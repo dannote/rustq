@@ -33,6 +33,33 @@ defmodule RustQ.RustlerTest do
     assert code =~ "get(term, a::r#type())"
   end
 
+  test "builds term decoders" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_decoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_decoder(:User,
+              fields: [
+                id: [type: :i64, key: "a::id()", required: true],
+                name: [type: :String, key: "a::name()", required: true],
+                active: [type: :bool, key: "a::active()", default: "false"],
+                email: [type: {:option, :String}, key: "a::email()"],
+                body: [type: {:vec, "Term<'a>"}, decode: "list_val(term, a::body())"]
+              ]
+            )
+        ]
+      )
+
+    assert code =~ "struct User<'a>"
+    assert code =~ "fn decode_user<'a>(term: Term<'a>) -> NifResult<User<'a>>"
+    assert code =~ "id: term.map_get(a::id())?.decode::<i64>()?"
+    assert code =~ "name: term.map_get(a::name())?.decode::<String>()?"
+    assert code =~ "unwrap_or(false)"
+    assert code =~ "email: term.map_get(a::email()).ok()"
+    assert code =~ "body: list_val(term, a::body())"
+  end
+
   test "selects term helper functions" do
     code =
       "__splice_items!();"

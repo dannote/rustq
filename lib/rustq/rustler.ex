@@ -6,6 +6,7 @@ defmodule RustQ.Rustler do
   use RustQ.Sigil
 
   alias RustQ.Rust
+  alias RustQ.Rustler.TermDecoder
 
   @resource_struct_template ~R"""
   struct __Resource {
@@ -162,6 +163,9 @@ defmodule RustQ.Rustler do
       module -> Rust.item(["mod ", to_string(module), " {\n", indent(code, 4), "\n}"])
     end
   end
+
+  @spec term_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
+  def term_decoder(name, opts), do: TermDecoder.build(name, opts)
 
   @spec term_helpers(keyword()) :: [Rust.Fragment.t()]
   def term_helpers(opts \\ []) do
