@@ -13,8 +13,6 @@ defmodule Mix.Tasks.Rustq.Gen do
 
   @impl Mix.Task
   def run(args) do
-    Mix.Task.run("app.start")
-
     {opts, names, invalid} = OptionParser.parse(args, strict: [check: :boolean, config: :string])
 
     if invalid != [] do
