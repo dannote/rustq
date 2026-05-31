@@ -165,7 +165,7 @@ defmodule RustQ.Rustler do
   end
 
   @spec term_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
-  def term_decoder(name, opts), do: TermDecoder.build(name, opts)
+  defdelegate term_decoder(name, opts), to: TermDecoder, as: :build
 
   @spec term_helpers(keyword()) :: [Rust.Fragment.t()]
   def term_helpers(opts \\ []) do
