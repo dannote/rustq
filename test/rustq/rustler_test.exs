@@ -51,6 +51,7 @@ defmodule RustQ.RustlerTest do
           items:
             RustQ.Rustler.tagged_enum(:ExContent,
               tag: "atom_struct()",
+              attrs: ["allow(dead_code)"],
               variants: [
                 Text: [type: :ExText, module: "Elixir.Folio.Content.Text"],
                 Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
@@ -59,6 +60,7 @@ defmodule RustQ.RustlerTest do
         ]
       )
 
+    assert code =~ "#[allow(dead_code)]"
     assert code =~ "pub enum ExContent"
     assert code =~ "Text(ExText)"
     assert code =~ "impl<'a> rustler::Decoder<'a> for ExContent"

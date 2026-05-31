@@ -48,7 +48,8 @@ defmodule RustQ.Rustler.TaggedEnum do
     |> Rust.enum(
       vis: Keyword.get(opts, :vis, :pub),
       derive: Keyword.get(opts, :derive, [:Clone, :Debug]),
-      variants: Enum.map(variants, &variant/1)
+      variants: Enum.map(variants, &variant/1),
+      attrs: Keyword.get(opts, :attrs, [])
     )
     |> Rust.to_fragment()
     |> Rust.item()
