@@ -41,7 +41,7 @@ defmodule RustQ.GeneratedTest do
     end
   end
 
-  test "loads rustq manifests with the DSL" do
+  test "loads rustq manifests with the optional wrapper DSL" do
     path = tmp_path("rustq.exs")
 
     File.mkdir_p!(Path.dirname(path))
@@ -53,6 +53,24 @@ defmodule RustQ.GeneratedTest do
       generate :helpers, "native/generated.rs" do
         content "fn main() {}\\n"
       end
+    end
+    """)
+
+    assert [helpers: target] = Generated.load_manifest!(path)
+    assert Keyword.fetch!(target, :path) == "native/generated.rs"
+    assert Keyword.fetch!(target, :content) == "fn main() {}\n"
+  end
+
+  test "loads rustq manifests with top-level generate calls" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    import RustQ.Config
+
+    generate :helpers, "native/generated.rs" do
+      content "fn main() {}\\n"
     end
     """)
 

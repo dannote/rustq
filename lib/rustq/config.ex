@@ -4,13 +4,11 @@ defmodule RustQ.Config do
 
       import RustQ.Config
 
-      rustq do
-        generate :term_helpers, "native/generated_term_helpers.rs" do
-          build fn ->
-            RustQ.render!("__splice_items!();", "generated_term_helpers.rs",
-              splice: [items: RustQ.Rustler.term_helpers()]
-            )
-          end
+      generate :term_helpers, "native/generated_term_helpers.rs" do
+        build fn ->
+          RustQ.render!("__splice_items!();", "generated_term_helpers.rs",
+            splice: [items: RustQ.Rustler.term_helpers()]
+          )
         end
       end
   """
@@ -33,6 +31,7 @@ defmodule RustQ.Config do
       RustQ.Config.__start_target__(unquote(name), unquote(path))
       unquote(block)
       RustQ.Config.__finish_target__()
+      RustQ.Config.__manifest__()
     end
   end
 
@@ -45,6 +44,7 @@ defmodule RustQ.Config do
 
       unquote(block)
       RustQ.Config.__finish_target__()
+      RustQ.Config.__manifest__()
     end
   end
 
@@ -67,8 +67,17 @@ defmodule RustQ.Config do
     Process.get(:rustq_config_targets, [])
   end
 
+  def __manifest__, do: [generated: Process.get(:rustq_config_targets, [])]
+
   def __start_target__(name, path) do
+    __ensure_started__()
     Process.put(:rustq_config_target, {name, [path: path]})
+  end
+
+  def __ensure_started__ do
+    unless Process.get(:rustq_config_targets) do
+      __start__()
+    end
   end
 
   def __put_target_option__(key, value) do
