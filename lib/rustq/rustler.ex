@@ -5,8 +5,10 @@ defmodule RustQ.Rustler do
 
   alias RustQ.Rust
   alias RustQ.Rustler.Atoms
+  alias RustQ.Rustler.NifStruct
   alias RustQ.Rustler.OptsDecoder
   alias RustQ.Rustler.Resource
+  alias RustQ.Rustler.TaggedEnum
   alias RustQ.Rustler.TermDecoder
   alias RustQ.Rustler.TermHelpers
 
@@ -29,6 +31,12 @@ defmodule RustQ.Rustler do
   @spec atoms([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) ::
           Rust.Fragment.t()
   defdelegate atoms(atoms, opts \\ []), to: Atoms, as: :build
+
+  @spec nif_struct(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
+  defdelegate nif_struct(name, module, opts \\ []), to: NifStruct, as: :build
+
+  @spec tagged_enum(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
+  defdelegate tagged_enum(name, opts), to: TaggedEnum, as: :build
 
   @spec term_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate term_decoder(name, opts), to: TermDecoder, as: :build

@@ -20,6 +20,53 @@ defmodule RustQ.RustlerTest do
     assert code =~ ~s|rustler::init!("Elixir.RustQ.Native");|
   end
 
+  test "builds NifStruct declarations" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("nif_struct.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.nif_struct(:ExText, "Folio.Content.Text",
+              fields: [
+                text: :String,
+                size: {:option, :String}
+              ]
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "#[derive(Clone, Debug, NifStruct)]"
+    assert code =~ ~S/#[module = "Folio.Content.Text"]/
+    assert code =~ "pub struct ExText"
+    assert code =~ "pub text: String"
+    assert code =~ "pub size: Option<String>"
+  end
+
+  test "builds tagged enum decoder and encoder declarations" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("tagged_enum.rs",
+        splice: [
+          items:
+            RustQ.Rustler.tagged_enum(:ExContent,
+              tag: "atom_struct()",
+              variants: [
+                Text: [type: :ExText, module: "Elixir.Folio.Content.Text"],
+                Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
+              ]
+            )
+        ]
+      )
+
+    assert code =~ "pub enum ExContent"
+    assert code =~ "Text(ExText)"
+    assert code =~ "impl<'a> rustler::Decoder<'a> for ExContent"
+    assert code =~ ~S/"Elixir.Folio.Content.Text" => Ok(ExContent::Text(Decoder::decode(term)?))/
+    assert code =~ "impl rustler::Encoder for ExContent"
+    assert code =~ "ExContent::Text(value) => value.encode(env)"
+  end
+
   test "builds term helper functions" do
     code =
       "__splice_items!();"

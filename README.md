@@ -91,6 +91,18 @@ RustQ.Rustler.term_decoder(:ProgramInput,
     body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]
   ]
 )
+
+RustQ.Rustler.nif_struct(:ExText, "Folio.Content.Text",
+  fields: [text: :String, size: {:option, :String}]
+)
+
+RustQ.Rustler.tagged_enum(:ExContent,
+  tag: "atom_struct()",
+  variants: [
+    Text: [type: :ExText, module: "Elixir.Folio.Content.Text"],
+    Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
+  ]
+)
 ```
 
 `term_decoder/2` field options:
