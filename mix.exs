@@ -14,6 +14,7 @@ defmodule RustQ.MixProject do
       aliases: aliases(),
       package: package(),
       docs: docs(),
+      dialyzer: [plt_add_apps: [:mix]],
       deps: deps()
     ]
   end
