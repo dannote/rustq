@@ -127,7 +127,7 @@ defmodule MyApp.Codegen.ContentSchema do
     rust_prefix "Ex"
     tag_field :__struct__
 
-    node Text do
+    node Text, attrs: ["allow(dead_code)"] do
       field :text, :String
       field :size, {:option, :String}
     end
@@ -135,7 +135,7 @@ defmodule MyApp.Codegen.ContentSchema do
     node Space do
     end
 
-    tagged_enum Content do
+    tagged_enum Content, attrs: ["allow(dead_code)"] do
       variants :all
       unknown :unknown_content_variant
     end

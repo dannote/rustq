@@ -8,7 +8,7 @@ defmodule RustQ.RustlerSchemaTest do
       rust_prefix("Ex")
       tag_field(:__struct__)
 
-      node Text do
+      node Text, attrs: ["allow(dead_code)"] do
         field(:text, :String)
         field(:size, {:option, :String})
       end
@@ -16,7 +16,7 @@ defmodule RustQ.RustlerSchemaTest do
       node Space do
       end
 
-      tagged_enum Content do
+      tagged_enum Content, attrs: ["allow(dead_code)"] do
         variants(:all)
         unknown(:unknown_content_variant)
       end
@@ -30,7 +30,9 @@ defmodule RustQ.RustlerSchemaTest do
     assert schema.rust_prefix == "Ex"
     assert schema.tag_field == :__struct__
     assert {:Text, [text: :String, size: {:option, :String}]} not in schema.nodes
-    assert {:Text, [{:text, :String, []}, {:size, {:option, :String}, []}]} in schema.nodes
+
+    assert {:Text, [{:text, :String, []}, {:size, {:option, :String}, []}],
+            attrs: ["allow(dead_code)"]} in schema.nodes
   end
 
   test "generates Rustler structs and tagged enum" do
@@ -38,6 +40,7 @@ defmodule RustQ.RustlerSchemaTest do
       "__splice_items!();"
       |> RustQ.render!("schema.rs", splice: [items: ContentSchema.rust_items()])
 
+    assert code =~ "#[allow(dead_code)]"
     assert code =~ ~S/#[module = "Folio.Content.Text"]/
     assert code =~ "pub struct ExText"
     assert code =~ "pub size: Option<String>"

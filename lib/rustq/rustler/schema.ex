@@ -10,7 +10,7 @@ defmodule RustQ.Rustler.Schema do
             enums: []
 
   @type field :: {atom(), RustQ.Rust.rust_type(), keyword()}
-  @type schema_node :: {atom(), [field()]}
+  @type schema_node :: {atom(), [field()], keyword()}
   @type enum_decl :: {atom(), keyword()}
   @type t :: %__MODULE__{
           module_prefix: module(),
@@ -73,18 +73,19 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
-  defmacro node(name, do: block) do
+  defmacro node(name, opts \\ [], do: block) do
     name = ast_name(name)
     fields = extract_fields(block)
 
     quote do
-      @rustq_schema_nodes {unquote(name), unquote(Macro.escape(fields))}
+      @rustq_schema_nodes {unquote(name), unquote(Macro.escape(fields)),
+                           unquote(Macro.escape(opts))}
     end
   end
 
-  defmacro tagged_enum(name, do: block) do
+  defmacro tagged_enum(name, opts \\ [], do: block) do
     name = ast_name(name)
-    opts = extract_enum_opts(block)
+    opts = Keyword.merge(opts, extract_enum_opts(block))
 
     quote do
       @rustq_schema_enums {unquote(name), unquote(Macro.escape(opts))}
@@ -98,9 +99,10 @@ defmodule RustQ.Rustler.Schema do
     |> Kernel.++(Enum.flat_map(schema.enums, &tagged_enum_items(schema, &1)))
   end
 
-  defp nif_struct(schema, {name, fields}) do
+  defp nif_struct(schema, {name, fields, opts}) do
     RustQ.Rustler.nif_struct(rust_name(schema, name), module_name(schema, name),
-      fields: Enum.map(fields, fn {field, type, _opts} -> {field, rust_type(schema, type)} end)
+      fields: Enum.map(fields, fn {field, type, _opts} -> {field, rust_type(schema, type)} end),
+      attrs: Keyword.get(opts, :attrs, [])
     )
   end
 
@@ -120,7 +122,8 @@ defmodule RustQ.Rustler.Schema do
     RustQ.Rustler.tagged_enum(Keyword.get(opts, :rust, rust_name(schema, name)),
       tag: tag_expr(schema.tag_field),
       unknown: Keyword.get(opts, :unknown, :unknown_variant),
-      variants: variants
+      variants: variants,
+      attrs: Keyword.get(opts, :attrs, [])
     )
   end
 
