@@ -60,7 +60,7 @@ defmodule RustQ.Config do
       path = unquote(path)
 
       RustQ.Config.__put_target__(
-        Path.basename(path, Path.extname(path)),
+        RustQ.Config.__target_name__(path),
         path,
         build: fn -> RustQ.Config.__render_rust_items__(path, unquote(opts)) end
       )
@@ -108,6 +108,12 @@ defmodule RustQ.Config do
     __ensure_started__()
     targets = Process.get(:rustq_config_targets, [])
     Process.put(:rustq_config_targets, [{name, Keyword.put(opts, :path, path)} | targets])
+  end
+
+  def __target_name__(path) do
+    path
+    |> Path.basename(Path.extname(path))
+    |> String.replace_prefix("generated_", "")
   end
 
   def __ensure_started__ do

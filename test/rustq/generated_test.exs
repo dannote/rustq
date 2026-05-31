@@ -77,6 +77,21 @@ defmodule RustQ.GeneratedTest do
     assert Keyword.fetch!(target, :build).() =~ "fn main()"
   end
 
+  test "infers names for rust_items shortcut" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    import RustQ.Config
+
+    rust_items "native/generated_helpers.rs", items: [RustQ.Rust.fn(:main, body: "")]
+    """)
+
+    assert [{"helpers", target}] = Generated.load_manifest!(path)
+    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
+  end
+
   test "loads rustq manifests with render shortcut" do
     path = tmp_path("rustq.exs")
 

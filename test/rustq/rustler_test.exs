@@ -73,6 +73,17 @@ defmodule RustQ.RustlerTest do
     refute code =~ "fn type_atom"
   end
 
+  test "supports explicit all term helper selection" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_helpers.rs",
+        splice: [items: RustQ.Rustler.term_helpers(include: :all)]
+      )
+
+    assert code =~ "fn get<'a>"
+    assert code =~ "fn type_str"
+  end
+
   test "excludes term helper functions" do
     code =
       "__splice_items!();"
