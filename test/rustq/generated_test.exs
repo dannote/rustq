@@ -28,6 +28,25 @@ defmodule RustQ.GeneratedTest do
     end
   end
 
+  test "reports all stale generated targets" do
+    first = tmp_path("first.rs")
+    second = tmp_path("second.rs")
+    File.mkdir_p!(Path.dirname(first))
+    File.mkdir_p!(Path.dirname(second))
+    File.write!(first, "old\n")
+    File.write!(second, "old\n")
+
+    assert_raise Generated.StaleError, ~r/first.rs.*second.rs/s, fn ->
+      Generated.sync_all!(
+        [
+          first: [path: first, content: "new\n"],
+          second: [path: second, content: "new\n"]
+        ],
+        check: true
+      )
+    end
+  end
+
   test "supports custom stale commands" do
     path = tmp_path("stale-custom.rs")
     File.mkdir_p!(Path.dirname(path))

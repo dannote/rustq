@@ -9,11 +9,19 @@ defmodule RustQ.Generated do
   defmodule StaleError do
     @moduledoc false
 
-    defexception [:path, command: "mix rustq.gen"]
+    defexception [:paths, command: "mix rustq.gen"]
 
     @impl true
-    def message(%{path: path, command: command}) do
-      "generated file is stale: #{path}\nRun: #{command}"
+    def message(%{paths: paths, command: command}) do
+      paths = List.wrap(paths)
+
+      stale =
+        case paths do
+          [path] -> "generated file is stale: #{path}"
+          paths -> "generated files are stale:\n" <> Enum.map_join(paths, "\n", &"  - #{&1}")
+        end
+
+      "#{stale}\nRun: #{command}"
     end
   end
 
@@ -33,9 +41,14 @@ defmodule RustQ.Generated do
   def sync_all!(targets, opts \\ []) do
     only = opts |> Keyword.get(:only, []) |> Enum.map(&to_string/1)
 
-    targets
-    |> Enum.filter(fn {name, _target} -> only == [] or to_string(name) in only end)
-    |> Enum.each(fn {name, target} -> sync!(name, target, opts) end)
+    targets =
+      Enum.filter(targets, fn {name, _target} -> only == [] or to_string(name) in only end)
+
+    if Keyword.get(opts, :check, false) do
+      check_all!(targets, opts)
+    else
+      Enum.each(targets, fn {name, target} -> sync!(name, target, opts) end)
+    end
 
     :ok
   end
@@ -71,9 +84,38 @@ defmodule RustQ.Generated do
       :ok
     else
       raise StaleError,
-        path: Path.relative_to_cwd(path),
+        paths: [Path.relative_to_cwd(path)],
         command: Keyword.get(opts, :command, "mix rustq.gen")
     end
+  end
+
+  defp check_all!(targets, opts) do
+    stale_paths =
+      targets
+      |> Enum.reject(fn {name, target} ->
+        path = Keyword.fetch!(target, :path)
+        contents = target |> build!() |> normalize_newlines()
+
+        if fresh?(path, contents) do
+          emit(opts, "Fresh #{name}: #{Path.relative_to_cwd(path)}")
+          true
+        else
+          false
+        end
+      end)
+      |> Enum.map(fn {_name, target} ->
+        target |> Keyword.fetch!(:path) |> Path.relative_to_cwd()
+      end)
+
+    if stale_paths != [] do
+      raise StaleError,
+        paths: stale_paths,
+        command: Keyword.get(opts, :command, "mix rustq.gen")
+    end
+  end
+
+  defp fresh?(path, expected) do
+    File.exists?(path) and File.read!(path) |> normalize_newlines() == expected
   end
 
   defp normalize_manifest!(manifest) when is_list(manifest) do

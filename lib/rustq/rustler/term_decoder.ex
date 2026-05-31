@@ -12,7 +12,7 @@ defmodule RustQ.Rustler.TermDecoder do
   """
 
   @function_template ~R"""
-  fn __decode_fn<'__lifetime>(__splice_args: ()) -> NifResult<__Struct<'__lifetime>> {
+  fn __decode_fn<'__lifetime>(__splice_args: ()) -> __type_result!() {
       Ok(__Struct {
           __splice_inits: (),
       })
@@ -27,7 +27,15 @@ defmodule RustQ.Rustler.TermDecoder do
     term_arg = Keyword.get(opts, :term_arg, :term)
     term_type = Keyword.get(opts, :term_type, "Term<'#{lifetime}>")
 
-    bindings = [Struct: name, lifetime: lifetime, decode_fn: function_name]
+    result = Keyword.get(opts, :result, :nif)
+    result_type = result_type(name, lifetime, result)
+
+    bindings = [
+      Struct: name,
+      lifetime: lifetime,
+      decode_fn: function_name,
+      result: Rust.type(result_type)
+    ]
 
     [
       Rust.item(
@@ -41,7 +49,7 @@ defmodule RustQ.Rustler.TermDecoder do
           bind: bindings,
           splice: [
             args: [Rust.arg(term_arg, {:raw, term_type})],
-            inits: decoder_inits(fields, term_arg)
+            inits: decoder_inits(fields, term_arg, result)
           ]
         )
       )
@@ -54,19 +62,20 @@ defmodule RustQ.Rustler.TermDecoder do
     end)
   end
 
-  defp decoder_inits(fields, term_arg) do
+  defp decoder_inits(fields, term_arg, result) do
     Enum.map(fields, fn {field, spec} ->
-      "#{field}: #{decoder_expr(spec, term_arg)}"
+      spec = Keyword.put_new(spec, :field, field)
+      "#{field}: #{decoder_expr(spec, term_arg, result)}"
     end)
   end
 
-  defp decoder_expr(spec, term_arg) do
+  defp decoder_expr(spec, term_arg, result) do
     cond do
       decode = Keyword.get(spec, :decode) ->
         decode
 
       Keyword.get(spec, :required, false) ->
-        "#{term_arg}.map_get(#{key!(spec)})?.decode::<#{Rust.type(Keyword.fetch!(spec, :type))}>()?"
+        required_expr(spec, term_arg, result)
 
       Keyword.has_key?(spec, :default) ->
         "#{term_arg}.map_get(#{key!(spec)}).ok().and_then(|t| t.decode::<#{Rust.type(Keyword.fetch!(spec, :type))}>().ok()).unwrap_or(#{Keyword.fetch!(spec, :default)})"
@@ -76,10 +85,24 @@ defmodule RustQ.Rustler.TermDecoder do
     end
   end
 
+  defp required_expr(spec, term_arg, :nif) do
+    "#{term_arg}.map_get(#{key!(spec)})?.decode::<#{Rust.type(Keyword.fetch!(spec, :type))}>()?"
+  end
+
+  defp required_expr(spec, term_arg, _result) do
+    field = Keyword.fetch!(spec, :field)
+    type = Rust.type(Keyword.fetch!(spec, :type))
+
+    "#{term_arg}.map_get(#{key!(spec)}).map_err(|_| \"Missing #{field}\".to_string())?.decode::<#{type}>().map_err(|_| \"Invalid #{field}\".to_string())?"
+  end
+
   defp key!(spec), do: Keyword.fetch!(spec, :key)
 
   defp inner_option_type({:option, type}), do: Rust.type(type)
   defp inner_option_type(type), do: Rust.type(type)
+
+  defp result_type(name, lifetime, :nif), do: {:raw, "NifResult<#{name}<'#{lifetime}>>"}
+  defp result_type(name, lifetime, result), do: {:raw, "#{result}<#{name}<'#{lifetime}>>"}
 
   defp default_decoder_name(name), do: "decode_#{Macro.underscore(to_string(name))}"
 end

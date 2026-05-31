@@ -81,6 +81,47 @@ RustQ.Rustler.nif(:add, args: [a: :i64, b: :i64], returns: :i64, body: "a + b")
 RustQ.Rustler.init(MyApp.Native)
 ```
 
+Common Rustler decoding helpers can be generated as Rust items:
+
+```elixir
+RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
+
+RustQ.Rustler.term_decoder(:ProgramInput,
+  fields: [
+    body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]
+  ]
+)
+```
+
+## Generated files
+
+Projects can declare generated outputs in `rustq.exs` and use RustQ's shared
+write/check task:
+
+```elixir
+import RustQ.Config
+
+rust_items "native/my_nif/src/generated_term_helpers.rs",
+  items: RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
+
+generate :schema, "native/my_nif/src/generated_schema.rs" do
+  render "__splice_items!();",
+    splice: [items: [RustQ.Rust.struct(:User, fields: [RustQ.Rust.field(:id, :i64)])]]
+end
+```
+
+Then run:
+
+```sh
+mix rustq.gen
+mix rustq.gen --check
+mix rustq.gen term_helpers
+```
+
+Path-only `rust_items` targets infer their name from the filename and strip a
+leading `generated_`, so `generated_term_helpers.rs` can be selected with
+`mix rustq.gen term_helpers`.
+
 ## Fragment validation
 
 ```elixir

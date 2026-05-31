@@ -60,6 +60,29 @@ defmodule RustQ.RustlerTest do
     assert code =~ "body: list_val(term, a::body())"
   end
 
+  test "builds term decoders with custom result aliases" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_decoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_decoder(:IfStatementInput,
+              result: "R",
+              fields: [
+                test: [type: "Term<'a>", key: "a::test()", required: true],
+                alternate: [type: {:option, "Term<'a>"}, key: "a::alternate()"]
+              ]
+            )
+        ]
+      )
+
+    assert code =~ "fn decode_if_statement_input<'a>(term: Term<'a>) -> R<IfStatementInput<'a>>"
+    assert code =~ ~S/map_err(|_| "Missing test".to_string())?/
+    assert code =~ ~S/map_err(|_| "Invalid test".to_string())?/
+    assert code =~ "alternate: term"
+    assert code =~ ".map_get(a::alternate())"
+  end
+
   test "selects term helper functions" do
     code =
       "__splice_items!();"
