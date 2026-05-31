@@ -96,6 +96,27 @@ defmodule RustQ.GeneratedTest do
     assert Keyword.fetch!(target, :build).() =~ "fn main()"
   end
 
+  test "flattens nested rust_items lists" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    import RustQ.Config
+
+    rust_items "native/generated_helpers.rs",
+      items: [
+        RustQ.Rust.fn(:first, body: ""),
+        [RustQ.Rust.fn(:second, body: "")]
+      ]
+    """)
+
+    assert [{"helpers", target}] = Generated.load_manifest!(path)
+    code = Keyword.fetch!(target, :build).()
+    assert code =~ "fn first()"
+    assert code =~ "fn second()"
+  end
+
   test "infers names for rust_items shortcut" do
     path = tmp_path("rustq.exs")
 

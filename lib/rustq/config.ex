@@ -135,7 +135,7 @@ defmodule RustQ.Config do
   end
 
   def __render_rust_items__(path, opts) do
-    items = Keyword.fetch!(opts, :items)
+    items = opts |> Keyword.fetch!(:items) |> List.wrap() |> List.flatten()
     opts = Keyword.put(opts, :splice, items: items)
 
     __render__("__splice_items!();", Keyword.put(opts, :filename, Path.basename(path)))

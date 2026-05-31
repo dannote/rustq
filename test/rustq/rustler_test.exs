@@ -77,10 +77,35 @@ defmodule RustQ.RustlerTest do
       )
 
     assert code =~ "fn decode_if_statement_input<'a>(term: Term<'a>) -> R<IfStatementInput<'a>>"
-    assert code =~ ~S/map_err(|_| "Missing test".to_string())?/
-    assert code =~ ~S/map_err(|_| "Invalid test".to_string())?/
+    assert code =~ ~S/map_err(|_| "Missing :test".to_string())?/
+    assert code =~ ~S/map_err(|_| "Invalid :test".to_string())?/
     assert code =~ "alternate: term"
     assert code =~ ".map_get(a::alternate())"
+  end
+
+  test "builds term decoders with custom required error messages" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_decoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_decoder(:IfStatementInput,
+              result: "R",
+              fields: [
+                test: [
+                  type: "Term<'a>",
+                  key: "a::test()",
+                  required: true,
+                  missing: "Missing condition",
+                  invalid: "Invalid condition"
+                ]
+              ]
+            )
+        ]
+      )
+
+    assert code =~ ~S/map_err(|_| "Missing condition".to_string())?/
+    assert code =~ ~S/map_err(|_| "Invalid condition".to_string())?/
   end
 
   test "selects term helper functions" do

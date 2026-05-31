@@ -93,6 +93,18 @@ RustQ.Rustler.term_decoder(:ProgramInput,
 )
 ```
 
+`term_decoder/2` field options:
+
+- `:type` — Rust field/decode type.
+- `:key` — Rust expression used as the map key.
+- `required: true` — decode with `?` instead of returning an option.
+- `default: "..."` — fallback Rust expression for missing/invalid optional values.
+- `decode: "..."` — custom Rust expression for the field value.
+- `missing: "..."` / `invalid: "..."` — custom required-field errors for non-`NifResult` decoders.
+
+Function options include `result: "R"` for custom result aliases,
+`:lifetime`, `:fn`, `:term_arg`, and `:term_type`.
+
 ## Generated files
 
 Projects can declare generated outputs in `rustq.exs` and use RustQ's shared

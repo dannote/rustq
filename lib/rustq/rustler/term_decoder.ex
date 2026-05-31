@@ -92,8 +92,10 @@ defmodule RustQ.Rustler.TermDecoder do
   defp required_expr(spec, term_arg, _result) do
     field = Keyword.fetch!(spec, :field)
     type = Rust.type(Keyword.fetch!(spec, :type))
+    missing = Keyword.get(spec, :missing, "Missing :#{field}")
+    invalid = Keyword.get(spec, :invalid, "Invalid :#{field}")
 
-    "#{term_arg}.map_get(#{key!(spec)}).map_err(|_| \"Missing #{field}\".to_string())?.decode::<#{type}>().map_err(|_| \"Invalid #{field}\".to_string())?"
+    "#{term_arg}.map_get(#{key!(spec)}).map_err(|_| #{inspect(missing)}.to_string())?.decode::<#{type}>().map_err(|_| #{inspect(invalid)}.to_string())?"
   end
 
   defp key!(spec), do: Keyword.fetch!(spec, :key)
