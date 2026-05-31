@@ -4,13 +4,16 @@ defmodule RustQ.Rustler do
   """
 
   alias RustQ.Rust
-  alias RustQ.Rustler.Atoms
-  alias RustQ.Rustler.NifStruct
-  alias RustQ.Rustler.OptsDecoder
-  alias RustQ.Rustler.Resource
-  alias RustQ.Rustler.TaggedEnum
-  alias RustQ.Rustler.TermDecoder
-  alias RustQ.Rustler.TermHelpers
+
+  alias RustQ.Rustler.{
+    Atoms,
+    NifStruct,
+    OptsDecoder,
+    Resource,
+    TaggedEnum,
+    TermDecoder,
+    TermHelpers
+  }
 
   @spec nif(atom() | String.t(), keyword()) :: Rust.Function.t()
   def nif(name, opts \\ []) do
