@@ -20,6 +20,19 @@ defmodule RustQ.RustlerTest do
     assert code =~ ~s|rustler::init!("Elixir.RustQ.Native");|
   end
 
+  test "builds term helper functions" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_helpers.rs",
+        splice: [items: RustQ.Rustler.term_helpers(type_key: "a::r#type()")]
+      )
+
+    assert code =~ "fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
+    assert code =~ "fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
+    assert code =~ "fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String"
+    assert code =~ "get(term, a::r#type())"
+  end
+
   test "builds resource boilerplate" do
     code =
       "__splice_items!();"

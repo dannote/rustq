@@ -476,7 +476,15 @@ impl<'a> Binder<'a> {
 impl VisitMut for Binder<'_> {
     fn visit_ident_mut(&mut self, ident: &mut syn::Ident) {
         if let Some(value) = self.binding_for_ident(ident, "__") {
-            *ident = syn::Ident::new(value, ident.span());
+            match syn::parse_str::<syn::Ident>(value) {
+                Ok(parsed) => *ident = parsed,
+                Err(error) => self.errors.push(binding_error(
+                    "ident_binding",
+                    &ident.to_string(),
+                    value,
+                    error,
+                )),
+            }
         }
     }
 
