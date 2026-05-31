@@ -9,11 +9,11 @@ defmodule RustQ.Generated do
   defmodule StaleError do
     @moduledoc false
 
-    defexception [:path]
+    defexception [:path, command: "mix rustq.gen"]
 
     @impl true
-    def message(%{path: path}) do
-      "generated file is stale: #{path}\nRun: mix rustq.gen"
+    def message(%{path: path, command: command}) do
+      "generated file is stale: #{path}\nRun: #{command}"
     end
   end
 
@@ -46,7 +46,7 @@ defmodule RustQ.Generated do
     contents = target |> build!() |> normalize_newlines()
 
     if Keyword.get(opts, :check, false) do
-      check!(path, contents)
+      check!(path, contents, command: Keyword.get(opts, :command, "mix rustq.gen"))
       emit(opts, "Fresh #{name}: #{Path.relative_to_cwd(path)}")
     else
       write!(path, contents)
@@ -62,15 +62,17 @@ defmodule RustQ.Generated do
     File.write!(path, normalize_newlines(contents))
   end
 
-  @spec check!(Path.t(), iodata()) :: :ok
-  def check!(path, expected) do
+  @spec check!(Path.t(), iodata(), keyword()) :: :ok
+  def check!(path, expected, opts \\ []) do
     expected = normalize_newlines(expected)
     actual = if File.exists?(path), do: File.read!(path) |> normalize_newlines(), else: nil
 
     if actual == expected do
       :ok
     else
-      raise StaleError, path: Path.relative_to_cwd(path)
+      raise StaleError,
+        path: Path.relative_to_cwd(path),
+        command: Keyword.get(opts, :command, "mix rustq.gen")
     end
   end
 

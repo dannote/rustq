@@ -23,8 +23,21 @@ defmodule RustQ.GeneratedTest do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, "old\n")
 
-    assert_raise Generated.StaleError, ~r/generated file is stale/, fn ->
+    assert_raise Generated.StaleError, ~r/Run: mix rustq.gen/, fn ->
       Generated.sync!(:helpers, [path: path, content: "new\n"], check: true)
+    end
+  end
+
+  test "supports custom stale commands" do
+    path = tmp_path("stale-custom.rs")
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "old\n")
+
+    assert_raise Generated.StaleError, ~r/Run: mix skia.codegen/, fn ->
+      Generated.sync!(:helpers, [path: path, content: "new\n"],
+        check: true,
+        command: "mix skia.codegen"
+      )
     end
   end
 
