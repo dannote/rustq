@@ -228,6 +228,9 @@ defmodule RustQ do
   defp validate_fragment(:stmt, code),
     do: validate_splice_fragment(:body, code, "fn target() { __splice_body!(); }")
 
+  defp validate_fragment(:arg, code),
+    do: validate_splice_fragment(:args, code, "fn target(__splice_args: ()) {}")
+
   defp validate_fragment(:arm, code) do
     validate_splice_fragment(
       :arms,

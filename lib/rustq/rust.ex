@@ -30,6 +30,9 @@ defmodule RustQ.Rust do
   @spec stmt(iodata()) :: Fragment.t()
   def stmt(code), do: %Fragment{kind: :stmt, code: code}
 
+  @spec param(atom() | String.t(), rust_type()) :: Fragment.t()
+  def param(name, type), do: %Fragment{kind: :arg, code: [ident(name), ": ", type(type)]}
+
   @spec unquote(:item)(iodata()) :: Fragment.t()
   def unquote(:item)(code), do: %Fragment{kind: :item, code: code}
 
@@ -99,6 +102,9 @@ defmodule RustQ.Rust do
 
   @spec arg(Function.t(), term()) :: Function.t()
   def arg(%Function{} = function, arg), do: %{function | args: function.args ++ [arg]}
+
+  @spec arg(atom() | String.t(), rust_type()) :: Fragment.t()
+  def arg(name, type), do: param(name, type)
 
   @spec arg(Function.t(), atom() | String.t(), rust_type(), keyword()) :: Function.t()
   def arg(%Function{} = function, name, type, opts \\ []) do

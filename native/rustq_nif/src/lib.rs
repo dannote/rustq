@@ -5,8 +5,8 @@ use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    Arm, Expr, ExprMatch, ExprStruct, Field, FieldValue, Fields, File, ImplItem, Item, Pat, Stmt,
-    Type,
+    Arm, Expr, ExprMatch, ExprStruct, Field, FieldValue, Fields, File, FnArg, ImplItem, Item,
+    Lifetime, Pat, Signature, Stmt, Type,
 };
 
 mod atoms {
@@ -131,7 +131,10 @@ fn splice_item(item: &mut Item, context: &Context) -> Result<(), Vec<ErrorInfo>>
             Ok(())
         }
         Item::Struct(item_struct) => splice_fields(&mut item_struct.fields, context),
-        Item::Fn(item_fn) => splice_stmts(&mut item_fn.block.stmts, context),
+        Item::Fn(item_fn) => {
+            splice_signature_inputs(&mut item_fn.sig, context)?;
+            splice_stmts(&mut item_fn.block.stmts, context)
+        }
         _ => Ok(()),
     }
 }
@@ -144,6 +147,7 @@ fn splice_impl_items(items: &mut Vec<ImplItem>, context: &Context) -> Result<(),
             next.extend(parse_impl_items(&name, context)?);
         } else {
             if let ImplItem::Fn(item_fn) = &mut item {
+                splice_signature_inputs(&mut item_fn.sig, context)?;
                 splice_stmts(&mut item_fn.block.stmts, context)?;
             }
             next.push(item);
@@ -151,6 +155,26 @@ fn splice_impl_items(items: &mut Vec<ImplItem>, context: &Context) -> Result<(),
     }
 
     *items = next;
+    Ok(())
+}
+
+fn splice_signature_inputs(
+    signature: &mut Signature,
+    context: &Context,
+) -> Result<(), Vec<ErrorInfo>> {
+    let mut next = Punctuated::<FnArg, Comma>::new();
+
+    for input in std::mem::take(&mut signature.inputs) {
+        if let Some(name) = arg_splice_name(&input) {
+            for parsed in parse_args(&name, context)? {
+                next.push(parsed);
+            }
+        } else {
+            next.push(input);
+        }
+    }
+
+    signature.inputs = next;
     Ok(())
 }
 
@@ -208,6 +232,22 @@ fn impl_item_splice_name(item: &ImplItem) -> Option<String> {
     splice_name(&item_macro.mac.path)
 }
 
+fn arg_splice_name(arg: &FnArg) -> Option<String> {
+    let FnArg::Typed(pat_type) = arg else {
+        return None;
+    };
+
+    let Pat::Ident(pat_ident) = pat_type.pat.as_ref() else {
+        return None;
+    };
+
+    pat_ident
+        .ident
+        .to_string()
+        .strip_prefix("__splice_")
+        .map(str::to_string)
+}
+
 fn stmt_splice_name(stmt: &Stmt) -> Option<String> {
     let Stmt::Macro(stmt_macro) = stmt else {
         return None;
@@ -241,6 +281,10 @@ fn parse_impl_items(name: &str, context: &Context) -> Result<Vec<ImplItem>, Vec<
 
 fn parse_fields(name: &str, context: &Context) -> Result<Vec<Field>, Vec<ErrorInfo>> {
     parse_fragments("field", name, context, parse_field)
+}
+
+fn parse_args(name: &str, context: &Context) -> Result<Vec<FnArg>, Vec<ErrorInfo>> {
+    parse_fragments("arg", name, context, syn::parse_str::<FnArg>)
 }
 
 fn parse_field_values(name: &str, context: &Context) -> Result<Vec<FieldValue>, Vec<ErrorInfo>> {
@@ -433,6 +477,18 @@ impl VisitMut for Binder<'_> {
     fn visit_ident_mut(&mut self, ident: &mut syn::Ident) {
         if let Some(value) = self.binding_for_ident(ident, "__") {
             *ident = syn::Ident::new(value, ident.span());
+        }
+    }
+
+    fn visit_lifetime_mut(&mut self, lifetime: &mut Lifetime) {
+        let name = lifetime.ident.to_string();
+
+        if let Some(value) = name
+            .strip_prefix("__")
+            .and_then(|name| self.bindings.get(name))
+        {
+            let value = value.trim_start_matches('\'');
+            *lifetime = Lifetime::new(&format!("'{value}"), lifetime.apostrophe);
         }
     }
 
