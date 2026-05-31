@@ -153,15 +153,15 @@ defmodule RustQ do
   @doc """
   Generates formatted Rust source from a parsed template.
   """
-  @spec codegen(Template.t()) :: {:ok, String.t()} | {:error, [map()]}
-  def codegen(%Template{} = template) do
+  @spec codegen(Template.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
+  def codegen(%Template{} = template, opts \\ []) do
     case RustQ.Native.render(
            template.source,
            native_bindings(template.bindings),
            native_splices(template.splices)
          ) do
       {:ok, code} ->
-        {:ok, code}
+        {:ok, with_preamble(code, opts)}
 
       {:error, errors} when is_list(errors) ->
         {:error, normalize_errors(errors, template.filename)}
@@ -172,11 +172,11 @@ defmodule RustQ do
   end
 
   @doc """
-  Like `codegen/1`, but raises on errors.
+  Like `codegen/2`, but raises on errors.
   """
-  @spec codegen!(Template.t()) :: String.t()
-  def codegen!(%Template{} = template) do
-    case codegen(template) do
+  @spec codegen!(Template.t(), keyword()) :: String.t()
+  def codegen!(%Template{} = template, opts \\ []) do
+    case codegen(template, opts) do
       {:ok, code} ->
         code
 
@@ -196,7 +196,7 @@ defmodule RustQ do
       opts
       |> Keyword.get(:splice, [])
       |> Enum.reduce(template, fn {name, replacement}, acc -> splice(acc, name, replacement) end)
-      |> codegen()
+      |> codegen(opts)
     end
   end
 
@@ -211,6 +211,14 @@ defmodule RustQ do
 
       {:error, errors} ->
         raise Error, message: "RustQ render error: #{inspect(errors)}", errors: errors
+    end
+  end
+
+  defp with_preamble(code, opts) do
+    case Keyword.get(opts, :preamble, "") do
+      nil -> code
+      "" -> code
+      preamble -> IO.iodata_to_binary([preamble, code])
     end
   end
 

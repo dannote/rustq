@@ -51,6 +51,18 @@ defmodule RustQ.PipelineTest do
     assert code =~ "type MaybeUser = Option<User>;"
   end
 
+  test "prepends preambles after codegen" do
+    template = RustQ.parse!("fn answer() -> i32 { 42 }", "answer.rs")
+
+    assert RustQ.codegen!(template, preamble: "// generated\n\n") ==
+             "// generated\n\nfn answer() -> i32 {\n    42\n}\n"
+
+    assert RustQ.render!("fn answer() -> i32 { 42 }", "answer.rs",
+             preamble: ["// generated", "\n\n"]
+           ) ==
+             "// generated\n\nfn answer() -> i32 {\n    42\n}\n"
+  end
+
   test "uses fragment wrappers" do
     code =
       """
