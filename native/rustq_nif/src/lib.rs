@@ -4,7 +4,10 @@ use rustler::{Encoder, Env, NifMap, NifResult, Term};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::visit_mut::{self, VisitMut};
-use syn::{Arm, Expr, ExprMatch, Field, Fields, File, ImplItem, Item, Pat, Stmt, Type};
+use syn::{
+    Arm, Expr, ExprMatch, ExprStruct, Field, FieldValue, Fields, File, ImplItem, Item, Pat, Stmt,
+    Type,
+};
 
 mod atoms {
     rustler::atoms! {
@@ -240,6 +243,10 @@ fn parse_fields(name: &str, context: &Context) -> Result<Vec<Field>, Vec<ErrorIn
     parse_fragments("field", name, context, parse_field)
 }
 
+fn parse_field_values(name: &str, context: &Context) -> Result<Vec<FieldValue>, Vec<ErrorInfo>> {
+    parse_fragments("field_value", name, context, parse_field_value)
+}
+
 fn parse_stmts(name: &str, context: &Context) -> Result<Vec<Stmt>, Vec<ErrorInfo>> {
     parse_fragments("stmt", name, context, syn::parse_str::<Stmt>)
 }
@@ -255,6 +262,15 @@ fn parse_field(source: &str) -> syn::Result<Field> {
         .into_iter()
         .next()
         .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "expected field"))
+}
+
+fn parse_field_value(source: &str) -> syn::Result<FieldValue> {
+    let wrapped = format!("__RustQ {{ {source} }}");
+    let expr = syn::parse_str::<ExprStruct>(&wrapped)?;
+    expr.fields
+        .into_iter()
+        .next()
+        .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "expected field value"))
 }
 
 fn parse_fragments<T, F>(
@@ -310,6 +326,28 @@ impl<'a> Splicer<'a> {
 }
 
 impl VisitMut for Splicer<'_> {
+    fn visit_expr_struct_mut(&mut self, expr_struct: &mut ExprStruct) {
+        let mut next = Punctuated::<FieldValue, Comma>::new();
+
+        for mut field in std::mem::take(&mut expr_struct.fields) {
+            if let Some(name) = field_value_splice_name(&field) {
+                match parse_field_values(&name, self.context) {
+                    Ok(fields) => {
+                        for field in fields {
+                            next.push(field);
+                        }
+                    }
+                    Err(errors) => self.errors.extend(errors),
+                }
+            } else {
+                visit_mut::visit_field_value_mut(self, &mut field);
+                next.push(field);
+            }
+        }
+
+        expr_struct.fields = next;
+    }
+
     fn visit_expr_match_mut(&mut self, expr_match: &mut ExprMatch) {
         let mut next = Vec::new();
 
@@ -328,6 +366,17 @@ impl VisitMut for Splicer<'_> {
         expr_match.arms = next;
         visit_mut::visit_expr_mut(self, &mut expr_match.expr);
     }
+}
+
+fn field_value_splice_name(field: &FieldValue) -> Option<String> {
+    let syn::Member::Named(ident) = &field.member else {
+        return None;
+    };
+
+    ident
+        .to_string()
+        .strip_prefix("__splice_")
+        .map(str::to_string)
 }
 
 fn arm_splice_name(arm: &Arm) -> Option<String> {

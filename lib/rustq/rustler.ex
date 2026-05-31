@@ -40,23 +40,30 @@ defmodule RustQ.Rustler do
 
   @spec resource(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def resource(name, opts \\ []) do
-    fields = Keyword.get(opts, :fields, [])
+    fields =
+      opts
+      |> Keyword.get(:fields, [])
+      |> Enum.map(fn {field, type} -> Rust.field(field, type, vis: :pub) end)
+
+    struct_template = """
+    struct __Resource {
+        __splice_fields: (),
+    }
+    """
+
+    impl_template = """
+    #[rustler::resource_impl]
+    impl rustler::Resource for __Resource {}
+    """
 
     [
-      Rust.item([
-        "struct ",
-        to_string(name),
-        " {\n",
-        Enum.map(fields, fn {field, type} ->
-          ["pub ", to_string(field), ": ", Rust.type(type), ",\n"]
-        end),
-        "}"
-      ]),
-      Rust.item([
-        "#[rustler::resource_impl]\nimpl rustler::Resource for ",
-        to_string(name),
-        " {}"
-      ])
+      Rust.item(
+        RustQ.render!(struct_template, "rustler_resource_struct.rs",
+          bind: [Resource: name],
+          splice: [fields: fields]
+        )
+      ),
+      Rust.item(RustQ.render!(impl_template, "rustler_resource_impl.rs", bind: [Resource: name]))
     ]
   end
 
@@ -66,39 +73,77 @@ defmodule RustQ.Rustler do
     fields = Keyword.fetch!(opts, :fields)
     function_name = Keyword.get(opts, :fn, default_decoder_name(name))
     opts_arg = Keyword.get(opts, :opts_arg, "opts: &[(Atom, Term#{lifetime_generics(lifetime)})]")
-    result_type = [to_string(name), lifetime_generics(lifetime)]
     phantom? = Keyword.get(opts, :phantom, lifetime != nil)
 
+    [struct_template, function_template] = opts_decoder_templates(lifetime, opts_arg)
+
     [
-      Rust.item([
-        "pub struct ",
-        to_string(name),
-        lifetime_generics(lifetime),
-        " {\n",
-        Enum.map(fields, fn {field, spec} ->
-          ["pub ", to_string(field), ": ", Rust.type(Keyword.fetch!(spec, :type)), ",\n"]
-        end),
-        phantom_field(phantom?, lifetime),
-        "}"
-      ]),
-      Rust.item([
-        "pub fn ",
-        to_string(function_name),
-        lifetime_generics(lifetime),
-        "(",
-        opts_arg,
-        ") -> NifResult<",
-        result_type,
-        "> {\nOk(",
-        to_string(name),
-        " {\n",
-        Enum.map(fields, fn {field, spec} ->
-          [to_string(field), ": ", Keyword.fetch!(spec, :decode), ",\n"]
-        end),
-        phantom_init(phantom?),
-        "})\n}"
-      ])
+      Rust.item(
+        RustQ.render!(struct_template, "rustler_opts_struct.rs",
+          bind: [Struct: name],
+          splice: [fields: opts_decoder_fields(fields)]
+        )
+      ),
+      Rust.item(
+        RustQ.render!(function_template, "rustler_opts_decoder.rs",
+          bind: [Struct: name, decode_fn: function_name],
+          splice: [inits: opts_decoder_inits(fields, phantom?)]
+        )
+      )
     ]
+  end
+
+  defp opts_decoder_templates(nil, opts_arg) do
+    [
+      """
+      pub struct __Struct {
+          __splice_fields: (),
+      }
+      """,
+      """
+      pub fn __decode_fn(#{opts_arg}) -> NifResult<__Struct> {
+          Ok(__Struct {
+              __splice_inits: (),
+          })
+      }
+      """
+    ]
+  end
+
+  defp opts_decoder_templates(lifetime, opts_arg) do
+    [
+      """
+      pub struct __Struct<'#{lifetime}> {
+          __splice_fields: (),
+      }
+      """,
+      """
+      pub fn __decode_fn<'#{lifetime}>(#{opts_arg}) -> NifResult<__Struct<'#{lifetime}>> {
+          Ok(__Struct {
+              __splice_inits: (),
+          })
+      }
+      """
+    ]
+  end
+
+  defp opts_decoder_fields(fields) do
+    Enum.map(fields, fn {field, spec} ->
+      Rust.field(field, Keyword.fetch!(spec, :type), vis: :pub)
+    end)
+  end
+
+  defp opts_decoder_inits(fields, phantom?) do
+    field_inits =
+      Enum.map(fields, fn {field, spec} ->
+        "#{field}: #{Keyword.fetch!(spec, :decode)}"
+      end)
+
+    if phantom? do
+      field_inits ++ ["_phantom: std::marker::PhantomData"]
+    else
+      field_inits
+    end
   end
 
   defp default_decoder_name(name) do
@@ -107,15 +152,6 @@ defmodule RustQ.Rustler do
 
   defp lifetime_generics(nil), do: ""
   defp lifetime_generics(lifetime), do: "<'#{lifetime}>"
-
-  defp phantom_field(false, _lifetime), do: []
-  defp phantom_field(true, nil), do: "_phantom: std::marker::PhantomData<()>,\n"
-
-  defp phantom_field(true, lifetime),
-    do: "_phantom: std::marker::PhantomData<&'#{lifetime} ()>,\n"
-
-  defp phantom_init(false), do: []
-  defp phantom_init(true), do: "_phantom: std::marker::PhantomData,\n"
 
   defp indent(iodata, spaces) do
     padding = String.duplicate(" ", spaces)
