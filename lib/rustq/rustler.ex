@@ -10,6 +10,7 @@ defmodule RustQ.Rustler do
     NifStruct,
     OptsDecoder,
     Resource,
+    Schema,
     TaggedEnum,
     TermDecoder,
     TermHelpers
@@ -37,6 +38,9 @@ defmodule RustQ.Rustler do
 
   @spec nif_struct(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
   defdelegate nif_struct(name, module, opts \\ []), to: NifStruct, as: :build
+
+  @spec schema_items(Schema.t()) :: [Rust.Fragment.t()]
+  defdelegate schema_items(schema), to: Schema, as: :rust_items
 
   @spec tagged_enum(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate tagged_enum(name, opts), to: TaggedEnum, as: :build

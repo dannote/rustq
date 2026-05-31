@@ -117,6 +117,36 @@ RustQ.Rustler.tagged_enum(:ExContent,
 Function options include `result: "R"` for custom result aliases,
 `:lifetime`, `:fn`, `:term_arg`, and `:term_type`.
 
+For larger Rustler type surfaces, define an Ecto-style schema module:
+
+```elixir
+defmodule MyApp.Codegen.ContentSchema do
+  use RustQ.Rustler.Schema
+
+  schema MyApp.Content do
+    rust_prefix "Ex"
+    tag_field :__struct__
+
+    node Text do
+      field :text, :String
+      field :size, {:option, :String}
+    end
+
+    node Space do
+    end
+
+    tagged_enum Content do
+      variants :all
+      unknown :unknown_content_variant
+    end
+  end
+end
+```
+
+Then use `MyApp.Codegen.ContentSchema.rust_items()` in `rustq.exs`.
+Field optionality is explicit in the Rust type (`{:option, :String}`), rather
+than `required: true` flags.
+
 ## Generated files
 
 Projects can declare generated outputs in `rustq.exs` and use RustQ's shared
