@@ -33,6 +33,31 @@ defmodule RustQ.RustlerTest do
     assert code =~ "get(term, a::r#type())"
   end
 
+  test "selects term helper functions" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_helpers.rs",
+        splice: [items: RustQ.Rustler.term_helpers(include: [:get, :str_val])]
+      )
+
+    assert code =~ "fn get<'a>"
+    assert code =~ "fn str_val<'a>"
+    refute code =~ "fn bool_val"
+    refute code =~ "fn type_atom"
+  end
+
+  test "excludes term helper functions" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_helpers.rs",
+        splice: [items: RustQ.Rustler.term_helpers(exclude: [:f64_val, :type_str])]
+      )
+
+    assert code =~ "fn get<'a>"
+    refute code =~ "fn f64_val"
+    refute code =~ "fn type_str"
+  end
+
   test "builds resource boilerplate" do
     code =
       "__splice_items!();"
