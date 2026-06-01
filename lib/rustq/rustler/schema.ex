@@ -6,6 +6,7 @@ defmodule RustQ.Rustler.Schema do
   defstruct module_prefix: nil,
             rust_prefix: "Ex",
             tag_field: :__struct__,
+            default_attrs: [],
             nodes: [],
             enums: []
 
@@ -16,6 +17,7 @@ defmodule RustQ.Rustler.Schema do
           module_prefix: module(),
           rust_prefix: String.t(),
           tag_field: atom(),
+          default_attrs: [term()],
           nodes: [schema_node()],
           enums: [enum_decl()]
         }
@@ -28,6 +30,7 @@ defmodule RustQ.Rustler.Schema do
       Module.register_attribute(__MODULE__, :rustq_schema_enums, accumulate: true)
       @rustq_schema_rust_prefix "Ex"
       @rustq_schema_tag_field :__struct__
+      @rustq_schema_default_attrs []
       @before_compile RustQ.Rustler.Schema
     end
   end
@@ -41,6 +44,7 @@ defmodule RustQ.Rustler.Schema do
           module_prefix: @rustq_schema_module_prefix,
           rust_prefix: @rustq_schema_rust_prefix,
           tag_field: @rustq_schema_tag_field,
+          default_attrs: @rustq_schema_default_attrs,
           nodes: Enum.reverse(@rustq_schema_nodes),
           enums: Enum.reverse(@rustq_schema_enums)
         }
@@ -52,11 +56,14 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
-  defmacro schema(module_prefix, do: block) do
+  defmacro schema(module_prefix, opts \\ [], do: block) do
     module_prefix = Macro.expand(module_prefix, __CALLER__)
 
     quote do
+      alias RustQ.Rustler.Schema, as: RustlerSchema
+
       @rustq_schema_module_prefix unquote(module_prefix)
+      RustlerSchema.__apply_schema_opts__(__MODULE__, unquote(Macro.escape(opts)))
       unquote(block)
     end
   end
@@ -70,6 +77,26 @@ defmodule RustQ.Rustler.Schema do
   defmacro tag_field(field) do
     quote do
       @rustq_schema_tag_field unquote(field)
+    end
+  end
+
+  defmacro default_attrs(attrs) do
+    quote do
+      @rustq_schema_default_attrs unquote(attrs)
+    end
+  end
+
+  def __apply_schema_opts__(module, opts) do
+    if prefix = Keyword.get(opts, :rust_prefix) do
+      Module.put_attribute(module, :rustq_schema_rust_prefix, prefix)
+    end
+
+    if tag = Keyword.get(opts, :tag_field) do
+      Module.put_attribute(module, :rustq_schema_tag_field, tag)
+    end
+
+    if attrs = Keyword.get(opts, :default_attrs) do
+      Module.put_attribute(module, :rustq_schema_default_attrs, attrs)
     end
   end
 
@@ -102,7 +129,7 @@ defmodule RustQ.Rustler.Schema do
   defp nif_struct(schema, {name, fields, opts}) do
     RustQ.Rustler.nif_struct(rust_name(schema, name), module_name(schema, name),
       fields: Enum.map(fields, fn {field, type, _opts} -> {field, rust_type(schema, type)} end),
-      attrs: Keyword.get(opts, :attrs, [])
+      attrs: attrs(schema, opts)
     )
   end
 
@@ -123,9 +150,11 @@ defmodule RustQ.Rustler.Schema do
       tag: tag_expr(schema.tag_field),
       unknown: Keyword.get(opts, :unknown, :unknown_variant),
       variants: variants,
-      attrs: Keyword.get(opts, :attrs, [])
+      attrs: attrs(schema, opts)
     )
   end
+
+  defp attrs(schema, opts), do: Keyword.get(opts, :attrs, schema.default_attrs)
 
   defp enum_variants(:all, schema), do: Enum.map(schema.nodes, &elem(&1, 0))
   defp enum_variants(variants, _schema), do: List.wrap(variants)

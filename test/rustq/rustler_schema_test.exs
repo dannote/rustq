@@ -4,11 +4,11 @@ defmodule RustQ.RustlerSchemaTest do
   defmodule ContentSchema do
     use RustQ.Rustler.Schema
 
-    schema Folio.Content do
-      rust_prefix("Ex")
-      tag_field(:__struct__)
-
-      node Text, attrs: ["allow(dead_code)"] do
+    schema Folio.Content,
+      rust_prefix: "Ex",
+      tag_field: :__struct__,
+      default_attrs: ["allow(dead_code)"] do
+      node Text do
         field(:text, :String)
         field(:size, {:option, :String})
       end
@@ -16,7 +16,7 @@ defmodule RustQ.RustlerSchemaTest do
       node Space do
       end
 
-      tagged_enum Content, attrs: ["allow(dead_code)"] do
+      tagged_enum Content do
         variants(:all)
         unknown(:unknown_content_variant)
       end
@@ -29,10 +29,10 @@ defmodule RustQ.RustlerSchemaTest do
     assert schema.module_prefix == Folio.Content
     assert schema.rust_prefix == "Ex"
     assert schema.tag_field == :__struct__
+    assert schema.default_attrs == ["allow(dead_code)"]
     assert {:Text, [text: :String, size: {:option, :String}]} not in schema.nodes
 
-    assert {:Text, [{:text, :String, []}, {:size, {:option, :String}, []}],
-            attrs: ["allow(dead_code)"]} in schema.nodes
+    assert {:Text, [{:text, :String, []}, {:size, {:option, :String}, []}], []} in schema.nodes
   end
 
   test "generates Rustler structs and tagged enum" do

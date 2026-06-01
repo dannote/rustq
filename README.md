@@ -123,11 +123,10 @@ For larger Rustler type surfaces, define an Ecto-style schema module:
 defmodule MyApp.Codegen.ContentSchema do
   use RustQ.Rustler.Schema
 
-  schema MyApp.Content do
-    rust_prefix "Ex"
-    tag_field :__struct__
+  schema MyApp.Content, rust_prefix: "Ex", tag_field: :__struct__ do
+    default_attrs ["allow(dead_code)"]
 
-    node Text, attrs: ["allow(dead_code)"] do
+    node Text do
       field :text, :String
       field :size, {:option, :String}
     end
@@ -135,7 +134,7 @@ defmodule MyApp.Codegen.ContentSchema do
     node Space do
     end
 
-    tagged_enum Content, attrs: ["allow(dead_code)"] do
+    tagged_enum Content do
       variants :all
       unknown :unknown_content_variant
     end
