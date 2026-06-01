@@ -7,17 +7,20 @@ defmodule RustQ.Rustler.Schema do
             rust_prefix: "Ex",
             tag_field: :__struct__,
             default_attrs: [],
+            type_aliases: [],
             nodes: [],
             enums: []
 
   @type field :: {atom(), RustQ.Rust.rust_type(), keyword()}
   @type schema_node :: {atom(), [field()], keyword()}
   @type enum_decl :: {atom(), keyword()}
+  @type type_alias :: {atom(), RustQ.Rust.rust_type()}
   @type t :: %__MODULE__{
           module_prefix: module(),
           rust_prefix: String.t(),
           tag_field: atom(),
           default_attrs: [term()],
+          type_aliases: [type_alias()],
           nodes: [schema_node()],
           enums: [enum_decl()]
         }
@@ -28,6 +31,7 @@ defmodule RustQ.Rustler.Schema do
 
       Module.register_attribute(__MODULE__, :rustq_schema_nodes, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_schema_enums, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_schema_type_aliases, accumulate: true)
       @rustq_schema_rust_prefix "Ex"
       @rustq_schema_tag_field :__struct__
       @rustq_schema_default_attrs []
@@ -45,6 +49,7 @@ defmodule RustQ.Rustler.Schema do
           rust_prefix: @rustq_schema_rust_prefix,
           tag_field: @rustq_schema_tag_field,
           default_attrs: @rustq_schema_default_attrs,
+          type_aliases: Enum.reverse(@rustq_schema_type_aliases),
           nodes: Enum.reverse(@rustq_schema_nodes),
           enums: Enum.reverse(@rustq_schema_enums)
         }
@@ -83,6 +88,12 @@ defmodule RustQ.Rustler.Schema do
   defmacro default_attrs(attrs) do
     quote do
       @rustq_schema_default_attrs unquote(attrs)
+    end
+  end
+
+  defmacro type(name, rust_type) do
+    quote do
+      @rustq_schema_type_aliases {unquote(name), unquote(rust_type)}
     end
   end
 
@@ -129,7 +140,10 @@ defmodule RustQ.Rustler.Schema do
   defp nif_struct(schema, {name, fields, opts}) do
     RustQ.Rustler.nif_struct(rust_name(schema, name), module_name(schema, name),
       fields: Enum.map(fields, fn {field, type, _opts} -> {field, rust_type(schema, type)} end),
-      attrs: attrs(schema, opts)
+      attrs: attrs(schema, opts),
+      derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
+      vis: Keyword.get(opts, :vis, :pub),
+      field_vis: Keyword.get(opts, :field_vis, :pub)
     )
   end
 
@@ -150,7 +164,9 @@ defmodule RustQ.Rustler.Schema do
       tag: tag_expr(schema.tag_field),
       unknown: Keyword.get(opts, :unknown, :unknown_variant),
       variants: variants,
-      attrs: attrs(schema, opts)
+      attrs: attrs(schema, opts),
+      derive: Keyword.get(opts, :derive, [:Clone, :Debug]),
+      vis: Keyword.get(opts, :vis, :pub)
     )
   end
 
@@ -173,6 +189,12 @@ defmodule RustQ.Rustler.Schema do
 
   defp rust_type(_schema, :string), do: :String
   defp rust_type(_schema, :boolean), do: :bool
+  defp rust_type(schema, {:option, type}), do: {:option, rust_type(schema, type)}
+  defp rust_type(schema, {:vec, type}), do: {:vec, rust_type(schema, type)}
+
+  defp rust_type(schema, type) when is_atom(type),
+    do: Keyword.get(schema.type_aliases, type, type)
+
   defp rust_type(_schema, type), do: type
 
   defp extract_fields(block) do

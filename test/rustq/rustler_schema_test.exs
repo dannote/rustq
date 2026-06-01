@@ -8,12 +8,18 @@ defmodule RustQ.RustlerSchemaTest do
       rust_prefix: "Ex",
       tag_field: :__struct__,
       default_attrs: ["allow(dead_code)"] do
+      type(:content, :ExContent)
+
       node Text do
         field(:text, :String)
         field(:size, {:option, :String})
       end
 
       node Space do
+      end
+
+      node Paragraph do
+        field(:body, {:vec, :content})
       end
 
       tagged_enum Content do
@@ -30,6 +36,7 @@ defmodule RustQ.RustlerSchemaTest do
     assert schema.rust_prefix == "Ex"
     assert schema.tag_field == :__struct__
     assert schema.default_attrs == ["allow(dead_code)"]
+    assert schema.type_aliases == [content: :ExContent]
     assert {:Text, [text: :String, size: {:option, :String}]} not in schema.nodes
 
     assert {:Text, [{:text, :String, []}, {:size, {:option, :String}, []}], []} in schema.nodes
@@ -44,6 +51,8 @@ defmodule RustQ.RustlerSchemaTest do
     assert code =~ ~S/#[module = "Folio.Content.Text"]/
     assert code =~ "pub struct ExText"
     assert code =~ "pub size: Option<String>"
+    assert code =~ "pub struct ExParagraph"
+    assert code =~ "pub body: Vec<ExContent>"
     assert code =~ "pub enum ExContent"
     assert code =~ "Text(ExText)"
     assert code =~ ~S/"Elixir.Folio.Content.Text" => Ok(ExContent::Text(Decoder::decode(term)?))/

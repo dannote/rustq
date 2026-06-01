@@ -125,6 +125,7 @@ defmodule MyApp.Codegen.ContentSchema do
 
   schema MyApp.Content, rust_prefix: "Ex", tag_field: :__struct__ do
     default_attrs ["allow(dead_code)"]
+    type :content, :ExContent
 
     node Text do
       field :text, :String
@@ -132,6 +133,10 @@ defmodule MyApp.Codegen.ContentSchema do
     end
 
     node Space do
+    end
+
+    node Paragraph do
+      field :body, {:vec, :content}
     end
 
     tagged_enum Content do
