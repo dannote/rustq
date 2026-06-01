@@ -91,7 +91,9 @@ defmodule RustQ.Rust do
       attrs: Keyword.get(opts, :attrs, []),
       body: Keyword.get(opts, :body, ""),
       returns: Keyword.get(opts, :returns),
-      vis: Keyword.get(opts, :vis)
+      vis: Keyword.get(opts, :vis),
+      generics: function_generics(opts),
+      where: Keyword.get(opts, :where, [])
     }
   end
 
@@ -213,10 +215,12 @@ defmodule RustQ.Rust do
       visibility(function.vis),
       "fn ",
       ident(function.name),
+      generics(function.generics),
       "(",
       args,
       ")",
       returns,
+      where_clause(function.where),
       " {\n",
       function.body,
       "\n}"
@@ -310,6 +314,42 @@ defmodule RustQ.Rust do
   def literal(nil), do: "None"
   def literal(value) when is_integer(value) or is_float(value), do: to_string(value)
 
+  @spec type(atom() | String.t(), keyword() | [rust_type()]) :: String.t()
+  def type(name, opts) when is_list(opts) do
+    if Keyword.keyword?(opts) do
+      generic_type(name, Keyword.get(opts, :generics, []), Keyword.get(opts, :lifetime))
+    else
+      generic_type(name, opts, nil)
+    end
+  end
+
+  @spec ref(rust_type(), keyword()) :: String.t()
+  def ref(value, opts \\ []) do
+    mut = if Keyword.get(opts, :mut), do: "mut ", else: ""
+    lifetime = if lifetime = Keyword.get(opts, :lifetime), do: "'#{lifetime} ", else: ""
+    "&#{lifetime}#{mut}#{type(value)}"
+  end
+
+  @spec static_slice(rust_type()) :: String.t()
+  def static_slice(value), do: ref({:slice, value}, lifetime: :static)
+
+  @spec use_many([term()], keyword()) :: [Use.t()]
+  def use_many(paths, opts \\ []) do
+    Enum.map(paths, &__MODULE__.use(&1, opts))
+  end
+
+  @spec prelude(atom()) :: [Use.t()]
+  def prelude(:rustler_resource) do
+    use_many([
+      {:path, [:std, :sync, :OnceLock]},
+      {:path, [:rustler, :Env]},
+      {:path, [:rustler, :Encoder]},
+      {:path, [:rustler, :NifResult]},
+      {:path, [:rustler, :ResourceArc]},
+      {:path, [:rustler, :Term]}
+    ])
+  end
+
   @spec type(rust_type()) :: String.t()
   def type(value) when is_binary(value), do: value
   def type(value) when is_atom(value), do: ident(value)
@@ -336,6 +376,39 @@ defmodule RustQ.Rust do
     do: "#{path(parts)}<#{Enum.map_join(generics, ", ", &type/1)}>"
 
   def type(parts) when is_list(parts), do: path(parts)
+
+  defp function_generics(opts) do
+    opts
+    |> Keyword.get(:generics, [])
+    |> List.wrap()
+    |> Kernel.++(opts |> Keyword.get(:lifetimes, []) |> List.wrap() |> Enum.map(&"'#{&1}"))
+    |> then(fn generics ->
+      case Keyword.get(opts, :lifetime) do
+        nil -> generics
+        lifetime -> ["'#{lifetime}" | generics]
+      end
+    end)
+  end
+
+  defp generic_type(name, generics, nil) do
+    case List.wrap(generics) do
+      [] -> type(name)
+      generics -> "#{type(name)}<#{Enum.map_join(generics, ", ", &type/1)}>"
+    end
+  end
+
+  defp generic_type(name, generics, lifetime) do
+    generic_type(name, ["'#{lifetime}" | List.wrap(generics)], nil)
+  end
+
+  defp generics([]), do: []
+  defp generics(values), do: ["<", Enum.map_join(values, ", ", &type/1), ">"]
+
+  defp where_clause([]), do: []
+
+  defp where_clause(values) do
+    ["\nwhere\n", values |> List.wrap() |> Enum.map_join(",\n", &["    ", &1])]
+  end
 
   defp attrs_with_derive(opts) do
     derive = Keyword.get(opts, :derive, [])

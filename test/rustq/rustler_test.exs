@@ -193,6 +193,28 @@ defmodule RustQ.RustlerTest do
     refute code =~ "fn type_str"
   end
 
+  test "builds resource helper boilerplate" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("resource.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.resource_type(:Document),
+            RustQ.Rustler.resource_decode(:Document),
+            RustQ.Rustler.resource_init(:Document)
+          ]
+        ]
+      )
+
+    assert RustQ.Rustler.resource_arc(:Document) == "ResourceArc<Document>"
+    assert code =~ "type DocumentResource = ResourceArc<Document>;"
+
+    assert code =~
+             "fn decode_document_resource<'a>(term: Term<'a>) -> NifResult<ResourceArc<Document>>"
+
+    assert code =~ "rustler::resource!(Document, env);"
+  end
+
   test "builds resource boilerplate" do
     code =
       "__splice_items!();"

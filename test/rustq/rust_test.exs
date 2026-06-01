@@ -18,6 +18,30 @@ defmodule RustQ.RustTest do
     assert code =~ ~s|pub const TABLE: &str = "users";|
   end
 
+  test "builds ergonomic generic and lifetime types" do
+    assert Rust.type(:Term, lifetime: :a) == "Term<'a>"
+    assert Rust.type(:Decoder, lifetime: :_) == "Decoder<'_>"
+    assert Rust.type(:ResourceArc, [:Document]) == "ResourceArc<Document>"
+    assert Rust.ref(:Document, lifetime: :static) == "&'static Document"
+    assert Rust.static_slice(:Atom) == "&'static [Atom]"
+  end
+
+  test "builds functions with generics and where clauses" do
+    code =
+      Rust.fn(:read_repeated,
+        lifetime: :a,
+        generics: [:T, :F],
+        args: [decoder: {:ref, :Decoder}],
+        returns: {:raw, "NifResult<T>"},
+        where: ["F: FnMut(&mut Self) -> NifResult<T>"],
+        body: "todo!()"
+      )
+      |> Rust.to_fragment()
+
+    assert code =~ "fn read_repeated<'a, T, F>"
+    assert code =~ "where\n    F: FnMut(&mut Self) -> NifResult<T>"
+  end
+
   test "builds top-level Rust items" do
     user =
       :User

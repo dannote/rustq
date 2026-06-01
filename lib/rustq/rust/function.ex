@@ -1,6 +1,15 @@
 defmodule RustQ.Rust.Function do
   @moduledoc false
-  defstruct [:name, args: [], attrs: [], body: "", returns: nil, vis: nil]
+  defstruct [
+    :name,
+    args: [],
+    attrs: [],
+    body: "",
+    returns: nil,
+    vis: nil,
+    generics: [],
+    where: []
+  ]
 
   @type t :: %__MODULE__{
           name: atom() | String.t(),
@@ -8,6 +17,8 @@ defmodule RustQ.Rust.Function do
           attrs: [term()],
           body: iodata(),
           returns: term(),
-          vis: atom() | String.t() | nil
+          vis: atom() | String.t() | nil,
+          generics: [term()],
+          where: [term()]
         }
 end

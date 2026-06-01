@@ -54,6 +54,18 @@ defmodule RustQ.Rustler do
   @spec resource(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate resource(name, opts \\ []), to: Resource, as: :build
 
+  @spec resource_arc(atom() | String.t()) :: String.t()
+  defdelegate resource_arc(name), to: Resource, as: :arc
+
+  @spec resource_decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  defdelegate resource_decode(name, opts \\ []), to: Resource, as: :decode
+
+  @spec resource_init(atom() | String.t()) :: Rust.Fragment.t()
+  defdelegate resource_init(name), to: Resource, as: :init
+
+  @spec resource_type(atom() | String.t(), keyword()) :: Rust.TypeAlias.t()
+  defdelegate resource_type(name, opts \\ []), to: Resource, as: :type_alias
+
   @spec opts_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate opts_decoder(name, opts), to: OptsDecoder, as: :build
 
