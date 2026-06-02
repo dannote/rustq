@@ -69,6 +69,13 @@ defmodule RustQ.Config do
     end
   end
 
+  defmacro require_file(path) do
+    quote do
+      Code.require_file(unquote(path))
+      RustQ.Config.__manifest__()
+    end
+  end
+
   defmacro render(template, opts \\ []) do
     quote do
       RustQ.Config.__put_target_option__(

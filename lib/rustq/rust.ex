@@ -33,6 +33,9 @@ defmodule RustQ.Rust do
   @spec param(atom() | String.t(), rust_type()) :: Fragment.t()
   def param(name, type), do: %Fragment{kind: :arg, code: [ident(name), ": ", type(type)]}
 
+  @spec path(term()) :: String.t()
+  def path(parts), do: Enum.map_join(List.wrap(parts), "::", &ident/1)
+
   @spec unquote(:item)(iodata()) :: Fragment.t()
   def unquote(:item)(code), do: %Fragment{kind: :item, code: code}
 
@@ -478,7 +481,6 @@ defmodule RustQ.Rust do
   defp visibility(:crate), do: "pub(crate) "
   defp visibility(value) when is_binary(value), do: [value, " "]
 
-  defp path(parts), do: Enum.map_join(List.wrap(parts), "::", &ident/1)
   defp ident(value) when is_atom(value), do: Atom.to_string(value)
   defp ident(value) when is_binary(value), do: value
 end

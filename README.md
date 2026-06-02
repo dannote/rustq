@@ -104,8 +104,9 @@ RustQ.Rustler.tagged_enum(:ExContent,
   ]
 )
 
-RustQ.Rustler.cached_atom_fns([:ok, node_changes: "nodeChanges"])
-RustQ.Rustler.term_builders(include: [:map_from_pairs, :struct_from_arrays])
+RustQ.Rustler.cached_atoms([:ok, node_changes: "nodeChanges"])
+RustQ.Rustler.term_builders(include: [:map_from_terms, :struct_from_terms])
+RustQ.Rustler.nif_term_builders(include: [:map_from_nif_terms, :struct_from_nif_terms])
 ```
 
 `term_decoder/2` field options:
@@ -183,16 +184,9 @@ Path-only `rust_items` targets infer their name from the filename and strip a
 leading `generated_`, so `generated_term_helpers.rs` can be selected with
 `mix rustq.gen term_helpers`.
 
-Targets can include static-analysis commands that run with `--check`:
-
-```elixir
-rust_items "native/my_nif/src/generated.rs",
-  items: MyApp.Codegen.rust_items(),
-  check: [
-    "cargo fmt --manifest-path native/my_nif/Cargo.toml -- --check",
-    "cargo clippy --manifest-path native/my_nif/Cargo.toml -- -D warnings"
-  ]
-```
+RustQ's own inline Rust helper templates are checked in CI with
+`mix rustq.templates.check`, which renders the helpers into a fixture Rustler
+crate and runs `cargo fmt`, `cargo check`, and `cargo clippy`.
 
 ## Fragment validation
 

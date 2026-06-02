@@ -5,42 +5,25 @@ defmodule RustQ.Rustler.TermBuilders do
 
   alias RustQ.Rust
 
-  @names [:map_from_pairs, :struct_from_arrays]
+  @names [:map_from_terms, :struct_from_terms]
 
   @templates %{
-    map_from_pairs: ~R"""
-    fn make_map_from_pairs<'a>(
+    map_from_terms: ~R"""
+    fn make_map_from_terms<'a>(
         env: Env<'a>,
-        pairs: &[(rustler::wrapper::NIF_TERM, rustler::wrapper::NIF_TERM)],
+        pairs: &[(Term<'a>, Term<'a>)],
     ) -> NifResult<Term<'a>> {
-        let mut map = rustler::types::map::map_new(env);
-
-        for (key, value) in pairs {
-            map = rustler::wrapper::map_put(env.as_c_arg(), map.as_c_arg(), *key, *value)
-                .ok_or(rustler::Error::BadArg)?;
-        }
-
-        Ok(unsafe { Term::new(env, map) })
+        let (keys, values): (Vec<_>, Vec<_>) = pairs.iter().copied().unzip();
+        Term::map_from_term_arrays(env, &keys, &values)
     }
     """,
-    struct_from_arrays: ~R"""
-    fn make_struct_from_arrays<'a>(
+    struct_from_terms: ~R"""
+    fn make_struct_from_terms<'a>(
         env: Env<'a>,
-        keys: &[rustler::wrapper::NIF_TERM],
-        values: &[rustler::wrapper::NIF_TERM],
+        keys: &[Term<'a>],
+        values: &[Term<'a>],
     ) -> NifResult<Term<'a>> {
-        if keys.len() != values.len() {
-            return Err(rustler::Error::BadArg);
-        }
-
-        let mut map = rustler::types::map::map_new(env);
-
-        for (key, value) in keys.iter().zip(values.iter()) {
-            map = rustler::wrapper::map_put(env.as_c_arg(), map.as_c_arg(), *key, *value)
-                .ok_or(rustler::Error::BadArg)?;
-        }
-
-        Ok(unsafe { Term::new(env, map) })
+        Term::map_from_term_arrays(env, keys, values)
     }
     """
   }

@@ -50,7 +50,6 @@ defmodule RustQ.Generated do
       Enum.each(targets, fn {name, target} -> sync!(name, target, opts) end)
     end
 
-    run_checks!(targets, opts)
     :ok
   end
 
@@ -117,23 +116,6 @@ defmodule RustQ.Generated do
 
   defp fresh?(path, expected) do
     File.exists?(path) and File.read!(path) |> normalize_newlines() == expected
-  end
-
-  defp run_checks!(targets, opts) do
-    if Keyword.get(opts, :check, false) do
-      targets
-      |> Enum.flat_map(fn {_name, target} -> List.wrap(Keyword.get(target, :check, [])) end)
-      |> Enum.uniq()
-      |> Enum.each(&run_check!/1)
-    end
-  end
-
-  defp run_check!(command) do
-    {_, status} = System.cmd("sh", ["-c", command], into: IO.stream(), stderr_to_stdout: true)
-
-    if status != 0 do
-      raise "RustQ generated check failed: #{command}"
-    end
   end
 
   defp normalize_manifest!(manifest) when is_list(manifest) do

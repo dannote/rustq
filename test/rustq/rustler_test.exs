@@ -24,7 +24,7 @@ defmodule RustQ.RustlerTest do
     code =
       "__splice_items!();"
       |> RustQ.render!("cached_atoms.rs",
-        splice: [items: RustQ.Rustler.cached_atom_fns([:ok, {:node_changes, "nodeChanges"}])]
+        splice: [items: RustQ.Rustler.cached_atoms([:ok, {:node_changes, "nodeChanges"}])]
       )
 
     assert code =~ "fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom"
@@ -38,9 +38,19 @@ defmodule RustQ.RustlerTest do
       "__splice_items!();"
       |> RustQ.render!("term_builders.rs", splice: [items: RustQ.Rustler.term_builders()])
 
-    assert code =~ "fn make_map_from_pairs<'a>"
-    assert code =~ "fn make_struct_from_arrays<'a>"
-    assert code =~ "rustler::wrapper::map_put"
+    assert code =~ "fn make_map_from_terms<'a>"
+    assert code =~ "fn make_struct_from_terms<'a>"
+    assert code =~ "Term::map_from_term_arrays"
+  end
+
+  test "builds raw NIF_TERM builder helpers" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("nif_term_builders.rs", splice: [items: RustQ.Rustler.nif_term_builders()])
+
+    assert code =~ "fn make_map_from_nif_terms<'a>"
+    assert code =~ "fn make_struct_from_nif_terms<'a>"
+    assert code =~ "rustler::wrapper::map::map_put"
   end
 
   test "builds NifStruct declarations" do
@@ -223,7 +233,7 @@ defmodule RustQ.RustlerTest do
         splice: [
           items: [
             RustQ.Rustler.resource_type(:Document),
-            RustQ.Rustler.resource_decode(:Document),
+            RustQ.Rustler.resource_decoder(:Document),
             RustQ.Rustler.resource_init(:Document)
           ]
         ]

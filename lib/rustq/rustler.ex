@@ -9,6 +9,7 @@ defmodule RustQ.Rustler do
     Atoms,
     CachedAtoms,
     NifStruct,
+    NifTermBuilders,
     OptsDecoder,
     Resource,
     Schema,
@@ -38,10 +39,10 @@ defmodule RustQ.Rustler do
           Rust.Fragment.t()
   defdelegate atoms(atoms, opts \\ []), to: Atoms, as: :build
 
-  @spec cached_atom_fns([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
+  @spec cached_atoms([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
           Rust.Fragment.t()
         ]
-  defdelegate cached_atom_fns(atoms, opts \\ []), to: CachedAtoms, as: :build
+  defdelegate cached_atoms(atoms, opts \\ []), to: CachedAtoms, as: :build
 
   @spec nif_struct(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
   defdelegate nif_struct(name, module, opts \\ []), to: NifStruct, as: :build
@@ -51,6 +52,9 @@ defmodule RustQ.Rustler do
 
   @spec tagged_enum(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate tagged_enum(name, opts), to: TaggedEnum, as: :build
+
+  @spec nif_term_builders(keyword()) :: [Rust.Fragment.t()]
+  defdelegate nif_term_builders(opts \\ []), to: NifTermBuilders, as: :build
 
   @spec term_builders(keyword()) :: [Rust.Fragment.t()]
   defdelegate term_builders(opts \\ []), to: TermBuilders, as: :build
@@ -67,8 +71,8 @@ defmodule RustQ.Rustler do
   @spec resource_arc(atom() | String.t()) :: String.t()
   defdelegate resource_arc(name), to: Resource, as: :arc
 
-  @spec resource_decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
-  defdelegate resource_decode(name, opts \\ []), to: Resource, as: :decode
+  @spec resource_decoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  defdelegate resource_decoder(name, opts \\ []), to: Resource, as: :decode
 
   @spec resource_init(atom() | String.t()) :: Rust.Fragment.t()
   defdelegate resource_init(name), to: Resource, as: :init

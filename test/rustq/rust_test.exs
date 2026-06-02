@@ -21,6 +21,7 @@ defmodule RustQ.RustTest do
   test "builds ergonomic generic and lifetime types" do
     assert Rust.type(:Term, lifetime: :a) == "Term<'a>"
     assert Rust.type(:Decoder, lifetime: :_) == "Decoder<'_>"
+    assert Rust.path([:std, :sync, :OnceLock]) == "std::sync::OnceLock"
     assert Rust.type(:ResourceArc, [:Document]) == "ResourceArc<Document>"
     assert Rust.ref(:Document, lifetime: :static) == "&'static Document"
     assert Rust.static_slice(:Atom) == "&'static [Atom]"

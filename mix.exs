@@ -49,6 +49,7 @@ defmodule RustQ.MixProject do
         "rust.fmt --check",
         "rust.check",
         "rust.clippy",
+        "rustq.templates.check",
         "test",
         "credo --strict",
         "dialyzer",
