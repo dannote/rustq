@@ -146,9 +146,8 @@ structs plus tagged enums:
 defmodule MyApp.Codegen.ContentSchema do
   use RustQ.Rustler.Schema
 
-  schema MyApp.Content, rust_prefix: "Ex", tag_field: :__struct__ do
+  schema MyApp.Content do
     default_attrs ["allow(dead_code)"]
-    type :content, :ExContent
 
     node Text do
       field :text, :String
@@ -156,7 +155,7 @@ defmodule MyApp.Codegen.ContentSchema do
     end
 
     node Paragraph do
-      field :body, {:vec, :content}
+      field :body, {:vec, Content}
     end
 
     tagged_enum Content do

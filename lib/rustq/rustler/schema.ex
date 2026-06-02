@@ -9,12 +9,14 @@ defmodule RustQ.Rustler.Schema do
       defmodule MyApp.Codegen.ContentSchema do
         use RustQ.Rustler.Schema
 
-        schema MyApp.Content, rust_prefix: "Ex", tag_field: :__struct__ do
-          type :content, :ExContent
-
+        schema MyApp.Content do
           node Text do
             field :text, :String
             field :size, {:option, :String}
+          end
+
+          node Paragraph do
+            field :body, {:vec, Content}
           end
 
           tagged_enum Content do
@@ -215,17 +217,26 @@ defmodule RustQ.Rustler.Schema do
   defp rust_type(schema, {:option, type}), do: {:option, rust_type(schema, type)}
   defp rust_type(schema, {:vec, type}), do: {:vec, rust_type(schema, type)}
 
-  defp rust_type(schema, type) when is_atom(type),
-    do: Keyword.get(schema.type_aliases, type, type)
+  defp rust_type(schema, type) when is_atom(type) do
+    cond do
+      alias_type = Keyword.get(schema.type_aliases, type) -> alias_type
+      type in schema_names(schema) -> rust_name(schema, type)
+      true -> type
+    end
+  end
 
   defp rust_type(_schema, type), do: type
+
+  defp schema_names(schema) do
+    Enum.map(schema.nodes, &elem(&1, 0)) ++ Enum.map(schema.enums, &elem(&1, 0))
+  end
 
   defp extract_fields(block) do
     block
     |> block_expressions()
     |> Enum.map(fn
-      {:field, _meta, [name, type]} -> {name, type, []}
-      {:field, _meta, [name, type, opts]} -> {name, type, opts}
+      {:field, _meta, [name, type]} -> {name, normalize_type(type), []}
+      {:field, _meta, [name, type, opts]} -> {name, normalize_type(type), opts}
       other -> raise ArgumentError, "unsupported node expression: #{Macro.to_string(other)}"
     end)
   end
@@ -254,8 +265,22 @@ defmodule RustQ.Rustler.Schema do
     Enum.map(variants, &ast_name/1)
   end
 
+  defp normalize_type({:__aliases__, _meta, _parts} = alias), do: ast_name(alias)
+  defp normalize_type({left, right}), do: {normalize_type(left), normalize_type(right)}
+
+  defp normalize_type(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&normalize_type/1)
+    |> List.to_tuple()
+  end
+
+  defp normalize_type(list) when is_list(list), do: Enum.map(list, &normalize_type/1)
+  defp normalize_type(type), do: ast_name(type)
+
   defp ast_name({:__aliases__, _meta, parts}), do: List.last(parts)
   defp ast_name(name) when is_atom(name), do: name
+  defp ast_name(other), do: other
 
   defp block_expressions({:__block__, _meta, expressions}), do: expressions
   defp block_expressions(expression), do: [expression]

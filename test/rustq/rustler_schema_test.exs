@@ -4,12 +4,7 @@ defmodule RustQ.RustlerSchemaTest do
   defmodule ContentSchema do
     use RustQ.Rustler.Schema
 
-    schema Folio.Content,
-      rust_prefix: "Ex",
-      tag_field: :__struct__,
-      default_attrs: ["allow(dead_code)"] do
-      type(:content, :ExContent)
-
+    schema Folio.Content, default_attrs: ["allow(dead_code)"] do
       node Text do
         field(:text, :String)
         field(:size, {:option, :String})
@@ -19,7 +14,7 @@ defmodule RustQ.RustlerSchemaTest do
       end
 
       node Paragraph do
-        field(:body, {:vec, :content})
+        field(:body, {:vec, Content})
       end
 
       tagged_enum Content do
@@ -36,7 +31,7 @@ defmodule RustQ.RustlerSchemaTest do
     assert schema.rust_prefix == "Ex"
     assert schema.tag_field == :__struct__
     assert schema.default_attrs == ["allow(dead_code)"]
-    assert schema.type_aliases == [content: :ExContent]
+    assert schema.type_aliases == []
     assert {:Text, [text: :String, size: {:option, :String}]} not in schema.nodes
 
     assert {:Text, [{:text, :String, []}, {:size, {:option, :String}, []}], []} in schema.nodes
