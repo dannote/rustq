@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.TypeAlias do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust type alias built with `RustQ.Rust.type_alias/3`.
+  """
   defstruct [:name, :type, attrs: [], vis: nil]
 
   @type t :: %__MODULE__{

@@ -1,7 +1,5 @@
 defmodule Mix.Tasks.Rustq.Templates.Check do
-  @moduledoc """
-  Checks RustQ's Rustler helper templates in a fixture Rust crate.
-  """
+  @moduledoc false
 
   use Mix.Task
 

@@ -1,11 +1,18 @@
 defmodule RustQ.Generated do
   @moduledoc """
-  Shared file sync helpers for RustQ-generated sources.
+  File sync helpers for RustQ-generated sources.
 
-  Projects can use this directly from their own Mix tasks, or declare targets in
-  `rustq.exs` and use `mix rustq.gen`.
+  Most projects should use `rustq.exs` with `mix rustq.gen`. Use this module
+  directly when a project already has its own Mix task and only needs RustQ's
+  write/check behavior.
+
+      RustQ.Generated.sync!(:helpers,
+        path: "native/my_nif/src/generated_helpers.rs",
+        build: fn -> render_helpers() end
+      )
+
+  Pass `check: true` to compare without writing, which is useful in CI.
   """
-
   defmodule StaleError do
     @moduledoc false
 

@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.ModDecl do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust module declaration built with `RustQ.Rust.mod/2`.
+  """
   defstruct [:name, attrs: [], items: [], vis: nil]
 
   @type t :: %__MODULE__{

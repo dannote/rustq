@@ -1,10 +1,21 @@
 defmodule RustQ do
   @moduledoc """
-  Rust templates and quasiquoting for Elixir.
+  Rust template quasiquoting and code generation.
 
-  RustQ follows the same pipeline shape as `oxc_ex`: parse a real source
-  template, bind placeholder identifiers or expressions, splice generated
-  fragments, then codegen formatted source.
+  RustQ renders real Rust templates from Elixir. Parse a template, bind
+  placeholder identifiers/expressions, splice Rust fragments, then generate
+  formatted Rust source.
+
+  The most common entry points are:
+
+    * `render!/3` for one-shot rendering from a string template.
+    * `render_file!/2` for `.rs` template files.
+    * `parse!/2`, `bind/2`, `splice/3`, and `codegen!/2` for pipeline-style codegen.
+    * `parse_fragment!/2` and `valid_fragment?/2` for validating generated snippets.
+
+  Use `RustQ.Rust` for Rust fragment builders, `RustQ.Rustler` for Rustler code
+  generators, and `RustQ.Config` plus `mix rustq.gen` for project-level generated
+  files.
   """
 
   alias RustQ.Template
@@ -17,6 +28,8 @@ defmodule RustQ do
 
   @doc """
   Parses and validates a Rust template.
+
+  `filename` is used only in error messages; it does not need to exist on disk.
   """
   @spec parse(source(), String.t()) :: {:ok, Template.t()} | {:error, [map()]}
   def parse(source, filename) when is_binary(filename) do
@@ -73,6 +86,8 @@ defmodule RustQ do
 
   @doc """
   Renders a Rust template file.
+
+  Accepts the same options as `render/3`.
   """
   @spec render_file(Path.t(), keyword()) :: {:ok, String.t()} | {:error, [map()] | File.posix()}
   def render_file(path, opts \\ []) do
@@ -93,6 +108,9 @@ defmodule RustQ do
 
   @doc """
   Parses and validates a Rust fragment for a specific context.
+
+  Supported contexts are `:item`, `:impl_item`, `:field`, `:stmt`, `:arg`,
+  `:arm`, `:expr`, and `:type`.
   """
   @spec parse_fragment(atom(), term()) :: {:ok, RustQ.Rust.Fragment.t()} | {:error, [map()]}
   def parse_fragment(kind, fragment) when is_atom(kind) do
@@ -143,7 +161,10 @@ defmodule RustQ do
   end
 
   @doc """
-  Splices fragments at `__splice_name!()` placeholders.
+  Splices fragments into a parsed template.
+
+  The splice name matches placeholders such as `__splice_items!();`,
+  `__splice_fields: (),`, or `__splice_arms => unreachable!(),`.
   """
   @spec splice(Template.t(), atom(), term() | [term()]) :: Template.t()
   def splice(%Template{} = template, name, replacement) when is_atom(name) do
@@ -186,7 +207,13 @@ defmodule RustQ do
   end
 
   @doc """
-  Convenience wrapper around `parse!/2`, `bind/2`, `splice/3`, and `codegen/1`.
+  Convenience wrapper around `parse/2`, `bind/2`, `splice/3`, and `codegen/2`.
+
+  Options:
+
+    * `:bind` - bindings passed to `bind/2`.
+    * `:splice` - splice replacements passed to `splice/3`.
+    * `:preamble` - optional text prepended after formatting.
   """
   @spec render(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
   def render(source, filename, opts \\ []) do

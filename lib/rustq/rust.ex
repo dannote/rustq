@@ -1,8 +1,22 @@
 defmodule RustQ.Rust do
   @moduledoc """
-  Elixir-friendly builders for Rust fragments used with `RustQ.splice/3`.
-  """
+  Elixir-friendly builders for Rust fragments.
 
+  Use this module when generating Rust declarations from data. Builders return
+  small structs or fragments that RustQ can validate and splice into templates.
+
+      alias RustQ.Rust
+
+      Rust.struct(:User,
+        vis: :pub,
+        derive: [:Clone, :Debug],
+        fields: [Rust.field(:id, :i64, vis: :pub)]
+      )
+
+  Prefer real Rust templates for larger bodies and use these builders for the
+  repetitive edges: fields, function signatures, attributes, type aliases, and
+  simple declarations.
+  """
   alias RustQ.Rust.Const
   alias RustQ.Rust.EnumDecl
   alias RustQ.Rust.Field

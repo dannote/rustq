@@ -1,12 +1,32 @@
 defmodule RustQ.Config do
   @moduledoc """
-  Small DSL for declaring RustQ-generated files in `rustq.exs`.
+  DSL for declaring generated RustQ files in `rustq.exs`.
 
-      import RustQ.Config
+  A manifest is ordinary Elixir. It can require helper modules, declare generated
+  Rust item files, or provide custom render/build functions.
 
-      rust_items :term_helpers, "native/generated_term_helpers.rs",
-        items: RustQ.Rustler.term_helpers()
+      use RustQ.Config
+
+      alias RustQ.Rustler
+
+      require_file "lib/my_app/codegen/schema.ex"
+
+      rust "native/my_nif/src/generated_term_helpers.rs" do
+        Rustler.term_helpers()
+      end
+
+      rust "native/my_nif/src/generated_schema.rs" do
+        MyApp.Codegen.Schema.rust_items()
+      end
+
+  Run `mix rustq.gen` to write files and `mix rustq.gen --check` in CI to fail
+  when checked-in generated files are stale.
   """
+  defmacro __using__(_opts) do
+    quote do
+      import RustQ.Config
+    end
+  end
 
   defmacro rustq(do: block) do
     quote do
@@ -43,6 +63,31 @@ defmodule RustQ.Config do
     end
   end
 
+  defmacro rust(name, path, do: block) do
+    items = block_items(block)
+
+    quote do
+      RustQ.Config.__put_rust_items__(unquote(name), unquote(path), unquote(items))
+    end
+  end
+
+  defmacro rust(path, do: block) do
+    items = block_items(block)
+
+    quote do
+      path = unquote(path)
+      RustQ.Config.__put_rust_items__(RustQ.Config.__target_name__(path), path, unquote(items))
+    end
+  end
+
+  defmacro rust_items(name, path, do: block) do
+    items = block_items(block)
+
+    quote do
+      RustQ.Config.__put_rust_items__(unquote(name), unquote(path), unquote(items))
+    end
+  end
+
   defmacro rust_items(name, path, opts) do
     quote do
       RustQ.Config.__put_target__(
@@ -52,6 +97,15 @@ defmodule RustQ.Config do
       )
 
       RustQ.Config.__manifest__()
+    end
+  end
+
+  defmacro rust_items(path, do: block) do
+    items = block_items(block)
+
+    quote do
+      path = unquote(path)
+      RustQ.Config.__put_rust_items__(RustQ.Config.__target_name__(path), path, unquote(items))
     end
   end
 
@@ -71,7 +125,13 @@ defmodule RustQ.Config do
 
   defmacro require_file(path) do
     quote do
-      Code.require_file(unquote(path))
+      path = unquote(path)
+      module = RustQ.Config.__module_from_path__(path)
+
+      if module == nil or not Code.ensure_loaded?(module) do
+        Code.require_file(path)
+      end
+
       RustQ.Config.__manifest__()
     end
   end
@@ -117,10 +177,34 @@ defmodule RustQ.Config do
     Process.put(:rustq_config_targets, [{name, Keyword.put(opts, :path, path)} | targets])
   end
 
+  def __put_rust_items__(name, path, items) do
+    __put_target__(
+      name,
+      path,
+      build: fn -> RustQ.Config.__render_rust_items__(path, items: items) end
+    )
+
+    __manifest__()
+  end
+
   def __target_name__(path) do
     path
     |> Path.basename(Path.extname(path))
     |> String.replace_prefix("generated_", "")
+  end
+
+  def __module_from_path__(path) do
+    segments =
+      path
+      |> Path.rootname()
+      |> String.split("/")
+      |> Enum.drop_while(&(&1 in ["lib", "test", "support"]))
+      |> Enum.map(&Macro.camelize/1)
+
+    case segments do
+      [] -> nil
+      segments -> Module.concat(segments)
+    end
   end
 
   def __ensure_started__ do
@@ -158,6 +242,9 @@ defmodule RustQ.Config do
 
     RustQ.render!(template, filename, render_opts)
   end
+
+  defp block_items({:__block__, _meta, items}), do: items
+  defp block_items(item), do: item
 
   defp expand_preamble(opts) do
     case Keyword.get(opts, :preamble, :rustq) do

@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.Const do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust `const` declaration built with `RustQ.Rust.const/4`.
+  """
   defstruct [:name, :type, :value, attrs: [], vis: nil]
 
   @type t :: %__MODULE__{

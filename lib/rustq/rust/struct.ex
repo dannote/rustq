@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.Struct do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust struct declaration built with `RustQ.Rust.struct/2`.
+  """
   defstruct [:name, attrs: [], fields: [], vis: nil]
 
   @type t :: %__MODULE__{

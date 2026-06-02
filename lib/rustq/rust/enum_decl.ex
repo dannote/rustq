@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.EnumDecl do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust enum declaration built with `RustQ.Rust.enum/2`.
+  """
   defstruct [:name, attrs: [], variants: [], vis: nil]
 
   @type t :: %__MODULE__{

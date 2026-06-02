@@ -2,7 +2,7 @@ defmodule RustQ.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/elixir-vibe/rustq"
+  @source_url "https://github.com/dannote/rustq"
 
   def project do
     [
@@ -85,14 +85,25 @@ defmodule RustQ.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url},
+      files: [
+        "lib",
+        "native/rustq_nif/Cargo.lock",
+        "native/rustq_nif/Cargo.toml",
+        "native/rustq_nif/src",
+        ".formatter.exs",
+        "mix.exs",
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
+      ]
     ]
   end
 
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
       source_ref: "v#{@version}",
       source_url: @source_url
     ]

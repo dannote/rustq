@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.Function do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust function declaration built with `RustQ.Rust.fn/2`.
+  """
   defstruct [
     :name,
     args: [],

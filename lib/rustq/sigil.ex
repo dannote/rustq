@@ -1,11 +1,18 @@
 defmodule RustQ.Sigil do
   @moduledoc """
-  Rust source sigil helpers.
+  Provides the `~R` sigil for inline Rust templates.
 
-  Use this module instead of importing it directly so Kernel's built-in `~R`
-  sigil is excluded for the caller.
+  Use `use RustQ.Sigil` instead of importing this module directly. It excludes
+  Kernel's built-in `~R` sigil and imports RustQ's version.
+
+      defmodule MyCodegen do
+        use RustQ.Sigil
+
+        @template ~R'''
+        fn answer() -> i32 { 42 }
+        '''
+      end
   """
-
   defmacro __using__(_opts) do
     quote do
       import Kernel, except: [sigil_R: 2]

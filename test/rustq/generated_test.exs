@@ -80,6 +80,22 @@ defmodule RustQ.GeneratedTest do
     assert Keyword.fetch!(target, :content) == "fn main() {}\n"
   end
 
+  test "loads rustq manifests with use macro" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    use RustQ.Config
+
+    rust_items :helpers, "native/generated.rs", items: [RustQ.Rust.fn(:main, body: "")]
+    """)
+
+    assert [helpers: target] = Generated.load_manifest!(path)
+    assert Keyword.fetch!(target, :path) == "native/generated.rs"
+    assert Keyword.fetch!(target, :build).() =~ "fn main()"
+  end
+
   test "loads rustq manifests with rust_items shortcut" do
     path = tmp_path("rustq.exs")
 
@@ -94,6 +110,48 @@ defmodule RustQ.GeneratedTest do
     assert [helpers: target] = Generated.load_manifest!(path)
     assert Keyword.fetch!(target, :path) == "native/generated.rs"
     assert Keyword.fetch!(target, :build).() =~ "fn main()"
+  end
+
+  test "loads rustq manifests with rust block shortcut" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    use RustQ.Config
+
+    rust "native/generated_helpers.rs" do
+      RustQ.Rust.fn(:first, body: "")
+      RustQ.Rust.fn(:second, body: "")
+    end
+    """)
+
+    assert [{"helpers", target}] = Generated.load_manifest!(path)
+    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
+    code = Keyword.fetch!(target, :build).()
+    assert code =~ "fn first()"
+    assert code =~ "fn second()"
+  end
+
+  test "loads rustq manifests with rust_items block shortcut" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    use RustQ.Config
+
+    rust_items "native/generated_helpers.rs" do
+      RustQ.Rust.fn(:first, body: "")
+      RustQ.Rust.fn(:second, body: "")
+    end
+    """)
+
+    assert [{"helpers", target}] = Generated.load_manifest!(path)
+    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
+    code = Keyword.fetch!(target, :build).()
+    assert code =~ "fn first()"
+    assert code =~ "fn second()"
   end
 
   test "flattens nested rust_items lists" do

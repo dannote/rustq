@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.Field do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust struct field built with `RustQ.Rust.field/3`.
+  """
   defstruct [:name, :type, attrs: [], vis: nil]
 
   @type t :: %__MODULE__{

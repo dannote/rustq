@@ -1,8 +1,31 @@
 defmodule RustQ.Rustler.Schema do
   @moduledoc """
-  Ecto-inspired DSL for Rustler interop schemas.
-  """
+  Schema DSL for generating Rustler structs and tagged enums.
 
+  Use this when a group of Elixir structs should be mirrored in Rust. A schema
+  module defines nodes, fields, type aliases, and tagged enums; `rust_items/1`
+  returns Rust fragments ready for `rustq.exs`.
+
+      defmodule MyApp.Codegen.ContentSchema do
+        use RustQ.Rustler.Schema
+
+        schema MyApp.Content, rust_prefix: "Ex", tag_field: :__struct__ do
+          type :content, :ExContent
+
+          node Text do
+            field :text, :String
+            field :size, {:option, :String}
+          end
+
+          tagged_enum Content do
+            variants :all
+          end
+        end
+      end
+
+  Field optionality is encoded in the Rust type (`{:option, :String}`), keeping
+  the schema close to the generated Rust.
+  """
   defstruct module_prefix: nil,
             rust_prefix: "Ex",
             tag_field: :__struct__,

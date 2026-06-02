@@ -5,6 +5,10 @@ defmodule Mix.Tasks.Rustq.Gen do
       mix rustq.gen
       mix rustq.gen --check
       mix rustq.gen term_helpers
+      mix rustq.gen --config path/to/rustq.exs
+
+  Use `--check` in CI to verify that generated files are up to date without
+  writing them. Passing one or more target names generates only those targets.
   """
 
   use Mix.Task

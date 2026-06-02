@@ -1,11 +1,26 @@
 # RustQ
 
-RustQ is Rust template quasiquoting for Elixir.
+RustQ is Rust template quasiquoting for Elixir. It helps Elixir projects generate
+Rust from real `.rs` templates instead of building Rust strings by hand.
 
-It lets Elixir code generate Rust from real `.rs` templates: parse a template,
-bind placeholder identifiers and expressions, splice generated declarations, and
-emit formatted Rust source through a Rustler NIF powered by `syn` and
-`prettyplease`.
+Use it for Rustler projects, schema-driven NIF surfaces, or any codegen where you
+want Rust syntax highlighting, Rust parsing, formatting, and AST-aware
+placeholder replacement.
+
+## Installation
+
+Add RustQ to `mix.exs`:
+
+```elixir
+{:rustq, "~> 0.1", only: [:dev, :test], runtime: false}
+```
+
+RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available
+where `mix rustq.gen` or your own codegen task runs.
+
+## Generate from real Rust templates
+
+Templates are ordinary Rust with parseable placeholder forms:
 
 ```elixir
 use RustQ.Sigil
@@ -44,84 +59,88 @@ code =
   |> RustQ.codegen!()
 ```
 
-## File templates
-
-```elixir
-"priv/templates/resource.rs"
-|> RustQ.from_file!()
-|> RustQ.bind(Resource: :User)
-|> RustQ.splice(:fields, [Rust.field(:id, :i64, vis: :pub)])
-|> RustQ.codegen!()
-```
-
-Or render in one call:
+For file templates:
 
 ```elixir
 RustQ.render_file!("priv/templates/resource.rs",
   bind: [Resource: :User],
-  splice: [fields: [Rust.field(:id, :i64, vis: :pub)]]
+  splice: [fields: [RustQ.Rust.field(:id, :i64, vis: :pub)]]
 )
 ```
 
+## Placeholder forms
+
+RustQ templates stay parseable Rust by using sentinel identifiers and macros:
+
+- `__Name` — identifier or type-path replacement.
+- `__expr_name!()` — expression replacement.
+- `__type_name!()` — type replacement.
+- `__splice_items!();` — item splice point.
+- `__splice_methods!();` — impl-item splice point.
+- `__splice_body!();` — statement splice point.
+- `__splice_arms => unreachable!(),` — match-arm splice point.
+- `__splice_fields: (),` — struct-field splice point.
+- `fn target(__splice_args: ()) {}` — function-argument splice point.
+
 ## Rust builders
 
+`RustQ.Rust` provides small Elixir builders for common Rust fragments:
+
 ```elixir
-:users
-|> Rust.mod()
-|> Rust.pub()
-|> Rust.item(Rust.type_alias(:UserId, :i64, vis: :pub))
-|> Rust.item(Rust.const(:TABLE, {:ref, :str}, Rust.expr(~s("users")), vis: :pub))
+alias RustQ.Rust
+
+items = [
+  Rust.use([:std, :sync, :OnceLock]),
+  Rust.const(:TABLE, {:ref, :str}, Rust.expr(Rust.literal("users")), vis: :pub),
+  Rust.struct(:User,
+    vis: :pub,
+    derive: [:Clone, :Debug],
+    fields: [Rust.field(:id, :i64, vis: :pub)]
+  )
+]
 ```
+
+Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
+`Rust.expr/1`, and `Rust.arm/1` when hand-written Rust is clearer than a builder.
 
 ## Rustler helpers
 
+`RustQ.Rustler` generates common Rustler code as Rust fragments:
+
 ```elixir
 RustQ.Rustler.atoms([:ok, :error, {"r#type", "type"}])
-RustQ.Rustler.nif(:add, args: [a: :i64, b: :i64], returns: :i64, body: "a + b")
-RustQ.Rustler.init(MyApp.Native)
-```
+RustQ.Rustler.cached_atoms([:ok, node_changes: "nodeChanges"])
 
-Common Rustler decoding helpers can be generated as Rust items:
+RustQ.Rustler.nif(:add,
+  args: [a: :i64, b: :i64],
+  returns: :i64,
+  body: "a + b"
+)
 
-```elixir
 RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
-
 RustQ.Rustler.term_decoder(:ProgramInput,
   fields: [
     body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]
   ]
 )
+```
 
-RustQ.Rustler.nif_struct(:ExText, "Folio.Content.Text",
-  fields: [text: :String, size: {:option, :String}]
-)
+Safe term builders use `Term<'a>`:
 
-RustQ.Rustler.tagged_enum(:ExContent,
-  tag: "atom_struct()",
-  variants: [
-    Text: [type: :ExText, module: "Elixir.Folio.Content.Text"],
-    Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
-  ]
-)
-
-RustQ.Rustler.cached_atoms([:ok, node_changes: "nodeChanges"])
+```elixir
 RustQ.Rustler.term_builders(include: [:map_from_terms, :struct_from_terms])
+```
+
+Low-level raw `NIF_TERM` helpers are explicit:
+
+```elixir
 RustQ.Rustler.nif_term_builders(include: [:map_from_nif_terms, :struct_from_nif_terms])
 ```
 
-`term_decoder/2` field options:
+## Rustler schema DSL
 
-- `:type` — Rust field/decode type.
-- `:key` — Rust expression used as the map key.
-- `required: true` — decode with `?` instead of returning an option.
-- `default: "..."` — fallback Rust expression for missing/invalid optional values.
-- `decode: "..."` — custom Rust expression for the field value.
-- `missing: "..."` / `invalid: "..."` — custom required-field errors for non-`NifResult` decoders.
-
-Function options include `result: "R"` for custom result aliases,
-`:lifetime`, `:fn`, `:term_arg`, and `:term_type`.
-
-For larger Rustler type surfaces, define an Ecto-style schema module:
+For larger Elixir struct surfaces, define a schema once and generate Rust NIF
+structs plus tagged enums:
 
 ```elixir
 defmodule MyApp.Codegen.ContentSchema do
@@ -136,9 +155,6 @@ defmodule MyApp.Codegen.ContentSchema do
       field :size, {:option, :String}
     end
 
-    node Space do
-    end
-
     node Paragraph do
       field :body, {:vec, :content}
     end
@@ -151,26 +167,31 @@ defmodule MyApp.Codegen.ContentSchema do
 end
 ```
 
-Then use `MyApp.Codegen.ContentSchema.rust_items()` in `rustq.exs`.
-Field optionality is explicit in the Rust type (`{:option, :String}`), rather
-than `required: true` flags.
+Optionality is part of the Rust type (`{:option, :String}`), not a separate
+boolean flag.
 
-## Generated files
+## Generated files with `rustq.exs`
 
-Projects can declare generated outputs in `rustq.exs` and use RustQ's shared
-write/check task:
+Create `rustq.exs` in your project root:
 
 ```elixir
-import RustQ.Config
+use RustQ.Config
 
-rust_items "native/my_nif/src/generated_term_helpers.rs",
-  items: RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
+alias RustQ.Rustler
 
-generate :schema, "native/my_nif/src/generated_schema.rs" do
-  render "__splice_items!();",
-    splice: [items: [RustQ.Rust.struct(:User, fields: [RustQ.Rust.field(:id, :i64)])]]
+require_file "lib/my_app/codegen/content_schema.ex"
+
+rust "native/my_nif/src/generated_term_helpers.rs" do
+  Rustler.term_helpers(type_key: "atoms::r#type()")
+end
+
+rust "native/my_nif/src/generated_content.rs" do
+  MyApp.Codegen.ContentSchema.rust_items()
 end
 ```
+
+The manifest is ordinary Elixir, so use aliases, helper functions, modules, and
+macros to keep project-specific codegen readable.
 
 Then run:
 
@@ -180,34 +201,20 @@ mix rustq.gen --check
 mix rustq.gen term_helpers
 ```
 
-Path-only `rust_items` targets infer their name from the filename and strip a
-leading `generated_`, so `generated_term_helpers.rs` can be selected with
-`mix rustq.gen term_helpers`.
+Path-only targets infer their name from the file name and strip a leading
+`generated_`, so `generated_term_helpers.rs` is selectable as `term_helpers`.
 
-RustQ's own inline Rust helper templates are checked in CI with
-`mix rustq.templates.check`, which renders the helpers into a fixture Rustler
-crate and runs `cargo fmt`, `cargo check`, and `cargo clippy`.
+Use `mix rustq.gen --check` in CI to fail when generated files are stale.
 
 ## Fragment validation
 
+You can validate individual Rust fragments in the same contexts RustQ splices:
+
 ```elixir
-RustQ.parse_fragment(:field, "pub id: i64")
-RustQ.parse_fragment!(:arm, Rust.arm("Some(value)", "value"))
-RustQ.valid_fragment?(:stmt, "let value = 1;")
+RustQ.valid_fragment?(:field, "pub id: i64")
+RustQ.parse_fragment!(:arm, RustQ.Rust.arm("Some(value)", "value"))
 ```
 
-## Placeholder forms
+## License
 
-Rust templates stay parseable by using ordinary identifiers and macro calls:
-
-- `__Name` — identifier/type-path replacement
-- `__expr_name!()` — expression replacement
-- `__type_name!()` — type replacement
-- `__splice_name!();` — item, impl item, or statement splice point
-- `__splice_name: (),` — named-field splice point inside structs
-
-## Status
-
-Early prototype. The current implementation mutates parseable Rust templates in
-the Rust NIF, validates with `syn`, and formats with `prettyplease`. The API is
-intentionally shaped after `oxc_ex`: `parse! |> bind |> splice |> codegen!`.
+MIT
