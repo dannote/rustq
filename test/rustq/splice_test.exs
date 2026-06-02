@@ -5,7 +5,7 @@ defmodule RustQ.SpliceTest do
 
   test "splices top-level items" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("items.rs", splice: [items: ["pub mod users;", "pub mod posts;"]])
 
     assert code =~ "pub mod users;"
@@ -16,7 +16,7 @@ defmodule RustQ.SpliceTest do
     code =
       """
       pub fn run() {
-          __splice_body!();
+          __rq_body!();
       }
       """
       |> RustQ.render!("statements.rs", splice: [body: ["let x = 1;", "drop(x);"]])
@@ -30,7 +30,7 @@ defmodule RustQ.SpliceTest do
       """
       pub fn value(input: Option<i32>) -> i32 {
           match input {
-              __splice_arms => unreachable!(),
+              __rq_arms => unreachable!(),
           }
       }
       """

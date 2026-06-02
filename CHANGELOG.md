@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.0 - 2026-06-02
+
+- Replace the separate `__expr_`, `__type_`, and `__splice_` placeholder
+  prefixes with one visually distinct `__rq_` placeholder prefix.
+- Templates now use forms like `__rq_Name`, `__rq_value!()`,
+  `__rq_fields: (),`, and `__rq_items!();`.
+
 ## v0.1.2 - 2026-06-02
 
 - Let Rustler schema field types reference schema nodes and tagged enums by

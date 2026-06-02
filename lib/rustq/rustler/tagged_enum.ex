@@ -6,25 +6,25 @@ defmodule RustQ.Rustler.TaggedEnum do
   alias RustQ.Rust
 
   @decoder_template ~R"""
-  impl<'a> rustler::Decoder<'a> for __Enum {
+  impl<'a> rustler::Decoder<'a> for __rq_Enum {
       fn decode(term: rustler::Term<'a>) -> rustler::NifResult<Self> {
           use rustler::Decoder;
           let env = term.get_env();
-          let module: rustler::Atom = term.map_get(__expr_tag!())?.decode()?;
+          let module: rustler::Atom = term.map_get(__rq_tag!())?.decode()?;
           let name_str = module.to_term(env).atom_to_string()?;
 
           match name_str.as_str() {
-              __splice_arms => unreachable!(),
+              __rq_arms => unreachable!(),
           }
       }
   }
   """
 
   @encoder_template ~R"""
-  impl rustler::Encoder for __Enum {
+  impl rustler::Encoder for __rq_Enum {
       fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a> {
           match self {
-              __splice_arms => unreachable!(),
+              __rq_arms => unreachable!(),
           }
       }
   }

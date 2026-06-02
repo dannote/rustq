@@ -6,29 +6,29 @@ defmodule RustQ.Rustler.OptsDecoder do
   alias RustQ.Rust
 
   @struct_template ~R"""
-  pub struct __Struct {
-      __splice_fields: (),
+  pub struct __rq_Struct {
+      __rq_fields: (),
   }
   """
 
   @struct_lifetime_template ~R"""
-  pub struct __Struct<'__lifetime> {
-      __splice_fields: (),
+  pub struct __rq_Struct<'__rq_lifetime> {
+      __rq_fields: (),
   }
   """
 
   @decoder_template ~R"""
-  pub fn __decode_fn(__splice_args: ()) -> NifResult<__Struct> {
-      Ok(__Struct {
-          __splice_inits: (),
+  pub fn __rq_decode_fn(__rq_args: ()) -> NifResult<__rq_Struct> {
+      Ok(__rq_Struct {
+          __rq_inits: (),
       })
   }
   """
 
   @decoder_lifetime_template ~R"""
-  pub fn __decode_fn<'__lifetime>(__splice_args: ()) -> NifResult<__Struct<'__lifetime>> {
-      Ok(__Struct {
-          __splice_inits: (),
+  pub fn __rq_decode_fn<'__rq_lifetime>(__rq_args: ()) -> NifResult<__rq_Struct<'__rq_lifetime>> {
+      Ok(__rq_Struct {
+          __rq_inits: (),
       })
   }
   """

@@ -244,7 +244,7 @@ fn arg_splice_name(arg: &FnArg) -> Option<String> {
     pat_ident
         .ident
         .to_string()
-        .strip_prefix("__splice_")
+        .strip_prefix("__rq_")
         .map(str::to_string)
 }
 
@@ -257,18 +257,12 @@ fn stmt_splice_name(stmt: &Stmt) -> Option<String> {
 
 fn field_splice_name(field: &Field) -> Option<String> {
     let ident = field.ident.as_ref()?;
-    ident
-        .to_string()
-        .strip_prefix("__splice_")
-        .map(str::to_string)
+    ident.to_string().strip_prefix("__rq_").map(str::to_string)
 }
 
 fn splice_name(path: &syn::Path) -> Option<String> {
     let ident = path.get_ident()?;
-    ident
-        .to_string()
-        .strip_prefix("__splice_")
-        .map(str::to_string)
+    ident.to_string().strip_prefix("__rq_").map(str::to_string)
 }
 
 fn parse_items(name: &str, context: &Context) -> Result<Vec<Item>, Vec<ErrorInfo>> {
@@ -417,10 +411,7 @@ fn field_value_splice_name(field: &FieldValue) -> Option<String> {
         return None;
     };
 
-    ident
-        .to_string()
-        .strip_prefix("__splice_")
-        .map(str::to_string)
+    ident.to_string().strip_prefix("__rq_").map(str::to_string)
 }
 
 fn arm_splice_name(arm: &Arm) -> Option<String> {
@@ -431,7 +422,7 @@ fn arm_splice_name(arm: &Arm) -> Option<String> {
     pat_ident
         .ident
         .to_string()
-        .strip_prefix("__splice_")
+        .strip_prefix("__rq_")
         .map(str::to_string)
 }
 
@@ -475,7 +466,7 @@ impl<'a> Binder<'a> {
 
 impl VisitMut for Binder<'_> {
     fn visit_ident_mut(&mut self, ident: &mut syn::Ident) {
-        if let Some(value) = self.binding_for_ident(ident, "__") {
+        if let Some(value) = self.binding_for_ident(ident, "__rq_") {
             match syn::parse_str::<syn::Ident>(value) {
                 Ok(parsed) => *ident = parsed,
                 Err(error) => self.errors.push(binding_error(
@@ -492,7 +483,7 @@ impl VisitMut for Binder<'_> {
         let name = lifetime.ident.to_string();
 
         if let Some(value) = name
-            .strip_prefix("__")
+            .strip_prefix("__rq_")
             .and_then(|name| self.bindings.get(name))
         {
             let value = value.trim_start_matches('\'');
@@ -502,8 +493,7 @@ impl VisitMut for Binder<'_> {
 
     fn visit_expr_mut(&mut self, expr: &mut Expr) {
         if let Expr::Macro(expr_macro) = expr {
-            if let Some((name, value)) =
-                self.binding_for_macro_path(&expr_macro.mac.path, "__expr_")
+            if let Some((name, value)) = self.binding_for_macro_path(&expr_macro.mac.path, "__rq_")
             {
                 match syn::parse_str::<Expr>(value) {
                     Ok(parsed) => *expr = parsed,
@@ -521,8 +511,7 @@ impl VisitMut for Binder<'_> {
 
     fn visit_type_mut(&mut self, ty: &mut Type) {
         if let Type::Macro(type_macro) = ty {
-            if let Some((name, value)) =
-                self.binding_for_macro_path(&type_macro.mac.path, "__type_")
+            if let Some((name, value)) = self.binding_for_macro_path(&type_macro.mac.path, "__rq_")
             {
                 match syn::parse_str::<Type>(value) {
                     Ok(parsed) => *ty = parsed,

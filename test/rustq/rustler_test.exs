@@ -3,7 +3,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds Rustler helpers" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("native.rs",
         splice: [
           items: [
@@ -22,7 +22,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds cached atom functions" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("cached_atoms.rs",
         splice: [items: RustQ.Rustler.cached_atoms([:ok, {:node_changes, "nodeChanges"}])]
       )
@@ -35,7 +35,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds term builder helpers" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_builders.rs", splice: [items: RustQ.Rustler.term_builders()])
 
     assert code =~ "fn make_map_from_terms<'a>"
@@ -45,7 +45,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds raw NIF_TERM builder helpers" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("nif_term_builders.rs", splice: [items: RustQ.Rustler.nif_term_builders()])
 
     assert code =~ "fn make_map_from_nif_terms<'a>"
@@ -55,7 +55,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds NifStruct declarations" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("nif_struct.rs",
         splice: [
           items: [
@@ -78,7 +78,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds tagged enum decoder and encoder declarations" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("tagged_enum.rs",
         splice: [
           items:
@@ -104,7 +104,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds term helper functions" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
         splice: [items: RustQ.Rustler.term_helpers(type_key: "a::r#type()")]
       )
@@ -117,7 +117,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds term decoders" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_decoder.rs",
         splice: [
           items:
@@ -144,7 +144,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds term decoders with custom result aliases" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_decoder.rs",
         splice: [
           items:
@@ -167,7 +167,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds term decoders with custom required error messages" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_decoder.rs",
         splice: [
           items:
@@ -192,7 +192,7 @@ defmodule RustQ.RustlerTest do
 
   test "selects term helper functions" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
         splice: [items: RustQ.Rustler.term_helpers(include: [:get, :str_val])]
       )
@@ -205,7 +205,7 @@ defmodule RustQ.RustlerTest do
 
   test "supports explicit all term helper selection" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
         splice: [items: RustQ.Rustler.term_helpers(include: :all)]
       )
@@ -216,7 +216,7 @@ defmodule RustQ.RustlerTest do
 
   test "excludes term helper functions" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
         splice: [items: RustQ.Rustler.term_helpers(exclude: [:f64_val, :type_str])]
       )
@@ -228,7 +228,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds resource helper boilerplate" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("resource.rs",
         splice: [
           items: [
@@ -250,7 +250,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds resource boilerplate" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("resource.rs",
         splice: [
           items: RustQ.Rustler.resource(:EncodedImage, fields: [bytes: {:vec, :u8}])
@@ -265,7 +265,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds option struct decoders" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("opts.rs",
         splice: [
           items:
@@ -293,7 +293,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds bare atoms blocks" do
     code =
-      RustQ.render!("__splice_items!();", "atoms.rs",
+      RustQ.render!("__rq_items!();", "atoms.rs",
         splice: [items: [RustQ.Rustler.atoms([:ok], module: false)]]
       )
 

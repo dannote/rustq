@@ -6,19 +6,19 @@ defmodule RustQ.Rustler.Resource do
   alias RustQ.Rust
 
   @struct_template ~R"""
-  struct __Resource {
-      __splice_fields: (),
+  struct __rq_Resource {
+      __rq_fields: (),
   }
   """
 
   @impl_template ~R"""
   #[rustler::resource_impl]
-  impl rustler::Resource for __Resource {}
+  impl rustler::Resource for __rq_Resource {}
   """
 
   @decode_template ~R"""
-  fn __decode_fn<'a>(term: Term<'a>) -> NifResult<ResourceArc<__Resource>> {
-      term.decode::<ResourceArc<__Resource>>()
+  fn __rq_decode_fn<'a>(term: Term<'a>) -> NifResult<ResourceArc<__rq_Resource>> {
+      term.decode::<ResourceArc<__rq_Resource>>()
   }
   """
 

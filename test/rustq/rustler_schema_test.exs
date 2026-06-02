@@ -39,7 +39,7 @@ defmodule RustQ.RustlerSchemaTest do
 
   test "generates Rustler structs and tagged enum" do
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("schema.rs", splice: [items: ContentSchema.rust_items()])
 
     assert code =~ "#[allow(dead_code)]"

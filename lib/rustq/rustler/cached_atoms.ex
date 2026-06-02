@@ -12,12 +12,12 @@ defmodule RustQ.Rustler.CachedAtoms do
   """
 
   @static_template ~R"""
-  static __STATIC: OnceLock<Atom> = OnceLock::new();
+  static __rq_STATIC: OnceLock<Atom> = OnceLock::new();
   """
 
   @fn_template ~R"""
-  fn __fn_name(env: Env) -> Atom {
-      cached_atom(env, &__STATIC, __expr_atom_name!())
+  fn __rq_fn_name(env: Env) -> Atom {
+      cached_atom(env, &__rq_STATIC, __rq_atom_name!())
   }
   """
 

@@ -9,7 +9,7 @@ defmodule RustQ.SigilTest do
     code =
       ~R"""
       pub fn answer() -> i32 {
-          __expr_value!()
+          __rq_value!()
       }
       """
       |> RustQ.render!("sigil.rs", bind: [value: Rust.expr("42")])

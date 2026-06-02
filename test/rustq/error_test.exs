@@ -5,7 +5,7 @@ defmodule RustQ.ErrorTest do
 
   test "returns structured splice errors" do
     assert {:error, [error]} =
-             RustQ.render("__splice_items!();", "broken.rs", splice: [items: ["pub mod ;"]])
+             RustQ.render("__rq_items!();", "broken.rs", splice: [items: ["pub mod ;"]])
 
     assert error.type == :invalid_splice
     assert error.context == :item
@@ -17,7 +17,7 @@ defmodule RustQ.ErrorTest do
 
   test "returns structured binding errors" do
     assert {:error, [error]} =
-             RustQ.render("fn value() -> i32 { __expr_value!() }", "broken.rs",
+             RustQ.render("fn value() -> i32 { __rq_value!() }", "broken.rs",
                bind: [value: Rust.expr("+")]
              )
 

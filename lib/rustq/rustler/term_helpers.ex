@@ -72,7 +72,7 @@ defmodule RustQ.Rustler.TermHelpers do
     """,
     type_atom: ~R"""
     fn type_atom(term: Term) -> Option<rustler::Atom> {
-        get(term, __expr_type_key!()).and_then(|t| t.decode::<rustler::Atom>().ok())
+        get(term, __rq_type_key!()).and_then(|t| t.decode::<rustler::Atom>().ok())
     }
     """,
     type_eq: ~R"""
@@ -82,7 +82,7 @@ defmodule RustQ.Rustler.TermHelpers do
     """,
     type_str: ~R"""
     fn type_str(term: Term) -> String {
-        get(term, __expr_type_key!())
+        get(term, __rq_type_key!())
             .and_then(|t| t.atom_to_string().ok())
             .unwrap_or_else(|| "<no type>".into())
     }

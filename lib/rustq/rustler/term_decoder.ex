@@ -6,15 +6,15 @@ defmodule RustQ.Rustler.TermDecoder do
   alias RustQ.Rust
 
   @struct_template ~R"""
-  struct __Struct<'__lifetime> {
-      __splice_fields: (),
+  struct __rq_Struct<'__rq_lifetime> {
+      __rq_fields: (),
   }
   """
 
   @function_template ~R"""
-  fn __decode_fn<'__lifetime>(__splice_args: ()) -> __type_result!() {
-      Ok(__Struct {
-          __splice_inits: (),
+  fn __rq_decode_fn<'__rq_lifetime>(__rq_args: ()) -> __rq_result!() {
+      Ok(__rq_Struct {
+          __rq_inits: (),
       })
   }
   """

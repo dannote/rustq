@@ -146,11 +146,9 @@ defmodule RustQ do
   @doc """
   Binds Rust placeholders in a parsed template.
 
-  Supported placeholder forms:
-
-    * `__Name` for identifier/type-path replacement
-    * `__expr_name!()` for expression replacement
-    * `__type_name!()` for type replacement
+  RustQ placeholders use the `__rq_` prefix. Use `__rq_Name` where Rust expects
+  an identifier/type/lifetime, and `__rq_name!()` where Rust expects an
+  expression or type macro.
 
   Values may be strings, atoms, `{:literal, value}`, `{:expr, code}`, or
   `{:type, type}` where type uses `RustQ.Rust.type/1` syntax.
@@ -163,8 +161,8 @@ defmodule RustQ do
   @doc """
   Splices fragments into a parsed template.
 
-  The splice name matches placeholders such as `__splice_items!();`,
-  `__splice_fields: (),`, or `__splice_arms => unreachable!(),`.
+  The splice name matches placeholders such as `__rq_items!();`,
+  `__rq_fields: (),`, or `__rq_arms => unreachable!(),`.
   """
   @spec splice(Template.t(), atom(), term() | [term()]) :: Template.t()
   def splice(%Template{} = template, name, replacement) when is_atom(name) do
@@ -250,36 +248,35 @@ defmodule RustQ do
   end
 
   defp validate_fragment(:item, code),
-    do: validate_splice_fragment(:items, code, "__splice_items!();")
+    do: validate_splice_fragment(:items, code, "__rq_items!();")
 
   defp validate_fragment(:impl_item, code) do
-    validate_splice_fragment(:items, code, "impl Target { __splice_items!(); }")
+    validate_splice_fragment(:items, code, "impl Target { __rq_items!(); }")
   end
 
   defp validate_fragment(:field, code) do
-    validate_splice_fragment(:fields, code, "struct Target { __splice_fields: (), }")
+    validate_splice_fragment(:fields, code, "struct Target { __rq_fields: (), }")
   end
 
   defp validate_fragment(:stmt, code),
-    do: validate_splice_fragment(:body, code, "fn target() { __splice_body!(); }")
+    do: validate_splice_fragment(:body, code, "fn target() { __rq_body!(); }")
 
   defp validate_fragment(:arg, code),
-    do: validate_splice_fragment(:args, code, "fn target(__splice_args: ()) {}")
+    do: validate_splice_fragment(:args, code, "fn target(__rq_args: ()) {}")
 
   defp validate_fragment(:arm, code) do
     validate_splice_fragment(
       :arms,
       code,
-      "fn target(value: Option<i32>) { match value { __splice_arms => unreachable!(), } }"
+      "fn target(value: Option<i32>) { match value { __rq_arms => unreachable!(), } }"
     )
   end
 
   defp validate_fragment(:expr, code),
-    do:
-      validate_binding_fragment(:value, RustQ.Rust.expr(code), "fn target() { __expr_value!(); }")
+    do: validate_binding_fragment(:value, RustQ.Rust.expr(code), "fn target() { __rq_value!(); }")
 
   defp validate_fragment(:type, code),
-    do: validate_binding_fragment(:value, {:type, {:raw, code}}, "type Target = __type_value!();")
+    do: validate_binding_fragment(:value, {:type, {:raw, code}}, "type Target = __rq_value!();")
 
   defp validate_fragment(kind, _code) do
     {:error,

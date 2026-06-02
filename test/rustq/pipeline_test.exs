@@ -5,15 +5,15 @@ defmodule RustQ.PipelineTest do
 
   test "binds identifiers, expressions, and splices fields/methods" do
     template = """
-    pub struct __Resource {
-        __splice_fields: (),
+    pub struct __rq_Resource {
+        __rq_fields: (),
     }
 
-    impl __Resource {
-        __splice_methods!();
+    impl __rq_Resource {
+        __rq_methods!();
 
         pub fn table() -> &'static str {
-            __expr_table_name!()
+            __rq_table_name!()
         }
     }
     """
@@ -45,7 +45,7 @@ defmodule RustQ.PipelineTest do
 
   test "renders type bindings" do
     code =
-      "type MaybeUser = __type_user!();"
+      "type MaybeUser = __rq_user!();"
       |> RustQ.render!("types.rs", bind: [user: {:type, {:option, :User}}])
 
     assert code =~ "type MaybeUser = Option<User>;"
@@ -66,11 +66,11 @@ defmodule RustQ.PipelineTest do
   test "uses fragment wrappers" do
     code =
       """
-      __splice_items!();
+      __rq_items!();
 
       pub fn run() -> i32 {
-          __splice_body!();
-          __expr_value!()
+          __rq_body!();
+          __rq_value!()
       }
       """
       |> RustQ.render!("fragments.rs",

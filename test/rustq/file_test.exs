@@ -5,7 +5,7 @@ defmodule RustQ.FileTest do
 
   test "loads and renders template files" do
     path = tmp_template_path()
-    File.write!(path, "pub struct __Name { __splice_fields: (), }")
+    File.write!(path, "pub struct __rq_Name { __rq_fields: (), }")
 
     code =
       path

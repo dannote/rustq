@@ -27,15 +27,15 @@ use RustQ.Sigil
 alias RustQ.Rust
 
 template = ~R"""
-pub struct __Resource {
-    __splice_fields: (),
+pub struct __rq_Resource {
+    __rq_fields: (),
 }
 
-impl __Resource {
-    __splice_methods!();
+impl __rq_Resource {
+    __rq_methods!();
 
     pub fn table() -> &'static str {
-        __expr_table_name!()
+        __rq_table_name!()
     }
 }
 """
@@ -70,17 +70,18 @@ RustQ.render_file!("priv/templates/resource.rs",
 
 ## Placeholder forms
 
-RustQ templates stay parseable Rust by using sentinel identifiers and macros:
+RustQ placeholders use the visually distinct `__rq_` prefix. The exact shape
+matches the Rust syntax position, but the name is consistent with the Elixir
+`bind:` or `splice:` key:
 
-- `__Name` — identifier or type-path replacement.
-- `__expr_name!()` — expression replacement.
-- `__type_name!()` — type replacement.
-- `__splice_items!();` — item splice point.
-- `__splice_methods!();` — impl-item splice point.
-- `__splice_body!();` — statement splice point.
-- `__splice_arms => unreachable!(),` — match-arm splice point.
-- `__splice_fields: (),` — struct-field splice point.
-- `fn target(__splice_args: ()) {}` — function-argument splice point.
+- `__rq_Name` — identifier, type path, or lifetime replacement.
+- `__rq_value!()` — expression or type replacement.
+- `__rq_items!();` — item splice point.
+- `__rq_methods!();` — impl-item splice point.
+- `__rq_body!();` — statement splice point.
+- `__rq_arms => unreachable!(),` — match-arm splice point.
+- `__rq_fields: (),` — struct-field splice point.
+- `fn target(__rq_args: ()) {}` — function-argument splice point.
 
 ## Rust builders
 

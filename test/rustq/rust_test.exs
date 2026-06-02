@@ -11,7 +11,7 @@ defmodule RustQ.RustTest do
       |> Rust.item(Rust.type_alias(:UserId, :i64, vis: :pub))
       |> Rust.item(Rust.const(:TABLE, {:ref, :str}, Rust.expr(~s("users")), vis: :pub))
 
-    code = RustQ.render!("__splice_items!();", "items.rs", splice: [items: [module]])
+    code = RustQ.render!("__rq_items!();", "items.rs", splice: [items: [module]])
 
     assert code =~ "pub mod users"
     assert code =~ "pub type UserId = i64;"
@@ -74,7 +74,7 @@ defmodule RustQ.RustTest do
       |> Rust.item(new_fn)
 
     code =
-      "__splice_items!();"
+      "__rq_items!();"
       |> RustQ.render!("items.rs",
         splice: [items: [Rust.use([:std, :collections, :HashMap]), user, event, impl]]
       )
