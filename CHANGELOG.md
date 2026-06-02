@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.2 - 2026-06-02
+
+- Let Rustler schema field types reference schema nodes and tagged enums by
+  schema name, so examples can use `Content` instead of generated Rust names
+  like `ExContent`.
+
 ## v0.1.1 - 2026-06-02
 
 - Keep the packaged NIF crate out of parent Cargo workspaces when RustQ is used
