@@ -50,7 +50,7 @@ defmodule RustQ.Generated do
       Enum.each(targets, fn {name, target} -> sync!(name, target, opts) end)
     end
 
-    run_rust_checks!(targets, opts)
+    run_checks!(targets, opts)
     :ok
   end
 
@@ -119,16 +119,16 @@ defmodule RustQ.Generated do
     File.exists?(path) and File.read!(path) |> normalize_newlines() == expected
   end
 
-  defp run_rust_checks!(targets, opts) do
-    if Keyword.get(opts, :check_rust, false) do
+  defp run_checks!(targets, opts) do
+    if Keyword.get(opts, :check, false) do
       targets
       |> Enum.flat_map(fn {_name, target} -> List.wrap(Keyword.get(target, :check, [])) end)
       |> Enum.uniq()
-      |> Enum.each(&run_rust_check!/1)
+      |> Enum.each(&run_check!/1)
     end
   end
 
-  defp run_rust_check!(command) do
+  defp run_check!(command) do
     {_, status} = System.cmd("sh", ["-c", command], into: IO.stream(), stderr_to_stdout: true)
 
     if status != 0 do

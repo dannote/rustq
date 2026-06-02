@@ -4,7 +4,6 @@ defmodule Mix.Tasks.Rustq.Gen do
 
       mix rustq.gen
       mix rustq.gen --check
-      mix rustq.gen --check-rust
       mix rustq.gen term_helpers
   """
 
@@ -15,7 +14,7 @@ defmodule Mix.Tasks.Rustq.Gen do
   @impl Mix.Task
   def run(args) do
     {opts, names, invalid} =
-      OptionParser.parse(args, strict: [check: :boolean, check_rust: :boolean, config: :string])
+      OptionParser.parse(args, strict: [check: :boolean, config: :string])
 
     if invalid != [] do
       Mix.raise("invalid rustq.gen options: #{inspect(invalid)}")
@@ -27,7 +26,6 @@ defmodule Mix.Tasks.Rustq.Gen do
     |> RustQ.Generated.load_manifest!()
     |> RustQ.Generated.sync_all!(
       check: Keyword.get(opts, :check, false),
-      check_rust: Keyword.get(opts, :check_rust, false),
       only: names,
       shell: Mix.shell()
     )

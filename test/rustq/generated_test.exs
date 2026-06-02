@@ -60,13 +60,15 @@ defmodule RustQ.GeneratedTest do
     end
   end
 
-  test "runs configured rust checks" do
+  test "runs configured checks during generated file checks" do
     path = tmp_path("generated.rs")
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "fn main() {}\n")
 
     assert :ok =
              Generated.sync_all!(
                [helpers: [path: path, content: "fn main() {}\n", check: "true"]],
-               check_rust: true
+               check: true
              )
   end
 

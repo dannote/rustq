@@ -176,7 +176,6 @@ Then run:
 ```sh
 mix rustq.gen
 mix rustq.gen --check
-mix rustq.gen --check-rust
 mix rustq.gen term_helpers
 ```
 
@@ -184,12 +183,15 @@ Path-only `rust_items` targets infer their name from the filename and strip a
 leading `generated_`, so `generated_term_helpers.rs` can be selected with
 `mix rustq.gen term_helpers`.
 
-Targets can include a Rust type-check command that runs with `--check-rust`:
+Targets can include static-analysis commands that run with `--check`:
 
 ```elixir
 rust_items "native/my_nif/src/generated.rs",
   items: MyApp.Codegen.rust_items(),
-  check: "cargo check --manifest-path native/my_nif/Cargo.toml"
+  check: [
+    "cargo fmt --manifest-path native/my_nif/Cargo.toml -- --check",
+    "cargo clippy --manifest-path native/my_nif/Cargo.toml -- -D warnings"
+  ]
 ```
 
 ## Fragment validation
