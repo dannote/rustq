@@ -60,6 +60,16 @@ defmodule RustQ.GeneratedTest do
     end
   end
 
+  test "runs configured rust checks" do
+    path = tmp_path("generated.rs")
+
+    assert :ok =
+             Generated.sync_all!(
+               [helpers: [path: path, content: "fn main() {}\n", check: "true"]],
+               check_rust: true
+             )
+  end
+
   test "loads rustq manifests with the optional wrapper DSL" do
     path = tmp_path("rustq.exs")
 

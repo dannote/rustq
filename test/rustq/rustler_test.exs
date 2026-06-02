@@ -20,6 +20,29 @@ defmodule RustQ.RustlerTest do
     assert code =~ ~s|rustler::init!("Elixir.RustQ.Native");|
   end
 
+  test "builds cached atom functions" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("cached_atoms.rs",
+        splice: [items: RustQ.Rustler.cached_atom_fns([:ok, {:node_changes, "nodeChanges"}])]
+      )
+
+    assert code =~ "fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom"
+    assert code =~ "static OK_ATOM: OnceLock<Atom> = OnceLock::new();"
+    assert code =~ "fn ok_atom(env: Env) -> Atom"
+    assert code =~ ~S/cached_atom(env, &NODE_CHANGES_ATOM, "nodeChanges")/
+  end
+
+  test "builds term builder helpers" do
+    code =
+      "__splice_items!();"
+      |> RustQ.render!("term_builders.rs", splice: [items: RustQ.Rustler.term_builders()])
+
+    assert code =~ "fn make_map_from_pairs<'a>"
+    assert code =~ "fn make_struct_from_arrays<'a>"
+    assert code =~ "rustler::wrapper::map_put"
+  end
+
   test "builds NifStruct declarations" do
     code =
       "__splice_items!();"

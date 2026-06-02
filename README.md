@@ -103,6 +103,9 @@ RustQ.Rustler.tagged_enum(:ExContent,
     Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
   ]
 )
+
+RustQ.Rustler.cached_atom_fns([:ok, node_changes: "nodeChanges"])
+RustQ.Rustler.term_builders(include: [:map_from_pairs, :struct_from_arrays])
 ```
 
 `term_decoder/2` field options:
@@ -173,12 +176,21 @@ Then run:
 ```sh
 mix rustq.gen
 mix rustq.gen --check
+mix rustq.gen --check-rust
 mix rustq.gen term_helpers
 ```
 
 Path-only `rust_items` targets infer their name from the filename and strip a
 leading `generated_`, so `generated_term_helpers.rs` can be selected with
 `mix rustq.gen term_helpers`.
+
+Targets can include a Rust type-check command that runs with `--check-rust`:
+
+```elixir
+rust_items "native/my_nif/src/generated.rs",
+  items: MyApp.Codegen.rust_items(),
+  check: "cargo check --manifest-path native/my_nif/Cargo.toml"
+```
 
 ## Fragment validation
 
