@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.1 - 2026-06-02
+
+- Keep the packaged NIF crate out of parent Cargo workspaces when RustQ is used
+  inside workspace-based projects.
+
 ## v0.1.0 - 2026-06-02
 
 Initial release.

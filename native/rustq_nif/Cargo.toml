@@ -3,6 +3,8 @@ name = "rustq_nif"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+
 [lib]
 name = "rustq_nif"
 crate-type = ["cdylib"]
