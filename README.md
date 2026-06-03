@@ -164,17 +164,13 @@ defmodule MyApp.Codegen.ContentSchema do
   schema MyApp.Content do
     default_attrs ["allow(dead_code)"]
 
-    field_group :body_content do
-      field :body, {:vec, Content}
-    end
-
     node Text do
       field :text, :String
       field :size, {:option, :String}
     end
 
     node Paragraph do
-      fields :body_content
+      field :body, {:vec, Content}
     end
 
     node Enum, rust: :ExEnum, module: MyApp.Content.EnumList do

@@ -5,10 +5,6 @@ defmodule RustQ.RustlerSchemaTest do
     use RustQ.Rustler.Schema
 
     schema Folio.Content, default_attrs: ["allow(dead_code)"] do
-      field_group :body_content do
-        field(:body, {:vec, Content})
-      end
-
       node Text do
         field(:text, :String)
         field(:size, {:option, :String})
@@ -18,7 +14,7 @@ defmodule RustQ.RustlerSchemaTest do
       end
 
       node Paragraph do
-        fields(:body_content)
+        field(:body, {:vec, Content})
       end
 
       tagged_enum Content do
@@ -74,22 +70,6 @@ defmodule RustQ.RustlerSchemaTest do
     assert code =~ "Text(ExText)"
     assert code =~ ~S/"Elixir.Folio.Content.Text" => Ok(ExContent::Text(Decoder::decode(term)?))/
     assert code =~ ~S/Err(rustler::Error::RaiseAtom("unknown_content_variant"))/
-  end
-
-  test "raises for unknown field groups" do
-    assert_raise ArgumentError, ~r/unknown field group/, fn ->
-      Code.compile_string("""
-      defmodule UnknownGroupSchema do
-        use RustQ.Rustler.Schema
-
-        schema Folio.Content do
-          node Paragraph do
-            fields(:missing)
-          end
-        end
-      end
-      """)
-    end
   end
 
   test "supports node Rust and module overrides" do

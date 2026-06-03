@@ -1,10 +1,15 @@
 # Changelog
 
+## v0.3.0 - 2026-06-06
+
+- Remove the generic Rustler schema field group DSL. Prefer explicit fields in
+  RustQ schemas or project-specific macros for domain shorthand.
+
 ## v0.2.2 - 2026-06-03
 
 - Add `RustQ.Rustler.resource_handle/2` for generating a Rustler resource plus
   a decoder for Elixir-facing resource handle structs/maps.
-- Add Rustler schema field groups for reusable field sets.
+- Add Rustler schema field groups for reusable field sets with `use_fields/1`.
 - Let Rustler schema nodes override generated Rust type names and Elixir module
   names with `rust:` and `module:`.
 
