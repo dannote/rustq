@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.2 - 2026-06-03
+
+- Add `RustQ.Rustler.resource_handle/2` for generating a Rustler resource plus
+  a decoder for Elixir-facing resource handle structs/maps.
+- Add Rustler schema field groups for reusable field sets.
+- Let Rustler schema nodes override generated Rust type names and Elixir module
+  names with `rust:` and `module:`.
+
 ## v0.2.1 - 2026-06-03
 
 - Add `RustQ.Rustler.nif_export/2` and `nif_exports/1` for generating exported

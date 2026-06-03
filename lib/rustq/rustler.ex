@@ -146,6 +146,22 @@ defmodule RustQ.Rustler do
   defdelegate resource(name, opts \\ []), to: Resource, as: :build
 
   @doc """
+  Builds a Rustler resource plus an Elixir handle decoder.
+
+  The generated decoder extracts a `ResourceArc<...>` from a field on an
+  Elixir-facing handle struct or map. The field defaults to `"ref"`.
+
+      RustQ.Rustler.resource_handle(:EncodedImage,
+        fields: [bytes: "Vec<u8>"],
+        handle_field: "ref"
+      )
+
+  Pass `:decoder` to override the decoder function name.
+  """
+  @spec resource_handle(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
+  defdelegate resource_handle(name, opts \\ []), to: Resource, as: :handle
+
+  @doc """
   Returns the `ResourceArc<...>` Rust type for a resource.
   """
   @spec resource_arc(atom() | String.t()) :: String.t()

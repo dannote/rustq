@@ -297,6 +297,47 @@ defmodule RustQ.RustlerTest do
     assert code =~ "impl rustler::Resource for EncodedImage"
   end
 
+  test "builds resource handle boilerplate" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("resource_handle.rs",
+        splice: [
+          items:
+            RustQ.Rustler.resource_handle(:EncodedImage,
+              fields: [bytes: "Vec<u8>"],
+              handle_field: :ref
+            )
+        ]
+      )
+
+    assert code =~ "struct EncodedImage"
+    assert code =~ "pub bytes: Vec<u8>"
+    assert code =~ "impl rustler::Resource for EncodedImage"
+    assert code =~ "fn decode_encoded_image_handle<'a>"
+    assert code =~ "term: Term<'a>"
+    assert code =~ ~S/Atom::from_bytes(term.get_env(), b"ref")?/
+    assert code =~ ".decode::<ResourceArc<EncodedImage>>()"
+  end
+
+  test "builds resource handles with custom decoder and field" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("resource_handle.rs",
+        splice: [
+          items:
+            RustQ.Rustler.resource_handle(:Session,
+              fields: [id: :u64],
+              handle_field: "handle",
+              decoder: :decode_session_ref
+            )
+        ]
+      )
+
+    assert code =~ "fn decode_session_ref<'a>"
+    assert code =~ ~S/Atom::from_bytes(term.get_env(), b"handle")?/
+    assert code =~ ".decode::<ResourceArc<Session>>()"
+  end
+
   test "builds option struct decoders" do
     code =
       "__rq_items!();"

@@ -57,6 +57,7 @@ defmodule RustQ.Rustler.Schema do
       Module.register_attribute(__MODULE__, :rustq_schema_nodes, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_schema_enums, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_schema_type_aliases, accumulate: true)
+      @rustq_schema_field_groups %{}
       @rustq_schema_rust_prefix "Ex"
       @rustq_schema_tag_field :__struct__
       @rustq_schema_default_attrs []
@@ -122,6 +123,21 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
+  defmacro field_group(name, do: block) do
+    fields = extract_fields(block)
+    groups = Module.get_attribute(__CALLER__.module, :rustq_schema_field_groups) || %{}
+
+    Module.put_attribute(
+      __CALLER__.module,
+      :rustq_schema_field_groups,
+      Map.put(groups, name, fields)
+    )
+
+    quote do
+      :ok
+    end
+  end
+
   def __apply_schema_opts__(module, opts) do
     if prefix = Keyword.get(opts, :rust_prefix) do
       Module.put_attribute(module, :rustq_schema_rust_prefix, prefix)
@@ -138,7 +154,12 @@ defmodule RustQ.Rustler.Schema do
 
   defmacro node(name, opts \\ [], do: block) do
     name = ast_name(name)
-    fields = extract_fields(block)
+    opts = normalize_node_opts(opts, __CALLER__)
+
+    groups =
+      __CALLER__.module |> Module.get_attribute(:rustq_schema_field_groups) |> field_groups()
+
+    fields = extract_fields(block, groups)
 
     quote do
       @rustq_schema_nodes {unquote(name), unquote(Macro.escape(fields)),
@@ -163,7 +184,7 @@ defmodule RustQ.Rustler.Schema do
   end
 
   defp nif_struct(schema, {name, fields, opts}) do
-    RustQ.Rustler.nif_struct(rust_name(schema, name), module_name(schema, name),
+    RustQ.Rustler.nif_struct(node_rust_name(schema, name), module_name(schema, name),
       fields: Enum.map(fields, fn {field, type, _opts} -> {field, rust_type(schema, type)} end),
       attrs: attrs(schema, opts),
       derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
@@ -180,7 +201,7 @@ defmodule RustQ.Rustler.Schema do
       |> Enum.map(fn variant ->
         {variant,
          [
-           type: rust_name(schema, variant),
+           type: node_rust_name(schema, variant),
            module: elixir_module_name(schema, variant)
          ]}
       end)
@@ -202,12 +223,34 @@ defmodule RustQ.Rustler.Schema do
 
   defp rust_name(schema, name), do: "#{schema.rust_prefix}#{name}"
 
+  defp node_rust_name(schema, name) do
+    case node_opts(schema, name) |> Keyword.get(:rust) do
+      nil -> rust_name(schema, name)
+      rust -> rust
+    end
+  end
+
   defp module_name(schema, name) do
+    case node_opts(schema, name) |> Keyword.get(:module) do
+      nil -> default_module_name(schema, name)
+      module -> module |> to_string() |> String.replace_prefix("Elixir.", "")
+    end
+  end
+
+  defp default_module_name(schema, name) do
     "#{schema.module_prefix}.#{name}"
     |> String.replace_prefix("Elixir.", "")
   end
 
   defp elixir_module_name(schema, name), do: "Elixir.#{module_name(schema, name)}"
+
+  defp node_opts(schema, name) do
+    schema.nodes
+    |> Enum.find_value([], fn
+      {^name, _fields, opts} -> opts
+      _node -> false
+    end)
+  end
 
   defp tag_expr(:__struct__), do: "atom_struct()"
   defp tag_expr(field), do: "atoms::#{field}()"
@@ -220,7 +263,7 @@ defmodule RustQ.Rustler.Schema do
   defp rust_type(schema, type) when is_atom(type) do
     cond do
       alias_type = Keyword.get(schema.type_aliases, type) -> alias_type
-      type in schema_names(schema) -> rust_name(schema, type)
+      type in schema_names(schema) -> node_rust_name(schema, type)
       true -> type
     end
   end
@@ -231,13 +274,31 @@ defmodule RustQ.Rustler.Schema do
     Enum.map(schema.nodes, &elem(&1, 0)) ++ Enum.map(schema.enums, &elem(&1, 0))
   end
 
-  defp extract_fields(block) do
+  defp field_groups(nil), do: %{}
+  defp field_groups(groups), do: groups
+
+  defp normalize_node_opts(opts, env) do
+    Enum.map(opts, fn
+      {:rust, value} -> {:rust, ast_name(value)}
+      {:module, value} -> {:module, Macro.expand(value, env)}
+      opt -> opt
+    end)
+  end
+
+  defp extract_fields(block, groups \\ %{}) do
     block
     |> block_expressions()
-    |> Enum.map(fn
-      {:field, _meta, [name, type]} -> {name, normalize_type(type), []}
-      {:field, _meta, [name, type, opts]} -> {name, normalize_type(type), opts}
+    |> Enum.flat_map(fn
+      {:field, _meta, [name, type]} -> [{name, normalize_type(type), []}]
+      {:field, _meta, [name, type, opts]} -> [{name, normalize_type(type), opts}]
+      {:fields, _meta, [name]} -> fetch_field_group(groups, name)
       other -> raise ArgumentError, "unsupported node expression: #{Macro.to_string(other)}"
+    end)
+  end
+
+  defp fetch_field_group(groups, name) do
+    Map.get_lazy(groups, name, fn ->
+      raise ArgumentError, "unknown field group #{inspect(name)}"
     end)
   end
 

@@ -133,6 +133,11 @@ RustQ.Rustler.term_decoder(:ProgramInput,
     body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]
   ]
 )
+
+RustQ.Rustler.resource_handle(:EncodedImage,
+  fields: [bytes: "Vec<u8>"],
+  handle_field: "ref"
+)
 ```
 
 Safe term builders use `Term<'a>`:
@@ -159,13 +164,21 @@ defmodule MyApp.Codegen.ContentSchema do
   schema MyApp.Content do
     default_attrs ["allow(dead_code)"]
 
+    field_group :body_content do
+      field :body, {:vec, Content}
+    end
+
     node Text do
       field :text, :String
       field :size, {:option, :String}
     end
 
     node Paragraph do
-      field :body, {:vec, Content}
+      fields :body_content
+    end
+
+    node Enum, rust: :ExEnum, module: MyApp.Content.EnumList do
+      field :children, {:vec, Content}
     end
 
     tagged_enum Content do
