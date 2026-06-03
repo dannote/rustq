@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.1 - 2026-06-03
+
+- Add `RustQ.Rustler.nif_export/2` and `nif_exports/1` for generating exported
+  Rustler NIF functions that delegate to handwritten implementation functions.
+
 ## v0.2.0 - 2026-06-02
 
 - Replace the separate `__expr_`, `__type_`, and `__splice_` placeholder

@@ -118,6 +118,15 @@ RustQ.Rustler.nif(:add,
   body: "a + b"
 )
 
+RustQ.Rustler.nif_exports(
+  render_png: [
+    args: [env: "Env<'a>", batch: "Term<'a>"],
+    returns: "NifResult<Term<'a>>",
+    lifetime: :a,
+    schedule: :dirty_cpu
+  ]
+)
+
 RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
 RustQ.Rustler.term_decoder(:ProgramInput,
   fields: [

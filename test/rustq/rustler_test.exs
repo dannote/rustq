@@ -20,6 +20,40 @@ defmodule RustQ.RustlerTest do
     assert code =~ ~s|rustler::init!("Elixir.RustQ.Native");|
   end
 
+  test "builds NIF export functions" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("nif_exports.rs",
+        splice: [
+          items:
+            RustQ.Rustler.nif_exports(
+              render_png: [
+                args: [env: "Env<'a>", batch: "Term<'a>"],
+                returns: "NifResult<Term<'a>>",
+                lifetime: :a,
+                schedule: :dirty_cpu
+              ],
+              register_file: [
+                args: [path: :String, data: "rustler::Binary<'a>"],
+                returns: "rustler::Atom",
+                lifetime: :a,
+                impl: "files::register"
+              ]
+            )
+        ]
+      )
+
+    assert code =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
+    assert code =~ "fn render_png<'a>(env: Env<'a>, batch: Term<'a>) -> NifResult<Term<'a>>"
+    assert code =~ "render_png_impl(env, batch)"
+    assert code =~ "#[rustler::nif]"
+
+    assert code =~
+             "fn register_file<'a>(path: String, data: rustler::Binary<'a>) -> rustler::Atom"
+
+    assert code =~ "files::register(path, data)"
+  end
+
   test "builds cached atom functions" do
     code =
       "__rq_items!();"

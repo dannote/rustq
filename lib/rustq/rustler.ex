@@ -17,6 +17,7 @@ defmodule RustQ.Rustler do
     CachedAtoms,
     NifStruct,
     NifTermBuilders,
+    NifWrappers,
     OptsDecoder,
     Resource,
     Schema,
@@ -40,8 +41,35 @@ defmodule RustQ.Rustler do
       body: Keyword.get(opts, :body, ""),
       vis: Keyword.get(opts, :vis)
     )
-    |> Rust.attr(nif_attr(opts))
+    |> Rust.attr(NifWrappers.nif_attr(opts))
   end
+
+  @doc """
+  Builds exported Rustler NIF functions that delegate to implementation functions.
+
+  This is useful when the exported Rustler surface is repetitive but the
+  implementation bodies should stay handwritten.
+
+      RustQ.Rustler.nif_exports([
+        render_png: [
+          args: [env: "Env<'a>", batch: "Term<'a>"],
+          returns: "NifResult<Term<'a>>",
+          lifetime: :a,
+          schedule: :dirty_cpu
+        ]
+      ])
+
+  Generates a `#[rustler::nif] fn render_png(...) { render_png_impl(...) }`
+  export. Pass `:impl` to override the implementation function name.
+  """
+  @spec nif_exports([{atom() | String.t(), keyword()}]) :: [Rust.Function.t()]
+  defdelegate nif_exports(specs), to: NifWrappers, as: :build
+
+  @doc """
+  Builds a single exported Rustler NIF function.
+  """
+  @spec nif_export(atom() | String.t(), keyword()) :: Rust.Function.t()
+  defdelegate nif_export(name, opts), to: NifWrappers, as: :build
 
   @doc """
   Builds the `rustler::init!` declaration for an Elixir module.
@@ -146,13 +174,4 @@ defmodule RustQ.Rustler do
   """
   @spec opts_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate opts_decoder(name, opts), to: OptsDecoder, as: :build
-
-  defp nif_attr(opts) do
-    case Keyword.get(opts, :schedule) do
-      nil -> "rustler::nif"
-      :dirty_cpu -> ~s|rustler::nif(schedule = "DirtyCpu")|
-      :dirty_io -> ~s|rustler::nif(schedule = "DirtyIo")|
-      value when is_binary(value) -> ~s|rustler::nif(schedule = "#{value}")|
-    end
-  end
 end
