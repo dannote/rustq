@@ -54,6 +54,64 @@ defmodule RustQ.RustlerTest do
     assert code =~ "files::register(path, data)"
   end
 
+  test "builds atom decoders" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_decoder.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_decoder(:decode_blend_mode,
+              returns: :BlendMode,
+              cases: [src_over: "BlendMode::SrcOver", multiply: "BlendMode::Multiply"]
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "pub fn decode_blend_mode(value: Atom) -> NifResult<BlendMode>"
+    assert code =~ "value if value == atoms::src_over() => Ok(BlendMode::SrcOver)"
+    assert code =~ "_ => Err(rustler::Error::BadArg)"
+  end
+
+  test "builds atom dispatch functions" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_dispatch.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_dispatch(:draw_command,
+              lifetime: :a,
+              args: [surface: "&mut Surface", command: "Term<'a>"],
+              on: "command.map_get(atoms::op())?.decode::<Atom>()?",
+              cases: [
+                rect: "draw_rect(surface, command)",
+                circle: "draw_circle(surface, command)"
+              ]
+            )
+          ]
+        ]
+      )
+
+    assert code =~
+             "fn draw_command<'a>(surface: &mut Surface, command: Term<'a>) -> NifResult<()>"
+
+    assert code =~ "let value = command.map_get(atoms::op())?.decode::<Atom>()?;"
+    assert code =~ "value if value == atoms::rect() => draw_rect(surface, command)"
+    assert code =~ "_ => Ok(())"
+  end
+
+  test "builds map helper functions" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("opts_helpers.rs", splice: [items: RustQ.Rustler.opts_helpers()])
+
+    assert code =~ "fn decode_opts<'a>(term: Term<'a>) -> NifResult<Vec<(Atom, Term<'a>)>>"
+    assert code =~ "term.map_get(atoms::opts())?"
+    assert code =~ "fn opt_term<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> Option<Term<'a>>"
+    assert code =~ "fn opt_f32<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<f32>"
+    assert code =~ "fn opt_atom_option<'a>"
+  end
+
   test "builds cached atom functions" do
     code =
       "__rq_items!();"

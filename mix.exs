@@ -1,7 +1,7 @@
 defmodule RustQ.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.4.0"
   @source_url "https://github.com/dannote/rustq"
 
   def project do
@@ -91,6 +91,9 @@ defmodule RustQ.MixProject do
         "native/rustq_nif/Cargo.lock",
         "native/rustq_nif/Cargo.toml",
         "native/rustq_nif/src",
+        "priv/fixtures/rustler_template_check/Cargo.lock",
+        "priv/fixtures/rustler_template_check/Cargo.toml",
+        "priv/fixtures/rustler_template_check/src/lib.rs",
         ".formatter.exs",
         "mix.exs",
         "README.md",

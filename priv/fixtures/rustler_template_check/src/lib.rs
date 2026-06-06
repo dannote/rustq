@@ -6,6 +6,22 @@ use std::sync::OnceLock;
 
 struct Node;
 
+#[allow(dead_code)]
+pub enum NodeKind {
+    Text,
+    Space,
+}
+
+#[allow(dead_code)]
+fn decode_text() -> NifResult<()> {
+    Ok(())
+}
+
+#[allow(dead_code)]
+fn decode_space() -> NifResult<()> {
+    Ok(())
+}
+
 rustler::atoms! {
     atom_struct = "__struct__",
 }
@@ -13,10 +29,13 @@ rustler::atoms! {
 mod atoms {
     rustler::atoms! {
         r#type = "type",
+        text,
+        space,
         body,
         test,
         consequent,
         alternate,
+        opts,
     }
 }
 

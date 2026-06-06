@@ -5,20 +5,24 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
 
   @shortdoc "Checks RustQ's Rustler helper templates"
 
-  @fixture Path.expand("../../../test/fixtures/rustler_template_check", __DIR__)
-  @generated Path.join(@fixture, "src/generated.rs")
+  @fixture Path.join(["fixtures", "rustler_template_check"])
 
   @impl Mix.Task
   def run(_args) do
-    File.write!(@generated, generated_source())
+    fixture = fixture_path()
+    manifest = Path.join(fixture, "Cargo.toml")
 
-    cargo(["fmt", "--manifest-path", Path.join(@fixture, "Cargo.toml"), "--", "--check"])
-    cargo(["check", "--manifest-path", Path.join(@fixture, "Cargo.toml")])
+    fixture
+    |> Path.join("src/generated.rs")
+    |> File.write!(generated_source())
+
+    cargo(["fmt", "--manifest-path", manifest, "--", "--check"])
+    cargo(["check", "--manifest-path", manifest])
 
     cargo([
       "clippy",
       "--manifest-path",
-      Path.join(@fixture, "Cargo.toml"),
+      manifest,
       "--",
       "-D",
       "warnings"
@@ -39,6 +43,16 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
       RustQ.Rustler.resource_type(:Document),
       RustQ.Rustler.resource_decoder(:Document),
       RustQ.Rustler.term_helpers(type_key: "atoms::r#type()"),
+      RustQ.Rustler.atom_decoder(:decode_node_kind,
+        returns: :NodeKind,
+        cases: [text: "NodeKind::Text", space: "NodeKind::Space"]
+      ),
+      RustQ.Rustler.atom_dispatch(:dispatch_node,
+        args: [kind: :Atom],
+        on: "kind",
+        cases: [text: "decode_text()", space: "decode_space()"]
+      ),
+      RustQ.Rustler.opts_helpers(),
       RustQ.Rustler.term_decoder(:ProgramInput,
         fields: [body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]]
       ),
@@ -69,6 +83,13 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
       RustQ.Rustler.term_builders(),
       RustQ.Rustler.nif_term_builders()
     ])
+  end
+
+  defp fixture_path do
+    :rustq
+    |> :code.priv_dir()
+    |> List.to_string()
+    |> Path.join(@fixture)
   end
 
   defp cargo(args) do

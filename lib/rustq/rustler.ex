@@ -13,12 +13,15 @@ defmodule RustQ.Rustler do
   alias RustQ.Rust
 
   alias RustQ.Rustler.{
+    AtomDecoder,
+    AtomDispatch,
     Atoms,
     CachedAtoms,
     NifStruct,
     NifTermBuilders,
     NifWrappers,
     OptsDecoder,
+    OptsHelpers,
     Resource,
     Schema,
     TaggedEnum,
@@ -84,6 +87,52 @@ defmodule RustQ.Rustler do
   @spec atoms([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) ::
           Rust.Fragment.t()
   defdelegate atoms(atoms, opts \\ []), to: Atoms, as: :build
+
+  @doc """
+  Builds a decoder from Rustler atoms into a Rust enum/value type.
+
+      RustQ.Rustler.atom_decoder(:decode_blend_mode,
+        returns: :BlendMode,
+        cases: [src_over: "BlendMode::SrcOver", multiply: "BlendMode::Multiply"]
+      )
+
+  The generated function returns `NifResult<returns>` by default. Pass `:result`
+  to override the full return type, `:input` to override the input type, `:atoms`
+  to override the atoms module, and `:unknown` to override the fallback branch.
+  """
+  @spec atom_decoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  defdelegate atom_decoder(name, opts), to: AtomDecoder, as: :build
+
+  @doc """
+  Builds a function that dispatches on an atom expression.
+
+      RustQ.Rustler.atom_dispatch(:draw_command,
+        args: [surface: "&mut Surface", command: "Term<'a>"],
+        on: "command.map_get(atoms::op())?.decode::<Atom>()?",
+        cases: [rect: "draw_rect(surface, command)"],
+        unknown: "Ok(())"
+      )
+
+  This is intentionally generic: use it for command dispatch, tagged map
+  dispatch, AST node dispatch, or any other Rustler atom switch.
+  """
+  @spec atom_dispatch(atom() | String.t(), keyword()) :: Rust.Function.t()
+  defdelegate atom_dispatch(name, opts), to: AtomDispatch, as: :build
+
+  @doc """
+  Builds keyword/options helper functions over `&[(Atom, Term<'a>)]`.
+
+  By default this includes `decode_opts`, `opt_term`, `opt_f32`,
+  `opt_f32_option`, `opt_f32_default`, `opt_bool_option`, and
+  `opt_atom_option`. Pass `:include` or `:exclude` to select helpers.
+
+      RustQ.Rustler.opts_helpers(include: [:decode_opts, :opt_term])
+
+  `decode_opts` extracts from `atoms::opts()` by default. Pass `:key` to use a
+  different map key expression.
+  """
+  @spec opts_helpers(keyword()) :: [Rust.Fragment.t()]
+  defdelegate opts_helpers(opts \\ []), to: OptsHelpers, as: :build
 
   @doc """
   Builds cached atom helper functions backed by `OnceLock<Atom>`.
@@ -186,7 +235,7 @@ defmodule RustQ.Rustler do
   defdelegate resource_type(name, opts \\ []), to: Resource, as: :type_alias
 
   @doc """
-  Builds an options struct plus decoder function for keyword/map options.
+  Builds an options struct plus decoder function for keyword/optionss.
   """
   @spec opts_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   defdelegate opts_decoder(name, opts), to: OptsDecoder, as: :build

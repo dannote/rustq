@@ -28,5 +28,5 @@ rustq-*.tar
 
 
 # RustQ template-check fixture build/generated artifacts.
-/test/fixtures/rustler_template_check/target/
-/test/fixtures/rustler_template_check/src/generated.rs
+/priv/fixtures/rustler_template_check/target/
+/priv/fixtures/rustler_template_check/src/generated.rs

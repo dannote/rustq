@@ -104,6 +104,9 @@ items = [
 Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
 `Rust.expr/1`, and `Rust.arm/1` when hand-written Rust is clearer than a builder.
 
+For larger wrapper bodies, prefer real Rust templates with placeholders over
+assembling statement lists in Elixir.
+
 ## Rustler helpers
 
 `RustQ.Rustler` generates common Rustler code as Rust fragments:
@@ -128,6 +131,7 @@ RustQ.Rustler.nif_exports(
 )
 
 RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
+RustQ.Rustler.opts_helpers()
 RustQ.Rustler.term_decoder(:ProgramInput,
   fields: [
     body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]
@@ -137,6 +141,23 @@ RustQ.Rustler.term_decoder(:ProgramInput,
 RustQ.Rustler.resource_handle(:EncodedImage,
   fields: [bytes: "Vec<u8>"],
   handle_field: "ref"
+)
+```
+
+Atom-based decoders and dispatchers are intentionally low-level so projects can
+compose them into their own command, AST, or schema models:
+
+```elixir
+RustQ.Rustler.atom_decoder(:decode_blend_mode,
+  returns: :BlendMode,
+  cases: [src_over: "BlendMode::SrcOver", multiply: "BlendMode::Multiply"]
+)
+
+RustQ.Rustler.atom_dispatch(:draw_command,
+  args: [surface: "&mut Surface", command: "Term<'a>"],
+  on: "command.map_get(atoms::op())?.decode::<Atom>()?",
+  cases: [rect: "draw_rect(surface, command)"],
+  unknown: "Ok(())"
 )
 ```
 

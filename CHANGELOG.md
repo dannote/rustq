@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.0 - 2026-06-06
+
+- Add generic Rustler builders for atom decoders, atom dispatch functions, and
+  keyword/options helper functions.
+
 ## v0.3.0 - 2026-06-06
 
 - Remove the generic Rustler schema field group DSL. Prefer explicit fields in
