@@ -17,6 +17,7 @@ defmodule RustQ.Rust do
   repetitive edges: fields, function signatures, attributes, type aliases, and
   simple declarations.
   """
+  alias RustQ.Rust.Block
   alias RustQ.Rust.Const
   alias RustQ.Rust.EnumDecl
   alias RustQ.Rust.Field
@@ -43,6 +44,64 @@ defmodule RustQ.Rust do
 
   @spec stmt(iodata()) :: Fragment.t()
   def stmt(code), do: %Fragment{kind: :stmt, code: code}
+
+  @spec block([term()]) :: Block.t()
+  def block(lines), do: %Block{lines: lines}
+
+  @spec let_(iodata(), iodata()) :: Fragment.t()
+  def let_(pattern, expr), do: %Fragment{kind: :stmt, code: ["let ", pattern, " = ", expr, ";"]}
+
+  @spec let_mut(iodata(), iodata()) :: Fragment.t()
+  def let_mut(pattern, expr),
+    do: %Fragment{kind: :stmt, code: ["let mut ", pattern, " = ", expr, ";"]}
+
+  @spec assign(iodata(), iodata()) :: Fragment.t()
+  def assign(target, expr), do: %Fragment{kind: :stmt, code: [target, " = ", expr, ";"]}
+
+  @spec call_stmt(iodata(), atom() | String.t(), [iodata()]) :: Fragment.t()
+  def call_stmt(receiver, method, args \\ []) do
+    %Fragment{
+      kind: :stmt,
+      code: [receiver, ".", ident(method), "(", Enum.intersperse(args, ", "), ");"]
+    }
+  end
+
+  @spec return_if(iodata(), iodata()) :: Fragment.t()
+  def return_if(condition, value \\ "Ok(())") do
+    %Fragment{kind: :stmt, code: ["if ", condition, " { return ", value, "; }"]}
+  end
+
+  @spec if_(iodata(), [term()], keyword()) :: Fragment.t()
+  def if_(condition, then_lines, opts \\ []) do
+    else_lines = Keyword.get(opts, :else, [])
+    body = ["if ", condition, " ", block_fragment(then_lines)]
+
+    %Fragment{
+      kind: :stmt,
+      code: if(else_lines == [], do: body, else: [body, " else ", block_fragment(else_lines)])
+    }
+  end
+
+  @spec if_let(iodata(), iodata(), [term()], keyword()) :: Fragment.t()
+  def if_let(pattern, expr, then_lines, opts \\ []) do
+    else_lines = Keyword.get(opts, :else, [])
+    body = ["if let ", pattern, " = ", expr, " ", block_fragment(then_lines)]
+
+    %Fragment{
+      kind: :stmt,
+      code: if(else_lines == [], do: body, else: [body, " else ", block_fragment(else_lines)])
+    }
+  end
+
+  @spec match_(iodata(), [{iodata(), [term()]}]) :: Fragment.t()
+  def match_(expr, arms) do
+    arms =
+      arms
+      |> Enum.map(fn {pattern, lines} -> [pattern, " => ", block_fragment(lines), ","] end)
+      |> Enum.intersperse("\n")
+
+    %Fragment{kind: :stmt, code: ["match ", expr, " {\n", indent(arms), "\n}"]}
+  end
 
   @spec param(atom() | String.t(), rust_type()) :: Fragment.t()
   def param(name, type), do: %Fragment{kind: :arg, code: [ident(name), ": ", type(type)]}
@@ -213,6 +272,8 @@ defmodule RustQ.Rust do
   def trait(%Impl{} = impl, trait), do: %{impl | trait: trait}
 
   @spec to_fragment(term()) :: String.t()
+  def to_fragment(%Block{} = block), do: block_fragment(block.lines) |> IO.iodata_to_binary()
+
   def to_fragment(%Use{} = item) do
     [visibility(item.vis), "use ", path(item.path), ";"]
     |> IO.iodata_to_binary()
@@ -324,6 +385,21 @@ defmodule RustQ.Rust do
   def to_fragment(%Fragment{} = fragment), do: IO.iodata_to_binary(fragment.code)
   def to_fragment(value) when is_binary(value), do: value
   def to_fragment(value) when is_list(value), do: IO.iodata_to_binary(value)
+
+  defp block_fragment(lines), do: ["{\n", indent(join_lines(lines)), "\n}"]
+
+  defp join_lines(lines) do
+    lines
+    |> Enum.map(&to_fragment/1)
+    |> Enum.intersperse("\n")
+  end
+
+  defp indent(iodata) do
+    iodata
+    |> IO.iodata_to_binary()
+    |> String.split("\n")
+    |> Enum.map_join("\n", &["    ", &1])
+  end
 
   @spec literal(term()) :: String.t()
   def literal(value) when is_binary(value), do: inspect(value)

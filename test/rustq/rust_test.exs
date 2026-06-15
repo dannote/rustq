@@ -43,6 +43,35 @@ defmodule RustQ.RustTest do
     assert code =~ "where\n    F: FnMut(&mut Self) -> NifResult<T>"
   end
 
+  test "builds generic statement and control-flow fragments" do
+    body =
+      Rust.block([
+        Rust.let_mut("paint", "Paint::default()"),
+        Rust.call_stmt("paint", :set_anti_alias, ["true"]),
+        Rust.if_let("Some(alpha)", "opts.alpha", [
+          Rust.call_stmt("paint", :set_alpha, ["alpha"])
+        ]),
+        Rust.if_(
+          "radius > 0.0",
+          [
+            Rust.call_stmt("canvas", :draw_rrect, ["rrect", "&paint"])
+          ], else: [Rust.call_stmt("canvas", :draw_rect, ["rect", "&paint"])]),
+        Rust.match_("mode", [
+          {"Mode::A", [Rust.call_stmt("canvas", :save, [])]},
+          {"_", [Rust.return_if("failed")]}
+        ])
+      ])
+      |> Rust.to_fragment()
+
+    assert body =~ "let mut paint = Paint::default();"
+    assert body =~ "paint.set_anti_alias(true);"
+    assert body =~ "if let Some(alpha) = opts.alpha"
+    assert body =~ "} else {"
+    assert body =~ "match mode"
+    assert body =~ "_ => {"
+    assert body =~ "if failed { return Ok(()); }"
+  end
+
   test "builds top-level Rust items" do
     user =
       :User
