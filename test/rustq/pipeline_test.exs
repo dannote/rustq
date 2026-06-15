@@ -43,6 +43,14 @@ defmodule RustQ.PipelineTest do
     assert code =~ ~s("users")
   end
 
+  test "does not replace placeholders inside Rust macro token trees" do
+    code =
+      "fn log() { println!(\"{}\", __rq_value!()); }"
+      |> RustQ.render!("macro.rs", bind: [value: {:literal, "hello"}])
+
+    assert code =~ "__rq_value!()"
+  end
+
   test "renders type bindings" do
     code =
       "type MaybeUser = __rq_user!();"

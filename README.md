@@ -102,6 +102,21 @@ matches the Rust syntax position, but the name is consistent with the Elixir
 - `__rq_include!("relative/path.rs");` — file include expanded before parsing.
 - `fn target(__rq_args: ()) {}` — function-argument splice point.
 
+Placeholders are replaced in parsed Rust syntax positions, not inside arbitrary
+macro token trees. If you need a generated value in a macro call, bind it outside
+the macro first:
+
+```rust
+let value = __rq_value!();
+println!("{}", value);
+```
+
+instead of:
+
+```rust
+println!("{}", __rq_value!());
+```
+
 ## Rust builders
 
 `RustQ.Rust` provides small Elixir builders for common Rust fragments:
