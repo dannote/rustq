@@ -68,6 +68,23 @@ RustQ.render_file!("priv/templates/resource.rs",
 )
 ```
 
+Large templates can be split into Rust partials. Includes are expanded before
+Rust parsing and are resolved relative to the including file:
+
+```rust
+// priv/templates/resource.rs
+pub struct __rq_Resource {
+    __rq_include!("resource/fields.rs");
+}
+
+impl __rq_Resource {
+    __rq_include!("resource/methods.rs");
+}
+```
+
+For string templates, pass `include_dir: "priv/templates"` to enable include
+expansion.
+
 ## Placeholder forms
 
 RustQ placeholders use the visually distinct `__rq_` prefix. The exact shape
@@ -81,6 +98,7 @@ matches the Rust syntax position, but the name is consistent with the Elixir
 - `__rq_body!();` — statement splice point.
 - `__rq_arms => unreachable!(),` — match-arm splice point.
 - `__rq_fields: (),` — struct-field splice point.
+- `__rq_include!("relative/path.rs");` — file include expanded before parsing.
 - `fn target(__rq_args: ()) {}` — function-argument splice point.
 
 ## Rust builders

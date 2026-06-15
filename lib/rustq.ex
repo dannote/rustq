@@ -65,23 +65,35 @@ defmodule RustQ do
 
   @doc """
   Reads and parses a Rust template file.
+
+  Template files may include other Rust template files with
+  `__rq_include!("relative/path.rs");`. Includes are expanded before Rust
+  parsing and are resolved relative to the including file by default. Pass
+  `:include_dir` to override the root directory for the initial file.
   """
-  @spec from_file(Path.t()) :: {:ok, Template.t()} | {:error, [map()] | File.posix()}
-  def from_file(path) do
-    case File.read(path) do
-      {:ok, source} -> parse(source, path)
-      {:error, reason} -> {:error, reason}
+  @spec from_file(Path.t(), keyword()) :: {:ok, Template.t()} | {:error, [map()] | File.posix()}
+  def from_file(path, opts \\ []) do
+    with {:ok, source} <- File.read(path),
+         {:ok, source} <- expand_includes(source, path, opts) do
+      parse(source, path)
     end
   end
 
   @doc """
   Like `from_file/1`, but returns the template directly or raises on errors.
   """
-  @spec from_file!(Path.t()) :: Template.t()
-  def from_file!(path) do
-    path
-    |> File.read!()
-    |> parse!(path)
+  @spec from_file!(Path.t(), keyword()) :: Template.t()
+  def from_file!(path, opts \\ []) do
+    case from_file(path, opts) do
+      {:ok, template} ->
+        template
+
+      {:error, errors} when is_list(errors) ->
+        raise Error, message: "RustQ file parse error: #{inspect(errors)}", errors: errors
+
+      {:error, reason} ->
+        raise File.Error, reason: reason, action: "read file", path: path
+    end
   end
 
   @doc """
@@ -91,7 +103,8 @@ defmodule RustQ do
   """
   @spec render_file(Path.t(), keyword()) :: {:ok, String.t()} | {:error, [map()] | File.posix()}
   def render_file(path, opts \\ []) do
-    with {:ok, source} <- File.read(path) do
+    with {:ok, source} <- File.read(path),
+         {:ok, source} <- expand_includes(source, path, opts) do
       render(source, path, opts)
     end
   end
@@ -101,9 +114,16 @@ defmodule RustQ do
   """
   @spec render_file!(Path.t(), keyword()) :: String.t()
   def render_file!(path, opts \\ []) do
-    path
-    |> File.read!()
-    |> render!(path, opts)
+    case render_file(path, opts) do
+      {:ok, code} ->
+        code
+
+      {:error, errors} when is_list(errors) ->
+        raise Error, message: "RustQ render file error: #{inspect(errors)}", errors: errors
+
+      {:error, reason} ->
+        raise File.Error, reason: reason, action: "read file", path: path
+    end
   end
 
   @doc """
@@ -215,7 +235,8 @@ defmodule RustQ do
   """
   @spec render(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
   def render(source, filename, opts \\ []) do
-    with {:ok, template} <- parse(source, filename) do
+    with {:ok, source} <- maybe_expand_includes(source, filename, opts),
+         {:ok, template} <- parse(source, filename) do
       template = bind(template, Keyword.get(opts, :bind, []))
 
       opts
@@ -237,6 +258,88 @@ defmodule RustQ do
       {:error, errors} ->
         raise Error, message: "RustQ render error: #{inspect(errors)}", errors: errors
     end
+  end
+
+  defp maybe_expand_includes(source, filename, opts) do
+    if Keyword.has_key?(opts, :include_dir) do
+      expand_includes(source, filename, opts)
+    else
+      {:ok, IO.iodata_to_binary(source)}
+    end
+  end
+
+  defp expand_includes(source, filename, opts) do
+    include_dir = Keyword.get(opts, :include_dir, Path.dirname(filename))
+
+    source
+    |> IO.iodata_to_binary()
+    |> expand_includes_from(filename, include_dir, MapSet.new([Path.expand(filename)]))
+  end
+
+  @include_pattern ~r/__rq_include!\(\s*"([^"]+)"\s*\)\s*;/
+
+  defp expand_includes_from(source, filename, include_dir, stack) do
+    case Regex.run(@include_pattern, source, return: :index) do
+      nil ->
+        {:ok, source}
+
+      [{start, length}, {_path_start, _path_length}] ->
+        expand_next_include(source, filename, include_dir, stack, start, length)
+    end
+  end
+
+  defp expand_next_include(source, filename, include_dir, stack, start, length) do
+    [_matched, relative_path] = Regex.run(@include_pattern, binary_part(source, start, length))
+    include_path = Path.expand(relative_path, include_dir)
+
+    if MapSet.member?(stack, include_path) do
+      include_error(filename, "cyclic RustQ include: #{include_path}")
+    else
+      replace_include(source, filename, include_dir, stack, start, length, include_path)
+    end
+  end
+
+  defp replace_include(source, filename, include_dir, stack, start, length, include_path) do
+    with {:ok, included} <- read_include(include_path, filename),
+         {:ok, expanded} <-
+           expand_includes_from(
+             included,
+             include_path,
+             Path.dirname(include_path),
+             MapSet.put(stack, include_path)
+           ) do
+      source =
+        binary_part(source, 0, start) <>
+          expanded <>
+          binary_part(source, start + length, byte_size(source) - start - length)
+
+      expand_includes_from(source, filename, include_dir, stack)
+    end
+  end
+
+  defp read_include(path, filename) do
+    case File.read(path) do
+      {:ok, source} ->
+        {:ok, source}
+
+      {:error, reason} ->
+        include_error(
+          filename,
+          "cannot read RustQ include #{path}: #{:file.format_error(reason)}"
+        )
+    end
+  end
+
+  defp include_error(filename, message) do
+    {:error,
+     [
+       %{
+         type: :include_error,
+         context: :include,
+         message: message,
+         filename: filename
+       }
+     ]}
   end
 
   defp with_preamble(code, opts) do
