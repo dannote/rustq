@@ -190,6 +190,18 @@ defmodule RustQ do
   end
 
   @doc """
+  Splices a `RustQ.SpliceGroup` or keyword/map of splice replacements.
+
+  Duplicate names are concatenated, which allows independent generators to
+  contribute fragments to the same splice point.
+  """
+  @spec splice(Template.t(), keyword() | map() | RustQ.SpliceGroup.t()) :: Template.t()
+  def splice(%Template{} = template, splices) do
+    merged = RustQ.SpliceGroup.merge(template.splices, splices)
+    %{template | splices: RustQ.SpliceGroup.to_keyword(merged)}
+  end
+
+  @doc """
   Generates formatted Rust source from a parsed template.
   """
   @spec codegen(Template.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
@@ -239,9 +251,8 @@ defmodule RustQ do
          {:ok, template} <- parse(source, filename) do
       template = bind(template, Keyword.get(opts, :bind, []))
 
-      opts
-      |> Keyword.get(:splice, [])
-      |> Enum.reduce(template, fn {name, replacement}, acc -> splice(acc, name, replacement) end)
+      template
+      |> splice(Keyword.get(opts, :splice, []))
       |> codegen(opts)
     end
   end
