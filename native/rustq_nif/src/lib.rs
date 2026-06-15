@@ -266,11 +266,17 @@ fn splice_name(path: &syn::Path) -> Option<String> {
 }
 
 fn parse_items(name: &str, context: &Context) -> Result<Vec<Item>, Vec<ErrorInfo>> {
-    parse_fragments("item", name, context, syn::parse_str::<Item>)
+    parse_many_fragments("item", name, context, |source| {
+        Ok(syn::parse_str::<syn::File>(source)?.items)
+    })
 }
 
 fn parse_impl_items(name: &str, context: &Context) -> Result<Vec<ImplItem>, Vec<ErrorInfo>> {
-    parse_fragments("impl_item", name, context, syn::parse_str::<ImplItem>)
+    parse_many_fragments("impl_item", name, context, |source| {
+        let wrapped = format!("impl __RustQ {{ {source} }}");
+        let item = syn::parse_str::<syn::ItemImpl>(&wrapped)?;
+        Ok(item.items)
+    })
 }
 
 fn parse_fields(name: &str, context: &Context) -> Result<Vec<Field>, Vec<ErrorInfo>> {
@@ -320,6 +326,20 @@ fn parse_fragments<T, F>(
 where
     F: FnMut(&str) -> syn::Result<T>,
 {
+    parse_many_fragments(fragment_context, name, context, |source| {
+        parse(source).map(|value| vec![value])
+    })
+}
+
+fn parse_many_fragments<T, F>(
+    fragment_context: &str,
+    name: &str,
+    context: &Context,
+    mut parse: F,
+) -> Result<Vec<T>, Vec<ErrorInfo>>
+where
+    F: FnMut(&str) -> syn::Result<Vec<T>>,
+{
     let Some(fragments) = context.splices.get(name) else {
         return Ok(Vec::new());
     };
@@ -329,7 +349,7 @@ where
 
     for fragment in fragments {
         match parse(fragment) {
-            Ok(value) => parsed.push(value),
+            Ok(values) => parsed.extend(values),
             Err(error) => errors.push(splice_error(fragment_context, name, fragment, error)),
         }
     }
