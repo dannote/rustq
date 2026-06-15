@@ -55,7 +55,9 @@ defmodule RustQ.RustTest do
           "radius > 0.0",
           [
             Rust.call_stmt("canvas", :draw_rrect, ["rrect", "&paint"])
-          ], else: [Rust.call_stmt("canvas", :draw_rect, ["rect", "&paint"])]),
+          ],
+          else: [Rust.call_stmt("canvas", :draw_rect, ["rect", "&paint"])]
+        ),
         Rust.match_("mode", [
           {"Mode::A", [Rust.call_stmt("canvas", :save, [])]},
           {"_", [Rust.return_if("failed")]}

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.0 - 2026-06-15
+
+- Add template includes.
+- Add composable RustQ splice groups.
+- Use plain keyword splices for composition.
+- Add structured include diagnostics.
+- Add rustfmt option.
+- Add generic Rust body/control-flow builders:
+  - `Rust.block/1`
+  - `Rust.let_/2`
+  - `Rust.let_mut/2`
+  - `Rust.assign/2`
+  - `Rust.call_stmt/3`
+  - `Rust.return_if/2`
+  - `Rust.if_/3`
+  - `Rust.if_let/4`
+  - `Rust.match_/2`
+- Document macro token placeholder limitation.
+
 ## v0.4.0 - 2026-06-06
 
 - Add generic Rustler builders for atom decoders, atom dispatch functions, and
