@@ -63,8 +63,11 @@ defmodule RustQ.FileTest do
     File.write!(a, ~s[__rq_include!("b.rs");])
     File.write!(b, ~s[__rq_include!("a.rs");])
 
-    assert {:error, [%{type: :include_error, message: message}]} = RustQ.render_file(a)
+    assert {:error, [%{type: :include_error, message: message, include_stack: include_stack}]} =
+             RustQ.render_file(a)
+
     assert message =~ "cyclic RustQ include"
+    assert include_stack == [Path.expand(a), Path.expand(b), Path.expand(a)]
   after
     if dir = Process.get(:rustq_template_dir), do: File.rm_rf(dir)
   end

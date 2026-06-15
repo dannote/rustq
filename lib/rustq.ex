@@ -211,7 +211,9 @@ defmodule RustQ do
            native_splices(template.splices)
          ) do
       {:ok, code} ->
-        {:ok, with_preamble(code, opts)}
+        code
+        |> with_preamble(opts)
+        |> maybe_rustfmt(opts, template.filename)
 
       {:error, errors} when is_list(errors) ->
         {:error, normalize_errors(errors, template.filename)}
@@ -283,7 +285,7 @@ defmodule RustQ do
 
     source
     |> IO.iodata_to_binary()
-    |> expand_includes_from(filename, include_dir, MapSet.new([Path.expand(filename)]))
+    |> expand_includes_from(filename, include_dir, [Path.expand(filename)])
   end
 
   @include_pattern ~r/__rq_include!\(\s*"([^"]+)"\s*\)\s*;/
@@ -302,8 +304,8 @@ defmodule RustQ do
     [_matched, relative_path] = Regex.run(@include_pattern, binary_part(source, start, length))
     include_path = Path.expand(relative_path, include_dir)
 
-    if MapSet.member?(stack, include_path) do
-      include_error(filename, "cyclic RustQ include: #{include_path}")
+    if include_path in stack do
+      include_error(filename, "cyclic RustQ include: #{include_path}", stack ++ [include_path])
     else
       replace_include(source, filename, include_dir, stack, start, length, include_path)
     end
@@ -316,7 +318,7 @@ defmodule RustQ do
              included,
              include_path,
              Path.dirname(include_path),
-             MapSet.put(stack, include_path)
+             stack ++ [include_path]
            ) do
       source =
         binary_part(source, 0, start) <>
@@ -335,19 +337,21 @@ defmodule RustQ do
       {:error, reason} ->
         include_error(
           filename,
-          "cannot read RustQ include #{path}: #{:file.format_error(reason)}"
+          "cannot read RustQ include #{path}: #{:file.format_error(reason)}",
+          [Path.expand(filename), path]
         )
     end
   end
 
-  defp include_error(filename, message) do
+  defp include_error(filename, message, include_stack) do
     {:error,
      [
        %{
          type: :include_error,
          context: :include,
          message: message,
-         filename: filename
+         filename: filename,
+         include_stack: Enum.map(include_stack, &Path.expand/1)
        }
      ]}
   end
@@ -358,6 +362,74 @@ defmodule RustQ do
       "" -> code
       preamble -> IO.iodata_to_binary([preamble, code])
     end
+  end
+
+  defp maybe_rustfmt(code, opts, filename) do
+    case Keyword.get(opts, :rustfmt, false) do
+      false ->
+        {:ok, code}
+
+      true ->
+        rustfmt(code, filename, "rustfmt")
+
+      command when is_binary(command) ->
+        rustfmt(code, filename, command)
+    end
+  end
+
+  defp rustfmt_temp_path(filename) do
+    extension =
+      filename
+      |> Path.extname()
+      |> case do
+        "" -> ".rs"
+        extension -> extension
+      end
+
+    Path.join(
+      System.tmp_dir!(),
+      "rustq-rustfmt-#{System.unique_integer([:positive])}#{extension}"
+    )
+  end
+
+  defp rustfmt(code, filename, command) do
+    path = rustfmt_temp_path(filename)
+    File.write!(path, code)
+
+    case System.cmd(command, ["--emit", "stdout", "--quiet", path], stderr_to_stdout: true) do
+      {formatted, 0} ->
+        File.rm(path)
+        {:ok, formatted}
+
+      {output, status} ->
+        File.rm(path)
+
+        {:error,
+         [
+           %{
+             type: :rustfmt_error,
+             context: :rustfmt,
+             message: "#{command} failed",
+             filename: filename,
+             command: command,
+             status: status,
+             output: output
+           }
+         ]}
+    end
+  rescue
+    error in ErlangError ->
+      {:error,
+       [
+         %{
+           type: :rustfmt_error,
+           context: :rustfmt,
+           message: "cannot run #{command}",
+           filename: filename,
+           command: command,
+           reason: error.original
+         }
+       ]}
   end
 
   defp validate_fragment(:item, code),

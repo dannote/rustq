@@ -51,6 +51,16 @@ defmodule RustQ.PipelineTest do
     assert code =~ "type MaybeUser = Option<User>;"
   end
 
+  test "optionally formats generated code with rustfmt" do
+    assert RustQ.render!("fn answer()->i32{42}", "answer.rs", rustfmt: true) ==
+             "fn answer() -> i32 {\n    42\n}\n"
+  end
+
+  test "returns structured rustfmt errors" do
+    assert {:error, [%{type: :rustfmt_error, command: "definitely-not-rustfmt", reason: :enoent}]} =
+             RustQ.render("fn answer()->i32{42}", "answer.rs", rustfmt: "definitely-not-rustfmt")
+  end
+
   test "prepends preambles after codegen" do
     template = RustQ.parse!("fn answer() -> i32 { 42 }", "answer.rs")
 

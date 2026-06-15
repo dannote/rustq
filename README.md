@@ -83,7 +83,8 @@ impl __rq_Resource {
 ```
 
 For string templates, pass `include_dir: "priv/templates"` to enable include
-expansion.
+expansion. Include errors return structured metadata, including
+`:include_stack`, so callers can present their own diagnostics.
 
 ## Placeholder forms
 
@@ -124,6 +125,20 @@ Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
 
 For larger wrapper bodies, prefer real Rust templates with placeholders over
 assembling statement lists in Elixir.
+
+## Optional rustfmt
+
+Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:
+
+```elixir
+RustQ.render_file!("native/src/generated.template.rs",
+  splice: [items: items],
+  rustfmt: true
+)
+```
+
+You can also pass a command path/string with `rustfmt: "/path/to/rustfmt"`.
+Rustfmt failures return structured `:rustfmt_error` metadata.
 
 ## Composing splices
 
