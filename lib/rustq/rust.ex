@@ -42,6 +42,32 @@ defmodule RustQ.Rust do
   @spec expr(iodata()) :: Fragment.t()
   def expr(code), do: %Fragment{kind: :expr, code: code}
 
+  @spec call_expr(iodata(), atom() | String.t(), [iodata()]) :: Fragment.t()
+  def call_expr(receiver, method, args \\ []) do
+    expr([receiver, ".", ident(method), "(", Enum.intersperse(args, ", "), ")"])
+  end
+
+  @spec some(iodata()) :: Fragment.t()
+  def some(value), do: expr(["Some(", value, ")"])
+
+  @spec none() :: Fragment.t()
+  def none, do: expr("None")
+
+  @spec tuple([iodata()]) :: Fragment.t()
+  def tuple(values), do: expr(["(", Enum.intersperse(values, ", "), ")"])
+
+  @spec cast(iodata(), iodata()) :: Fragment.t()
+  def cast(value, type), do: expr([value, " as ", type])
+
+  @spec question(iodata()) :: Fragment.t()
+  def question(value), do: expr([value, "?"])
+
+  @spec ref_expr(iodata(), keyword()) :: Fragment.t()
+  def ref_expr(value, opts \\ []) do
+    mut = if Keyword.get(opts, :mut), do: "mut ", else: ""
+    expr(["&", mut, value])
+  end
+
   @spec stmt(iodata()) :: Fragment.t()
   def stmt(code), do: %Fragment{kind: :stmt, code: code}
 

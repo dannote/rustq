@@ -43,6 +43,16 @@ defmodule RustQ.RustTest do
     assert code =~ "where\n    F: FnMut(&mut Self) -> NifResult<T>"
   end
 
+  test "builds generic expression fragments" do
+    assert Rust.call_expr("paint", :color, []) |> Rust.to_fragment() == "paint.color()"
+    assert Rust.some("value") |> Rust.to_fragment() == "Some(value)"
+    assert Rust.none() |> Rust.to_fragment() == "None"
+    assert Rust.tuple(["x", "y"]) |> Rust.to_fragment() == "(x, y)"
+    assert Rust.cast("alpha", "u8") |> Rust.to_fragment() == "alpha as u8"
+    assert Rust.question("decode(term)") |> Rust.to_fragment() == "decode(term)?"
+    assert Rust.ref_expr("paint", mut: true) |> Rust.to_fragment() == "&mut paint"
+  end
+
   test "builds generic statement and control-flow fragments" do
     body =
       Rust.block([
