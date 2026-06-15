@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.1 - 2026-06-15
+
+- Add generic Rust expression builders:
+  - `Rust.call_expr/3`
+  - `Rust.some/1`
+  - `Rust.none/0`
+  - `Rust.tuple/1`
+  - `Rust.cast/2`
+  - `Rust.question/1`
+  - `Rust.ref_expr/2`
+
 ## v0.5.0 - 2026-06-15
 
 - Add template includes.
