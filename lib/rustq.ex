@@ -190,15 +190,14 @@ defmodule RustQ do
   end
 
   @doc """
-  Splices a `RustQ.SpliceGroup` or keyword/map of splice replacements.
+  Splices a keyword/map/nested list of splice replacements.
 
   Duplicate names are concatenated, which allows independent generators to
   contribute fragments to the same splice point.
   """
-  @spec splice(Template.t(), keyword() | map() | RustQ.SpliceGroup.t()) :: Template.t()
+  @spec splice(Template.t(), RustQ.Splice.source()) :: Template.t()
   def splice(%Template{} = template, splices) do
-    merged = RustQ.SpliceGroup.merge(template.splices, splices)
-    %{template | splices: RustQ.SpliceGroup.to_keyword(merged)}
+    %{template | splices: RustQ.Splice.merge([template.splices, splices])}
   end
 
   @doc """

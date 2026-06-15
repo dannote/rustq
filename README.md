@@ -125,22 +125,30 @@ Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
 For larger wrapper bodies, prefer real Rust templates with placeholders over
 assembling statement lists in Elixir.
 
-## Composing splice groups
+## Composing splices
 
-When multiple generators contribute to one template, use `RustQ.SpliceGroup` to
-merge splices without losing duplicate names:
+When multiple generators contribute to one template, pass nested splice sources
+or use `RustQ.Splice.merge/1`. Duplicate names are concatenated:
+
+```elixir
+RustQ.render_file!("native/src/generated.template.rs",
+  splice: [
+    MyApp.BaseGenerator.splices(schema),
+    MyApp.NativeGenerator.splices(schema),
+    items: RustQ.Rust.item("pub fn generated() {}")
+  ]
+)
+```
+
+For explicit composition:
 
 ```elixir
 splices =
-  RustQ.SpliceGroup.merge([
+  RustQ.Splice.merge([
     MyApp.BaseGenerator.splices(schema),
     MyApp.NativeGenerator.splices(schema),
-    [items: RustQ.Rust.item("pub fn generated() {}")] 
+    items: RustQ.Rust.item("pub fn generated() {}")
   ])
-
-RustQ.render_file!("native/src/generated.template.rs",
-  splice: RustQ.SpliceGroup.to_keyword(splices)
-)
 ```
 
 ## Rustler helpers

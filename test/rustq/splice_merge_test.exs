@@ -1,31 +1,28 @@
-defmodule RustQ.SpliceGroupTest do
+defmodule RustQ.SpliceMergeTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.SpliceGroup
-
-  test "merges duplicate splice names by concatenating replacements" do
-    group =
-      SpliceGroup.merge([
+  test "merges nested splice sources by concatenating duplicate names" do
+    splices =
+      RustQ.Splice.merge([
         [items: "pub fn one() {}"],
         %{items: "pub fn two() {}", more: "pub fn three() {}"},
-        SpliceGroup.new(items: ["pub fn four() {}"])
+        [items: ["pub fn four() {}"]]
       ])
-
-    splices = SpliceGroup.to_keyword(group)
 
     assert splices[:items] == ["pub fn one() {}", "pub fn two() {}", "pub fn four() {}"]
     assert splices[:more] == ["pub fn three() {}"]
   end
 
-  test "template splice accepts splice groups" do
-    group =
-      SpliceGroup.new(items: "pub fn one() -> i32 { 1 }")
-      |> SpliceGroup.append(:items, "pub fn two() -> i32 { 2 }")
+  test "template splice accepts nested splice sources" do
+    splices = [
+      [items: "pub fn one() -> i32 { 1 }"],
+      [items: "pub fn two() -> i32 { 2 }"]
+    ]
 
     code =
       "mod generated { __rq_items!(); }"
       |> RustQ.parse!("generated.rs")
-      |> RustQ.splice(group)
+      |> RustQ.splice(splices)
       |> RustQ.codegen!()
 
     assert code =~ "pub fn one() -> i32"
