@@ -11,6 +11,67 @@ defmodule RustQ.ASTSamples do
     |> Map.new(fn node -> {node.name, sample_for(node.name)} end)
   end
 
+  def validate_rendered?(name, ast, source) when is_binary(source) do
+    source =~ base_fragment(ast) and source =~ semantic_fragment(name)
+  end
+
+  defp base_fragment(%AST.Use{tree: tree}), do: "use #{tree};"
+  defp base_fragment(%AST.Module{name: name}), do: "mod #{name}"
+  defp base_fragment(%AST.MacroItem{source: source}), do: source
+  defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
+  defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
+  defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"
+  defp base_fragment(%AST.Function{name: name}), do: "fn #{name}"
+
+  defp semantic_fragment(:module), do: "mod sample"
+  defp semantic_fragment(:struct_field), do: "value: u32"
+  defp semantic_fragment(:enum_variant), do: "Unit"
+  defp semantic_fragment(:type_path), do: "type_path_VALUE: u32"
+  defp semantic_fragment(:type_ref), do: "type_ref_VALUE: &str"
+  defp semantic_fragment(:type_option), do: "Option<u32>"
+  defp semantic_fragment(:type_result), do: "Result<u32, String>"
+  defp semantic_fragment(:type_nif_result), do: "NifResult<u32>"
+  defp semantic_fragment(:type_vec), do: "Vec<u8>"
+  defp semantic_fragment(:type_unit), do: "type_unit_VALUE: ()"
+  defp semantic_fragment(:let), do: "let value = 1i64;"
+  defp semantic_fragment(:expr_stmt), do: "side_effect();"
+  defp semantic_fragment(:return), do: "1i64"
+  defp semantic_fragment(:var), do: "value"
+  defp semantic_fragment(:path), do: "Sample::VALUE"
+  defp semantic_fragment(:field), do: "opts.value"
+  defp semantic_fragment(:path_call), do: "Sample::new()"
+  defp semantic_fragment(:method_call), do: "value.clone()"
+  defp semantic_fragment(:struct_literal), do: "Point { x: 1i64 }"
+  defp semantic_fragment(:local_call), do: "make_value()"
+  defp semantic_fragment(:ref), do: "&value"
+  defp semantic_fragment(:try), do: "fallible()?"
+  defp semantic_fragment(:tuple), do: "(1i64, 2i64)"
+  defp semantic_fragment(:literal), do: "1i64"
+  defp semantic_fragment(:token_macro), do: "quote!(None)"
+  defp semantic_fragment(:atom_value), do: "atoms::ok()"
+  defp semantic_fragment(:none), do: "None"
+  defp semantic_fragment(:some), do: "Some(1i64)"
+  defp semantic_fragment(:ok), do: "Ok(())"
+  defp semantic_fragment(:err), do: "Err(rustler::Error::BadArg)"
+  defp semantic_fragment(:nif_raise_atom), do: "RaiseAtom"
+  defp semantic_fragment(:match), do: "match value"
+  defp semantic_fragment(:if), do: "if condition"
+  defp semantic_fragment(:binary_op), do: "left == right"
+  defp semantic_fragment(:arm), do: "_ =>"
+  defp semantic_fragment(:pat_var), do: "value =>"
+  defp semantic_fragment(:pat_wildcard), do: "_ =>"
+  defp semantic_fragment(:pat_path), do: "Option::None =>"
+  defp semantic_fragment(:pat_literal), do: ~s|"ready" =>|
+  defp semantic_fragment(:pat_none), do: "None =>"
+  defp semantic_fragment(:pat_some), do: "Some(value) =>"
+  defp semantic_fragment(:pat_atom_guard), do: "value if value == atoms::ok()"
+  defp semantic_fragment(:pat_tuple), do: "(left, right) =>"
+  defp semantic_fragment(:pat_ok), do: "Ok(value) =>"
+  defp semantic_fragment(:pat_err), do: "Err(reason) =>"
+  defp semantic_fragment(:pat_path_tuple), do: "Event::Click(click) =>"
+  defp semantic_fragment(:pat_struct), do: "Click { name: name } =>"
+  defp semantic_fragment(_), do: ""
+
   def sample_for(:use), do: %AST.Use{tree: "std::fmt"}
   def sample_for(:module), do: %AST.Module{name: :sample, items: [sample_for(:const)]}
   def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}

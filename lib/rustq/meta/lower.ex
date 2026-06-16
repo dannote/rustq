@@ -57,30 +57,26 @@ defmodule RustQ.Meta.Lower do
     %AST.Return{expr: lower_if(condition, branches, {:return, return_type}, vars)}
   end
 
-  defp lower_return(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}, _vars),
-    do: %AST.Return{expr: %AST.Ok{}}
+  defp lower_return(expression, return_type, _vars),
+    do: %AST.Return{expr: lower_return_expr(expression, return_type)}
 
-  defp lower_return(:ok, _return_type, _vars), do: %AST.Return{expr: %AST.Tuple{values: []}}
-  defp lower_return(nil, %Type{kind: :option}, _vars), do: %AST.Return{expr: %AST.None{}}
+  defp lower_return_expr(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}), do: %AST.Ok{}
+  defp lower_return_expr(:ok, _return_type), do: %AST.Tuple{values: []}
+  defp lower_return_expr(nil, %Type{kind: :option}), do: %AST.None{}
 
-  defp lower_return({:ok, value}, %Type{kind: kind}, _vars) when kind in [:result, :nif_result] do
-    %AST.Return{expr: %AST.Ok{expr: lower_expr(value)}}
-  end
+  defp lower_return_expr({:ok, value}, %Type{kind: kind}) when kind in [:result, :nif_result],
+    do: %AST.Ok{expr: lower_expr(value)}
 
-  defp lower_return({:error, value}, %Type{kind: :nif_result}, _vars) do
-    %AST.Return{expr: %AST.Err{expr: lower_nif_error(value)}}
-  end
+  defp lower_return_expr({:error, value}, %Type{kind: :nif_result}),
+    do: %AST.Err{expr: lower_nif_error(value)}
 
-  defp lower_return({:error, value}, %Type{kind: :result}, _vars) do
-    %AST.Return{expr: %AST.Err{expr: lower_expr(value)}}
-  end
+  defp lower_return_expr({:error, value}, %Type{kind: :result}),
+    do: %AST.Err{expr: lower_expr(value)}
 
-  defp lower_return(expression, %Type{kind: :option}, _vars) do
-    %AST.Return{expr: %AST.Some{expr: lower_expr(expression)}}
-  end
+  defp lower_return_expr(expression, %Type{kind: :option}),
+    do: %AST.Some{expr: lower_expr(expression)}
 
-  defp lower_return(expression, _return_type, _vars),
-    do: %AST.Return{expr: lower_expr(expression)}
+  defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
 
   defp lower_case(expression, clauses, context, vars) do
     case_type = infer_expr_type(expression, vars) || infer_case_type_from_patterns(clauses)

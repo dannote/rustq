@@ -1,4 +1,4 @@
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use rustler::{NifResult, Term};
 use syn::{Arm, Expr, Field, Item, Pat, Stmt, Type};
 
@@ -8,7 +8,11 @@ use crate::generated_ast::{
 };
 use crate::{parse_expr, parse_path, parse_syn, parse_type};
 
-// Handwritten item decoders that still need direct syn/Rustler glue.
+// Primitive-boundary inventory:
+// - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
+// - Generic glue: list/optional decoding and typed named-field collection.
+// - Dogfood candidates: keyword_args, path_parts, decode_lifetime_list once iterator lowering exists.
+// - Parse assembly belongs in parse.rs, parse_item.rs, or parse_type.rs, not here.
 // Temporary dogfood bridge helpers called by generated defrust decoders.
 pub(crate) fn decode_item_list(term: Term) -> NifResult<Vec<Item>> {
     term.decode::<Vec<Term>>()?
@@ -128,8 +132,21 @@ pub(crate) fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr>
     }
 }
 
-pub(crate) fn decode_struct_literal_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
-    decode_token_field_list(term, decode_expr)
+pub(crate) struct NamedField<T> {
+    name: proc_macro2::Ident,
+    value: T,
+}
+
+impl<T: ToTokens> ToTokens for NamedField<T> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = &self.name;
+        let value = &self.value;
+        tokens.extend(quote!(#name: #value));
+    }
+}
+
+pub(crate) fn decode_struct_literal_fields(term: Term) -> NifResult<Vec<NamedField<Expr>>> {
+    decode_named_field_list(term, decode_expr)
 }
 
 pub(crate) fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
@@ -172,15 +189,38 @@ pub(crate) fn decode_optional_expr_field(term: Term, key: &str) -> NifResult<Opt
     decode_optional_field(term, key, decode_expr)
 }
 
-pub(crate) fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
+enum LiteralTerm {
+    Bool(bool),
+    I64(i64),
+    F64(f64),
+    String(String),
+    Atom(String),
+}
+
+fn decode_literal_term(term: Term) -> NifResult<LiteralTerm> {
+    if let Ok(value) = term.decode::<bool>() {
+        return Ok(LiteralTerm::Bool(value));
+    }
+    if let Ok(value) = term.decode::<i64>() {
+        return Ok(LiteralTerm::I64(value));
+    }
+    if let Ok(value) = term.decode::<f64>() {
+        return Ok(LiteralTerm::F64(value));
+    }
     if let Ok(value) = term.decode::<String>() {
-        return parse_syn::<Pat>(quote!(#value));
+        return Ok(LiteralTerm::String(value));
     }
     if term.is_atom() {
-        let value = term.atom_to_string()?;
-        return parse_syn::<Pat>(quote!(#value));
+        return Ok(LiteralTerm::Atom(term.atom_to_string()?));
     }
     Err(rustler::Error::BadArg)
+}
+
+pub(crate) fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
+    match decode_literal_term(term)? {
+        LiteralTerm::String(value) | LiteralTerm::Atom(value) => parse_syn::<Pat>(quote!(#value)),
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 pub(crate) fn decode_pat(term: Term) -> NifResult<Pat> {
@@ -195,22 +235,23 @@ pub(crate) fn decode_pat_list(term: Term) -> NifResult<Vec<Pat>> {
     decode_list(term, decode_pat)
 }
 
-pub(crate) fn decode_token_field_list<T: quote::ToTokens>(
+pub(crate) fn decode_named_field_list<T>(
     term: Term,
     decoder: fn(Term) -> NifResult<T>,
-) -> NifResult<Vec<proc_macro2::TokenStream>> {
+) -> NifResult<Vec<NamedField<T>>> {
     term.decode::<Vec<(Term, Term)>>()?
         .into_iter()
         .map(|(name, value)| {
-            let name = format_ident!("{}", atom_or_string(name)?);
-            let value = decoder(value)?;
-            Ok(quote!(#name: #value))
+            Ok(NamedField {
+                name: format_ident!("{}", atom_or_string(name)?),
+                value: decoder(value)?,
+            })
         })
         .collect()
 }
 
-pub(crate) fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
-    decode_token_field_list(term, decode_pat)
+pub(crate) fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<NamedField<Pat>>> {
+    decode_named_field_list(term, decode_pat)
 }
 
 pub(crate) fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
@@ -218,23 +259,14 @@ pub(crate) fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
 }
 
 pub(crate) fn decode_literal_expr(term: Term) -> NifResult<Expr> {
-    if let Ok(value) = term.decode::<bool>() {
-        return if value {
-            parse_syn::<Expr>(quote!(true))
-        } else {
-            parse_syn::<Expr>(quote!(false))
-        };
+    match decode_literal_term(term)? {
+        LiteralTerm::Bool(true) => parse_syn::<Expr>(quote!(true)),
+        LiteralTerm::Bool(false) => parse_syn::<Expr>(quote!(false)),
+        LiteralTerm::I64(value) => parse_syn::<Expr>(quote!(#value)),
+        LiteralTerm::F64(value) => parse_syn::<Expr>(quote!(#value)),
+        LiteralTerm::String(value) => parse_syn::<Expr>(quote!(#value)),
+        LiteralTerm::Atom(_) => Err(rustler::Error::BadArg),
     }
-    if let Ok(value) = term.decode::<i64>() {
-        return parse_syn::<Expr>(quote!(#value));
-    }
-    if let Ok(value) = term.decode::<f64>() {
-        return parse_syn::<Expr>(quote!(#value));
-    }
-    if let Ok(value) = term.decode::<String>() {
-        return parse_syn::<Expr>(quote!(#value));
-    }
-    Err(rustler::Error::BadArg)
 }
 
 pub(crate) fn keyword_args(term: Term) -> NifResult<Vec<(String, Type)>> {

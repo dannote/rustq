@@ -16,7 +16,11 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
              RustQ.Rust.AST.Schema.nodes() |> Enum.map(& &1.name) |> MapSet.new()
 
     for {name, ast} <- samples do
-      assert is_binary(Native.render_ast(ast)), "sample for #{name} should render"
+      source = Native.render_ast(ast)
+      assert is_binary(source), "sample for #{name} should render"
+
+      assert RustQ.ASTSamples.validate_rendered?(name, ast, source),
+             "sample for #{name} should render expected behavior, got:\n#{source}"
     end
   end
 

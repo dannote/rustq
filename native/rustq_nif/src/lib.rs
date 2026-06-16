@@ -4,10 +4,14 @@ use syn::File;
 mod decode;
 mod generated_ast;
 mod parse;
+mod parse_item;
+mod parse_type;
 mod template;
 
 pub(crate) use decode::*;
 pub(crate) use parse::*;
+pub(crate) use parse_item::*;
+pub(crate) use parse_type::*;
 use template::{render_source, template_error};
 
 use generated_ast::{atoms, decode_ast_item};
