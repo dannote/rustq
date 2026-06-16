@@ -149,17 +149,11 @@ fn parse_struct_field(name: syn::Ident, ty: Type, vis: syn::Visibility) -> NifRe
 }
 
 fn decode_struct_field_list(term: Term) -> NifResult<Vec<Field>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_struct_field)
-        .collect::<NifResult<Vec<Field>>>()
+    decode_list(term, decode_struct_field)
 }
 
 fn decode_enum_variant_list(term: Term) -> NifResult<Vec<syn::Variant>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_enum_variant)
-        .collect::<NifResult<Vec<syn::Variant>>>()
+    decode_list(term, decode_enum_variant)
 }
 
 fn parse_item_enum(
@@ -173,10 +167,7 @@ fn parse_item_enum(
 }
 
 fn decode_type_list(term: Term) -> NifResult<Vec<Type>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_type)
-        .collect::<NifResult<Vec<Type>>>()
+    decode_list(term, decode_type)
 }
 
 fn parse_enum_variant(name: syn::Ident, tuple: Vec<Type>) -> NifResult<syn::Variant> {
@@ -220,11 +211,15 @@ fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
 }
 
 // Collection decoders for generated AST nodes.
-fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
+fn decode_list<T>(term: Term, decoder: fn(Term) -> NifResult<T>) -> NifResult<Vec<T>> {
     term.decode::<Vec<Term>>()?
         .into_iter()
-        .map(decode_stmt)
+        .map(decoder)
         .collect()
+}
+
+fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
+    decode_list(term, decode_stmt)
 }
 
 fn decode_block(term: Term) -> NifResult<syn::Block> {
@@ -283,21 +278,11 @@ fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
 }
 
 fn decode_struct_literal_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
-    term.decode::<Vec<(Term, Term)>>()?
-        .into_iter()
-        .map(|(name, expr)| {
-            let name = format_ident!("{}", atom_or_string(name)?);
-            let expr = decode_expr(expr)?;
-            Ok(quote!(#name: #expr))
-        })
-        .collect()
+    decode_token_field_list(term, decode_expr)
 }
 
 fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_arm)
-        .collect()
+    decode_list(term, decode_arm)
 }
 
 fn parse_arm(tokens: proc_macro2::TokenStream) -> NifResult<Arm> {
@@ -365,28 +350,29 @@ fn decode_pat_atom_guard(_term: Term) -> NifResult<Pat> {
 }
 
 fn decode_pat_list(term: Term) -> NifResult<Vec<Pat>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_pat)
-        .collect()
+    decode_list(term, decode_pat)
 }
 
-fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
+fn decode_token_field_list<T: quote::ToTokens>(
+    term: Term,
+    decoder: fn(Term) -> NifResult<T>,
+) -> NifResult<Vec<proc_macro2::TokenStream>> {
     term.decode::<Vec<(Term, Term)>>()?
         .into_iter()
-        .map(|(name, pattern)| {
+        .map(|(name, value)| {
             let name = format_ident!("{}", atom_or_string(name)?);
-            let pattern = decode_pat(pattern)?;
-            Ok(quote!(#name: #pattern))
+            let value = decoder(value)?;
+            Ok(quote!(#name: #value))
         })
         .collect()
 }
 
+fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
+    decode_token_field_list(term, decode_pat)
+}
+
 fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_expr)
-        .collect()
+    decode_list(term, decode_expr)
 }
 
 fn decode_literal_expr(term: Term) -> NifResult<Expr> {
