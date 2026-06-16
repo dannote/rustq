@@ -50,21 +50,6 @@ defmodule RustQ.Type do
   @typedoc "Rust string slice `&str`."
   @type str :: binary()
 
-  @typedoc "Rust `syn::Expr` imported as `Expr` in native codegen."
-  @type expr :: term()
-
-  @typedoc "Rust `syn::Pat` imported as `Pat` in native codegen."
-  @type pat :: term()
-
-  @typedoc "Rust `syn::Stmt` imported as `Stmt` in native codegen."
-  @type stmt :: term()
-
-  @typedoc "Rust `syn::Path` imported as `Path` in native codegen."
-  @type path :: term()
-
-  @typedoc "Rust `syn::Arm` imported as `Arm` in native codegen."
-  @type arm :: term()
-
   @typedoc "Rust shared reference `&T`."
   @type ref(t) :: t
 
@@ -92,11 +77,6 @@ defmodule RustQ.Type do
   def f64, do: type_only!()
   def i64, do: type_only!()
   def str, do: type_only!()
-  def expr, do: type_only!()
-  def pat, do: type_only!()
-  def stmt, do: type_only!()
-  def path, do: type_only!()
-  def arm, do: type_only!()
   def term, do: type_only!()
   def u8, do: type_only!()
   def u32, do: type_only!()
