@@ -96,6 +96,15 @@ coverage currently includes item support for use/module/const/struct/enum,
 struct fields, enum variants, selected type decoders, and the generated
 statement/expression/pattern decoders.
 
+Semantic Rusty-Elixir forms are compiler input, not a second registry. Do not
+add trivial native wrappers or constructor spec tables for shapes already written
+in `defrust`, such as `expr!(field(receiver, field))`, `pat!(tuple(patterns))`,
+or `arm!(pat, block)`. The `defrust` call itself is the declaration; lowering
+must infer and inline the expansion from that call. Handwritten Rust should stay
+limited to real primitive boundaries: Rustler term APIs, collection iteration,
+`syn` parsing/assembly that is not yet represented in RustQ AST, and other
+operations that cannot be authored as valid Rusty Elixir.
+
 ### Dogfooding status map
 
 | Area | Status | Notes |
