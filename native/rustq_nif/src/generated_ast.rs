@@ -79,10 +79,6 @@ pub(crate) fn optional_map_get<'a>(term: Term<'a>, key: &str) -> NifResult<Optio
     }
 }
 
-pub(crate) fn atom_key(term: Term, key: &str) -> NifResult<String> {
-    term.map_get(atom(term.get_env(), key)?)?.atom_to_string()
-}
-
 pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<String>> {
     let value = term.map_get(atom(term.get_env(), key)?)?;
     if is_nil(value)? {
@@ -92,21 +88,26 @@ pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<Strin
     }
 }
 
-pub(crate) fn is_nil(term: Term) -> NifResult<bool> {
-    Ok(term.is_atom() && term.atom_to_string()? == "nil")
-}
-
-pub(crate) fn struct_name(term: Term) -> NifResult<String> {
-    term.map_get(atom(term.get_env(), "__struct__")?)?
-        .atom_to_string()
-}
-
 pub(crate) fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
     if struct_name(term)? == expected {
         Ok(())
     } else {
         Err(rustler::Error::BadArg)
     }
+}
+
+pub(crate) fn atom_key<'a>(term: Term<'a>, key: &str) -> NifResult<String> {
+    let value = term.map_get(atom(term.get_env(), key)?)?;
+    value.atom_to_string()
+}
+
+pub(crate) fn is_nil<'a>(term: Term<'a>) -> NifResult<bool> {
+    Ok(term.is_atom() && term.atom_to_string()? == "nil")
+}
+
+pub(crate) fn struct_name<'a>(term: Term<'a>) -> NifResult<String> {
+    let value = term.map_get(atom(term.get_env(), "__struct__")?)?;
+    value.atom_to_string()
 }
 
 pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {

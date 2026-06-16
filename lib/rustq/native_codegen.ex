@@ -18,6 +18,7 @@ defmodule RustQ.NativeCodegen do
       atoms_module(),
       ast_modules_module(),
       helper_items(),
+      RustQ.NativeCodegen.Helpers.asts(),
       decode_ast_item_item(),
       decode_ast_type_item(),
       decode_ast_pat_item(),
@@ -80,21 +81,6 @@ defmodule RustQ.NativeCodegen do
           end
         end
       end,
-      function :atom_key,
-        vis: :crate,
-        args: [term: "Term", key: "&str"],
-        returns: "NifResult<String>" do
-        A.return(
-          A.method(
-            A.try(
-              A.method(:term, :map_get, [
-                A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
-              ])
-            ),
-            :atom_to_string
-          )
-        )
-      end,
       function :optional_atom_key,
         vis: :crate,
         args: [term: "Term", key: "&str"],
@@ -113,34 +99,6 @@ defmodule RustQ.NativeCodegen do
             A.try(A.call(:is_nil, [:value])),
             [A.return(A.ok(A.none()))],
             [A.return(A.ok(A.some(A.try(A.method(:value, :atom_to_string)))))]
-          )
-        )
-      end,
-      function :is_nil,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<bool>" do
-        A.return(
-          A.ok(
-            A.and_(
-              A.method(:term, :is_atom),
-              A.eq(A.try(A.method(:term, :atom_to_string)), "nil")
-            )
-          )
-        )
-      end,
-      function :struct_name,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<String>" do
-        A.return(
-          A.method(
-            A.try(
-              A.method(:term, :map_get, [
-                A.try(A.call(:atom, [A.method(:term, :get_env), "__struct__"]))
-              ])
-            ),
-            :atom_to_string
           )
         )
       end,

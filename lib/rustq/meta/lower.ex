@@ -41,12 +41,20 @@ defmodule RustQ.Meta.Lower do
     %AST.ExprStmt{expr: lower_case(expression, clauses, :statement, vars)}
   end
 
+  defp lower_statement({:if, _, [condition, branches]}, vars) do
+    %AST.ExprStmt{expr: lower_if(condition, branches, :statement, vars)}
+  end
+
   defp lower_statement(:ok, _vars), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
   defp lower_statement(nil, _vars), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
   defp lower_statement(expression, _vars), do: %AST.ExprStmt{expr: lower_expr(expression)}
 
   defp lower_return({:case, _, [expression, [do: clauses]]}, return_type, vars) do
     %AST.Return{expr: lower_case(expression, clauses, {:return, return_type}, vars)}
+  end
+
+  defp lower_return({:if, _, [condition, branches]}, return_type, vars) do
+    %AST.Return{expr: lower_if(condition, branches, {:return, return_type}, vars)}
   end
 
   defp lower_return(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}, _vars),
@@ -86,6 +94,17 @@ defmodule RustQ.Meta.Lower do
       end)
 
     %AST.Match{expr: lower_expr(expression), arms: arms}
+  end
+
+  defp lower_if(condition, branches, context, vars) do
+    then_body = Keyword.fetch!(branches, :do)
+    else_body = Keyword.get(branches, :else, nil)
+
+    %AST.If{
+      condition: lower_expr(condition),
+      then: lower_clause_body(then_body, context, vars),
+      else: lower_clause_body(else_body, context, vars)
+    }
   end
 
   defp lower_clause_body(body, :statement, vars) do
@@ -181,6 +200,21 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:ok, _, [expression]}), do: %AST.Ok{expr: lower_expr(expression)}
   defp lower_expr({:err, _, [expression]}), do: %AST.Err{expr: lower_expr(expression)}
 
+  defp lower_expr({:token_macro, _, [path, tokens]}),
+    do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
+
+  defp lower_expr({:==, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
+
+  defp lower_expr({:and, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :and, right: lower_expr(right)}
+
+  defp lower_expr({:or, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :or, right: lower_expr(right)}
+
+  defp lower_expr({:if, _, [condition, branches]}),
+    do: lower_if(condition, branches, :statement, %{})
+
   defp lower_expr({{:., _meta, [receiver, field_or_function]}, call_meta, []}) do
     cond do
       Keyword.get(call_meta, :no_parens) ->
@@ -227,6 +261,13 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
+
+  defp lower_token_macro_path(atom) when is_atom(atom), do: %AST.Path{parts: [atom]}
+  defp lower_token_macro_path({:__aliases__, _, parts}), do: %AST.Path{parts: parts}
+
+  defp lower_token_macro_path(other) do
+    raise ArgumentError, "unsupported token_macro path: #{Macro.to_string(other)}"
+  end
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)

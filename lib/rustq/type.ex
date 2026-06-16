@@ -47,6 +47,9 @@ defmodule RustQ.Type do
   @typedoc "Rust `f64`."
   @type f64 :: float()
 
+  @typedoc "Rust string slice `&str`."
+  @type str :: binary()
+
   @typedoc "Rust shared reference `&T`."
   @type ref(t) :: t
 
@@ -73,6 +76,7 @@ defmodule RustQ.Type do
   def f32, do: type_only!()
   def f64, do: type_only!()
   def i64, do: type_only!()
+  def str, do: type_only!()
   def term, do: type_only!()
   def u8, do: type_only!()
   def u32, do: type_only!()

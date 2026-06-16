@@ -36,4 +36,29 @@ defmodule RustQ.Meta.LowerTest do
              }
            } = hd(maybe_save.body)
   end
+
+  test "dogfooded native helpers lower binary operators and Rust string types" do
+    helpers = RustQ.NativeCodegen.Helpers.__rustq_asts__()
+
+    assert %RustQ.Rust.AST.Function{
+             name: :atom_key,
+             args: [
+               term: %RustQ.Rust.AST.TypePath{parts: [:Term], lifetimes: [:a]},
+               key: %RustQ.Rust.AST.TypeRef{inner: %RustQ.Rust.AST.TypePath{parts: [:str]}}
+             ],
+             returns: %RustQ.Rust.AST.TypeNifResult{
+               inner: %RustQ.Rust.AST.TypePath{parts: [:String]}
+             }
+           } = Enum.find(helpers, &(&1.name == :atom_key))
+
+    assert %RustQ.Rust.AST.Function{name: :is_nil, body: body} =
+             Enum.find(helpers, &(&1.name == :is_nil))
+
+    assert [
+             %RustQ.Rust.AST.Return{
+               expr: %RustQ.Rust.AST.Ok{expr: %RustQ.Rust.AST.BinaryOp{op: :and}}
+             }
+           ] =
+             body
+  end
 end
