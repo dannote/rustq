@@ -1,0 +1,39 @@
+Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
+
+defmodule RustQ.Meta.LowerTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Meta.GeneratedCase, as: Generated
+
+  test "generated ASTs are retained before fragment validation" do
+    [draw_save, decode_mode, draw_rect, maybe_save | _] = Generated.__rustq_asts__()
+
+    assert %RustQ.Rust.AST.Function{name: :draw_save, args: [canvas: %RustQ.Rust.AST.TypeRef{}]} =
+             draw_save
+
+    assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
+
+    assert %RustQ.Rust.AST.Function{
+             args: [_canvas_arg, {:opts, %RustQ.Rust.AST.TypePath{}}, _raw_opts_arg]
+           } = draw_rect
+
+    assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} = hd(draw_rect.body)
+
+    assert Enum.any?(
+             draw_rect.body,
+             &match?(
+               %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :paint}, mutable: true},
+               &1
+             )
+           )
+
+    assert %RustQ.Rust.AST.ExprStmt{
+             expr: %RustQ.Rust.AST.Match{
+               arms: [
+                 %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatNone{}},
+                 %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatSome{}}
+               ]
+             }
+           } = hd(maybe_save.body)
+  end
+end
