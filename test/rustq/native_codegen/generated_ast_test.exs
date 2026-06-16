@@ -43,4 +43,28 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat>"
     assert source =~ "super::format_ident_value(atom_key(term, \"name\")?)"
   end
+
+  test "dogfooded decoder module covers generated stmt, expr, and pat decoders" do
+    decoder_names =
+      RustQ.NativeCodegen.Decoders.__rustq_asts__()
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+
+    expected_expr_decoders =
+      RustQ.Rust.AST.Schema.nodes(:expr)
+      |> Enum.map(&String.to_atom("decode_expr_#{&1.name}"))
+
+    expected_stmt_decoders =
+      RustQ.Rust.AST.Schema.nodes(:stmt)
+      |> Enum.map(&String.to_atom("decode_stmt_#{&1.name}"))
+
+    expected_pat_decoders =
+      RustQ.Rust.AST.Schema.nodes(:pat)
+      |> Enum.reject(&(&1.name == :pat_atom_guard))
+      |> Enum.map(&String.to_atom("decode_#{&1.name}"))
+
+    for decoder <- expected_expr_decoders ++ expected_stmt_decoders ++ expected_pat_decoders do
+      assert MapSet.member?(decoder_names, decoder), "missing dogfooded decoder #{decoder}"
+    end
+  end
 end

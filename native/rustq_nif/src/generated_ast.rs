@@ -372,6 +372,16 @@ pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {
     super::parse_expr(&format!("{}!({})", path, tokens))
 }
 
+pub(crate) fn decode_expr_ok<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let optional_expr = super::decode_optional_expr_field(term, "expr")?;
+    if optional_expr.is_none() {
+        super::parse_expr_tokens(quote!(Ok(())))
+    } else {
+        let expr = optional_expr.unwrap();
+        super::parse_expr_tokens(quote!(Ok(# expr)))
+    }
+}
+
 pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr> {
     super::parse_expr_tokens(quote!(None))
 }
@@ -393,18 +403,4 @@ pub(crate) fn decode_expr_some<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_err<'a>(term: Term<'a>) -> NifResult<Expr> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     super::parse_expr_tokens(quote!(Err(# expr)))
-}
-
-pub(crate) fn decode_expr_ok(term: Term) -> NifResult<Expr> {
-    match super::optional_map_get(term, "expr")? {
-        Some(expr_term) => {
-            if super::is_nil(expr_term)? {
-                super::parse_expr_tokens(quote!(Ok(())))
-            } else {
-                let expr = super::decode_expr(expr_term)?;
-                super::parse_expr_tokens(quote!(Ok(# expr)))
-            }
-        }
-        None => super::parse_expr_tokens(quote!(Ok(()))),
-    }
 }

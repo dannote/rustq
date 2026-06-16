@@ -341,6 +341,13 @@ fn decode_optional_type_field(term: Term, key: &str) -> NifResult<Option<Type>> 
     }
 }
 
+fn decode_optional_expr_field(term: Term, key: &str) -> NifResult<Option<Expr>> {
+    match optional_map_get(term, key)? {
+        Some(expr_term) if !is_nil(expr_term)? => Ok(Some(decode_expr(expr_term)?)),
+        _ => Ok(None),
+    }
+}
+
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     if let Ok(value) = term.decode::<String>() {
         return parse_pat(quote!(#value));

@@ -225,6 +225,18 @@ defmodule RustQ.NativeCodegen.Decoders do
     Super.parse_expr(ref(token_macro(:format, "\"{}!({})\", path, tokens")))
   end
 
+  @spec decode_expr_ok(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_ok(term) do
+    optional_expr = unwrap!(Super.decode_optional_expr_field(term, "expr"))
+
+    if optional_expr.is_none() do
+      quote_expr!("Ok(())")
+    else
+      expr = optional_expr.unwrap()
+      quote_expr!("Ok(#expr)")
+    end
+  end
+
   @spec decode_expr_none(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_none(_term) do
     quote_expr!("None")
