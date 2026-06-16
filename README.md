@@ -192,6 +192,16 @@ remains the explicit public schema DSL for Rustler struct/tagged-enum generation
 the two may share internals later, but their authoring surfaces are currently
 separate by design.
 
+Native AST rendering is the primary backend. During development you can disable
+silent fallback rendering with:
+
+```elixir
+config :rustq, :strict_native_ast, true
+```
+
+Use strict mode when adding AST nodes or native decoder coverage so unsupported
+nodes fail visibly instead of falling back to the Elixir debug renderer.
+
 ## Optional rustfmt
 
 Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:

@@ -74,6 +74,29 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     end
   end
 
+  test "dogfooded item decoders expose structural AST boundaries" do
+    item_decoders = RustQ.NativeCodegen.Decoders.Item.__rustq_asts__()
+
+    assert %AST.Function{name: :decode_ast_function, body: function_body} =
+             Enum.find(item_decoders, &(&1.name == :decode_ast_function))
+
+    assert %AST.ExprStmt{expr: %AST.Try{}} = hd(function_body)
+    assert %AST.Let{pattern: %AST.PatVar{name: :args}} = Enum.at(function_body, 3)
+
+    assert %AST.Return{
+             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_item_function_args]}}
+           } = List.last(function_body)
+
+    assert %AST.Function{name: :decode_function_arg, body: arg_body} =
+             Enum.find(item_decoders, &(&1.name == :decode_function_arg))
+
+    assert %AST.ExprStmt{expr: %AST.Try{}} = hd(arg_body)
+
+    assert %AST.Return{
+             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_function_arg]}}
+           } = List.last(arg_body)
+  end
+
   test "dogfooded decoder modules cover generated decoder categories" do
     decoder_names =
       RustQ.NativeCodegen.Decoders.asts()

@@ -11,11 +11,16 @@ defmodule RustQ.Meta.GeneratedCase do
     defstruct [:width, :height]
   end
 
+  defmodule Scroll do
+    defstruct [:dx, :dy]
+  end
+
   @type mode :: :src_over | :multiply
 
   @type click :: %Click{name: String.t()}
   @type resize :: %Resize{width: R.u32(), height: R.u32()}
-  @type event :: click() | resize()
+  @type scroll :: %Scroll{dx: R.f32(), dy: R.f32()}
+  @type event :: click() | resize() | scroll()
 
   @type rect_opts :: %{
           required(:x) => R.f32(),

@@ -25,6 +25,9 @@ defmodule RustQ.Meta.TypeItemsTest do
     assert {:Resize, [%RustQ.Meta.Type{rust: "Resize"}]} =
              List.keyfind(event_variants, :Resize, 0)
 
+    assert {:Scroll, [%RustQ.Meta.Type{rust: "Scroll"}]} =
+             List.keyfind(event_variants, :Scroll, 0)
+
     assert %RustQ.Meta.Type{
              kind: :struct,
              rust: "RectOpts<'a>",
@@ -131,6 +134,10 @@ defmodule RustQ.Meta.TypeItemsTest do
                %RustQ.Rust.AST.EnumVariant{
                  name: :Resize,
                  tuple: [%RustQ.Rust.AST.TypePath{parts: ["Resize"]}]
+               },
+               %RustQ.Rust.AST.EnumVariant{
+                 name: :Scroll,
+                 tuple: [%RustQ.Rust.AST.TypePath{parts: ["Scroll"]}]
                }
              ]
            } = Enum.find(type_asts, &match?(%RustQ.Rust.AST.Enum{name: :Event}, &1))

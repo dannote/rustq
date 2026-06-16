@@ -304,15 +304,15 @@ stable template API.
 
 The next practical sequence should be:
 
-1. Keep `path_parts`/`decode_lifetime_list` consolidated through the generic
-   string-list primitive unless Rusty-Elixir gains iterator/list lowering that
-   makes a dogfooded version clearer.
-2. Continue reducing type parsing boundaries: `TypePath` now has structured
-   generics, container decoders use generic type construction, and `TypeRef`
-   uses token construction; lifetime-heavy path assembly still has parse-boundary code.
-3. Expand schema/type behavioral coverage for nested maps, optional fields,
-   struct lifetimes, tuple enum variants, and invalid atom behavior.
-4. Revisit public docs once the lowering/context refactor is stable.
+1. Continue reducing item/type assembly boundaries only where a generic primitive
+   or typed AST node removes real complexity; avoid churn in the already-small
+   `parse_item.rs` helpers.
+2. Improve Rusty-Elixir list/iterator lowering before attempting to dogfood
+   `path_parts`, `decode_lifetime_list`, or collection transforms in `decode.rs`.
+3. Expand schema/type behavioral coverage for invalid atom behavior and any
+   newly added map/tuple-union shapes.
+4. Revisit public docs once list/iterator lowering and remaining primitive policy
+   are stable.
 
 Recently completed:
 
@@ -335,6 +335,12 @@ Recently completed:
   :strict_native_ast, true` to avoid silent fallback rendering.
 - `path_parts` and `decode_lifetime_list` share one generic string-list native
   primitive.
+- Type alias generation tests now assert structural ASTs for nested maps,
+  lifetimes, tuple enums with three variants, and invalid atom fallback arms.
+- Native-codegen decoder tests now include structural AST checks for dogfooded
+  item decoders.
+- Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
+  been run successfully after the AST/type cleanup.
 
 ## Verification gates
 
