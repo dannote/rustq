@@ -25,12 +25,18 @@ defmodule RustQ.ASTSamples do
   defp base_fragment(%AST.Use{tree: tree}), do: "use #{tree};"
   defp base_fragment(%AST.Module{name: name}), do: "mod #{name}"
   defp base_fragment(%AST.MacroItem{source: source}), do: source
+
+  defp base_fragment(%AST.MacroItemCall{path: path}) do
+    [RustQ.Rust.AST.render_expr(path), "!"] |> IO.iodata_to_binary()
+  end
+
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
   defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
   defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"
   defp base_fragment(%AST.Function{name: name}), do: "fn #{name}"
 
   defp semantic_fragment(:module), do: "mod sample"
+  defp semantic_fragment(:macro_item_call), do: "rustler::atoms!"
   defp semantic_fragment(:function_arg), do: "value: u32"
   defp semantic_fragment(:derive), do: "#[derive(Clone, serde::Serialize)]"
   defp semantic_fragment(:struct_field), do: "value: u32"
@@ -90,6 +96,7 @@ defmodule RustQ.ASTSamples do
   def sample_for(:module), do: %AST.Module{name: :sample, items: [sample_for(:const)]}
   def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
+  def sample_for(:macro_item_call), do: A.macro_item_call([:rustler, :atoms], [:ok, :error])
   def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")
 
   def sample_for(:function_arg),

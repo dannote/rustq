@@ -12,6 +12,7 @@ defmodule RustQ.Rust.AST do
           | Module.t()
           | Const.t()
           | MacroItem.t()
+          | MacroItemCall.t()
           | Function.t()
           | Struct.t()
           | Enum.t()
@@ -102,6 +103,10 @@ defmodule RustQ.Rust.AST do
   )
 
   defnode(MacroItem, :item, [:source], type: quote(do: %__MODULE__{source: String.t()}))
+
+  defnode(MacroItemCall, :item, [:path, args: []],
+    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [atom() | String.t()]})
+  )
 
   defnode(FunctionArg, :field, [:name, :type],
     type: quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type() | String.t()})
@@ -356,6 +361,7 @@ defmodule RustQ.Rust.AST do
       Module,
       Const,
       MacroItem,
+      MacroItemCall,
       FunctionArg,
       Function,
       Derive,
@@ -419,6 +425,10 @@ defmodule RustQ.Rust.AST do
   def render_item_native(%Module{} = item), do: render_native(item, &render_module/1)
   def render_item_native(%Const{} = item), do: render_native(item, &render_const/1)
   def render_item_native(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
+
+  def render_item_native(%MacroItemCall{} = item),
+    do: render_native(item, &render_macro_item_call/1)
+
   def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
   def render_item_native(%Struct{} = item), do: render_native(item, &render_struct/1)
   def render_item_native(%Enum{} = item), do: render_native(item, &render_enum/1)
@@ -487,6 +497,10 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_macro_item(%MacroItem{source: source}), do: source
+
+  def render_macro_item_call(%MacroItemCall{path: path, args: args}) do
+    [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &to_string/1), " }"]
+  end
 
   def render_function(%Function{} = function) do
     args =

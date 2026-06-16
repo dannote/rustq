@@ -359,6 +359,9 @@ Recently completed:
   `EarlyReturn` AST nodes plus `assign!` / `return!` lowering.
 - Unit type decoding now uses token-based native assembly instead of parsing the
   string `"()"`.
+- Item-level macro invocations such as `rustler::atoms! { ... }` now use a
+  structural `MacroItemCall` node; generated atom support no longer needs a raw
+  `MacroItem.source` escape.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

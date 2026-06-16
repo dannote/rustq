@@ -26,6 +26,7 @@ impl_parse_syn_tokens!(
     Stmt,
     Type,
     syn::FnArg,
+    syn::Item,
     syn::ItemConst,
     syn::ItemEnum,
     syn::ItemFn,

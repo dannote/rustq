@@ -47,6 +47,15 @@ pub(crate) fn parse_macro_item(source: String) -> NifResult<Item> {
     syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
 
+pub(crate) fn parse_macro_item_call(path: syn::Path, args: Vec<String>) -> NifResult<Item> {
+    let args = args
+        .into_iter()
+        .map(|arg| format_ident!("{}", arg))
+        .collect::<Vec<_>>();
+
+    parse_syn(quote!(#path! { #(#args),* }))
+}
+
 pub(crate) fn parse_item_function_args(
     name: syn::Ident,
     vis: syn::Visibility,

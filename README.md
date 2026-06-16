@@ -176,7 +176,7 @@ its own native AST decoder support.
 Current `defrust` subset:
 
 - ordinary assignment as Rust `let`, explicit `assign!`, explicit `return!`, final expressions, `if`, and `case`
-- aliases, remote calls, method calls, local calls, macro calls, fields, refs, tuples, lists as `vec![...]`, and literals
+- aliases, remote calls, method calls, local calls, expression/item macro calls, fields, refs, tuples, lists as `vec![...]`, and literals
 - `Enum.map/2` with a single-argument anonymous function lowers to an iterator chain
 - `Option`, `Result`, and `NifResult` return/branch wrapping from `@spec`
 - selected `@type` forms: atom unions, `nil | t`, `{:ok, t} | {:error, e}`, maps, structs, and tagged tuple unions

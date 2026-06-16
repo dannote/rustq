@@ -11,7 +11,7 @@ use syn::{
 
 pub(crate) mod atoms {
     rustler::atoms! {
-        ok, error,
+        ok, error
     }
 }
 
@@ -20,6 +20,7 @@ pub(crate) mod ast_modules {
     pub(crate) const MODULE: &str = "Elixir.RustQ.Rust.AST.Module";
     pub(crate) const CONST: &str = "Elixir.RustQ.Rust.AST.Const";
     pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
+    pub(crate) const MACRO_ITEM_CALL: &str = "Elixir.RustQ.Rust.AST.MacroItemCall";
     pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";
     pub(crate) const STRUCT: &str = "Elixir.RustQ.Rust.AST.Struct";
     pub(crate) const ENUM: &str = "Elixir.RustQ.Rust.AST.Enum";
@@ -125,6 +126,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
         ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
         ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
+        ast_modules::MACRO_ITEM_CALL => decode_ast_macro_item_call(term),
         ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
         ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
         ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
@@ -271,6 +273,13 @@ pub(crate) fn decode_ast_macro_item<'a>(term: Term<'a>) -> NifResult<Item> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItem")?;
     let source = super::string_field(term, "source")?;
     super::parse_macro_item(source)
+}
+
+pub(crate) fn decode_ast_macro_item_call<'a>(term: Term<'a>) -> NifResult<Item> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItemCall")?;
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let args = super::decode_string_list(required_field(term, "args")?)?;
+    super::parse_macro_item_call(path, args)
 }
 
 pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {

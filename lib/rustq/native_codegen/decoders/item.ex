@@ -83,6 +83,14 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_macro_item(source)
   end
 
+  @spec decode_ast_macro_item_call(term()) :: R.nif_result(Item.t())
+  defrust decode_ast_macro_item_call(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItemCall"))
+    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    args = unwrap!(Super.decode_string_list(unwrap!(required_field(term, "args"))))
+    Super.parse_macro_item_call(path, args)
+  end
+
   @spec decode_ast_enum(term()) :: R.nif_result(ItemEnum.t())
   defrust decode_ast_enum(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Enum"))

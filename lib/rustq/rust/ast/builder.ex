@@ -76,6 +76,7 @@ defmodule RustQ.Rust.AST.Builder do
   def derive(paths), do: %AST.Derive{paths: List.wrap(paths)}
 
   def macro_item(source), do: %AST.MacroItem{source: source}
+  def macro_item_call(path, args \\ []), do: %AST.MacroItemCall{path: expr_path(path), args: args}
 
   def let(name, expression, opts \\ []),
     do: %AST.Let{pattern: pat(name), expr: expr(expression), type: Keyword.get(opts, :type)}
@@ -182,6 +183,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Module,
              AST.Const,
              AST.MacroItem,
+             AST.MacroItemCall,
              AST.Var,
              AST.Path,
              AST.Field,

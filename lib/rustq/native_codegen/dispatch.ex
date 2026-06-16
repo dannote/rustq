@@ -48,6 +48,12 @@ defmodule RustQ.NativeCodegen.Dispatch do
     end
   end
 
+  defp decode_ast_item_arm(%Schema.Node{name: :macro_item_call, rust_const: rust_const}) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
+      A.return(A.path_call([:decode_ast_macro_item_call], [:term]))
+    end
+  end
+
   defp decode_ast_item_arm(%Schema.Node{name: name, rust_const: rust_const}) do
     {wrapper, decoder} = item_decoder(name)
 

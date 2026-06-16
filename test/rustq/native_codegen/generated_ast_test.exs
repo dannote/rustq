@@ -12,7 +12,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
   test "generated modules are AST-backed" do
     modules = RustQ.NativeCodegen.Modules.asts()
 
-    assert %AST.Module{name: :atoms, items: [%AST.MacroItem{}], vis: :crate} =
+    assert %AST.Module{name: :atoms, items: [%AST.MacroItemCall{}], vis: :crate} =
              Enum.find(modules, &match?(%AST.Module{name: :atoms}, &1))
 
     assert %AST.Module{name: :ast_modules, items: constants, vis: :crate} =
@@ -178,6 +178,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       :decode_ast_function,
       :decode_ast_struct,
       :decode_ast_macro_item,
+      :decode_ast_macro_item_call,
       :decode_ast_enum,
       :decode_function_arg,
       :decode_struct_field,

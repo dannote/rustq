@@ -21,7 +21,7 @@ defmodule RustQ.NativeCodegen.Modules do
     A.module(
       :atoms,
       [
-        A.macro_item("rustler::atoms! {\n    ok,\n    error,\n}")
+        A.macro_item_call([:rustler, :atoms], [:ok, :error])
       ],
       vis: :crate
     )
