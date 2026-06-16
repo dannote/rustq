@@ -218,19 +218,21 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
-  defp lower_expr({:quote_expr!, _, [tokens]}),
+  defp lower_expr({:expr!, _, [expression]}), do: semantic_expr(expression)
+
+  defp lower_expr({:raw_expr!, _, [tokens]}),
     do: %AST.PathCall{
       path: %AST.Path{parts: [:super, :parse_expr_tokens]},
       args: [quote_tokens(tokens)]
     }
 
-  defp lower_expr({:quote_pat!, _, [tokens]}),
+  defp lower_expr({:raw_pat!, _, [tokens]}),
     do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_pat]}, args: [quote_tokens(tokens)]}
 
-  defp lower_expr({:quote_stmt!, _, [tokens]}),
+  defp lower_expr({:raw_stmt!, _, [tokens]}),
     do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_stmt]}, args: [quote_tokens(tokens)]}
 
-  defp lower_expr({:quote_arm!, _, [tokens]}),
+  defp lower_expr({:raw_arm!, _, [tokens]}),
     do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_arm]}, args: [quote_tokens(tokens)]}
 
   defp lower_expr({:badarg, _, []}), do: %AST.Path{parts: [:rustler, :Error, :BadArg]}
@@ -307,6 +309,30 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
+
+  defp semantic_expr(:ok), do: raw_expr("Ok(())")
+  defp semantic_expr({:ok, value}), do: raw_expr("Ok(#{semantic_interpolation(value)})")
+  defp semantic_expr({:error, value}), do: raw_expr("Err(#{semantic_interpolation(value)})")
+  defp semantic_expr({:{}, _, [:ok, value]}), do: raw_expr("Ok(#{semantic_interpolation(value)})")
+
+  defp semantic_expr({:{}, _, [:error, value]}),
+    do: raw_expr("Err(#{semantic_interpolation(value)})")
+
+  defp semantic_expr(nil), do: raw_expr("None")
+
+  defp semantic_expr(other), do: raw_expr(AST.render_expr(lower_expr(other)))
+
+  defp semantic_interpolation({name, _, context}) when is_atom(name) and is_atom(context),
+    do: "##{name}"
+
+  defp semantic_interpolation(other), do: AST.render_expr(lower_expr(other))
+
+  defp raw_expr(tokens) do
+    %AST.PathCall{
+      path: %AST.Path{parts: [:super, :parse_expr_tokens]},
+      args: [quote_tokens(tokens)]
+    }
+  end
 
   defp quote_tokens(tokens) when is_binary(tokens),
     do: %AST.TokenMacro{path: %AST.Path{parts: [:quote]}, tokens: tokens}

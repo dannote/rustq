@@ -136,6 +136,21 @@ defmodule RustQ.Meta.LowerTest do
            } = Enum.find(decoders, &(&1.name == :decode_stmt_return))
 
     assert %RustQ.Rust.AST.Function{
+             name: :decode_expr_ok,
+             body: [
+               %RustQ.Rust.AST.Let{},
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.Match{
+                   arms: [
+                     %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatNone{}},
+                     %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatSome{}}
+                   ]
+                 }
+               }
+             ]
+           } = Enum.find(decoders, &(&1.name == :decode_expr_ok))
+
+    assert %RustQ.Rust.AST.Function{
              name: :decode_expr_none,
              body: [
                %RustQ.Rust.AST.Return{

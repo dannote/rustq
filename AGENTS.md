@@ -18,9 +18,10 @@ Preferred order:
    - If generation needs a Rust construct that RustQ cannot represent yet, first consider adding an AST node and native decoder/rendering support.
    - Keep growing the AST vocabulary rather than accumulating ad hoc string templates.
 
-4. **Use Rusty-Elixir helper markers before raw strings**
+4. **Use semantic Rusty-Elixir helpers before raw strings**
+   - `expr!(...)` lowers valid Rusty-Elixir values such as `:ok` and `{:ok, value}` to a `syn::Expr`.
    - `Super.foo(...)` in `defrust` intentionally lowers to a Rust parent-module call such as `super::foo(...)`.
-   - `quote_expr!(...)`, `quote_pat!(...)`, and `quote_stmt!(...)` are explicit Rust token escape hatches that lower through parser helpers.
+   - `raw_expr!(...)`, `raw_pat!(...)`, `raw_stmt!(...)`, and `raw_arm!(...)` are explicit Rust token escape hatches that lower through parser helpers.
 
 5. **Use raw Rust strings only as isolated escape hatches**
    - Acceptable examples: `AST.MacroItem` for macro invocations such as `rustler::atoms!`.
