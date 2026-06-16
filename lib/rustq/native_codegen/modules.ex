@@ -30,7 +30,7 @@ defmodule RustQ.NativeCodegen.Modules do
   defp ast_modules_module do
     constants =
       Schema.nodes()
-      |> Enum.reject(&(&1.name in [:arm, :struct_field, :enum_variant]))
+      |> Enum.reject(&(&1.name in [:arm, :function_arg, :struct_field, :enum_variant]))
       |> Enum.map(fn node ->
         A.const(node.rust_const, "&str", node.rust_module, vis: :crate)
       end)

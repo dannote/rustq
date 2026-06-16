@@ -24,6 +24,7 @@ defmodule RustQ.ASTSamples do
   defp base_fragment(%AST.Function{name: name}), do: "fn #{name}"
 
   defp semantic_fragment(:module), do: "mod sample"
+  defp semantic_fragment(:function_arg), do: "value: u32"
   defp semantic_fragment(:struct_field), do: "value: u32"
   defp semantic_fragment(:enum_variant), do: "Unit"
   defp semantic_fragment(:type_path), do: "type_path_VALUE: u32"
@@ -77,6 +78,14 @@ defmodule RustQ.ASTSamples do
   def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
   def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")
+
+  def sample_for(:function_arg),
+    do: %AST.Function{
+      name: :function_arg_sample,
+      args: [%AST.FunctionArg{name: :value, type: A.type_path(:u32)}],
+      returns: "u32",
+      body: [A.return(:value)]
+    }
 
   def sample_for(:struct) do
     %AST.Struct{name: :Sample, fields: [%AST.StructField{name: :value, type: A.type_path(:u32)}]}

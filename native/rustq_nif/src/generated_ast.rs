@@ -5,8 +5,8 @@ use quote::quote;
 use rustler::{Atom, Env, NifResult, Term};
 
 use syn::{
-    Arm, Expr, Field, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat, Stmt,
-    Type, Variant,
+    Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat,
+    Stmt, Type, Variant,
 };
 
 pub(crate) mod atoms {
@@ -221,11 +221,11 @@ pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Function")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
     let vis = super::decode_vis(required_field(term, "vis")?)?;
-    let args = super::keyword_args(required_field(term, "args")?)?;
+    let args = super::decode_function_arg_list(required_field(term, "args")?)?;
     let returns = super::decode_type(required_field(term, "returns")?)?;
     let lifetime = optional_atom_key(term, "lifetime")?;
     let stmts = super::decode_stmt_list(required_field(term, "body")?)?;
-    super::parse_item_function(name, vis, args, returns, lifetime, stmts)
+    super::parse_item_function_args(name, vis, args, returns, lifetime, stmts)
 }
 
 pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
@@ -251,6 +251,13 @@ pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {
     let derive = super::decode_derive(required_field(term, "derive")?)?;
     let variants = super::decode_enum_variant_list(required_field(term, "variants")?)?;
     super::parse_item_enum(name, vis, derive, variants)
+}
+
+pub(crate) fn decode_function_arg<'a>(term: Term<'a>) -> NifResult<FnArg> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.FunctionArg")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let ty = super::decode_type(required_field(term, "type")?)?;
+    super::parse_function_arg(name, ty)
 }
 
 pub(crate) fn decode_struct_field<'a>(term: Term<'a>) -> NifResult<Field> {

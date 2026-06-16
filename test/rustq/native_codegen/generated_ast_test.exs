@@ -21,6 +21,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     constant_names = constants |> Enum.map(& &1.name) |> MapSet.new()
     assert MapSet.member?(constant_names, :FUNCTION)
     refute MapSet.member?(constant_names, :ARM)
+    refute MapSet.member?(constant_names, :FUNCTION_ARG)
     refute MapSet.member?(constant_names, :STRUCT_FIELD)
     refute MapSet.member?(constant_names, :ENUM_VARIANT)
   end
@@ -108,6 +109,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       :decode_ast_struct,
       :decode_ast_macro_item,
       :decode_ast_enum,
+      :decode_function_arg,
       :decode_struct_field,
       :decode_enum_variant
     ]

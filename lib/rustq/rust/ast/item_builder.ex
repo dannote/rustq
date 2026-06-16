@@ -10,7 +10,7 @@ defmodule RustQ.Rust.AST.ItemBuilder do
       %AST.Function{
         name: unquote(name),
         vis: Keyword.get(unquote(opts), :vis),
-        args: Keyword.get(unquote(opts), :args, []),
+        args: A.function_args(Keyword.get(unquote(opts), :args, [])),
         returns: Keyword.fetch!(unquote(opts), :returns),
         lifetime: Keyword.get(unquote(opts), :lifetime),
         body: A.flatten(unquote(block_values(body)))

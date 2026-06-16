@@ -22,7 +22,7 @@ defmodule RustQ.Rust.AST.ItemBuilderTest do
     assert %AST.Function{
              name: :hello,
              vis: :crate,
-             args: [value: "i32"],
+             args: [%AST.FunctionArg{name: :value, type: "i32"}],
              returns: "NifResult<i32>",
              body: [%AST.Let{}, %AST.Return{}]
            } = item

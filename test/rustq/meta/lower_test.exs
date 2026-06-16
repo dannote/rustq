@@ -8,13 +8,19 @@ defmodule RustQ.Meta.LowerTest do
   test "generated ASTs are retained before fragment validation" do
     [draw_save, decode_mode, draw_rect, maybe_save | _] = Generated.__rustq_asts__()
 
-    assert %RustQ.Rust.AST.Function{name: :draw_save, args: [canvas: %RustQ.Rust.AST.TypeRef{}]} =
-             draw_save
+    assert %RustQ.Rust.AST.Function{
+             name: :draw_save,
+             args: [%RustQ.Rust.AST.FunctionArg{name: :canvas, type: %RustQ.Rust.AST.TypeRef{}}]
+           } = draw_save
 
     assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
 
     assert %RustQ.Rust.AST.Function{
-             args: [_canvas_arg, {:opts, %RustQ.Rust.AST.TypePath{}}, _raw_opts_arg]
+             args: [
+               _canvas_arg,
+               %RustQ.Rust.AST.FunctionArg{name: :opts, type: %RustQ.Rust.AST.TypePath{}},
+               _raw_opts_arg
+             ]
            } = draw_rect
 
     assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} = hd(draw_rect.body)
@@ -53,8 +59,14 @@ defmodule RustQ.Meta.LowerTest do
     assert %RustQ.Rust.AST.Function{
              name: :atom_key,
              args: [
-               term: %RustQ.Rust.AST.TypePath{parts: [:Term], lifetimes: [:a]},
-               key: %RustQ.Rust.AST.TypeRef{inner: %RustQ.Rust.AST.TypePath{parts: [:str]}}
+               %RustQ.Rust.AST.FunctionArg{
+                 name: :term,
+                 type: %RustQ.Rust.AST.TypePath{parts: [:Term], lifetimes: [:a]}
+               },
+               %RustQ.Rust.AST.FunctionArg{
+                 name: :key,
+                 type: %RustQ.Rust.AST.TypeRef{inner: %RustQ.Rust.AST.TypePath{parts: [:str]}}
+               }
              ],
              returns: %RustQ.Rust.AST.TypeNifResult{
                inner: %RustQ.Rust.AST.TypePath{parts: [:String]}

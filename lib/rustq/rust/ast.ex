@@ -91,12 +91,16 @@ defmodule RustQ.Rust.AST do
 
   defnode(MacroItem, :item, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
+  defnode(FunctionArg, :field, [:name, :type],
+    type: quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type() | String.t()})
+  )
+
   defnode(Function, :item, [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil],
     type:
       quote(
         do: %__MODULE__{
           name: atom(),
-          args: [{atom(), RustQ.Rust.AST.type() | String.t()}],
+          args: [RustQ.Rust.AST.FunctionArg.t()],
           returns: RustQ.Rust.AST.type() | String.t(),
           body: [RustQ.Rust.AST.stmt()],
           lifetime: atom() | nil,
@@ -318,6 +322,7 @@ defmodule RustQ.Rust.AST do
       Module,
       Const,
       MacroItem,
+      FunctionArg,
       Function,
       Struct,
       StructField,
@@ -426,9 +431,7 @@ defmodule RustQ.Rust.AST do
 
   def render_function(%Function{} = function) do
     args =
-      Elixir.Enum.map_join(function.args, ", ", fn {name, type} ->
-        "#{name}: #{render_type(type)}"
-      end)
+      Elixir.Enum.map_join(function.args, ", ", &render_function_arg/1)
 
     lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""
 
@@ -446,6 +449,14 @@ defmodule RustQ.Rust.AST do
       "\n}"
     ]
     |> IO.iodata_to_binary()
+  end
+
+  def render_function_arg(%FunctionArg{name: name, type: type}) do
+    "#{name}: #{render_type(type)}"
+  end
+
+  def render_function_arg({name, type}) do
+    "#{name}: #{render_type(type)}"
   end
 
   def render_struct(%Struct{} = struct) do

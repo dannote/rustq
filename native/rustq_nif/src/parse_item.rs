@@ -1,7 +1,5 @@
-use quote::{format_ident, quote};
+use quote::quote;
 use rustler::NifResult;
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
 use syn::{Expr, Field, FnArg, Item, Stmt, Type};
 
 use crate::parse_syn;
@@ -31,30 +29,23 @@ pub(crate) fn parse_macro_item(source: String) -> NifResult<Item> {
     syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
 
-pub(crate) fn parse_item_function(
+pub(crate) fn parse_item_function_args(
     name: syn::Ident,
     vis: syn::Visibility,
-    args: Vec<(String, Type)>,
+    args: Vec<FnArg>,
     returns: Type,
     lifetime: Option<String>,
     stmts: Vec<Stmt>,
 ) -> NifResult<syn::ItemFn> {
-    let inputs = args
-        .into_iter()
-        .map(|(name, ty)| {
-            let ident = format_ident!("{}", name);
-            syn::parse2::<FnArg>(quote!(#ident: #ty))
-        })
-        .collect::<Result<Punctuated<FnArg, Comma>, syn::Error>>()
-        .map_err(|_| rustler::Error::BadArg)?;
+    let inputs = args;
     let block = parse_syn::<syn::Block>(quote!({ #(#stmts)* }))?;
 
     if let Some(lifetime) = lifetime {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        parse_syn(quote!(#vis fn #name <#lifetime> (#inputs) -> #returns #block))
+        parse_syn(quote!(#vis fn #name <#lifetime> (#(#inputs),*) -> #returns #block))
     } else {
-        parse_syn(quote!(#vis fn #name (#inputs) -> #returns #block))
+        parse_syn(quote!(#vis fn #name (#(#inputs),*) -> #returns #block))
     }
 }
 
@@ -74,6 +65,10 @@ pub(crate) fn parse_item_struct(
     };
 
     parse_syn(quote!(#(#derive)* #vis struct #name #generics { #(#fields)* }))
+}
+
+pub(crate) fn parse_function_arg(name: syn::Ident, ty: Type) -> NifResult<FnArg> {
+    parse_syn(quote!(#name: #ty))
 }
 
 pub(crate) fn parse_struct_field(
