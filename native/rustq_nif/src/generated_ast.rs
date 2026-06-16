@@ -126,6 +126,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+
 pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
     match struct_name(term)?.as_str() {
         ast_modules::TYPE_PATH => decode_type_path(term),
@@ -138,6 +139,7 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+
 pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
     match struct_name(term)?.as_str() {
         ast_modules::PAT_VAR => decode_pat_var(term),
@@ -155,6 +157,7 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+
 pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
     match struct_name(term)?.as_str() {
         ast_modules::LET => decode_stmt_let(term),
@@ -163,6 +166,7 @@ pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+
 pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
     match struct_name(term)?.as_str() {
         ast_modules::VAR => decode_expr_var(term),
@@ -189,6 +193,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+
 pub(crate) fn decode_ast_use<'a>(term: Term<'a>) -> NifResult<ItemUse> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Use")?;
     let tree = super::string_field(term, "tree")?;
@@ -315,8 +320,7 @@ pub(crate) fn decode_pat_none<'a>(_term: Term<'a>) -> NifResult<Pat> {
 }
 
 pub(crate) fn decode_pat_path<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let parts = super::path_parts(required_field(term, "parts")?)?;
-    let path = super::parse_path(&parts)?;
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
     super::parse_syn::<Pat>(quote!(# path))
 }
 

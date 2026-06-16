@@ -23,8 +23,7 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
 
   @spec decode_pat_path(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_path(term) do
-    parts = unwrap!(Super.path_parts(unwrap!(required_field(term, "parts"))))
-    path = unwrap!(Super.parse_path(ref(parts)))
+    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
     pat!(path(path))
   end
 
