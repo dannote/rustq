@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use quote::{format_ident, quote};
 use rustler::{Encoder, Env, NifMap, NifResult, Term};
-use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::visit_mut::{self, VisitMut};
@@ -12,6 +11,9 @@ use syn::{
 };
 
 mod generated_ast;
+mod parse;
+
+pub(crate) use parse::{parse_expr, parse_path, parse_syn, parse_type};
 
 use generated_ast::{atom, atom_key, atoms, is_nil, optional_map_get};
 use generated_ast::{decode_arm, decode_enum_variant, decode_struct_field};
@@ -448,46 +450,6 @@ fn parse_type_ref(inner: Type, mutable: bool, lifetime: Option<String>) -> NifRe
         .unwrap_or_default();
     let mutability = if mutable { "mut " } else { "" };
     parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
-}
-
-trait ParseSynTokens: Sized {
-    fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self>;
-}
-
-macro_rules! impl_parse_syn_tokens {
-    ($($type:ty),+ $(,)?) => {
-        $(
-            impl ParseSynTokens for $type {
-                fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
-                    syn::parse2(tokens)
-                }
-            }
-        )+
-    };
-}
-
-impl_parse_syn_tokens!(Arm, Expr, Stmt, Type);
-
-impl ParseSynTokens for Pat {
-    fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
-        Pat::parse_single.parse2(tokens)
-    }
-}
-
-fn parse_syn<T: ParseSynTokens>(tokens: proc_macro2::TokenStream) -> NifResult<T> {
-    T::parse_syn_tokens(tokens).map_err(|_| rustler::Error::BadArg)
-}
-
-fn parse_type(source: &str) -> NifResult<Type> {
-    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
-}
-
-fn parse_path(source: &str) -> NifResult<syn::Path> {
-    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
-}
-
-fn parse_expr(source: &str) -> NifResult<Expr> {
-    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
 }
 
 struct Context {

@@ -1,0 +1,189 @@
+defmodule RustQ.ASTSamples do
+  @moduledoc false
+
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+
+  require A
+
+  def all do
+    RustQ.Rust.AST.Schema.nodes()
+    |> Map.new(fn node -> {node.name, sample_for(node.name)} end)
+  end
+
+  def sample_for(:use), do: %AST.Use{tree: "std::fmt"}
+  def sample_for(:module), do: %AST.Module{name: :sample, items: [sample_for(:const)]}
+  def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}
+  def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
+  def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")
+
+  def sample_for(:struct) do
+    %AST.Struct{name: :Sample, fields: [%AST.StructField{name: :value, type: A.type_path(:u32)}]}
+  end
+
+  def sample_for(:struct_field), do: sample_for(:struct)
+
+  def sample_for(:enum) do
+    %AST.Enum{name: :SampleEnum, variants: [%AST.EnumVariant{name: :Unit}]}
+  end
+
+  def sample_for(:enum_variant), do: sample_for(:enum)
+  def sample_for(:type_path), do: type_sample(:type_path, A.type_path(:u32))
+  def sample_for(:type_ref), do: type_sample(:type_ref, %AST.TypeRef{inner: A.type_path(:str)})
+
+  def sample_for(:type_option),
+    do: type_sample(:type_option, %AST.TypeOption{inner: A.type_path(:u32)})
+
+  def sample_for(:type_result),
+    do:
+      type_sample(:type_result, %AST.TypeResult{
+        ok: A.type_path(:u32),
+        error: A.type_path(:String)
+      })
+
+  def sample_for(:type_nif_result),
+    do: type_sample(:type_nif_result, %AST.TypeNifResult{inner: A.type_path(:u32)})
+
+  def sample_for(:type_vec), do: type_sample(:type_vec, %AST.TypeVec{inner: A.type_path(:u8)})
+  def sample_for(:type_unit), do: type_sample(:type_unit, %AST.TypeUnit{})
+
+  def sample_for(:let),
+    do:
+      function_sample(:let_sample, %AST.Var{name: :value},
+        body: [A.let(:value, A.lit(1)), A.return(:value)],
+        returns: "i64"
+      )
+
+  def sample_for(:expr_stmt),
+    do: function_sample(:expr_stmt, A.call(:side_effect), statement?: true)
+
+  def sample_for(:return), do: function_sample(:return_sample, A.lit(1), returns: "i64")
+  def sample_for(:var), do: function_sample(:var_sample, A.var(:value), returns: "i64")
+
+  def sample_for(:path),
+    do: function_sample(:path_sample, A.path([:Sample, :VALUE]), returns: "i64")
+
+  def sample_for(:field),
+    do:
+      function_sample(:field_sample, %AST.Field{receiver: A.var(:opts), field: :value},
+        returns: "i64"
+      )
+
+  def sample_for(:path_call),
+    do: function_sample(:path_call_sample, A.path_call([:Sample, :new], []), returns: "Sample")
+
+  def sample_for(:method_call),
+    do: function_sample(:method_call_sample, A.method(:value, :clone, []), returns: "Value")
+
+  def sample_for(:struct_literal),
+    do: function_sample(:struct_literal_sample, A.struct([:Point], x: A.lit(1)), returns: "Point")
+
+  def sample_for(:local_call),
+    do: function_sample(:local_call_sample, A.call(:make_value), returns: "i64")
+
+  def sample_for(:ref), do: function_sample(:ref_sample, A.ref(:value), returns: "&i64")
+
+  def sample_for(:try),
+    do: function_sample(:try_sample, A.try(A.call(:fallible)), returns: "NifResult<()> ")
+
+  def sample_for(:tuple),
+    do:
+      function_sample(:tuple_sample, %AST.Tuple{values: [A.lit(1), A.lit(2)]},
+        returns: "(i64, i64)"
+      )
+
+  def sample_for(:literal), do: function_sample(:literal_sample, A.lit(1), returns: "i64")
+
+  def sample_for(:token_macro),
+    do:
+      function_sample(:token_macro_sample, A.token_macro(:quote, "None"), returns: "TokenStream")
+
+  def sample_for(:atom_value),
+    do: function_sample(:atom_value_sample, %AST.AtomValue{name: :ok}, returns: "Atom")
+
+  def sample_for(:none), do: function_sample(:none_sample, A.none(), returns: "Option<i64>")
+
+  def sample_for(:some),
+    do: function_sample(:some_sample, A.some(A.lit(1)), returns: "Option<i64>")
+
+  def sample_for(:ok), do: function_sample(:ok_sample, A.ok(), returns: "NifResult<()> ")
+
+  def sample_for(:err),
+    do:
+      function_sample(:err_sample, A.err(A.path([:rustler, :Error, :BadArg])),
+        returns: "NifResult<()> "
+      )
+
+  def sample_for(:nif_raise_atom),
+    do:
+      function_sample(:nif_raise_atom_sample, %AST.NifRaiseAtom{name: :invalid},
+        returns: "NifResult<()> "
+      )
+
+  def sample_for(:match), do: match_sample(:match_sample, A.wildcard())
+
+  def sample_for(:if),
+    do:
+      sample_for(:match)
+      |> Map.put(:name, :if_sample)
+      |> Map.put(:body, [
+        A.return(A.if_expr(:condition, [A.return(A.lit(1))], [A.return(A.lit(0))]))
+      ])
+
+  def sample_for(:binary_op),
+    do: function_sample(:binary_op_sample, A.eq(:left, :right), returns: "bool")
+
+  def sample_for(:arm), do: match_sample(:arm_sample, A.wildcard())
+  def sample_for(:pat_var), do: match_sample(:pat_var_sample, A.pat(:value))
+  def sample_for(:pat_wildcard), do: match_sample(:pat_wildcard_sample, A.wildcard())
+  def sample_for(:pat_path), do: match_sample(:pat_path_sample, A.path_pat(["Option", "None"]))
+  def sample_for(:pat_literal), do: match_sample(:pat_literal_sample, A.lit_pat("ready"))
+  def sample_for(:pat_none), do: match_sample(:pat_none_sample, A.none_pat())
+  def sample_for(:pat_some), do: match_sample(:pat_some_sample, A.some_pat(:value))
+
+  def sample_for(:pat_atom_guard),
+    do: match_sample(:pat_atom_guard_sample, %AST.PatAtomGuard{name: :ok}, args: [value: "Atom"])
+
+  def sample_for(:pat_tuple),
+    do: match_sample(:pat_tuple_sample, %AST.PatTuple{patterns: [A.pat(:left), A.pat(:right)]})
+
+  def sample_for(:pat_ok), do: match_sample(:pat_ok_sample, A.ok_pat(:value))
+  def sample_for(:pat_err), do: match_sample(:pat_err_sample, A.err_pat(:reason))
+
+  def sample_for(:pat_path_tuple),
+    do: match_sample(:pat_path_tuple_sample, A.path_tuple_pat([:Event, :Click], [A.pat(:click)]))
+
+  def sample_for(:pat_struct),
+    do: match_sample(:pat_struct_sample, A.struct_pat([:Click], name: A.pat(:name)))
+
+  defp type_sample(name, type) do
+    %AST.Const{name: String.to_atom("#{name}_VALUE"), type: type, expr: A.lit(0)}
+  end
+
+  defp function_sample(name, expr, opts) do
+    body = Keyword.get(opts, :body)
+    returns = Keyword.get(opts, :returns, "()")
+
+    body =
+      cond do
+        body -> body
+        Keyword.get(opts, :statement?) -> [A.stmt(expr), A.return(%AST.Tuple{values: []})]
+        true -> [A.return(expr)]
+      end
+
+    %AST.Function{name: name, args: Keyword.get(opts, :args, []), returns: returns, body: body}
+  end
+
+  defp match_sample(name, pattern, opts \\ []) do
+    function_sample(name, A.var(:value),
+      args: Keyword.get(opts, :args, []),
+      returns: "i64",
+      body: [
+        A.return(%AST.Match{
+          expr: A.var(:value),
+          arms: [%AST.Arm{pattern: pattern, body: [A.return(A.lit(1))]}]
+        })
+      ]
+    )
+  end
+end
