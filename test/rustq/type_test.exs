@@ -1,6 +1,17 @@
 defmodule RustQ.TypeTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Meta.Type
+
+  test "maps fitting built-in Elixir types to Rust/Rustler types" do
+    assert Type.from_spec_ast(quote(do: atom())).rust == "Atom"
+    assert Type.from_spec_ast(quote(do: term())).rust == "Term<'a>"
+    assert Type.from_spec_ast(quote(do: boolean())).rust == "bool"
+    assert Type.from_spec_ast(quote(do: integer())).rust == "i64"
+    assert Type.from_spec_ast(quote(do: float())).rust == "f64"
+    assert Type.from_spec_ast(quote(do: binary())).rust == "Vec<u8>"
+  end
+
   test "exports non-reserved Rust vocabulary as Elixir types" do
     {:docs_v1, _annotation, _beam_language, _format, _module_doc, _metadata, docs} =
       Code.fetch_docs(RustQ.Type)

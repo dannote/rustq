@@ -2,9 +2,11 @@ defmodule RustQ.Type do
   @moduledoc """
   Built-in Rust/Rustler type vocabulary for `RustQ.Meta.defrust/2` specs.
 
-  These types make Rust-oriented `@spec` and `@type` declarations visible to
-  Elixir tooling while `RustQ.Meta` reads their quoted AST and maps them to Rust
-  types during code generation.
+  Prefer ordinary Elixir types when they fit. `RustQ.Meta` maps built-ins such
+  as `atom()`, `term()`, `boolean()`, `integer()`, `float()`, and `binary()` to
+  Rust/Rustler types. Use this module where Rust needs extra precision or
+  syntax that Elixir types cannot express: fixed-width numbers, references,
+  `NifResult`, `Vec`, and unit.
 
       alias RustQ.Type, as: R
 
@@ -14,8 +16,14 @@ defmodule RustQ.Type do
         :ok
       end
 
+      @spec decode_mode(atom()) :: R.nif_result(Mode.t())
+      defrust decode_mode(atom) do
+        # atom() maps to Rustler Atom
+      end
+
   The functions with matching names are marker helpers for non-typespec macro
-  contexts. They are not runtime APIs.
+  contexts and for the reserved built-in names (`R.atom()`, `R.bool()`,
+  `R.term()`). They are not runtime APIs.
   """
 
   @typedoc "Rust `()`; represented as `:ok`/unit-ish data in Elixir specs."

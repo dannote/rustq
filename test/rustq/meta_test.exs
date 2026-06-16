@@ -14,7 +14,7 @@ defmodule RustQ.MetaTest do
       :ok
     end
 
-    @spec decode_mode(R.atom()) :: R.nif_result(mode())
+    @spec decode_mode(atom()) :: R.nif_result(mode())
     defrust decode_mode(atom) do
       case atom do
         :src_over -> {:ok, BlendMode.SrcOver}
