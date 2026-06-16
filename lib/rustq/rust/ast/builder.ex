@@ -44,6 +44,18 @@ defmodule RustQ.Rust.AST.Builder do
     end
   end
 
+  defmacro if_expr(condition, do: body) do
+    {then_body, else_body} = split_if_body(body)
+
+    quote do
+      RustQ.Rust.AST.Builder.if_expr(
+        unquote(condition),
+        RustQ.Rust.AST.Builder.flatten(unquote(block_values(then_body))),
+        RustQ.Rust.AST.Builder.flatten(unquote(block_values(else_body)))
+      )
+    end
+  end
+
   def flatten(values), do: values |> List.wrap() |> List.flatten()
 
   def let(name, expression), do: %AST.Let{pattern: pat(name), expr: expr(expression)}
@@ -99,6 +111,14 @@ defmodule RustQ.Rust.AST.Builder do
 
   def match_expr(expression, arms), do: %AST.Match{expr: expr(expression), arms: flatten(arms)}
 
+  def if_expr(condition, then_body, else_body),
+    do: %AST.If{condition: expr(condition), then: flatten(then_body), else: flatten(else_body)}
+
+  def binary(left, op, right), do: %AST.BinaryOp{left: expr(left), op: op, right: expr(right)}
+  def eq(left, right), do: binary(left, :eq, right)
+  def and_(left, right), do: binary(left, :and, right)
+  def or_(left, right), do: binary(left, :or, right)
+
   def pat(name) when is_atom(name), do: %AST.PatVar{name: name}
   def wildcard, do: %AST.PatWildcard{}
   def lit_pat(value), do: %AST.PatLiteral{value: value}
@@ -136,7 +156,9 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Ok,
              AST.Err,
              AST.NifRaiseAtom,
-             AST.Match
+             AST.Match,
+             AST.If,
+             AST.BinaryOp
            ],
       do: value
 
@@ -178,4 +200,20 @@ defmodule RustQ.Rust.AST.Builder do
       [unquote(expression)]
     end
   end
+
+  defp split_if_body({:__block__, _meta, expressions}) do
+    case Enum.split_while(expressions, fn
+           {:else, _, _} -> false
+           _other -> true
+         end) do
+      {then_body, [{:else, _, [[do: else_body]]}]} -> {block_ast(then_body), else_body}
+      {then_body, [{:else, _, [else_body]}]} -> {block_ast(then_body), else_body}
+      {then_body, []} -> {block_ast(then_body), nil}
+    end
+  end
+
+  defp split_if_body(expression), do: {expression, nil}
+
+  defp block_ast([expression]), do: expression
+  defp block_ast(expressions), do: {:__block__, [], expressions}
 end

@@ -36,6 +36,8 @@ pub(crate) mod ast_modules {
     pub(crate) const ERR: &str = "Elixir.RustQ.Rust.AST.Err";
     pub(crate) const NIF_RAISE_ATOM: &str = "Elixir.RustQ.Rust.AST.NifRaiseAtom";
     pub(crate) const MATCH: &str = "Elixir.RustQ.Rust.AST.Match";
+    pub(crate) const IF: &str = "Elixir.RustQ.Rust.AST.If";
+    pub(crate) const BINARY_OP: &str = "Elixir.RustQ.Rust.AST.BinaryOp";
     pub(crate) const ARM: &str = "Elixir.RustQ.Rust.AST.Arm";
     pub(crate) const PAT_VAR: &str = "Elixir.RustQ.Rust.AST.PatVar";
     pub(crate) const PAT_WILDCARD: &str = "Elixir.RustQ.Rust.AST.PatWildcard";
@@ -72,11 +74,6 @@ pub(crate) fn atom_key(term: Term, key: &str) -> NifResult<String> {
     term.map_get(atom(term.get_env(), key)?)?.atom_to_string()
 }
 
-pub(crate) fn struct_name(term: Term) -> NifResult<String> {
-    term.map_get(atom(term.get_env(), "__struct__")?)?
-        .atom_to_string()
-}
-
 pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<String>> {
     let value = term.map_get(atom(term.get_env(), key)?)?;
     if is_nil(value)? {
@@ -88,6 +85,11 @@ pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<Strin
 
 pub(crate) fn is_nil(term: Term) -> NifResult<bool> {
     Ok(term.is_atom() && term.atom_to_string()? == "nil")
+}
+
+pub(crate) fn struct_name(term: Term) -> NifResult<String> {
+    term.map_get(atom(term.get_env(), "__struct__")?)?
+        .atom_to_string()
 }
 
 pub(crate) fn expect_struct(term: Term, expected: &str) -> NifResult<()> {

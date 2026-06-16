@@ -355,6 +355,36 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
             Ok(syn::parse2(quote!(match #expr { #(#arms)* }))
                 .map_err(|_| rustler::Error::BadArg)?)
         }
+        ast_modules::IF => {
+            let condition = decode_expr(term.map_get(atom(env, "condition")?)?)?;
+            let then_body = decode_stmt_list(term.map_get(atom(env, "then")?)?)?;
+            let else_body = decode_stmt_list(term.map_get(atom(env, "else")?)?)?;
+            let then_block = syn::parse2::<syn::Block>(quote!({ #(#then_body)* }))
+                .map_err(|_| rustler::Error::BadArg)?;
+            let else_block = syn::parse2::<syn::Block>(quote!({ #(#else_body)* }))
+                .map_err(|_| rustler::Error::BadArg)?;
+            Ok(
+                syn::parse2(quote!(if #condition #then_block else #else_block))
+                    .map_err(|_| rustler::Error::BadArg)?,
+            )
+        }
+        ast_modules::BINARY_OP => {
+            let left = decode_expr(term.map_get(atom(env, "left")?)?)?;
+            let right = decode_expr(term.map_get(atom(env, "right")?)?)?;
+            let op = atom_key(term, "op")?;
+            match op.as_str() {
+                "eq" => {
+                    Ok(syn::parse2(quote!(#left == #right)).map_err(|_| rustler::Error::BadArg)?)
+                }
+                "and" => {
+                    Ok(syn::parse2(quote!(#left && #right)).map_err(|_| rustler::Error::BadArg)?)
+                }
+                "or" => {
+                    Ok(syn::parse2(quote!(#left || #right)).map_err(|_| rustler::Error::BadArg)?)
+                }
+                _ => Err(rustler::Error::BadArg),
+            }
+        }
         _ => Err(rustler::Error::BadArg),
     }
 }

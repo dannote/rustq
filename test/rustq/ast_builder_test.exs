@@ -6,6 +6,30 @@ defmodule RustQ.Rust.ASTBuilderTest do
 
   require A
 
+  test "renders if and binary operators through native AST" do
+    function = %AST.Function{
+      name: :expect,
+      args: [left: "bool", right: "bool"],
+      returns: "NifResult<()>",
+      body:
+        A.block do
+          A.return(
+            A.if_expr(
+              A.and_(A.var(:left), A.eq(A.var(:right), true)),
+              [A.return(A.ok())],
+              [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
+            )
+          )
+        end
+    }
+
+    source = AST.render_function_native(function)
+
+    assert source =~ "if left && right == true"
+    assert source =~ "Ok(())"
+    assert source =~ "Err(rustler::Error::BadArg)"
+  end
+
   test "builds structured blocks with do-end match arms" do
     body =
       A.block do

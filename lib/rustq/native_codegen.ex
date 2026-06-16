@@ -33,6 +33,8 @@ defmodule RustQ.NativeCodegen do
     err: "Elixir.RustQ.Rust.AST.Err",
     nif_raise_atom: "Elixir.RustQ.Rust.AST.NifRaiseAtom",
     match: "Elixir.RustQ.Rust.AST.Match",
+    if: "Elixir.RustQ.Rust.AST.If",
+    binary_op: "Elixir.RustQ.Rust.AST.BinaryOp",
     arm: "Elixir.RustQ.Rust.AST.Arm",
     pat_var: "Elixir.RustQ.Rust.AST.PatVar",
     pat_wildcard: "Elixir.RustQ.Rust.AST.PatWildcard",
@@ -82,27 +84,6 @@ defmodule RustQ.NativeCodegen do
     }
 
     #{String.trim_trailing(ast_helpers)}
-
-    pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<String>> {
-        let value = term.map_get(atom(term.get_env(), key)?)?;
-        if is_nil(value)? {
-            Ok(None)
-        } else {
-            Ok(Some(value.atom_to_string()?))
-        }
-    }
-
-    pub(crate) fn is_nil(term: Term) -> NifResult<bool> {
-        Ok(term.is_atom() && term.atom_to_string()? == "nil")
-    }
-
-    pub(crate) fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
-        if struct_name(term)? == expected {
-            Ok(())
-        } else {
-            Err(rustler::Error::BadArg)
-        }
-    }
     """
     |> format_rust()
   end
@@ -162,6 +143,48 @@ defmodule RustQ.NativeCodegen do
           end
       },
       %AST.Function{
+        name: :optional_atom_key,
+        vis: :crate,
+        args: [term: "Term", key: "&str"],
+        returns: "NifResult<Option<String>>",
+        body:
+          A.block do
+            A.let(
+              :value,
+              A.try(
+                A.method(:term, :map_get, [
+                  A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
+                ])
+              )
+            )
+
+            A.return(
+              A.if_expr(
+                A.try(A.call(:is_nil, [:value])),
+                [A.return(A.ok(A.none()))],
+                [A.return(A.ok(A.some(A.try(A.method(:value, :atom_to_string)))))]
+              )
+            )
+          end
+      },
+      %AST.Function{
+        name: :is_nil,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<bool>",
+        body:
+          A.block do
+            A.return(
+              A.ok(
+                A.and_(
+                  A.method(:term, :is_atom),
+                  A.eq(A.try(A.method(:term, :atom_to_string)), "nil")
+                )
+              )
+            )
+          end
+      },
+      %AST.Function{
         name: :struct_name,
         vis: :crate,
         args: [term: "Term"],
@@ -176,6 +199,22 @@ defmodule RustQ.NativeCodegen do
                   ])
                 ),
                 :atom_to_string
+              )
+            )
+          end
+      },
+      %AST.Function{
+        name: :expect_struct,
+        vis: :crate,
+        args: [term: "Term", expected: "&str"],
+        returns: "NifResult<()>",
+        body:
+          A.block do
+            A.return(
+              A.if_expr(
+                A.eq(A.try(A.call(:struct_name, [:term])), :expected),
+                [A.return(A.ok())],
+                [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
               )
             )
           end

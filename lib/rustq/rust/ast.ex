@@ -172,6 +172,16 @@ defmodule RustQ.Rust.AST do
     defstruct [:expr, arms: []]
   end
 
+  defmodule If do
+    @moduledoc false
+    defstruct [:condition, then: [], else: []]
+  end
+
+  defmodule BinaryOp do
+    @moduledoc false
+    defstruct [:left, :op, :right]
+  end
+
   defmodule Arm do
     @moduledoc false
     defstruct [:pattern, body: []]
@@ -409,6 +419,25 @@ defmodule RustQ.Rust.AST do
     ["match ", render_expr(match.expr), " {\n", indent(arms), "\n}"]
   end
 
+  def render_expr(%If{} = if_expr) do
+    then_body = if_expr.then |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+    else_body = if_expr.else |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+
+    [
+      "if ",
+      render_expr(if_expr.condition),
+      " {\n",
+      indent(then_body),
+      "\n} else {\n",
+      indent(else_body),
+      "\n}"
+    ]
+  end
+
+  def render_expr(%BinaryOp{left: left, op: op, right: right}) do
+    [render_expr(left), " ", render_binary_op(op), " ", render_expr(right)]
+  end
+
   def render_arm(%Arm{pattern: pattern, body: body}) do
     rendered_body = body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
     [render_pattern(pattern), " => {\n", indent(rendered_body), "\n},"]
@@ -452,6 +481,10 @@ defmodule RustQ.Rust.AST do
 
   defp render_args(args),
     do: args |> Elixir.Enum.map(&render_expr/1) |> Elixir.Enum.intersperse(", ")
+
+  defp render_binary_op(:eq), do: "=="
+  defp render_binary_op(:and), do: "&&"
+  defp render_binary_op(:or), do: "||"
 
   defp render_derive([]), do: []
 
