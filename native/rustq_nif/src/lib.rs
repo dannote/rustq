@@ -50,12 +50,21 @@ fn render<'a>(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn render_ast(ast: Term) -> NifResult<String> {
-    let item = decode_ast_function(ast)?;
+    let item = decode_ast_item(ast)?;
     Ok(prettyplease::unparse(&File {
         shebang: None,
         attrs: Vec::new(),
-        items: vec![Item::Fn(item)],
+        items: vec![item],
     }))
+}
+
+fn decode_ast_item(term: Term) -> NifResult<Item> {
+    match struct_name(term)?.as_str() {
+        "Elixir.RustQ.Rust.AST.Function" => Ok(Item::Fn(decode_ast_function(term)?)),
+        "Elixir.RustQ.Rust.AST.Struct" => Ok(Item::Struct(decode_ast_struct(term)?)),
+        "Elixir.RustQ.Rust.AST.Enum" => Ok(Item::Enum(decode_ast_enum(term)?)),
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
@@ -85,6 +94,98 @@ fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
     } else {
         syn::parse2(quote!(fn #name (#inputs) -> #returns #block))
             .map_err(|_| rustler::Error::BadArg)
+    }
+}
+
+fn decode_ast_struct(term: Term) -> NifResult<syn::ItemStruct> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Struct")?;
+    let env = term.get_env();
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
+    let derive = decode_derive(term.map_get(atom(env, "derive")?)?)?;
+    let lifetime = optional_atom_key(term, "lifetime")?;
+    let fields = term
+        .map_get(atom(env, "fields")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_struct_field)
+        .collect::<NifResult<Vec<Field>>>()?;
+
+    let generics = if let Some(lifetime) = lifetime {
+        let lifetime =
+            syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
+        quote!(<#lifetime>)
+    } else {
+        quote!()
+    };
+
+    syn::parse2(quote!(#(#derive)* #vis struct #name #generics { #(#fields)* }))
+        .map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_struct_field(term: Term) -> NifResult<Field> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.StructField")?;
+    let env = term.get_env();
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    let ty: String = term.map_get(atom(env, "type")?)?.decode()?;
+    let ty = parse_type(&ty)?;
+    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
+    let item: syn::ItemStruct = syn::parse2(quote!(struct __RustQ { #vis #name: #ty, }))
+        .map_err(|_| rustler::Error::BadArg)?;
+    item.fields.into_iter().next().ok_or(rustler::Error::BadArg)
+}
+
+fn decode_ast_enum(term: Term) -> NifResult<syn::ItemEnum> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Enum")?;
+    let env = term.get_env();
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
+    let derive = decode_derive(term.map_get(atom(env, "derive")?)?)?;
+    let variants = term
+        .map_get(atom(env, "variants")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_enum_variant)
+        .collect::<NifResult<Vec<syn::Variant>>>()?;
+
+    syn::parse2(quote!(#(#derive)* #vis enum #name { #(#variants)* }))
+        .map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_enum_variant(term: Term) -> NifResult<syn::Variant> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant")?;
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    syn::parse2(quote!(#name,)).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_vis(term: Term) -> NifResult<syn::Visibility> {
+    if is_nil(term)? {
+        syn::parse2(quote!()).map_err(|_| rustler::Error::BadArg)
+    } else {
+        match term.atom_to_string()?.as_str() {
+            "pub" => syn::parse2(quote!(pub)).map_err(|_| rustler::Error::BadArg),
+            "crate" => syn::parse2(quote!(pub(crate))).map_err(|_| rustler::Error::BadArg),
+            _ => Err(rustler::Error::BadArg),
+        }
+    }
+}
+
+fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
+    let values = term
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(atom_or_string)
+        .collect::<NifResult<Vec<String>>>()?;
+
+    if values.is_empty() {
+        Ok(Vec::new())
+    } else {
+        let paths = values
+            .into_iter()
+            .map(|value| syn::parse_str::<syn::Path>(&value))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| rustler::Error::BadArg)?;
+        Ok(vec![syn::parse_quote!(#[derive(#(#paths),*)])])
     }
 }
 

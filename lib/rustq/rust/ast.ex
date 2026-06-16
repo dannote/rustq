@@ -12,6 +12,26 @@ defmodule RustQ.Rust.AST do
     defstruct [:name, args: [], returns: nil, body: [], lifetime: nil]
   end
 
+  defmodule Struct do
+    @moduledoc false
+    defstruct [:name, fields: [], vis: nil, derive: [], lifetime: nil]
+  end
+
+  defmodule StructField do
+    @moduledoc false
+    defstruct [:name, :type, vis: nil]
+  end
+
+  defmodule Enum do
+    @moduledoc false
+    defstruct [:name, variants: [], vis: nil, derive: []]
+  end
+
+  defmodule EnumVariant do
+    @moduledoc false
+    defstruct [:name]
+  end
+
   defmodule Let do
     @moduledoc false
     defstruct [:pattern, :expr, mutable: false]
@@ -147,16 +167,22 @@ defmodule RustQ.Rust.AST do
     defstruct [:patterns]
   end
 
-  def render_function_native(%Function{} = function) do
-    RustQ.Native.render_ast(function)
+  def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
+  def render_item_native(%Struct{} = item), do: render_native(item, &render_struct/1)
+  def render_item_native(%Enum{} = item), do: render_native(item, &render_enum/1)
+
+  def render_function_native(%Function{} = function), do: render_item_native(function)
+
+  defp render_native(item, fallback) do
+    RustQ.Native.render_ast(item)
   rescue
-    _error -> render_function(function)
+    _error -> fallback.(item)
   catch
-    :exit, _reason -> render_function(function)
+    :exit, _reason -> fallback.(item)
   end
 
   def render_function(%Function{} = function) do
-    args = Enum.map_join(function.args, ", ", fn {name, type} -> "#{name}: #{type}" end)
+    args = Elixir.Enum.map_join(function.args, ", ", fn {name, type} -> "#{name}: #{type}" end)
     lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""
 
     [
@@ -168,11 +194,45 @@ defmodule RustQ.Rust.AST do
       ") -> ",
       function.returns,
       " {\n",
-      function.body |> Enum.map(&render_stmt/1) |> Enum.join("\n") |> indent(),
+      function.body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n") |> indent(),
       "\n}"
     ]
     |> IO.iodata_to_binary()
   end
+
+  def render_struct(%Struct{} = struct) do
+    derive = render_derive(struct.derive)
+    vis = render_vis(struct.vis)
+    lifetime = if struct.lifetime, do: "<'#{struct.lifetime}>", else: ""
+    fields = struct.fields |> Elixir.Enum.map(&render_struct_field/1) |> Elixir.Enum.join("\n")
+
+    [
+      derive,
+      vis,
+      "struct ",
+      Atom.to_string(struct.name),
+      lifetime,
+      " {\n",
+      fields |> indent(),
+      "\n}"
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  def render_struct_field(%StructField{} = field) do
+    [render_vis(field.vis), Atom.to_string(field.name), ": ", field.type, ","]
+  end
+
+  def render_enum(%Enum{} = enum) do
+    derive = render_derive(enum.derive)
+    vis = render_vis(enum.vis)
+    variants = enum.variants |> Elixir.Enum.map(&render_enum_variant/1) |> Elixir.Enum.join("\n")
+
+    [derive, vis, "enum ", Atom.to_string(enum.name), " {\n", variants |> indent(), "\n}"]
+    |> IO.iodata_to_binary()
+  end
+
+  def render_enum_variant(%EnumVariant{} = variant), do: [Atom.to_string(variant.name), ","]
 
   def render_stmt(%Let{} = stmt) do
     mut = if stmt.mutable, do: "mut ", else: ""
@@ -183,7 +243,7 @@ defmodule RustQ.Rust.AST do
   def render_stmt(%Return{} = stmt), do: render_expr(stmt.expr)
 
   def render_expr(%Var{name: name}), do: Atom.to_string(name)
-  def render_expr(%Path{parts: parts}), do: Enum.map_join(parts, "::", &to_string/1)
+  def render_expr(%Path{parts: parts}), do: Elixir.Enum.map_join(parts, "::", &to_string/1)
 
   def render_expr(%Field{receiver: receiver, field: field}),
     do: [render_expr(receiver), ".", to_string(field)]
@@ -222,12 +282,12 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_expr(%Match{} = match) do
-    arms = match.arms |> Enum.map(&render_arm/1) |> Enum.join("\n")
+    arms = match.arms |> Elixir.Enum.map(&render_arm/1) |> Elixir.Enum.join("\n")
     ["match ", render_expr(match.expr), " {\n", indent(arms), "\n}"]
   end
 
   def render_arm(%Arm{pattern: pattern, body: body}) do
-    rendered_body = body |> Enum.map(&render_stmt/1) |> Enum.join("\n")
+    rendered_body = body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
     [render_pattern(pattern), " => {\n", indent(rendered_body), "\n},"]
   end
 
@@ -240,15 +300,30 @@ defmodule RustQ.Rust.AST do
     do: ["value if value == atoms::", Atom.to_string(name), "()"]
 
   def render_pattern(%PatTuple{patterns: patterns}) do
-    ["(", patterns |> Enum.map(&render_pattern/1) |> Enum.intersperse(", "), ")"]
+    ["(", patterns |> Elixir.Enum.map(&render_pattern/1) |> Elixir.Enum.intersperse(", "), ")"]
   end
 
-  defp render_args(args), do: args |> Enum.map(&render_expr/1) |> Enum.intersperse(", ")
+  defp render_args(args),
+    do: args |> Elixir.Enum.map(&render_expr/1) |> Elixir.Enum.intersperse(", ")
+
+  defp render_derive([]), do: []
+
+  defp render_derive(values) do
+    [
+      "#[derive(",
+      values |> Elixir.Enum.map(&to_string/1) |> Elixir.Enum.intersperse(", "),
+      ")]\n"
+    ]
+  end
+
+  defp render_vis(:pub), do: "pub "
+  defp render_vis(:crate), do: "pub(crate) "
+  defp render_vis(nil), do: []
 
   defp indent(iodata) do
     iodata
     |> IO.iodata_to_binary()
     |> String.split("\n")
-    |> Enum.map_join("\n", &("    " <> &1))
+    |> Elixir.Enum.map_join("\n", &("    " <> &1))
   end
 end

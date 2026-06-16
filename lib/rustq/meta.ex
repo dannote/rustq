@@ -83,8 +83,12 @@ defmodule RustQ.Meta do
     }
   end
 
-  defp validate_item_ast(%AST.Function{} = function) do
-    RustQ.parse_fragment!(:item, AST.render_function_native(function))
+  defp validate_item_ast(%AST.Function{} = item), do: validate_ast_item(item)
+  defp validate_item_ast(%AST.Struct{} = item), do: validate_ast_item(item)
+  defp validate_item_ast(%AST.Enum{} = item), do: validate_ast_item(item)
+
+  defp validate_ast_item(item) do
+    RustQ.parse_fragment!(:item, AST.render_item_native(item))
   end
 
   defp build_type_items(type_aliases) do
@@ -99,14 +103,15 @@ defmodule RustQ.Meta do
          meta: %{variants: variants, elixir_name: elixir_name}
        }) do
     enum =
-      RustQ.parse_fragment!(
-        :item,
-        Rust.enum(rust_name,
-          vis: :pub,
-          derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
-          variants: Enum.map(variants, &rust_variant/1)
-        )
-      )
+      validate_item_ast(%AST.Enum{
+        name: String.to_atom(rust_name),
+        vis: :pub,
+        derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
+        variants:
+          variants
+          |> Enum.map(&rust_variant/1)
+          |> Enum.map(&%AST.EnumVariant{name: String.to_atom(&1)})
+      })
 
     decoder =
       RustQ.parse_fragment!(
@@ -123,30 +128,27 @@ defmodule RustQ.Meta do
   defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
     lifetime =
       if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
-        do: "<'a>",
-        else: ""
+        do: :a
 
-    source = [
-      "#[derive(Clone, Debug)]\n",
-      "pub struct ",
-      rust_name,
-      lifetime,
-      " {\n",
-      fields |> Enum.map(&struct_field_source/1) |> Enum.intersperse("\n"),
-      "\n}"
+    [
+      validate_item_ast(%AST.Struct{
+        name: String.to_atom(rust_name),
+        vis: :pub,
+        derive: [:Clone, :Debug],
+        lifetime: lifetime,
+        fields: Enum.map(fields, &struct_field_ast/1)
+      })
     ]
-
-    [RustQ.parse_fragment!(:item, Rust.item(source))]
   end
 
   defp type_items(_type), do: []
 
-  defp struct_field_source({name, %Type{} = type, :required}) do
-    ["    pub ", Atom.to_string(name), ": ", type.rust, ","]
+  defp struct_field_ast({name, %Type{} = type, :required}) do
+    %AST.StructField{name: name, type: type.rust, vis: :pub}
   end
 
-  defp struct_field_source({name, %Type{} = type, :optional}) do
-    ["    pub ", Atom.to_string(name), ": Option<", type.rust, ">,"]
+  defp struct_field_ast({name, %Type{} = type, :optional}) do
+    %AST.StructField{name: name, type: "Option<#{type.rust}>", vis: :pub}
   end
 
   defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
