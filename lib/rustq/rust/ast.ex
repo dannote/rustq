@@ -29,7 +29,7 @@ defmodule RustQ.Rust.AST do
 
   defmodule EnumVariant do
     @moduledoc false
-    defstruct [:name]
+    defstruct [:name, tuple: []]
   end
 
   defmodule TypePath do
@@ -272,7 +272,17 @@ defmodule RustQ.Rust.AST do
     |> IO.iodata_to_binary()
   end
 
-  def render_enum_variant(%EnumVariant{} = variant), do: [Atom.to_string(variant.name), ","]
+  def render_enum_variant(%EnumVariant{tuple: []} = variant),
+    do: [Atom.to_string(variant.name), ","]
+
+  def render_enum_variant(%EnumVariant{} = variant) do
+    [
+      Atom.to_string(variant.name),
+      "(",
+      variant.tuple |> Elixir.Enum.map(&render_type/1) |> Elixir.Enum.intersperse(", "),
+      "),"
+    ]
+  end
 
   def render_type(type) when is_binary(type), do: type
   def render_type(%TypeUnit{}), do: "()"

@@ -47,6 +47,12 @@ defmodule RustQ.Meta.Type do
           error: error_type
         })
 
+      tuple_union?(ast) ->
+        type(:tuple_enum, path(rust_name), %{
+          elixir_name: name,
+          variants: tuple_variants(ast)
+        })
+
       map_type?(ast) ->
         fields = map_fields(ast)
 
@@ -230,6 +236,17 @@ defmodule RustQ.Meta.Type do
     length(members) == 2 and Enum.any?(members, &match?({:ok, _}, &1)) and
       Enum.any?(members, &match?({:error, _}, &1))
   end
+
+  defp tuple_union?(ast), do: ast |> union_members() |> Enum.all?(&tagged_tuple?/1)
+
+  defp tagged_tuple?({tag, _type}) when is_atom(tag), do: tag not in [:ok, :error]
+  defp tagged_tuple?({:{}, _, [tag | types]}) when is_atom(tag), do: types != []
+  defp tagged_tuple?(_other), do: false
+
+  defp tuple_variants(ast), do: ast |> union_members() |> Enum.map(&tuple_variant/1)
+
+  defp tuple_variant({tag, type}), do: {tag, [parse(type, %{})]}
+  defp tuple_variant({:{}, _, [tag | types]}), do: {tag, Enum.map(types, &parse(&1, %{}))}
 
   defp result_members(ast) do
     members = union_members(ast)

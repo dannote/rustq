@@ -155,7 +155,18 @@ fn decode_ast_enum(term: Term) -> NifResult<syn::ItemEnum> {
 fn decode_enum_variant(term: Term) -> NifResult<syn::Variant> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant")?;
     let name = format_ident!("{}", atom_key(term, "name")?);
-    syn::parse2(quote!(#name,)).map_err(|_| rustler::Error::BadArg)
+    let tuple = term
+        .map_get(atom(term.get_env(), "tuple")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_type)
+        .collect::<NifResult<Vec<Type>>>()?;
+
+    if tuple.is_empty() {
+        syn::parse2(quote!(#name,)).map_err(|_| rustler::Error::BadArg)
+    } else {
+        syn::parse2(quote!(#name(#(#tuple),*),)).map_err(|_| rustler::Error::BadArg)
+    }
 }
 
 fn decode_vis(term: Term) -> NifResult<syn::Visibility> {

@@ -8,6 +8,8 @@ defmodule RustQ.MetaTest do
 
     @type mode :: :src_over | :multiply
 
+    @type event :: {:click, String.t()} | {:resize, R.u32(), R.u32()}
+
     @type rect_opts :: %{
             required(:x) => R.f32(),
             required(:y) => R.f32(),
@@ -67,6 +69,9 @@ defmodule RustQ.MetaTest do
     assert source =~ "Ok(BlendMode::SrcOver)"
     assert source =~ ~s|Err(rustler::Error::RaiseAtom("invalid_blend_mode"))|
 
+    assert source =~ "pub enum Event"
+    assert source =~ "Click(String),"
+    assert source =~ "Resize(u32, u32),"
     assert source =~ "pub struct RectOpts"
     assert source =~ "pub x: f32,"
     assert source =~ "pub fill: Option<Term<'a>>,"
@@ -88,6 +93,14 @@ defmodule RustQ.MetaTest do
              Generated.__rustq_types__()[{:mode, 0}]
 
     assert Generated.__rustq_source__() =~ "pub enum Mode"
+
+    assert %RustQ.Meta.Type{kind: :tuple_enum, rust: "Event", meta: %{variants: event_variants}} =
+             Generated.__rustq_types__()[{:event, 0}]
+
+    assert {:click, [%RustQ.Meta.Type{rust: "String"}]} = List.keyfind(event_variants, :click, 0)
+
+    assert {:resize, [%RustQ.Meta.Type{rust: "u32"}, %RustQ.Meta.Type{rust: "u32"}]} =
+             List.keyfind(event_variants, :resize, 0)
 
     assert %RustQ.Meta.Type{
              kind: :struct,

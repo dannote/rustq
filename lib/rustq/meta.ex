@@ -154,6 +154,23 @@ defmodule RustQ.Meta do
     [enum, decoder]
   end
 
+  defp type_items(%Type{kind: :tuple_enum, rust: rust_name, meta: %{variants: variants}}) do
+    [
+      validate_item_ast(%AST.Enum{
+        name: String.to_atom(rust_name),
+        vis: :pub,
+        derive: [:Clone, :Debug],
+        variants:
+          Enum.map(variants, fn {tag, types} ->
+            %AST.EnumVariant{
+              name: tag |> rust_variant() |> String.to_atom(),
+              tuple: Enum.map(types, & &1.ast)
+            }
+          end)
+      })
+    ]
+  end
+
   defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
     lifetime =
       if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
