@@ -5,7 +5,10 @@ defmodule RustQ.NativeCodegen do
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.Schema
 
+  import RustQ.Rust.AST.ItemBuilder
+
   require A
+  require RustQ.Rust.AST.ItemBuilder
 
   def generated_ast_support do
     [
@@ -238,20 +241,16 @@ defmodule RustQ.NativeCodegen do
   defp item_decoder(:enum), do: {:Enum, :decode_ast_enum}
 
   defp decode_ast_type_item do
-    %AST.Function{
-      name: :decode_ast_type,
+    function :decode_ast_type,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Type>",
-      body:
-        A.block do
-          A.return do
-            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
-              decode_ast_type_arms()
-            end
-          end
+      returns: "NifResult<Type>" do
+      A.return do
+        A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+          decode_ast_type_arms()
         end
-    }
+      end
+    end
   end
 
   defp decode_ast_type_arms do
