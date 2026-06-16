@@ -352,7 +352,6 @@ defmodule RustQ.NativeCodegen do
 
         A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path")]))
       end,
-      unary_pat_decoder(:decode_pat_some, "pattern", "Some(#pat)"),
       function :decode_pat_tuple,
         vis: :crate,
         args: [term: "Term"],
@@ -364,8 +363,6 @@ defmodule RustQ.NativeCodegen do
 
         A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "(#(#patterns),*)")]))
       end,
-      unary_pat_decoder(:decode_pat_ok, "pattern", "Ok(#pat)"),
-      unary_pat_decoder(:decode_pat_err, "pattern", "Err(#pat)"),
       function :decode_pat_path_tuple,
         vis: :crate,
         args: [term: "Term"],
@@ -616,8 +613,6 @@ defmodule RustQ.NativeCodegen do
           )
         )
       end,
-      unary_expr_decoder(:decode_expr_try, "expr", "#expr?"),
-      unary_expr_decoder(:decode_expr_some, "expr", "Some(#expr)"),
       function :decode_expr_ok,
         vis: :crate,
         args: [term: "Term"],
@@ -653,7 +648,6 @@ defmodule RustQ.NativeCodegen do
           end
         end
       end,
-      unary_expr_decoder(:decode_expr_err, "expr", "Err(#expr)"),
       function :decode_expr_nif_raise_atom,
         vis: :crate,
         args: [term: "Term"],
@@ -751,26 +745,6 @@ defmodule RustQ.NativeCodegen do
         )
       end
     ]
-  end
-
-  defp unary_pat_decoder(name, field, tokens) do
-    function name,
-      vis: :crate,
-      args: [term: "Term"],
-      returns: "NifResult<Pat>" do
-      A.let(:pat, A.try(A.path_call([:super, :decode_pat], [map_get(:term, field)])))
-      A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, tokens)]))
-    end
-  end
-
-  defp unary_expr_decoder(name, field, tokens) do
-    function name,
-      vis: :crate,
-      args: [term: "Term"],
-      returns: "NifResult<Expr>" do
-      A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, field)])))
-      A.return(A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, tokens)]))
-    end
   end
 
   defp path_parts_term(term) do

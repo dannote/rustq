@@ -8,6 +8,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "pub(crate) mod atoms"
     assert source =~ ~s|pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";|
     assert source =~ "pub(crate) fn atom(env: Env, name: &str) -> NifResult<Atom>"
+    assert source =~ "pub(crate) fn required_field<'a>"
     assert source =~ "pub(crate) fn optional_map_get<'a>"
     assert source =~ "match term.map_get(atom(term.get_env(), key)?)"
     assert source =~ "pub(crate) fn atom_key<'a>(term: Term<'a>, key: &str) -> NifResult<String>"
@@ -28,6 +29,10 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat>"
     assert source =~ "pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt>"
     assert source =~ "pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr>"
+    assert source =~ "pub(crate) fn decode_pat_some<'a>(term: Term<'a>) -> NifResult<Pat>"
+    assert source =~ "super::parse_pat(quote!(Some(# pat)))"
+    assert source =~ "pub(crate) fn decode_expr_try<'a>(term: Term<'a>) -> NifResult<Expr>"
+    assert source =~ "super::parse_expr_tokens(quote!(# expr ?))"
     assert source =~ "pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt>"
     assert source =~ "Ok(Stmt::Expr(expr, None))"
     assert source =~ "pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr>"

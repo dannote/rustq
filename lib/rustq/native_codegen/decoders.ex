@@ -17,22 +17,36 @@ defmodule RustQ.NativeCodegen.Decoders do
 
   @spec decode_pat_literal(term()) :: R.nif_result(R.pat())
   defrust decode_pat_literal(term) do
-    Super.decode_pat_literal_value(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "value")))))
+    Super.decode_pat_literal_value(unwrap!(required_field(term, "value")))
+  end
+
+  @spec decode_pat_some(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_some(term) do
+    pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    quote_pat!("Some(#pat)")
+  end
+
+  @spec decode_pat_ok(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_ok(term) do
+    pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    quote_pat!("Ok(#pat)")
+  end
+
+  @spec decode_pat_err(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_err(term) do
+    pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    quote_pat!("Err(#pat)")
   end
 
   @spec decode_stmt_expr_stmt(term()) :: R.nif_result(R.stmt())
   defrust decode_stmt_expr_stmt(term) do
-    expr =
-      unwrap!(Super.decode_expr(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "expr"))))))
-
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
     quote_stmt!("#expr;")
   end
 
   @spec decode_stmt_return(term()) :: R.nif_result(R.stmt())
   defrust decode_stmt_return(term) do
-    expr =
-      unwrap!(Super.decode_expr(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "expr"))))))
-
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
     {:ok, Stmt.expr(expr, none())}
   end
 
@@ -43,7 +57,25 @@ defmodule RustQ.NativeCodegen.Decoders do
 
   @spec decode_expr_literal(term()) :: R.nif_result(R.expr())
   defrust decode_expr_literal(term) do
-    Super.decode_literal_expr(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "value")))))
+    Super.decode_literal_expr(unwrap!(required_field(term, "value")))
+  end
+
+  @spec decode_expr_try(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_try(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    quote_expr!("#expr?")
+  end
+
+  @spec decode_expr_some(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_some(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    quote_expr!("Some(#expr)")
+  end
+
+  @spec decode_expr_err(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_err(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    quote_expr!("Err(#expr)")
   end
 
   def asts do
