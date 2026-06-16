@@ -473,6 +473,34 @@ fn parse_type_ref(inner: Type, mutable: bool, lifetime: Option<String>) -> NifRe
     parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
 }
 
+trait ParseSynTokens: Sized {
+    fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self>;
+}
+
+macro_rules! impl_parse_syn_tokens {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl ParseSynTokens for $type {
+                fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
+                    syn::parse2(tokens)
+                }
+            }
+        )+
+    };
+}
+
+impl_parse_syn_tokens!(Arm, Expr, Stmt, Type);
+
+impl ParseSynTokens for Pat {
+    fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
+        Pat::parse_single.parse2(tokens)
+    }
+}
+
+fn parse_syn<T: ParseSynTokens>(tokens: proc_macro2::TokenStream) -> NifResult<T> {
+    T::parse_syn_tokens(tokens).map_err(|_| rustler::Error::BadArg)
+}
+
 fn parse_type(source: &str) -> NifResult<Type> {
     syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
 }

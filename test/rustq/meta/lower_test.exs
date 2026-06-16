@@ -103,7 +103,7 @@ defmodule RustQ.Meta.LowerTest do
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_expr_tokens]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, "parse_syn::<Expr>"]}
                  }
                }
              ]
@@ -115,7 +115,7 @@ defmodule RustQ.Meta.LowerTest do
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_pat]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, "parse_syn::<Pat>"]}
                  }
                }
              ]
@@ -155,7 +155,7 @@ defmodule RustQ.Meta.LowerTest do
              body: [
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_expr_tokens]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, "parse_syn::<Expr>"]}
                  }
                }
              ]

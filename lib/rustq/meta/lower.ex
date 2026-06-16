@@ -222,20 +222,10 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:pat!, _, [pattern]}), do: semantic_pat(pattern)
   defp lower_expr({:stmt!, _, [expression]}), do: semantic_stmt(expression)
 
-  defp lower_expr({:raw_expr!, _, [tokens]}),
-    do: %AST.PathCall{
-      path: %AST.Path{parts: [:super, :parse_expr_tokens]},
-      args: [quote_tokens(tokens)]
-    }
-
-  defp lower_expr({:raw_pat!, _, [tokens]}),
-    do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_pat]}, args: [quote_tokens(tokens)]}
-
-  defp lower_expr({:raw_stmt!, _, [tokens]}),
-    do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_stmt]}, args: [quote_tokens(tokens)]}
-
-  defp lower_expr({:raw_arm!, _, [tokens]}),
-    do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_arm]}, args: [quote_tokens(tokens)]}
+  defp lower_expr({:raw_expr!, _, [tokens]}), do: parse_syn(:Expr, tokens)
+  defp lower_expr({:raw_pat!, _, [tokens]}), do: parse_syn(:Pat, tokens)
+  defp lower_expr({:raw_stmt!, _, [tokens]}), do: parse_syn(:Stmt, tokens)
+  defp lower_expr({:raw_arm!, _, [tokens]}), do: parse_syn(:Arm, tokens)
 
   defp lower_expr({:arm!, _, [pattern, block]}), do: semantic_arm(pattern, block)
 
@@ -405,12 +395,7 @@ defmodule RustQ.Meta.Lower do
   defp semantic_stmt(expression), do: raw_stmt("#{semantic_interpolation(expression)};")
 
   defp semantic_arm(pattern, block),
-    do: %AST.PathCall{
-      path: %AST.Path{parts: [:super, :parse_arm]},
-      args: [
-        quote_tokens("#{semantic_interpolation(pattern)} => #{semantic_interpolation(block)},")
-      ]
-    }
+    do: parse_syn(:Arm, "#{semantic_interpolation(pattern)} => #{semantic_interpolation(block)},")
 
   defp semantic_interpolation({name, _, context}) when is_atom(name) and is_atom(context),
     do: "##{name}"
@@ -430,19 +415,15 @@ defmodule RustQ.Meta.Lower do
   defp semantic_binary_op(:and), do: "&&"
   defp semantic_binary_op(:or), do: "||"
 
-  defp raw_expr(tokens) do
+  defp raw_expr(tokens), do: parse_syn(:Expr, tokens)
+  defp raw_pat(tokens), do: parse_syn(:Pat, tokens)
+  defp raw_stmt(tokens), do: parse_syn(:Stmt, tokens)
+
+  defp parse_syn(type, tokens) do
     %AST.PathCall{
-      path: %AST.Path{parts: [:super, :parse_expr_tokens]},
+      path: %AST.Path{parts: [:super, "parse_syn::<#{type}>"]},
       args: [quote_tokens(tokens)]
     }
-  end
-
-  defp raw_pat(tokens) do
-    %AST.PathCall{path: %AST.Path{parts: [:super, :parse_pat]}, args: [quote_tokens(tokens)]}
-  end
-
-  defp raw_stmt(tokens) do
-    %AST.PathCall{path: %AST.Path{parts: [:super, :parse_stmt]}, args: [quote_tokens(tokens)]}
   end
 
   defp quote_tokens(tokens) when is_binary(tokens),
