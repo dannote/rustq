@@ -1,17 +1,22 @@
 defmodule RustQ.Meta.GeneratedCase do
+  @moduledoc false
+
   use RustQ.Meta
 
   alias RustQ.Type, as: R
 
   defmodule Click do
+    @moduledoc false
     defstruct [:name]
   end
 
   defmodule Resize do
+    @moduledoc false
     defstruct [:width, :height]
   end
 
   defmodule Scroll do
+    @moduledoc false
     defstruct [:dx, :dy]
   end
 

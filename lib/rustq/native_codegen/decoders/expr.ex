@@ -112,6 +112,12 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     expr!(tuple(values))
   end
 
+  @spec decode_expr_vec_literal(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_vec_literal(term) do
+    values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
+    expr!(vec(values))
+  end
+
   @spec decode_expr_token_macro(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_token_macro(term) do
     path =

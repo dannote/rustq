@@ -307,12 +307,13 @@ The next practical sequence should be:
 1. Continue reducing item/type assembly boundaries only where a generic primitive
    or typed AST node removes real complexity; avoid churn in the already-small
    `parse_item.rs` helpers.
-2. Improve Rusty-Elixir list/iterator lowering before attempting to dogfood
-   `path_parts`, `decode_lifetime_list`, or collection transforms in `decode.rs`.
+2. Improve Rusty-Elixir iterator lowering beyond list literals before attempting
+   to dogfood `path_parts`, `decode_lifetime_list`, or collection transforms in
+   `decode.rs`.
 3. Expand schema/type behavioral coverage for invalid atom behavior and any
    newly added map/tuple-union shapes.
-4. Revisit public docs once list/iterator lowering and remaining primitive policy
-   are stable.
+4. Revisit public docs once iterator lowering and remaining primitive policy are
+   stable.
 
 Recently completed:
 
@@ -339,8 +340,13 @@ Recently completed:
   lifetimes, tuple enums with three variants, and invalid atom fallback arms.
 - Native-codegen decoder tests now include structural AST checks for dogfooded
   item decoders.
+- Rusty-Elixir list literals now lower to an AST-backed `VecLiteral`, which
+  renders native Rust `vec![...]` and is dogfooded by generic type construction.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
+- `mix ci` currently reaches Credo and fails on existing strict style/design
+  findings; compile, format, Rust checks, generated-file checks, template checks,
+  and tests complete before that failure.
 
 ## Verification gates
 

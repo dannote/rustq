@@ -176,7 +176,7 @@ its own native AST decoder support.
 Current `defrust` subset:
 
 - ordinary assignment, final expressions, `if`, and `case`
-- aliases, remote calls, method calls, local calls, fields, refs, tuples, and literals
+- aliases, remote calls, method calls, local calls, fields, refs, tuples, lists as `vec![...]`, and literals
 - `Option`, `Result`, and `NifResult` return/branch wrapping from `@spec`
 - selected `@type` forms: atom unions, `nil | t`, `{:ok, t} | {:error, e}`, maps, structs, and tagged tuple unions
 - semantic helpers: `expr!`, `pat!`, `stmt!`, `arm!`

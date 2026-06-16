@@ -242,6 +242,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
               :ref,
               :try,
               :tuple,
+              :vec_literal,
               :literal,
               :token_macro,
               :atom_value,

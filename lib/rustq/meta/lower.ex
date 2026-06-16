@@ -299,12 +299,8 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
 
-  defp lower_expr(values) when is_list(values) do
-    %AST.TokenMacro{
-      path: %AST.Path{parts: [:vec]},
-      tokens: values |> Enum.map(&AST.render_expr(lower_expr(&1))) |> Enum.join(", ")
-    }
-  end
+  defp lower_expr(values) when is_list(values),
+    do: %AST.VecLiteral{values: Enum.map(values, &lower_expr/1)}
 
   defp lower_expr(value) when is_binary(value), do: %AST.Literal{value: value}
   defp lower_expr(value) when is_integer(value) or is_float(value), do: %AST.Literal{value: value}
@@ -356,6 +352,7 @@ defmodule RustQ.Meta.Lower do
     do: raw_expr("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
 
   defp semantic_expr({:tuple, _, [values]}), do: raw_expr("(#{semantic_splice(values)})")
+  defp semantic_expr({:vec, _, [values]}), do: raw_expr("vec![#{semantic_splice(values)}]")
 
   defp semantic_expr({:binary, _, [left, op, right]}),
     do:

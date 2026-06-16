@@ -43,6 +43,7 @@ pub(crate) mod ast_modules {
     pub(crate) const REF: &str = "Elixir.RustQ.Rust.AST.Ref";
     pub(crate) const TRY: &str = "Elixir.RustQ.Rust.AST.Try";
     pub(crate) const TUPLE: &str = "Elixir.RustQ.Rust.AST.Tuple";
+    pub(crate) const VEC_LITERAL: &str = "Elixir.RustQ.Rust.AST.VecLiteral";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
     pub(crate) const TOKEN_MACRO: &str = "Elixir.RustQ.Rust.AST.TokenMacro";
     pub(crate) const ATOM_VALUE: &str = "Elixir.RustQ.Rust.AST.AtomValue";
@@ -179,6 +180,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::REF => decode_expr_ref(term),
         ast_modules::TRY => decode_expr_try(term),
         ast_modules::TUPLE => decode_expr_tuple(term),
+        ast_modules::VEC_LITERAL => decode_expr_vec_literal(term),
         ast_modules::LITERAL => decode_expr_literal(term),
         ast_modules::TOKEN_MACRO => decode_expr_token_macro(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
@@ -488,6 +490,11 @@ pub(crate) fn decode_expr_if<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_tuple<'a>(term: Term<'a>) -> NifResult<Expr> {
     let values = super::decode_expr_list(required_field(term, "values")?)?;
     super::parse_syn::<Expr>(quote!((# (# values),*)))
+}
+
+pub(crate) fn decode_expr_vec_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let values = super::decode_expr_list(required_field(term, "values")?)?;
+    super::parse_syn::<Expr>(quote!(vec![# (# values),*]))
 }
 
 pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {

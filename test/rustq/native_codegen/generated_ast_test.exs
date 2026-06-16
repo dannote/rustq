@@ -69,7 +69,10 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       assert %AST.Function{body: body} = Enum.find(decoders, &(&1.name == name))
 
       assert %AST.Return{
-               expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_type_generic]}}
+               expr: %AST.PathCall{
+                 path: %AST.Path{parts: [:super, :parse_type_generic]},
+                 args: [_path, %AST.VecLiteral{}]
+               }
              } = List.last(body)
     end
   end

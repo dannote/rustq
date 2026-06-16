@@ -29,6 +29,7 @@ defmodule RustQ.Rust.AST do
           | Ref.t()
           | Try.t()
           | Tuple.t()
+          | VecLiteral.t()
           | Literal.t()
           | TokenMacro.t()
           | AtomValue.t()
@@ -237,6 +238,10 @@ defmodule RustQ.Rust.AST do
 
   defnode(Tuple, :expr, [:values], type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]}))
 
+  defnode(VecLiteral, :expr, [:values],
+    type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]})
+  )
+
   defnode(Literal, :expr, [:value],
     type: quote(do: %__MODULE__{value: String.t() | integer() | float() | boolean()})
   )
@@ -353,6 +358,7 @@ defmodule RustQ.Rust.AST do
       Ref,
       Try,
       Tuple,
+      VecLiteral,
       Literal,
       TokenMacro,
       AtomValue,
@@ -583,6 +589,7 @@ defmodule RustQ.Rust.AST do
   def render_expr(%Ref{expr: expr, mutable: true}), do: ["&mut ", render_expr(expr)]
   def render_expr(%Try{expr: expr}), do: [render_expr(expr), "?"]
   def render_expr(%Tuple{values: values}), do: ["(", render_args(values), ")"]
+  def render_expr(%VecLiteral{values: values}), do: ["vec![", render_args(values), "]"]
   def render_expr(%Literal{value: value}) when is_binary(value), do: inspect(value)
 
   def render_expr(%Literal{value: value}) when is_integer(value) or is_float(value),
