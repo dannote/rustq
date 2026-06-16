@@ -4,7 +4,7 @@ use quote::quote;
 
 use rustler::{Atom, Env, NifResult, Term};
 
-use syn::{Expr, Item, Pat, Stmt, Type};
+use syn::{Arm, Expr, Item, Pat, Stmt, Type};
 
 pub(crate) mod atoms {
     rustler::atoms! {
@@ -155,7 +155,7 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
 
 pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
     match struct_name(term)?.as_str() {
-        ast_modules::LET => super::decode_stmt_let(term),
+        ast_modules::LET => decode_stmt_let(term),
         ast_modules::EXPR_STMT => decode_stmt_expr_stmt(term),
         ast_modules::RETURN => decode_stmt_return(term),
         _ => Err(rustler::Error::BadArg),
@@ -186,6 +186,19 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::IF => decode_expr_if(term),
         ast_modules::BINARY_OP => decode_expr_binary_op(term),
         _ => Err(rustler::Error::BadArg),
+    }
+}
+
+pub(crate) fn decode_arm(term: Term) -> NifResult<Arm> {
+    super::expect_struct(term, ast_modules::ARM)?;
+    let pat_term = term.map_get(super::atom(term.get_env(), "pattern")?)?;
+    let block = super::decode_block(term.map_get(super::atom(term.get_env(), "body")?)?)?;
+    match super::struct_name(pat_term)?.as_str() {
+        ast_modules::PAT_ATOM_GUARD => super::decode_atom_guard_arm(pat_term, block),
+        _ => {
+            let pat = super::decode_pat(pat_term)?;
+            super::parse_arm(quote!(# pat => # block,))
+        }
     }
 }
 
@@ -251,6 +264,27 @@ pub(crate) fn decode_pat_struct(term: Term) -> NifResult<Pat> {
     let fields =
         super::decode_pat_struct_fields(term.map_get(super::atom(term.get_env(), "fields")?)?)?;
     super::parse_pat(quote!(# path { # (# fields),* }))
+}
+
+pub(crate) fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
+    let pattern = super::decode_pat(term.map_get(super::atom(term.get_env(), "pattern")?)?)?;
+    let mutable = term
+        .map_get(super::atom(term.get_env(), "mutable")?)?
+        .decode()?;
+    let pat_tokens = super::decode_let_pattern(pattern, mutable)?;
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    let ty = match super::optional_map_get(term, "type")? {
+        Some(type_term) => {
+            if super::is_nil(type_term)? {
+                None
+            } else {
+                let ty = super::decode_type(type_term)?;
+                Some(ty)
+            }
+        }
+        None => None,
+    };
+    super::parse_let_stmt(pat_tokens, ty, expr)
 }
 
 pub(crate) fn decode_stmt_expr_stmt(term: Term) -> NifResult<Stmt> {

@@ -14,7 +14,7 @@ defmodule RustQ.NativeCodegen do
     [
       A.use("quote::quote"),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
-      A.use("syn::{Expr, Item, Pat, Stmt, Type}"),
+      A.use("syn::{Arm, Expr, Item, Pat, Stmt, Type}"),
       atoms_module(),
       ast_modules_module(),
       helper_items(),
@@ -23,6 +23,7 @@ defmodule RustQ.NativeCodegen do
       decode_ast_pat_item(),
       decode_ast_stmt_item(),
       decode_ast_expr_item(),
+      decode_arm_helper_items(),
       decode_pat_helper_items(),
       decode_stmt_helper_items(),
       decode_expr_helper_items()
@@ -320,7 +321,7 @@ defmodule RustQ.NativeCodegen do
     end
   end
 
-  defp stmt_decoder_path(:let), do: [:super, :decode_stmt_let]
+  defp stmt_decoder_path(:let), do: [:decode_stmt_let]
   defp stmt_decoder_path(:expr_stmt), do: [:decode_stmt_expr_stmt]
   defp stmt_decoder_path(:return), do: [:decode_stmt_return]
 
@@ -383,6 +384,38 @@ defmodule RustQ.NativeCodegen do
     do: raise(ArgumentError, "missing expression decoder for #{inspect(name)}")
 
   defp expr_decoder(name), do: String.to_atom("decode_expr_#{name}")
+
+  defp decode_arm_helper_items do
+    [
+      function :decode_arm,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Arm>" do
+        A.stmt(
+          A.try(A.path_call([:super, :expect_struct], [:term, A.path([:ast_modules, :ARM])]))
+        )
+
+        A.let(:pat_term, map_get(:term, "pattern"))
+        A.let(:block, A.try(A.path_call([:super, :decode_block], [map_get(:term, "body")])))
+
+        A.return do
+          A.match A.method(A.try(A.path_call([:super, :struct_name], [:pat_term])), :as_str) do
+            A.arm A.path_pat([:ast_modules, :PAT_ATOM_GUARD]) do
+              A.return(A.path_call([:super, :decode_atom_guard_arm], [:pat_term, :block]))
+            end
+
+            A.arm A.wildcard() do
+              A.let(:pat, A.try(A.path_call([:super, :decode_pat], [:pat_term])))
+
+              A.return(
+                A.path_call([:super, :parse_arm], [A.token_macro(:quote, "#pat => #block,")])
+              )
+            end
+          end
+        end
+      end
+    ]
+  end
 
   defp decode_pat_helper_items do
     [
@@ -493,6 +526,44 @@ defmodule RustQ.NativeCodegen do
 
   defp decode_stmt_helper_items do
     [
+      function :decode_stmt_let,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Stmt>" do
+        A.let(:pattern, A.try(A.path_call([:super, :decode_pat], [map_get(:term, "pattern")])))
+        A.let(:mutable, A.try(A.method(map_get(:term, "mutable"), :decode)))
+
+        A.let(
+          :pat_tokens,
+          A.try(A.path_call([:super, :decode_let_pattern], [:pattern, :mutable]))
+        )
+
+        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+
+        A.let(
+          :ty,
+          A.match A.try(A.path_call([:super, :optional_map_get], [:term, "type"])) do
+            A.arm A.some_pat(:type_term) do
+              A.return(
+                A.if_expr(
+                  A.try(A.path_call([:super, :is_nil], [:type_term])),
+                  [A.return(A.none())],
+                  [
+                    A.let(:ty, A.try(A.path_call([:super, :decode_type], [:type_term]))),
+                    A.return(A.some(:ty))
+                  ]
+                )
+              )
+            end
+
+            A.arm A.none_pat() do
+              A.return(A.none())
+            end
+          end
+        )
+
+        A.return(A.path_call([:super, :parse_let_stmt], [:pat_tokens, :ty, :expr]))
+      end,
       function :decode_stmt_expr_stmt,
         vis: :crate,
         args: [term: "Term"],

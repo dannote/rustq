@@ -14,9 +14,9 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_ast_expr, decode_ast_item, decode_ast_pat,
-    decode_ast_stmt, decode_ast_type, expect_struct, is_nil, optional_atom_key, optional_map_get,
-    struct_name,
+    ast_modules, atom, atom_key, atoms, decode_arm, decode_ast_expr, decode_ast_item,
+    decode_ast_pat, decode_ast_stmt, decode_ast_type, expect_struct, is_nil, optional_atom_key,
+    optional_map_get, struct_name,
 };
 
 #[derive(NifMap)]
@@ -250,31 +250,27 @@ fn decode_stmt(term: Term) -> NifResult<Stmt> {
     decode_ast_stmt(term)
 }
 
-fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
-    let env = term.get_env();
-    let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
-    let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-    let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
-    let ty = match optional_map_get(term, "type")? {
-        Some(type_term) if !is_nil(type_term)? => Some(decode_type(type_term)?),
-        _ => None,
-    };
-
-    let pat_tokens = if mutable {
+fn decode_let_pattern(pat: Pat, mutable: bool) -> NifResult<proc_macro2::TokenStream> {
+    if mutable {
         let Pat::Ident(mut pat_ident) = pat else {
             return Err(rustler::Error::BadArg);
         };
         pat_ident.mutability = Some(Default::default());
-        quote!(#pat_ident)
+        Ok(quote!(#pat_ident))
     } else {
-        quote!(#pat)
-    };
+        Ok(quote!(#pat))
+    }
+}
 
+fn parse_let_stmt(
+    pat_tokens: proc_macro2::TokenStream,
+    ty: Option<Type>,
+    expr: Expr,
+) -> NifResult<Stmt> {
     if let Some(ty) = ty {
-        Ok(syn::parse2(quote!(let #pat_tokens: #ty = #expr;))
-            .map_err(|_| rustler::Error::BadArg)?)
+        parse_stmt(quote!(let #pat_tokens: #ty = #expr;))
     } else {
-        Ok(syn::parse2(quote!(let #pat_tokens = #expr;)).map_err(|_| rustler::Error::BadArg)?)
+        parse_stmt(quote!(let #pat_tokens = #expr;))
     }
 }
 
@@ -317,25 +313,13 @@ fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
         .collect()
 }
 
-fn decode_arm(term: Term) -> NifResult<Arm> {
-    expect_struct(term, ast_modules::ARM)?;
-    let env = term.get_env();
-    let pat_term = term.map_get(atom(env, "pattern")?)?;
-    let body = decode_stmt_list(term.map_get(atom(env, "body")?)?)?;
-    let block =
-        syn::parse2::<syn::Block>(quote!({ #(#body)* })).map_err(|_| rustler::Error::BadArg)?;
+fn parse_arm(tokens: proc_macro2::TokenStream) -> NifResult<Arm> {
+    syn::parse2(tokens).map_err(|_| rustler::Error::BadArg)
+}
 
-    match struct_name(pat_term)?.as_str() {
-        ast_modules::PAT_ATOM_GUARD => {
-            let name = format_ident!("{}", atom_key(pat_term, "name")?);
-            syn::parse2(quote!(value if value == atoms::#name() => #block,))
-                .map_err(|_| rustler::Error::BadArg)
-        }
-        _ => {
-            let pat = decode_pat(pat_term)?;
-            syn::parse2(quote!(#pat => #block,)).map_err(|_| rustler::Error::BadArg)
-        }
-    }
+fn decode_atom_guard_arm(pat_term: Term, block: syn::Block) -> NifResult<Arm> {
+    let name = format_ident!("{}", atom_key(pat_term, "name")?);
+    parse_arm(quote!(value if value == atoms::#name() => #block,))
 }
 
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {

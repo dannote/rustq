@@ -44,7 +44,21 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ "canvas.draw_rect(&rect, &mut paint);"
   end
 
-  test "native decoder renders typed let statements" do
+  test "native decoder renders mutable and typed let statements" do
+    mutable_source =
+      Native.render_ast(%AST.Function{
+        name: :mutable_let,
+        args: [],
+        returns: "String",
+        body:
+          A.block do
+            A.let_mut(:tokens, A.call(:read_tokens))
+            A.return(:tokens)
+          end
+      })
+
+    assert mutable_source =~ "let mut tokens = read_tokens();"
+
     source =
       Native.render_ast(%AST.Function{
         name: :typed_let,
@@ -113,6 +127,31 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert literal_source =~ ~s|"hello"|
     assert token_macro_source =~ "quote!(None)"
     assert binary_source =~ "left == right && ok"
+  end
+
+  test "generated arm decoder renders atom guard patterns" do
+    source =
+      Native.render_ast(%AST.Function{
+        name: :atom_guard,
+        args: [value: "Atom"],
+        returns: "i32",
+        body:
+          A.block do
+            A.return do
+              A.match A.var(:value) do
+                A.arm %AST.PatAtomGuard{name: :ok} do
+                  A.return(1)
+                end
+
+                A.arm A.wildcard() do
+                  A.return(0)
+                end
+              end
+            end
+          end
+      })
+
+    assert source =~ "value if value == atoms::ok() =>"
   end
 
   test "generated pattern decoders render tuple, path tuple, and struct patterns" do
