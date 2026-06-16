@@ -35,14 +35,18 @@ defmodule RustQ.Meta do
   defmacro __before_compile__(env) do
     defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
     specs = Module.get_attribute(env.module, :spec) |> List.wrap()
+    type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
 
-    asts = Enum.map(defs, &build_ast(&1, specs))
+    asts = Enum.map(defs, &build_ast(&1, specs, type_aliases))
     items = Enum.map(asts, &validate_item_ast/1)
     source = Enum.map_join(asts, "\n\n", &AST.render_function_native/1)
 
     quote do
       @doc false
       def __rustq_asts__, do: unquote(Macro.escape(asts))
+
+      @doc false
+      def __rustq_types__, do: unquote(Macro.escape(type_aliases))
 
       @doc false
       def __rustq_items__, do: unquote(Macro.escape(items))
@@ -52,10 +56,10 @@ defmodule RustQ.Meta do
     end
   end
 
-  defp build_ast({call_ast, body_ast}, specs) do
+  defp build_ast({call_ast, body_ast}, specs, type_aliases) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
-    {arg_types, return_type} = find_spec!(specs, name, length(arg_names))
+    {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
 
     args = Enum.zip(arg_names, Enum.map(arg_types, & &1.rust))
     body = Lower.function_ast(body_ast, return_type)
@@ -80,10 +84,11 @@ defmodule RustQ.Meta do
     raise ArgumentError, "unsupported defrust argument: #{Macro.to_string(other)}"
   end
 
-  defp find_spec!(specs, name, arity) do
+  defp find_spec!(specs, name, arity, type_aliases) do
     Enum.find_value(specs, fn
       {:spec, {:"::", _, [{^name, _, args}, return]}, _location} when length(args) == arity ->
-        {Enum.map(args, &Type.from_spec_ast/1), Type.from_spec_ast(return)}
+        {Enum.map(args, &Type.from_spec_ast(&1, type_aliases)),
+         Type.from_spec_ast(return, type_aliases)}
 
       _other ->
         nil

@@ -6,13 +6,15 @@ defmodule RustQ.MetaTest do
 
     alias RustQ.Type, as: R
 
+    @type mode :: :src_over | :multiply
+
     @spec draw_save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
     defrust draw_save(canvas) do
       canvas.save()
       :ok
     end
 
-    @spec decode_mode(R.atom()) :: R.nif_result(BlendMode.t())
+    @spec decode_mode(R.atom()) :: R.nif_result(mode())
     defrust decode_mode(atom) do
       case atom do
         :src_over -> {:ok, BlendMode.SrcOver}
@@ -38,7 +40,7 @@ defmodule RustQ.MetaTest do
     assert source =~ "canvas.save();"
     assert source =~ "Ok(())"
 
-    assert source =~ "fn decode_mode(atom: Atom) -> NifResult<BlendMode>"
+    assert source =~ "fn decode_mode(atom: Atom) -> NifResult<Mode>"
     assert source =~ "match atom"
     assert source =~ "value if value == atoms::src_over() =>"
     assert source =~ "Ok(BlendMode::SrcOver)"
@@ -51,6 +53,13 @@ defmodule RustQ.MetaTest do
     assert source =~ "let mut paint = decode_paint(opts.fill)?;"
     assert source =~ "apply_blend_mode(&mut paint, raw_opts)?;"
     assert source =~ "canvas.draw_rect(&rect, &paint);"
+  end
+
+  test "set-theoretic type aliases are available to specs" do
+    assert %RustQ.Meta.Type{kind: :enum, rust: "Mode", meta: %{variants: [:src_over, :multiply]}} =
+             Generated.__rustq_types__()[{:mode, 0}]
+
+    assert Generated.__rustq_source__() =~ "fn decode_mode(atom: Atom) -> NifResult<Mode>"
   end
 
   test "generated ASTs are retained before fragment validation" do
