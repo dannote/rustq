@@ -8,6 +8,14 @@ defmodule RustQ.MetaTest do
 
     @type mode :: :src_over | :multiply
 
+    @type rect_opts :: %{
+            required(:x) => R.f32(),
+            required(:y) => R.f32(),
+            required(:width) => R.f32(),
+            required(:height) => R.f32(),
+            optional(:fill) => term()
+          }
+
     @spec draw_save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
     defrust draw_save(canvas) do
       canvas.save()
@@ -23,7 +31,7 @@ defmodule RustQ.MetaTest do
       end
     end
 
-    @spec draw_rect(R.ref(Canvas.t()), RectOpts.t(), term()) :: R.nif_result(R.unit())
+    @spec draw_rect(R.ref(Canvas.t()), rect_opts(), term()) :: R.nif_result(R.unit())
     defrust draw_rect(canvas, opts, raw_opts) do
       rect = Rect.from_xywh(opts.x, opts.y, opts.width, opts.height)
       paint = unwrap!(decode_paint(opts.fill))
@@ -59,8 +67,11 @@ defmodule RustQ.MetaTest do
     assert source =~ "Ok(BlendMode::SrcOver)"
     assert source =~ ~s|Err(rustler::Error::RaiseAtom("invalid_blend_mode"))|
 
+    assert source =~ "pub struct RectOpts"
+    assert source =~ "pub x: f32,"
+    assert source =~ "pub fill: Option<Term<'a>>,"
     assert source =~ "fn draw_rect<'a>("
-    assert source =~ "opts: RectOpts"
+    assert source =~ "opts: RectOpts<'a>"
     assert source =~ "raw_opts: Term<'a>"
     assert source =~ "let rect = Rect::from_xywh(opts.x, opts.y, opts.width, opts.height);"
     assert source =~ "let mut paint = decode_paint(opts.fill)?;"
@@ -77,6 +88,12 @@ defmodule RustQ.MetaTest do
              Generated.__rustq_types__()[{:mode, 0}]
 
     assert Generated.__rustq_source__() =~ "pub enum Mode"
+
+    assert %RustQ.Meta.Type{kind: :struct, rust: "RectOpts<'a>", meta: %{fields: fields}} =
+             Generated.__rustq_types__()[{:rect_opts, 0}]
+
+    assert Enum.any?(fields, &match?({:x, %RustQ.Meta.Type{rust: "f32"}, :required}, &1))
+    assert Enum.any?(fields, &match?({:fill, %RustQ.Meta.Type{rust: "Term<'a>"}, :optional}, &1))
 
     assert Generated.__rustq_source__() =~
              "pub fn decode_mode_atom(value: Atom) -> NifResult<Mode>"

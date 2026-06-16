@@ -120,7 +120,34 @@ defmodule RustQ.Meta do
     [enum, decoder]
   end
 
+  defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
+    lifetime =
+      if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
+        do: "<'a>",
+        else: ""
+
+    source = [
+      "#[derive(Clone, Debug)]\n",
+      "pub struct ",
+      rust_name,
+      lifetime,
+      " {\n",
+      fields |> Enum.map(&struct_field_source/1) |> Enum.intersperse("\n"),
+      "\n}"
+    ]
+
+    [RustQ.parse_fragment!(:item, Rust.item(source))]
+  end
+
   defp type_items(_type), do: []
+
+  defp struct_field_source({name, %Type{} = type, :required}) do
+    ["    pub ", Atom.to_string(name), ": ", type.rust, ","]
+  end
+
+  defp struct_field_source({name, %Type{} = type, :optional}) do
+    ["    pub ", Atom.to_string(name), ": Option<", type.rust, ">,"]
+  end
 
   defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
 

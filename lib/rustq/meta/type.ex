@@ -41,6 +41,16 @@ defmodule RustQ.Meta.Type do
           error: error_type
         })
 
+      map_type?(ast) ->
+        fields = map_fields(ast)
+
+        rust =
+          if Enum.any?(fields, fn {_name, type, _presence} ->
+               String.contains?(type.rust, "'a")
+             end), do: "#{rust_name}<'a>", else: rust_name
+
+        type(:struct, rust, %{elixir_name: name, rust_name: rust_name, fields: fields})
+
       true ->
         type(:alias, rust_name, %{elixir_name: name, ast: ast})
     end
@@ -151,6 +161,19 @@ defmodule RustQ.Meta.Type do
 
   defp parse_external_type(_module, function, _args, _aliases),
     do: type(:type, Atom.to_string(function))
+
+  defp map_type?({:%{}, _, fields}) when is_list(fields), do: true
+  defp map_type?(_ast), do: false
+
+  defp map_fields({:%{}, _, fields}) do
+    Enum.map(fields, fn
+      {{:required, _, [name]}, ast} ->
+        {name, parse(ast, %{}), :required}
+
+      {{:optional, _, [name]}, ast} ->
+        {name, parse(ast, %{}), :optional}
+    end)
+  end
 
   defp union_members({:|, _, [left, right]}), do: union_members(left) ++ union_members(right)
   defp union_members(other), do: [other]
