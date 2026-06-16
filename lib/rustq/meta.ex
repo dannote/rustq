@@ -9,7 +9,7 @@ defmodule RustQ.Meta do
 
   alias RustQ.Meta.Lower
   alias RustQ.Meta.Type
-  alias RustQ.Rust
+  alias RustQ.Rust.AST
 
   defmacro __using__(_opts) do
     quote do
@@ -36,10 +36,14 @@ defmodule RustQ.Meta do
     defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
     specs = Module.get_attribute(env.module, :spec) |> List.wrap()
 
-    items = Enum.map(defs, &build_item(&1, specs))
-    source = Enum.map_join(items, "\n\n", &Rust.to_fragment/1)
+    asts = Enum.map(defs, &build_ast(&1, specs))
+    items = Enum.map(asts, &validate_item_ast/1)
+    source = Enum.map_join(asts, "\n\n", &AST.render_function/1)
 
     quote do
+      @doc false
+      def __rustq_asts__, do: unquote(Macro.escape(asts))
+
       @doc false
       def __rustq_items__, do: unquote(Macro.escape(items))
 
@@ -48,19 +52,26 @@ defmodule RustQ.Meta do
     end
   end
 
-  defp build_item({call_ast, body_ast}, specs) do
+  defp build_ast({call_ast, body_ast}, specs) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names))
 
     args = Enum.zip(arg_names, Enum.map(arg_types, & &1.rust))
-    body = Lower.function_body(body_ast, return_type)
+    body = Lower.function_ast(body_ast, return_type)
     lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
 
-    RustQ.parse_fragment!(
-      :item,
-      Rust.fn_(name, args: args, returns: return_type.rust, body: body, lifetime: lifetime)
-    )
+    %AST.Function{
+      name: name,
+      args: args,
+      returns: return_type.rust,
+      body: body,
+      lifetime: lifetime
+    }
+  end
+
+  defp validate_item_ast(%AST.Function{} = function) do
+    RustQ.parse_fragment!(:item, AST.render_function(function))
   end
 
   defp arg_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name

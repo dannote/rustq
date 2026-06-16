@@ -55,7 +55,9 @@ end
 2. Add `RustQ.Meta.defrust/2` and collect generated Rust items in a module
    attribute.
 3. Parse the preceding `@spec` AST for function args and return type.
-4. Lower a small valid-Elixir subset:
+4. Lower to a small Elixir-side Rust AST/IR (`RustQ.Rust.AST`) before rendering
+   at the final RustQ fragment-validation boundary.
+5. Lower a small valid-Elixir subset:
    - `x = expr` -> `let x = expr;`
    - final `:ok` in `R.nif_result(R.unit())` -> `Ok(())`
    - `{:ok, value}` -> `Ok(value)`
@@ -64,13 +66,15 @@ end
    - atoms, variables, tuples, numeric/string literals
    - aliases and remote calls
    - `ref/1`, `mut_ref/1`, `unwrap!/1`
-5. Provide `__rustq_items__/0` and `__rustq_source__/0` on modules using
-   `RustQ.Meta`.
-6. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
+6. Provide `__rustq_asts__/0`, `__rustq_items__/0`, and `__rustq_source__/0` on
+   modules using `RustQ.Meta`.
+7. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
    small assignment/body example.
 
 ## Later work
 
+- Native NIF backend that decodes `RustQ.Rust.AST` terms into `syn` nodes
+  directly, so string rendering is only a compatibility/debug path.
 - Full set-theoretic `@type` parsing for atom unions, tuples, maps, options,
   results, and Rustler decoder generation.
 - Mutability inference: upgrade `x = expr` to `let mut x = expr` when `mut_ref(x)`

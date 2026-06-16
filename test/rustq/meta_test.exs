@@ -53,6 +53,14 @@ defmodule RustQ.MetaTest do
     assert source =~ "canvas.draw_rect(&rect, &paint);"
   end
 
+  test "generated ASTs are retained before fragment validation" do
+    [draw_save, decode_mode, draw_rect] = Generated.__rustq_asts__()
+
+    assert %RustQ.Rust.AST.Function{name: :draw_save} = draw_save
+    assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
+    assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} = hd(draw_rect.body)
+  end
+
   test "generated items are validated Rust fragments" do
     assert Enum.all?(Generated.__rustq_items__(), &match?(%RustQ.Rust.Fragment{kind: :item}, &1))
   end
