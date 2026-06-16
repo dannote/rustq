@@ -175,6 +175,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       :decode_ast_use,
       :decode_ast_module,
       :decode_ast_const,
+      :decode_ast_static,
       :decode_ast_function,
       :decode_ast_struct,
       :decode_ast_macro_item,

@@ -43,6 +43,20 @@ pub(crate) fn parse_item_const(
     parse_syn(quote!(#vis const #name: #ty = #expr;))
 }
 
+pub(crate) fn parse_item_static(
+    name: syn::Ident,
+    ty: Type,
+    expr: Expr,
+    mutable: bool,
+    vis: syn::Visibility,
+) -> NifResult<syn::ItemStatic> {
+    if mutable {
+        parse_syn(quote!(#vis static mut #name: #ty = #expr;))
+    } else {
+        parse_syn(quote!(#vis static #name: #ty = #expr;))
+    }
+}
+
 pub(crate) fn parse_macro_item(source: String) -> NifResult<Item> {
     syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }

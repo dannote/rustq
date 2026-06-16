@@ -5,8 +5,8 @@ use quote::quote;
 use rustler::{Atom, Env, NifResult, Term};
 
 use syn::{
-    Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat,
-    Path, Stmt, Type, Variant,
+    Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStatic, ItemStruct,
+    ItemUse, Pat, Path, Stmt, Type, Variant,
 };
 
 pub(crate) mod atoms {
@@ -19,6 +19,7 @@ pub(crate) mod ast_modules {
     pub(crate) const USE: &str = "Elixir.RustQ.Rust.AST.Use";
     pub(crate) const MODULE: &str = "Elixir.RustQ.Rust.AST.Module";
     pub(crate) const CONST: &str = "Elixir.RustQ.Rust.AST.Const";
+    pub(crate) const STATIC: &str = "Elixir.RustQ.Rust.AST.Static";
     pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
     pub(crate) const MACRO_ITEM_CALL: &str = "Elixir.RustQ.Rust.AST.MacroItemCall";
     pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";
@@ -125,6 +126,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         ast_modules::USE => Ok(Item::Use(decode_ast_use(term)?)),
         ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
         ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
+        ast_modules::STATIC => Ok(Item::Static(decode_ast_static(term)?)),
         ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
         ast_modules::MACRO_ITEM_CALL => decode_ast_macro_item_call(term),
         ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
@@ -238,6 +240,16 @@ pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     let vis = super::decode_vis(required_field(term, "vis")?)?;
     super::parse_item_const(name, ty, expr, vis)
+}
+
+pub(crate) fn decode_ast_static<'a>(term: Term<'a>) -> NifResult<ItemStatic> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Static")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let ty = super::decode_type(required_field(term, "type")?)?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let mutable = required_field(term, "mutable")?.decode()?;
+    let vis = super::decode_vis(required_field(term, "vis")?)?;
+    super::parse_item_static(name, ty, expr, mutable, vis)
 }
 
 pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {

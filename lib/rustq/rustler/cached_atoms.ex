@@ -4,20 +4,12 @@ defmodule RustQ.Rustler.CachedAtoms do
   use RustQ.Sigil
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
 
   @helpers_template ~R"""
   fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom {
       *cell.get_or_init(|| Atom::from_term(name.encode(env)).unwrap())
-  }
-  """
-
-  @static_template ~R"""
-  static __rq_STATIC: OnceLock<Atom> = OnceLock::new();
-  """
-
-  @fn_template ~R"""
-  fn __rq_fn_name(env: Env) -> Atom {
-      cached_atom(env, &__rq_STATIC, __rq_atom_name!())
   }
   """
 
@@ -40,15 +32,26 @@ defmodule RustQ.Rustler.CachedAtoms do
   end
 
   defp atom_items({name, value}) do
-    bindings = [
-      STATIC: static_name(name),
-      fn_name: "#{name}_atom",
-      atom_name: Rust.expr(Rust.literal(value))
-    ]
+    static_name = static_name(name)
 
     [
-      Rust.item(RustQ.render!(@static_template, "rustler_cached_atom_static.rs", bind: bindings)),
-      Rust.item(RustQ.render!(@fn_template, "rustler_cached_atom_fn.rs", bind: bindings))
+      rust_item(
+        A.static(String.to_atom(static_name), "OnceLock<Atom>", A.path_call([:OnceLock, :new]))
+      ),
+      rust_item(%AST.Function{
+        name: String.to_atom("#{name}_atom"),
+        args: [A.function_arg(:env, "Env")],
+        returns: "Atom",
+        body: [
+          A.return_stmt(
+            A.call(:cached_atom, [
+              A.var(:env),
+              A.ref(A.var(String.to_atom(static_name))),
+              A.lit(value)
+            ])
+          )
+        ]
+      })
     ]
   end
 
@@ -57,6 +60,8 @@ defmodule RustQ.Rustler.CachedAtoms do
 
   defp atom_spec({name, value}) when (is_atom(name) or is_binary(name)) and is_binary(value),
     do: {name, value}
+
+  defp rust_item(ast), do: Rust.item(AST.render_item_native(ast))
 
   defp static_name(name) do
     name

@@ -68,6 +68,15 @@ defmodule RustQ.Rust.AST.Builder do
   def const(name, type, expression, opts \\ []),
     do: %AST.Const{name: name, type: type, expr: expr(expression), vis: Keyword.get(opts, :vis)}
 
+  def static(name, type, expression, opts \\ []),
+    do: %AST.Static{
+      name: name,
+      type: type,
+      expr: expr(expression),
+      mutable: Keyword.get(opts, :mutable, false),
+      vis: Keyword.get(opts, :vis)
+    }
+
   def function_arg(%AST.FunctionArg{} = arg), do: arg
   def function_arg({name, type}), do: %AST.FunctionArg{name: name, type: type}
   def function_arg(name, type), do: %AST.FunctionArg{name: name, type: type}
@@ -191,6 +200,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Use,
              AST.Module,
              AST.Const,
+             AST.Static,
              AST.MacroItem,
              AST.MacroItemCall,
              AST.Var,

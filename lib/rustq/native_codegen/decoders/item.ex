@@ -44,6 +44,17 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_const(name, ty, expr, vis)
   end
 
+  @spec decode_ast_static(term()) :: R.nif_result(ItemStatic.t())
+  defrust decode_ast_static(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Static"))
+    name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
+    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
+    vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
+    Super.parse_item_static(name, ty, expr, mutable, vis)
+  end
+
   @spec decode_ast_function(term()) :: R.nif_result(ItemFn.t())
   defrust decode_ast_function(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Function"))

@@ -11,6 +11,7 @@ defmodule RustQ.Rust.AST do
           Use.t()
           | Module.t()
           | Const.t()
+          | Static.t()
           | MacroItem.t()
           | MacroItemCall.t()
           | Function.t()
@@ -97,6 +98,19 @@ defmodule RustQ.Rust.AST do
           name: atom(),
           type: RustQ.Rust.AST.type() | String.t(),
           expr: RustQ.Rust.AST.expr(),
+          vis: RustQ.Rust.AST.vis()
+        }
+      )
+  )
+
+  defnode(Static, :item, [:name, :type, :expr, mutable: false, vis: nil],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          type: RustQ.Rust.AST.type() | String.t(),
+          expr: RustQ.Rust.AST.expr(),
+          mutable: boolean(),
           vis: RustQ.Rust.AST.vis()
         }
       )
@@ -368,6 +382,7 @@ defmodule RustQ.Rust.AST do
       Use,
       Module,
       Const,
+      Static,
       MacroItem,
       MacroItemCall,
       FunctionArg,
@@ -432,6 +447,7 @@ defmodule RustQ.Rust.AST do
   def render_item_native(%Use{} = item), do: render_native(item, &render_use/1)
   def render_item_native(%Module{} = item), do: render_native(item, &render_module/1)
   def render_item_native(%Const{} = item), do: render_native(item, &render_const/1)
+  def render_item_native(%Static{} = item), do: render_native(item, &render_static/1)
   def render_item_native(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
 
   def render_item_native(%MacroItemCall{} = item),
@@ -500,6 +516,22 @@ defmodule RustQ.Rust.AST do
       render_type(const.type),
       " = ",
       render_expr(const.expr),
+      ";"
+    ]
+  end
+
+  def render_static(%Static{} = static) do
+    mutable = if static.mutable, do: "mut ", else: ""
+
+    [
+      render_vis(static.vis),
+      "static ",
+      mutable,
+      Atom.to_string(static.name),
+      ": ",
+      render_type(static.type),
+      " = ",
+      render_expr(static.expr),
       ";"
     ]
   end

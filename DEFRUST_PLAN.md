@@ -370,6 +370,9 @@ Recently completed:
   splice fragment, proving a narrow migration path for older Rustler helpers.
 - `RustQ.Rustler.AtomDecoder` now uses RustQ AST for the default BadArg decoder
   path, falling back to its legacy template only for custom unknown-arm source.
+- RustQ AST now models `static` items, including native decoder support, and
+  `RustQ.Rustler.CachedAtoms` uses that AST for its per-atom statics/functions
+  while retaining the shared helper template.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

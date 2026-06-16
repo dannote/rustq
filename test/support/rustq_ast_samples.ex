@@ -31,6 +31,7 @@ defmodule RustQ.ASTSamples do
   end
 
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
+  defp base_fragment(%AST.Static{name: name}), do: "static #{name}"
   defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
   defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"
   defp base_fragment(%AST.Function{name: name}), do: "fn #{name}"
@@ -95,6 +96,14 @@ defmodule RustQ.ASTSamples do
   def sample_for(:use), do: %AST.Use{group: {[:std], [:fmt, :io]}}
   def sample_for(:module), do: %AST.Module{name: :sample, items: [sample_for(:const)]}
   def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}
+
+  def sample_for(:static),
+    do: %AST.Static{
+      name: :VALUE_STATIC,
+      type: A.type_path(:u32),
+      expr: A.lit(1)
+    }
+
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
   def sample_for(:macro_item_call), do: A.macro_item_call([:rustler, :atoms], [:ok, :error])
   def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")

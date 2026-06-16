@@ -73,6 +73,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp item_decoder(:use), do: {:Use, :decode_ast_use}
   defp item_decoder(:module), do: {:Mod, :decode_ast_module}
   defp item_decoder(:const), do: {:Const, :decode_ast_const}
+  defp item_decoder(:static), do: {:Static, :decode_ast_static}
   defp item_decoder(:function), do: {:Fn, :decode_ast_function}
   defp item_decoder(:struct), do: {:Struct, :decode_ast_struct}
   defp item_decoder(:enum), do: {:Enum, :decode_ast_enum}
