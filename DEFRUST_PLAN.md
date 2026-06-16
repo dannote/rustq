@@ -105,8 +105,8 @@ statement/expression/pattern decoders.
 | Item decoders | Mostly dogfooded | `Use`, `Module`, `Const`, `Struct`, `StructField`, `Enum`, `EnumVariant`, and `MacroItem` extraction lives in `defrust`; parsing remains primitive. |
 | Type dispatch | Generated AST builder | `decode_ast_type` routes dogfooded and primitive decoders. |
 | Type decoders | Dogfooded for current AST nodes | `Path`, `Ref`, `Unit`, `Option`, `Result`, `NifResult`, and `Vec` are dogfooded; parsing remains primitive. |
-| Stmt/Expr/Pat/Arm decoders | Dogfooded | Raw token escapes remain only where semantic helpers or direct syn construction are not available yet. |
-| Primitive bridge | Handwritten Rust | Rustler decode details, `syn` parsing, list decoders, and temporary parse helpers. |
+| Stmt/Expr/Pat/Arm decoders | Dogfooded | Simple expr/pat/arm shapes call named primitive constructors instead of inline raw token escapes. |
+| Primitive bridge | Handwritten Rust | Rustler decode details, `syn` parsing, list decoders, direct constructor helpers, and temporary parse helpers. |
 | Function decoder | Dogfooded extraction with primitive assembly | `decode_ast_function` field extraction lives in `defrust`; args, lifetimes, block assembly, and parsing remain primitive. |
 
 ## Later work
