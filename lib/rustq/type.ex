@@ -59,6 +59,9 @@ defmodule RustQ.Type do
   @typedoc "Rust `syn::Stmt` imported as `Stmt` in native codegen."
   @type stmt :: term()
 
+  @typedoc "Rust `syn::Path` imported as `Path` in native codegen."
+  @type path :: term()
+
   @typedoc "Rust shared reference `&T`."
   @type ref(t) :: t
 
@@ -89,6 +92,7 @@ defmodule RustQ.Type do
   def expr, do: type_only!()
   def pat, do: type_only!()
   def stmt, do: type_only!()
+  def path, do: type_only!()
   def term, do: type_only!()
   def u8, do: type_only!()
   def u32, do: type_only!()

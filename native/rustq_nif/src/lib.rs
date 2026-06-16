@@ -326,6 +326,10 @@ fn format_ident_value(name: String) -> proc_macro2::Ident {
     format_ident!("{}", name)
 }
 
+fn parse_ast_path(term: Term) -> NifResult<syn::Path> {
+    parse_path(&path_parts(term.map_get(atom(term.get_env(), "parts")?)?)?)
+}
+
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     if let Ok(value) = term.decode::<String>() {
         return parse_pat(quote!(#value));

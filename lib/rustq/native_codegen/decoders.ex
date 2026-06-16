@@ -81,6 +81,47 @@ defmodule RustQ.NativeCodegen.Decoders do
     quote_expr!("atoms::#name()")
   end
 
+  @spec decode_expr_field(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_field(term) do
+    receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
+    field = Super.format_ident_value(unwrap!(atom_key(term, "field")))
+    quote_expr!("#receiver.#field")
+  end
+
+  @spec decode_expr_path_call(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_path_call(term) do
+    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
+    quote_expr!("#path(#(#args),*)")
+  end
+
+  @spec decode_expr_method_call(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_method_call(term) do
+    receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
+    method = Super.format_ident_value(unwrap!(atom_key(term, "method")))
+    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
+    quote_expr!("#receiver.#method(#(#args),*)")
+  end
+
+  @spec decode_expr_local_call(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_local_call(term) do
+    name = unwrap!(atom_key(term, "name"))
+    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
+    Super.parse_local_call(name, args)
+  end
+
+  @spec decode_expr_ref(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_ref(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
+
+    if mutable do
+      quote_expr!("&mut #expr")
+    else
+      quote_expr!("&#expr")
+    end
+  end
+
   @spec decode_expr_none(term()) :: R.nif_result(R.expr())
   defrust decode_expr_none(_term) do
     quote_expr!("None")

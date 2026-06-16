@@ -442,71 +442,6 @@ defmodule RustQ.NativeCodegen do
           ])
         )
       end,
-      function :decode_expr_field,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(:receiver, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")])))
-
-        A.let(
-          :field,
-          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "field")?|)
-        )
-
-        A.return(
-          A.path_call([:super, :parse_expr_tokens], [
-            A.token_macro(:quote, "#receiver.#field")
-          ])
-        )
-      end,
-      function :decode_expr_path_call,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(
-          :path,
-          A.try(
-            A.path_call([:super, :parse_path], [
-              A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
-            ])
-          )
-        )
-
-        A.let(:args, A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")])))
-
-        A.return(
-          A.path_call([:super, :parse_expr_tokens], [
-            A.token_macro(:quote, "#path(#(#args),*)")
-          ])
-        )
-      end,
-      function :decode_expr_method_call,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(:receiver, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")])))
-
-        A.let(
-          :method,
-          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "method")?|)
-        )
-
-        A.let(:args, A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")])))
-
-        A.return(
-          A.path_call([:super, :parse_expr_tokens], [
-            A.token_macro(:quote, "#receiver.#method(#(#args),*)")
-          ])
-        )
-      end,
-      function :decode_expr_local_call,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(:name, A.try(A.path_call([:super, :atom_key], [:term, "name"])))
-        A.let(:args, A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")])))
-        A.return(A.path_call([:super, :parse_local_call], [:name, :args]))
-      end,
       function :decode_expr_struct_literal,
         vis: :crate,
         args: [term: "Term"],
@@ -522,29 +457,6 @@ defmodule RustQ.NativeCodegen do
           A.path_call([:super, :parse_expr_tokens], [
             A.token_macro(:quote, "#path { #(#fields),* }")
           ])
-        )
-      end,
-      function :decode_expr_ref,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-        A.let(:mutable, A.try(A.method(map_get(:term, "mutable"), :decode)))
-
-        A.return(
-          A.if_expr(
-            :mutable,
-            [
-              A.return(
-                A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "&mut #expr")])
-              )
-            ],
-            [
-              A.return(
-                A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "&#expr")])
-              )
-            ]
-          )
         )
       end,
       function :decode_expr_ok,
