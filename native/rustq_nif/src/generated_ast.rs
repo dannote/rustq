@@ -53,7 +53,6 @@ pub(crate) mod ast_modules {
     pub(crate) const MATCH: &str = "Elixir.RustQ.Rust.AST.Match";
     pub(crate) const IF: &str = "Elixir.RustQ.Rust.AST.If";
     pub(crate) const BINARY_OP: &str = "Elixir.RustQ.Rust.AST.BinaryOp";
-    pub(crate) const ARM: &str = "Elixir.RustQ.Rust.AST.Arm";
     pub(crate) const PAT_VAR: &str = "Elixir.RustQ.Rust.AST.PatVar";
     pub(crate) const PAT_WILDCARD: &str = "Elixir.RustQ.Rust.AST.PatWildcard";
     pub(crate) const PAT_PATH: &str = "Elixir.RustQ.Rust.AST.PatPath";

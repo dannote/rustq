@@ -219,6 +219,8 @@ defmodule RustQ.Meta.Lower do
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
   defp lower_expr({:expr!, _, [expression]}), do: semantic_expr(expression)
+  defp lower_expr({:pat!, _, [pattern]}), do: semantic_pat(pattern)
+  defp lower_expr({:stmt!, _, [expression]}), do: semantic_stmt(expression)
 
   defp lower_expr({:raw_expr!, _, [tokens]}),
     do: %AST.PathCall{
@@ -318,9 +320,36 @@ defmodule RustQ.Meta.Lower do
   defp semantic_expr({:{}, _, [:error, value]}),
     do: raw_expr("Err(#{semantic_interpolation(value)})")
 
+  defp semantic_expr({:some, _, [value]}), do: raw_expr("Some(#{semantic_interpolation(value)})")
+  defp semantic_expr({:none, _, []}), do: raw_expr("None")
+  defp semantic_expr({:err, _, [value]}), do: raw_expr("Err(#{semantic_interpolation(value)})")
+  defp semantic_expr({:ref, _, [value]}), do: raw_expr("&#{semantic_interpolation(value)}")
+
+  defp semantic_expr({:mut_ref, _, [value]}),
+    do: raw_expr("&mut #{semantic_interpolation(value)}")
+
+  defp semantic_expr({:unwrap!, _, [value]}), do: raw_expr("#{semantic_interpolation(value)}?")
   defp semantic_expr(nil), do: raw_expr("None")
 
   defp semantic_expr(other), do: raw_expr(AST.render_expr(lower_expr(other)))
+
+  defp semantic_pat({:some, _, [pattern]}),
+    do: raw_pat("Some(#{semantic_interpolation(pattern)})")
+
+  defp semantic_pat({:ok, pattern}), do: raw_pat("Ok(#{semantic_interpolation(pattern)})")
+  defp semantic_pat({:error, pattern}), do: raw_pat("Err(#{semantic_interpolation(pattern)})")
+
+  defp semantic_pat({:{}, _, [:ok, pattern]}),
+    do: raw_pat("Ok(#{semantic_interpolation(pattern)})")
+
+  defp semantic_pat({:{}, _, [:error, pattern]}),
+    do: raw_pat("Err(#{semantic_interpolation(pattern)})")
+
+  defp semantic_pat(nil), do: raw_pat("None")
+  defp semantic_pat(:_), do: raw_pat("_")
+  defp semantic_pat(other), do: raw_pat(semantic_interpolation(other))
+
+  defp semantic_stmt(expression), do: raw_stmt("#{semantic_interpolation(expression)};")
 
   defp semantic_interpolation({name, _, context}) when is_atom(name) and is_atom(context),
     do: "##{name}"
@@ -332,6 +361,14 @@ defmodule RustQ.Meta.Lower do
       path: %AST.Path{parts: [:super, :parse_expr_tokens]},
       args: [quote_tokens(tokens)]
     }
+  end
+
+  defp raw_pat(tokens) do
+    %AST.PathCall{path: %AST.Path{parts: [:super, :parse_pat]}, args: [quote_tokens(tokens)]}
+  end
+
+  defp raw_stmt(tokens) do
+    %AST.PathCall{path: %AST.Path{parts: [:super, :parse_stmt]}, args: [quote_tokens(tokens)]}
   end
 
   defp quote_tokens(tokens) when is_binary(tokens),

@@ -13,12 +13,12 @@ defmodule RustQ.NativeCodegen.Decoders do
 
   @spec decode_pat_wildcard(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_wildcard(_term) do
-    raw_pat!("_")
+    pat!(:_)
   end
 
   @spec decode_pat_none(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_none(_term) do
-    raw_pat!("None")
+    pat!(nil)
   end
 
   @spec decode_pat_path(term()) :: R.nif_result(Pat.t())
@@ -36,25 +36,25 @@ defmodule RustQ.NativeCodegen.Decoders do
   @spec decode_pat_some(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_some(term) do
     pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
-    raw_pat!("Some(#pat)")
+    pat!(some(pat))
   end
 
   @spec decode_pat_ok(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_ok(term) do
     pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
-    raw_pat!("Ok(#pat)")
+    pat!({:ok, pat})
   end
 
   @spec decode_pat_err(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_err(term) do
     pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
-    raw_pat!("Err(#pat)")
+    pat!({:error, pat})
   end
 
   @spec decode_stmt_expr_stmt(term()) :: R.nif_result(Stmt.t())
   defrust decode_stmt_expr_stmt(term) do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
-    raw_stmt!("#expr;")
+    stmt!(expr)
   end
 
   @spec decode_stmt_return(term()) :: R.nif_result(Stmt.t())
@@ -140,9 +140,9 @@ defmodule RustQ.NativeCodegen.Decoders do
     mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
 
     if mutable do
-      raw_expr!("&mut #expr")
+      expr!(mut_ref(expr))
     else
-      raw_expr!("&#expr")
+      expr!(ref(expr))
     end
   end
 
@@ -237,7 +237,7 @@ defmodule RustQ.NativeCodegen.Decoders do
 
   @spec decode_expr_none(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_none(_term) do
-    raw_expr!("None")
+    expr!(nil)
   end
 
   @spec decode_expr_literal(term()) :: R.nif_result(Expr.t())
@@ -248,19 +248,19 @@ defmodule RustQ.NativeCodegen.Decoders do
   @spec decode_expr_try(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_try(term) do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
-    raw_expr!("#expr?")
+    expr!(unwrap!(expr))
   end
 
   @spec decode_expr_some(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_some(term) do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
-    raw_expr!("Some(#expr)")
+    expr!(some(expr))
   end
 
   @spec decode_expr_err(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_err(term) do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
-    raw_expr!("Err(#expr)")
+    expr!(err(expr))
   end
 
   def asts do

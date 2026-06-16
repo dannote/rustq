@@ -7,6 +7,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "use rustler::{Atom, Env, NifResult, Term};"
     assert source =~ "pub(crate) mod atoms"
     assert source =~ ~s|pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";|
+    refute source =~ ~s|pub(crate) const ARM: &str = "Elixir.RustQ.Rust.AST.Arm";|
     assert source =~ "pub(crate) fn atom(env: Env, name: &str) -> NifResult<Atom>"
     assert source =~ "pub(crate) fn required_field<'a>"
     assert source =~ "pub(crate) fn optional_map_get<'a>"
