@@ -383,8 +383,9 @@ defmodule RustQ.NativeCodegen do
     end
   end
 
-  defp expr_decoder_path(name) when name in [:var, :path, :atom_value, :none],
-    do: [expr_decoder(name)]
+  defp expr_decoder_path(name)
+       when name in [:var, :path, :try, :tuple, :some, :err, :atom_value, :none],
+       do: [expr_decoder(name)]
 
   defp expr_decoder_path(_name), do: [:super, :decode_expr_manual]
 
@@ -553,6 +554,26 @@ defmodule RustQ.NativeCodegen do
           A.block do
             A.return(A.path_call([:super, :parse_expr], ["None"]))
           end
+      },
+      unary_expr_decoder(:decode_expr_try, "expr", "#expr?"),
+      unary_expr_decoder(:decode_expr_some, "expr", "Some(#expr)"),
+      unary_expr_decoder(:decode_expr_err, "expr", "Err(#expr)"),
+      %AST.Function{
+        name: :decode_expr_tuple,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :values,
+              A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "values")]))
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "(#(#values),*)")])
+            )
+          end
       }
     ]
   end
@@ -567,6 +588,20 @@ defmodule RustQ.NativeCodegen do
         A.block do
           A.let(:pat, A.try(A.path_call([:super, :decode_pat], [map_get(:term, field)])))
           A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, tokens)]))
+        end
+    }
+  end
+
+  defp unary_expr_decoder(name, field, tokens) do
+    %AST.Function{
+      name: name,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Expr>",
+      body:
+        A.block do
+          A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, field)])))
+          A.return(A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, tokens)]))
         end
     }
   end

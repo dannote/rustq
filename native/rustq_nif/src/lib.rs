@@ -655,6 +655,10 @@ fn parse_expr(source: &str) -> NifResult<Expr> {
     syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
 }
 
+fn parse_expr_tokens(tokens: proc_macro2::TokenStream) -> NifResult<Expr> {
+    syn::parse2(tokens).map_err(|_| rustler::Error::BadArg)
+}
+
 struct Context {
     bindings: HashMap<String, String>,
     splices: HashMap<String, Vec<String>>,

@@ -172,15 +172,15 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::STRUCT_LITERAL => super::decode_expr_manual(term),
         ast_modules::LOCAL_CALL => super::decode_expr_manual(term),
         ast_modules::REF => super::decode_expr_manual(term),
-        ast_modules::TRY => super::decode_expr_manual(term),
-        ast_modules::TUPLE => super::decode_expr_manual(term),
+        ast_modules::TRY => decode_expr_try(term),
+        ast_modules::TUPLE => decode_expr_tuple(term),
         ast_modules::LITERAL => super::decode_expr_manual(term),
         ast_modules::TOKEN_MACRO => super::decode_expr_manual(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
         ast_modules::NONE => decode_expr_none(term),
-        ast_modules::SOME => super::decode_expr_manual(term),
+        ast_modules::SOME => decode_expr_some(term),
         ast_modules::OK => super::decode_expr_manual(term),
-        ast_modules::ERR => super::decode_expr_manual(term),
+        ast_modules::ERR => decode_expr_err(term),
         ast_modules::NIF_RAISE_ATOM => super::decode_expr_manual(term),
         ast_modules::MATCH => super::decode_expr_manual(term),
         ast_modules::IF => super::decode_expr_manual(term),
@@ -257,4 +257,24 @@ pub(crate) fn decode_expr_atom_value(term: Term) -> NifResult<Expr> {
 
 pub(crate) fn decode_expr_none(_term: Term) -> NifResult<Expr> {
     super::parse_expr("None")
+}
+
+pub(crate) fn decode_expr_try(term: Term) -> NifResult<Expr> {
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    super::parse_expr_tokens(quote!(# expr ?))
+}
+
+pub(crate) fn decode_expr_some(term: Term) -> NifResult<Expr> {
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    super::parse_expr_tokens(quote!(Some(# expr)))
+}
+
+pub(crate) fn decode_expr_err(term: Term) -> NifResult<Expr> {
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    super::parse_expr_tokens(quote!(Err(# expr)))
+}
+
+pub(crate) fn decode_expr_tuple(term: Term) -> NifResult<Expr> {
+    let values = super::decode_expr_list(term.map_get(super::atom(term.get_env(), "values")?)?)?;
+    super::parse_expr_tokens(quote!((# (# values),*)))
 }
