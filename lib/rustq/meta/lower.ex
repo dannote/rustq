@@ -4,27 +4,27 @@ defmodule RustQ.Meta.Lower do
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
 
-  @spec function_ast(Macro.t(), Type.t()) :: [struct()]
-  def function_ast(body_ast, return_type) do
+  @spec function_ast(Macro.t(), Type.t(), map()) :: [struct()]
+  def function_ast(body_ast, return_type, vars \\ %{}) do
     body =
       body_ast
       |> block_expressions()
-      |> lower_block(return_type)
+      |> lower_block(return_type, vars)
 
     infer_mutability(body)
   end
 
-  @spec function_body(Macro.t(), Type.t()) :: String.t()
-  def function_body(body_ast, return_type) do
+  @spec function_body(Macro.t(), Type.t(), map()) :: String.t()
+  def function_body(body_ast, return_type, vars \\ %{}) do
     body_ast
-    |> function_ast(return_type)
+    |> function_ast(return_type, vars)
     |> Enum.map(&AST.render_stmt/1)
     |> Enum.join("\n")
   end
 
-  defp lower_block(expressions, return_type) do
+  defp lower_block(expressions, return_type, vars) do
     {statements, final} = split_final(expressions)
-    Enum.map(statements, &lower_statement/1) ++ [lower_return(final, return_type)]
+    Enum.map(statements, &lower_statement(&1, vars)) ++ [lower_return(final, return_type, vars)]
   end
 
   defp split_final([]), do: {[], :ok}
@@ -33,71 +33,72 @@ defmodule RustQ.Meta.Lower do
   defp block_expressions({:__block__, _, expressions}), do: expressions
   defp block_expressions(expression), do: [expression]
 
-  defp lower_statement({:=, _, [pattern, expression]}) do
+  defp lower_statement({:=, _, [pattern, expression]}, _vars) do
     %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression)}
   end
 
-  defp lower_statement({:case, _, [expression, [do: clauses]]}) do
-    %AST.ExprStmt{expr: lower_case(expression, clauses, :statement)}
+  defp lower_statement({:case, _, [expression, [do: clauses]]}, vars) do
+    %AST.ExprStmt{expr: lower_case(expression, clauses, :statement, vars)}
   end
 
-  defp lower_statement(:ok), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
-  defp lower_statement(nil), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
-  defp lower_statement(expression), do: %AST.ExprStmt{expr: lower_expr(expression)}
+  defp lower_statement(:ok, _vars), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
+  defp lower_statement(nil, _vars), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
+  defp lower_statement(expression, _vars), do: %AST.ExprStmt{expr: lower_expr(expression)}
 
-  defp lower_return({:case, _, [expression, [do: clauses]]}, return_type) do
-    %AST.Return{expr: lower_case(expression, clauses, {:return, return_type})}
+  defp lower_return({:case, _, [expression, [do: clauses]]}, return_type, vars) do
+    %AST.Return{expr: lower_case(expression, clauses, {:return, return_type}, vars)}
   end
 
-  defp lower_return(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}),
+  defp lower_return(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}, _vars),
     do: %AST.Return{expr: %AST.Ok{}}
 
-  defp lower_return(:ok, _return_type), do: %AST.Return{expr: %AST.Tuple{values: []}}
-  defp lower_return(nil, %Type{kind: :option}), do: %AST.Return{expr: %AST.None{}}
+  defp lower_return(:ok, _return_type, _vars), do: %AST.Return{expr: %AST.Tuple{values: []}}
+  defp lower_return(nil, %Type{kind: :option}, _vars), do: %AST.Return{expr: %AST.None{}}
 
-  defp lower_return({:ok, value}, %Type{kind: kind}) when kind in [:result, :nif_result] do
+  defp lower_return({:ok, value}, %Type{kind: kind}, _vars) when kind in [:result, :nif_result] do
     %AST.Return{expr: %AST.Ok{expr: lower_expr(value)}}
   end
 
-  defp lower_return({:error, value}, %Type{kind: :nif_result}) do
+  defp lower_return({:error, value}, %Type{kind: :nif_result}, _vars) do
     %AST.Return{expr: %AST.Err{expr: lower_nif_error(value)}}
   end
 
-  defp lower_return({:error, value}, %Type{kind: :result}) do
+  defp lower_return({:error, value}, %Type{kind: :result}, _vars) do
     %AST.Return{expr: %AST.Err{expr: lower_expr(value)}}
   end
 
-  defp lower_return(expression, %Type{kind: :option}) do
+  defp lower_return(expression, %Type{kind: :option}, _vars) do
     %AST.Return{expr: %AST.Some{expr: lower_expr(expression)}}
   end
 
-  defp lower_return(expression, _return_type), do: %AST.Return{expr: lower_expr(expression)}
+  defp lower_return(expression, _return_type, _vars),
+    do: %AST.Return{expr: lower_expr(expression)}
 
-  defp lower_case(expression, clauses, context) do
-    option_case? = Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> pattern == nil end)
+  defp lower_case(expression, clauses, context, vars) do
+    case_type = infer_expr_type(expression, vars)
 
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
         %AST.Arm{
-          pattern: lower_match_pattern(pattern, option_case?),
-          body: lower_clause_body(body, context)
+          pattern: lower_match_pattern(pattern, case_type),
+          body: lower_clause_body(body, context, vars)
         }
       end)
 
     %AST.Match{expr: lower_expr(expression), arms: arms}
   end
 
-  defp lower_clause_body(body, :statement) do
+  defp lower_clause_body(body, :statement, vars) do
     body
     |> block_expressions()
-    |> Enum.map(&lower_statement/1)
+    |> Enum.map(&lower_statement(&1, vars))
     |> reject_unit_statements()
   end
 
-  defp lower_clause_body(body, {:return, return_type}) do
+  defp lower_clause_body(body, {:return, return_type}, vars) do
     body
     |> block_expressions()
-    |> lower_block(return_type)
+    |> lower_block(return_type, vars)
   end
 
   defp reject_unit_statements(statements) do
@@ -114,23 +115,28 @@ defmodule RustQ.Meta.Lower do
     raise ArgumentError, "unsupported defrust binding pattern: #{Macro.to_string(other)}"
   end
 
-  defp lower_match_pattern(nil, _option_case?), do: %AST.PatNone{}
-  defp lower_match_pattern({:_, _, _}, _option_case?), do: %AST.PatWildcard{}
+  defp lower_match_pattern(nil, %Type{kind: :option}), do: %AST.PatNone{}
+  defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
+  defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
 
-  defp lower_match_pattern({name, _, context}, true) when is_atom(name) and is_atom(context),
-    do: %AST.PatSome{pattern: %AST.PatVar{name: name}}
+  defp lower_match_pattern({name, _, context}, %Type{kind: :option})
+       when is_atom(name) and is_atom(context),
+       do: %AST.PatSome{pattern: %AST.PatVar{name: name}}
 
-  defp lower_match_pattern({name, _, context}, false) when is_atom(name) and is_atom(context),
-    do: %AST.PatVar{name: name}
+  defp lower_match_pattern({name, _, context}, _case_type)
+       when is_atom(name) and is_atom(context),
+       do: %AST.PatVar{name: name}
 
-  defp lower_match_pattern(atom, _option_case?) when is_atom(atom),
+  defp lower_match_pattern(atom, %Type{kind: kind}) when is_atom(atom) and kind in [:atom, :enum],
     do: %AST.PatAtomGuard{name: atom}
 
-  defp lower_match_pattern({:{}, _, values}, _option_case?) do
+  defp lower_match_pattern(atom, _case_type) when is_atom(atom), do: %AST.PatAtomGuard{name: atom}
+
+  defp lower_match_pattern({:{}, _, values}, _case_type) do
     %AST.PatTuple{patterns: Enum.map(values, &lower_tuple_pattern/1)}
   end
 
-  defp lower_match_pattern(other, _option_case?) do
+  defp lower_match_pattern(other, _case_type) do
     raise ArgumentError, "unsupported defrust match pattern: #{Macro.to_string(other)}"
   end
 
@@ -199,6 +205,11 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
+
+  defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
+    do: Map.get(vars, name)
+
+  defp infer_expr_type(_expression, _vars), do: nil
 
   defp infer_mutability(body) do
     mutable_vars = body |> collect_mut_refs() |> MapSet.new()

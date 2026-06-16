@@ -23,12 +23,22 @@ defmodule RustQ.MetaTest do
       end
     end
 
-    @spec draw_rect(R.ref(Canvas.t()), RectOpts.t(), R.term()) :: R.nif_result(R.unit())
+    @spec draw_rect(R.ref(Canvas.t()), RectOpts.t(), term()) :: R.nif_result(R.unit())
     defrust draw_rect(canvas, opts, raw_opts) do
       rect = Rect.from_xywh(opts.x, opts.y, opts.width, opts.height)
       paint = unwrap!(decode_paint(opts.fill))
       unwrap!(apply_blend_mode(mut_ref(paint), raw_opts))
       canvas.draw_rect(ref(rect), ref(paint))
+      :ok
+    end
+
+    @spec maybe_save(R.option(R.ref(Canvas.t()))) :: R.nif_result(R.unit())
+    defrust maybe_save(canvas) do
+      case canvas do
+        nil -> :ok
+        canvas -> canvas.save()
+      end
+
       :ok
     end
   end
@@ -56,6 +66,9 @@ defmodule RustQ.MetaTest do
     assert source =~ "let mut paint = decode_paint(opts.fill)?;"
     assert source =~ "apply_blend_mode(&mut paint, raw_opts)?;"
     assert source =~ "canvas.draw_rect(&rect, &paint);"
+    assert source =~ "fn maybe_save(canvas: Option<&Canvas>) -> NifResult<()>"
+    assert source =~ "None => {}"
+    assert source =~ "Some(canvas) => {"
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
@@ -72,7 +85,7 @@ defmodule RustQ.MetaTest do
   end
 
   test "generated ASTs are retained before fragment validation" do
-    [draw_save, decode_mode, draw_rect] = Generated.__rustq_asts__()
+    [draw_save, decode_mode, draw_rect, maybe_save] = Generated.__rustq_asts__()
 
     assert %RustQ.Rust.AST.Function{name: :draw_save} = draw_save
     assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
@@ -85,6 +98,15 @@ defmodule RustQ.MetaTest do
                &1
              )
            )
+
+    assert %RustQ.Rust.AST.ExprStmt{
+             expr: %RustQ.Rust.AST.Match{
+               arms: [
+                 %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatNone{}},
+                 %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatSome{}}
+               ]
+             }
+           } = hd(maybe_save.body)
   end
 
   test "native AST renderer emits Rust through syn" do

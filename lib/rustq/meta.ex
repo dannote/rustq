@@ -71,7 +71,7 @@ defmodule RustQ.Meta do
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
 
     args = Enum.zip(arg_names, Enum.map(arg_types, & &1.rust))
-    body = Lower.function_ast(body_ast, return_type)
+    body = Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)))
     lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
 
     %AST.Function{
