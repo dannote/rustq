@@ -229,11 +229,9 @@ defmodule RustQ.NativeCodegen.Decoders do
   defrust decode_expr_ok(term) do
     optional_expr = unwrap!(Super.decode_optional_expr_field(term, "expr"))
 
-    if optional_expr.is_none() do
-      quote_expr!("Ok(())")
-    else
-      expr = optional_expr.unwrap()
-      quote_expr!("Ok(#expr)")
+    case optional_expr do
+      nil -> quote_expr!("Ok(())")
+      expr -> quote_expr!("Ok(#expr)")
     end
   end
 

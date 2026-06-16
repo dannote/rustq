@@ -83,7 +83,7 @@ defmodule RustQ.Meta.Lower do
     do: %AST.Return{expr: lower_expr(expression)}
 
   defp lower_case(expression, clauses, context, vars) do
-    case_type = infer_expr_type(expression, vars)
+    case_type = infer_expr_type(expression, vars) || infer_case_type_from_patterns(clauses)
 
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
@@ -124,6 +124,12 @@ defmodule RustQ.Meta.Lower do
     body
     |> block_expressions()
     |> lower_block(nil, vars)
+  end
+
+  defp infer_case_type_from_patterns(clauses) do
+    if Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> pattern == nil end) do
+      %Type{kind: :option}
+    end
   end
 
   defp reject_unit_statements(statements) do

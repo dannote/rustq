@@ -374,11 +374,9 @@ pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {
 
 pub(crate) fn decode_expr_ok<'a>(term: Term<'a>) -> NifResult<Expr> {
     let optional_expr = super::decode_optional_expr_field(term, "expr")?;
-    if optional_expr.is_none() {
-        super::parse_expr_tokens(quote!(Ok(())))
-    } else {
-        let expr = optional_expr.unwrap();
-        super::parse_expr_tokens(quote!(Ok(# expr)))
+    match optional_expr {
+        None => super::parse_expr_tokens(quote!(Ok(()))),
+        Some(expr) => super::parse_expr_tokens(quote!(Ok(# expr))),
     }
 }
 
