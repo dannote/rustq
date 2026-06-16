@@ -4,12 +4,15 @@ use rustler::{Atom, Env, NifResult, Term};
 
 pub(crate) mod atoms {
     rustler::atoms! {
-        ok,
-        error,
+        ok, error,
     }
 }
 
 pub(crate) mod ast_modules {
+    pub(crate) const USE: &str = "Elixir.RustQ.Rust.AST.Use";
+    pub(crate) const MODULE: &str = "Elixir.RustQ.Rust.AST.Module";
+    pub(crate) const CONST: &str = "Elixir.RustQ.Rust.AST.Const";
+    pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
     pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";
     pub(crate) const STRUCT: &str = "Elixir.RustQ.Rust.AST.Struct";
     pub(crate) const STRUCT_FIELD: &str = "Elixir.RustQ.Rust.AST.StructField";

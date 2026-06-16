@@ -6,6 +6,24 @@ defmodule RustQ.Rust.ASTBuilderTest do
 
   require A
 
+  test "renders item-level Rust AST nodes through native AST" do
+    source =
+      AST.render_file_native([
+        A.use("rustler::{Atom, Env}"),
+        A.module(
+          :generated,
+          [
+            A.const(:NAME, "&str", "Elixir.Example", vis: :crate),
+            A.macro_item("rustler::atoms! { ok }")
+          ], vis: :crate)
+      ])
+
+    assert source =~ "use rustler::{Atom, Env};"
+    assert source =~ "pub(crate) mod generated"
+    assert source =~ ~s|pub(crate) const NAME: &str = "Elixir.Example";|
+    assert source =~ "rustler::atoms!"
+  end
+
   test "renders if and binary operators through native AST" do
     function = %AST.Function{
       name: :expect,

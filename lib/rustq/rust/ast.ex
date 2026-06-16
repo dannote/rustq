@@ -7,6 +7,26 @@ defmodule RustQ.Rust.AST do
   AST, then renders them only at the final fragment-validation boundary.
   """
 
+  defmodule Use do
+    @moduledoc false
+    defstruct [:tree]
+  end
+
+  defmodule Module do
+    @moduledoc false
+    defstruct [:name, items: [], vis: nil]
+  end
+
+  defmodule Const do
+    @moduledoc false
+    defstruct [:name, :type, :expr, vis: nil]
+  end
+
+  defmodule MacroItem do
+    @moduledoc false
+    defstruct [:source]
+  end
+
   defmodule Function do
     @moduledoc false
     defstruct [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil]
@@ -242,9 +262,19 @@ defmodule RustQ.Rust.AST do
     defstruct [:path, fields: []]
   end
 
+  def render_item_native(%Use{} = item), do: render_native(item, &render_use/1)
+  def render_item_native(%Module{} = item), do: render_native(item, &render_module/1)
+  def render_item_native(%Const{} = item), do: render_native(item, &render_const/1)
+  def render_item_native(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
   def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
   def render_item_native(%Struct{} = item), do: render_native(item, &render_struct/1)
   def render_item_native(%Enum{} = item), do: render_native(item, &render_enum/1)
+
+  def render_file_native(items) do
+    items
+    |> List.wrap()
+    |> Elixir.Enum.map_join("\n", &render_item_native/1)
+  end
 
   def render_function_native(%Function{} = function), do: render_item_native(function)
 
@@ -255,6 +285,36 @@ defmodule RustQ.Rust.AST do
   catch
     :exit, _reason -> fallback.(item)
   end
+
+  def render_use(%Use{tree: tree}), do: ["use ", tree, ";"]
+
+  def render_module(%Module{} = module) do
+    items = module.items |> Elixir.Enum.map(&render_item_native/1) |> Elixir.Enum.join("\n")
+
+    [
+      render_vis(module.vis),
+      "mod ",
+      Atom.to_string(module.name),
+      " {\n",
+      indent(items),
+      "\n}"
+    ]
+  end
+
+  def render_const(%Const{} = const) do
+    [
+      render_vis(const.vis),
+      "const ",
+      Atom.to_string(const.name),
+      ": ",
+      render_type(const.type),
+      " = ",
+      render_expr(const.expr),
+      ";"
+    ]
+  end
+
+  def render_macro_item(%MacroItem{source: source}), do: source
 
   def render_function(%Function{} = function) do
     args =

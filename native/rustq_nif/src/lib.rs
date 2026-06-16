@@ -60,11 +60,57 @@ fn render_ast(ast: Term) -> NifResult<String> {
 
 fn decode_ast_item(term: Term) -> NifResult<Item> {
     match struct_name(term)?.as_str() {
+        ast_modules::USE => Ok(Item::Use(decode_ast_use(term)?)),
+        ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
+        ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
+        ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
         ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
         ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
         ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
         _ => Err(rustler::Error::BadArg),
     }
+}
+
+fn decode_ast_use(term: Term) -> NifResult<syn::ItemUse> {
+    expect_struct(term, ast_modules::USE)?;
+    let tree = term
+        .map_get(atom(term.get_env(), "tree")?)?
+        .decode::<String>()?;
+    syn::parse_str(&format!("use {tree};")).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_ast_module(term: Term) -> NifResult<syn::ItemMod> {
+    expect_struct(term, ast_modules::MODULE)?;
+    let env = term.get_env();
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
+    let items = term
+        .map_get(atom(env, "items")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_ast_item)
+        .collect::<NifResult<Vec<Item>>>()?;
+
+    syn::parse2(quote!(#vis mod #name { #(#items)* })).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_ast_const(term: Term) -> NifResult<syn::ItemConst> {
+    expect_struct(term, ast_modules::CONST)?;
+    let env = term.get_env();
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    let ty = decode_type(term.map_get(atom(env, "type")?)?)?;
+    let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
+
+    syn::parse2(quote!(#vis const #name: #ty = #expr;)).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_ast_macro_item(term: Term) -> NifResult<Item> {
+    expect_struct(term, ast_modules::MACRO_ITEM)?;
+    let source = term
+        .map_get(atom(term.get_env(), "source")?)?
+        .decode::<String>()?;
+    syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
 
 fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {

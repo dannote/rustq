@@ -58,6 +58,16 @@ defmodule RustQ.Rust.AST.Builder do
 
   def flatten(values), do: values |> List.wrap() |> List.flatten()
 
+  def use(tree), do: %AST.Use{tree: tree}
+
+  def module(name, items, opts \\ []),
+    do: %AST.Module{name: name, items: flatten(items), vis: Keyword.get(opts, :vis)}
+
+  def const(name, type, expression, opts \\ []),
+    do: %AST.Const{name: name, type: type, expr: expr(expression), vis: Keyword.get(opts, :vis)}
+
+  def macro_item(source), do: %AST.MacroItem{source: source}
+
   def let(name, expression), do: %AST.Let{pattern: pat(name), expr: expr(expression)}
 
   def let_mut(name, expression),
@@ -139,6 +149,10 @@ defmodule RustQ.Rust.AST.Builder do
 
   def expr(%{__struct__: module} = value)
       when module in [
+             AST.Use,
+             AST.Module,
+             AST.Const,
+             AST.MacroItem,
              AST.Var,
              AST.Path,
              AST.Field,
