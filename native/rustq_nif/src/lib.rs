@@ -426,6 +426,23 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
                 .collect::<NifResult<Vec<Pat>>>()?;
             parse_pat(quote!(#path(#(#patterns),*)))
         }
+        "Elixir.RustQ.Rust.AST.PatStruct" => {
+            let path = parse_path(&path_parts(
+                term.map_get(atom(env, "path")?)?
+                    .map_get(atom(env, "parts")?)?,
+            )?)?;
+            let fields = term
+                .map_get(atom(env, "fields")?)?
+                .decode::<Vec<(Term, Term)>>()?
+                .into_iter()
+                .map(|(name, pattern)| {
+                    let name = format_ident!("{}", atom_or_string(name)?);
+                    let pattern = decode_pat(pattern)?;
+                    Ok(quote!(#name: #pattern))
+                })
+                .collect::<NifResult<Vec<_>>>()?;
+            parse_pat(quote!(#path { #(#fields),* }))
+        }
         "Elixir.RustQ.Rust.AST.PatTuple" => {
             let patterns = term
                 .map_get(atom(env, "patterns")?)?

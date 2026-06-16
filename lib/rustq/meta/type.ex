@@ -73,6 +73,15 @@ defmodule RustQ.Meta.Type do
           variants: variants
         })
 
+      struct_type?(ast) ->
+        {struct_rust_name, fields} = struct_type(ast)
+
+        type(:struct, path(struct_rust_name), %{
+          elixir_name: name,
+          rust_name: struct_rust_name,
+          fields: fields
+        })
+
       tuple_type?(ast) ->
         {variant, _aliases} = tuple_variant(ast, raw, aliases)
         type(:tuple, path(rust_name), %{elixir_name: name, variant: variant})
@@ -242,6 +251,22 @@ defmodule RustQ.Meta.Type do
   defp tuple_type?({:{}, _, [tag | types]}) when is_atom(tag), do: types != []
   defp tuple_type?(_ast), do: false
 
+  defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),
+    do: true
+
+  defp struct_type?(_ast), do: false
+
+  defp struct_type({:%, _, [{:__aliases__, _, parts}, {:%{}, _, fields}]}) do
+    rust_name = parts |> List.last() |> to_string()
+
+    fields =
+      Enum.map(fields, fn {name, ast} ->
+        {name, parse(ast, %{}), :required}
+      end)
+
+    {rust_name, fields}
+  end
+
   defp map_type?({:%{}, _, fields}) when is_list(fields), do: true
   defp map_type?(_ast), do: false
 
@@ -293,7 +318,7 @@ defmodule RustQ.Meta.Type do
 
   defp tagged_tuple?({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
     {type, _aliases} = parse_alias_type({name, [], args}, raw, aliases)
-    type.kind == :tuple
+    type.kind in [:tuple, :struct]
   rescue
     _error -> false
   end
@@ -318,7 +343,14 @@ defmodule RustQ.Meta.Type do
 
   defp tuple_variant({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
     {type, aliases} = parse_alias_type({name, [], args}, raw, aliases)
-    {type.meta.variant, aliases}
+
+    variant =
+      case type.kind do
+        :tuple -> type.meta.variant
+        :struct -> {String.to_atom(type.meta.rust_name), [type]}
+      end
+
+    {variant, aliases}
   end
 
   defp result_members(ast) do

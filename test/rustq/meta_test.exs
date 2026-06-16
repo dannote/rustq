@@ -6,10 +6,18 @@ defmodule RustQ.MetaTest do
 
     alias RustQ.Type, as: R
 
+    defmodule Click do
+      defstruct [:name]
+    end
+
+    defmodule Resize do
+      defstruct [:width, :height]
+    end
+
     @type mode :: :src_over | :multiply
 
-    @type click :: {:click, String.t()}
-    @type resize :: {:resize, R.u32(), R.u32()}
+    @type click :: %Click{name: String.t()}
+    @type resize :: %Resize{width: R.u32(), height: R.u32()}
     @type event :: click() | resize()
 
     @type rect_opts :: %{
@@ -65,8 +73,8 @@ defmodule RustQ.MetaTest do
     @spec handle_event(event()) :: R.nif_result(R.unit())
     defrust handle_event(event) do
       case event do
-        {:click, name} -> log_click(name)
-        {:resize, width, height} -> log_resize(width, height)
+        %Click{name: name} -> log_click(name)
+        %Resize{width: width, height: height} -> log_resize(width, height)
       end
 
       :ok
@@ -89,9 +97,13 @@ defmodule RustQ.MetaTest do
     assert source =~ "Ok(BlendMode::SrcOver)"
     assert source =~ ~s|Err(rustler::Error::RaiseAtom("invalid_blend_mode"))|
 
+    assert source =~ "pub struct Click"
+    assert source =~ "pub name: String,"
+    assert source =~ "pub struct Resize"
+    assert source =~ "pub width: u32,"
     assert source =~ "pub enum Event"
-    assert source =~ "Click(String),"
-    assert source =~ "Resize(u32, u32),"
+    assert source =~ "Click(Click),"
+    assert source =~ "Resize(Resize),"
     assert source =~ "pub fn decode_event<'a>(term: Term<'a>) -> NifResult<Event>"
     assert source =~ "todo!()"
     assert source =~ "pub struct RectOpts"
@@ -114,8 +126,8 @@ defmodule RustQ.MetaTest do
     assert source =~ "Ok(value) =>"
     assert source =~ "Err(reason) =>"
     assert source =~ "fn handle_event(event: Event) -> NifResult<()>"
-    assert source =~ "Event::Click(name) =>"
-    assert source =~ "Event::Resize(width, height) =>"
+    assert source =~ "Event::Click(Click { name: name }) =>"
+    assert source =~ "Event::Resize(Resize { width: width, height: height }) =>"
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
@@ -125,19 +137,21 @@ defmodule RustQ.MetaTest do
 
     assert Generated.__rustq_source__() =~ "pub enum Mode"
 
-    assert %RustQ.Meta.Type{
-             kind: :tuple,
-             meta: %{variant: {:click, [%RustQ.Meta.Type{rust: "String"}]}}
-           } =
+    assert %RustQ.Meta.Type{kind: :struct, rust: "Click", meta: %{fields: click_fields}} =
              Generated.__rustq_types__()[{:click, 0}]
+
+    assert Enum.any?(
+             click_fields,
+             &match?({:name, %RustQ.Meta.Type{rust: "String"}, :required}, &1)
+           )
 
     assert %RustQ.Meta.Type{kind: :tuple_enum, rust: "Event", meta: %{variants: event_variants}} =
              Generated.__rustq_types__()[{:event, 0}]
 
-    assert {:click, [%RustQ.Meta.Type{rust: "String"}]} = List.keyfind(event_variants, :click, 0)
+    assert {:Click, [%RustQ.Meta.Type{rust: "Click"}]} = List.keyfind(event_variants, :Click, 0)
 
-    assert {:resize, [%RustQ.Meta.Type{rust: "u32"}, %RustQ.Meta.Type{rust: "u32"}]} =
-             List.keyfind(event_variants, :resize, 0)
+    assert {:Resize, [%RustQ.Meta.Type{rust: "Resize"}]} =
+             List.keyfind(event_variants, :Resize, 0)
 
     assert %RustQ.Meta.Type{
              kind: :struct,

@@ -133,6 +133,22 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
+  defp lower_match_pattern({:%, _, [{:__aliases__, _, [module]}, {:%{}, _, fields}]}, %Type{
+         kind: :tuple_enum,
+         rust: rust_name
+       }) do
+    %AST.PatPathTuple{
+      path: %AST.Path{parts: [rust_name, module]},
+      patterns: [
+        %AST.PatStruct{
+          path: %AST.Path{parts: [module]},
+          fields:
+            Enum.map(fields, fn {name, pattern} -> {name, lower_match_pattern(pattern, nil)} end)
+        }
+      ]
+    }
+  end
+
   defp lower_match_pattern({tag, pattern}, %Type{kind: :tuple_enum, rust: rust_name})
        when is_atom(tag) do
     %AST.PatPathTuple{

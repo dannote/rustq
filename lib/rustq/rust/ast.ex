@@ -222,6 +222,11 @@ defmodule RustQ.Rust.AST do
     defstruct [:path, patterns: []]
   end
 
+  defmodule PatStruct do
+    @moduledoc false
+    defstruct [:path, fields: []]
+  end
+
   def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
   def render_item_native(%Struct{} = item), do: render_native(item, &render_struct/1)
   def render_item_native(%Enum{} = item), do: render_native(item, &render_enum/1)
@@ -418,6 +423,17 @@ defmodule RustQ.Rust.AST do
       patterns |> Elixir.Enum.map(&render_pattern/1) |> Elixir.Enum.intersperse(", "),
       ")"
     ]
+  end
+
+  def render_pattern(%PatStruct{path: path, fields: fields}) do
+    rendered_fields =
+      fields
+      |> Elixir.Enum.map(fn {name, pattern} ->
+        [to_string(name), ": ", render_pattern(pattern)]
+      end)
+      |> Elixir.Enum.intersperse(", ")
+
+    [render_expr(path), " { ", rendered_fields, " }"]
   end
 
   def render_pattern(%PatAtomGuard{name: name}),
