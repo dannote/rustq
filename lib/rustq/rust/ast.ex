@@ -50,6 +50,7 @@ defmodule RustQ.Rust.AST do
           | Closure.t()
           | Literal.t()
           | ByteString.t()
+          | EscapeExpr.t()
           | TokenMacro.t()
           | MacroCall.t()
           | AtomValue.t()
@@ -418,6 +419,8 @@ defmodule RustQ.Rust.AST do
 
   defnode(ByteString, :expr, [:value], type: quote(do: %__MODULE__{value: String.t()}))
 
+  defnode(EscapeExpr, :expr, [:source], type: quote(do: %__MODULE__{source: String.t()}))
+
   defnode(TokenMacro, :expr, [:path, :tokens],
     type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), tokens: String.t()})
   )
@@ -555,6 +558,7 @@ defmodule RustQ.Rust.AST do
       Closure,
       Literal,
       ByteString,
+      EscapeExpr,
       TokenMacro,
       MacroCall,
       AtomValue,
@@ -976,6 +980,8 @@ defmodule RustQ.Rust.AST do
   def render_expr(%Literal{value: value}) when is_binary(value), do: inspect(value)
 
   def render_expr(%ByteString{value: value}), do: ["b", inspect(value)]
+
+  def render_expr(%EscapeExpr{source: source}), do: source
 
   def render_expr(%Literal{value: value}) when is_integer(value) or is_float(value),
     do: to_string(value)

@@ -158,6 +158,8 @@ defmodule RustQ.Rust.AST.Builder do
   def not_(expression), do: %AST.UnaryOp{op: :not, expr: expr(expression)}
   def neg(expression), do: %AST.UnaryOp{op: :neg, expr: expr(expression)}
   def byte_string(value), do: %AST.ByteString{value: value}
+  def escape_expr(source), do: %AST.EscapeExpr{source: source}
+  def path_value(parts), do: path(parts)
 
   def ref(expression), do: %AST.Ref{expr: expr(expression)}
   def mut_ref(expression), do: %AST.Ref{expr: expr(expression), mutable: true}
@@ -280,6 +282,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Closure,
              AST.Literal,
              AST.ByteString,
+             AST.EscapeExpr,
              AST.TokenMacro,
              AST.MacroCall,
              AST.AtomValue,

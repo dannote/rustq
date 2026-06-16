@@ -85,6 +85,6 @@ pub(crate) fn parse_path(source: &str) -> NifResult<syn::Path> {
     syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
 }
 
-pub(crate) fn parse_expr(source: &str) -> NifResult<Expr> {
-    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
+pub(crate) fn parse_expr(source: impl AsRef<str>) -> NifResult<Expr> {
+    syn::parse_str(source.as_ref()).map_err(|_| rustler::Error::BadArg)
 }

@@ -188,6 +188,12 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     Super.parse_byte_string_expr(value)
   end
 
+  @spec decode_expr_escape_expr(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_escape_expr(term) do
+    source = unwrap!(Super.string_field(term, "source"))
+    Super.parse_expr(ref(source))
+  end
+
   @spec decode_expr_token_macro(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_token_macro(term) do
     path =
@@ -196,7 +202,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
       )
 
     tokens = unwrap!(Super.string_field(term, "tokens"))
-    Super.parse_expr(ref(token_macro(:format, "\"{}!({})\", path, tokens")))
+    Super.parse_expr(token_macro(:format, "\"{}!({})\", path, tokens"))
   end
 
   @spec decode_expr_ok(term()) :: R.nif_result(Expr.t())

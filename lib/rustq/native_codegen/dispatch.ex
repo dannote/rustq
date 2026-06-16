@@ -265,6 +265,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
               :closure,
               :literal,
               :byte_string,
+              :escape_expr,
               :token_macro,
               :macro_call,
               :atom_value,

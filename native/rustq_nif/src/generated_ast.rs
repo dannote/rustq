@@ -61,6 +61,7 @@ pub(crate) mod ast_modules {
     pub(crate) const CLOSURE: &str = "Elixir.RustQ.Rust.AST.Closure";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
     pub(crate) const BYTE_STRING: &str = "Elixir.RustQ.Rust.AST.ByteString";
+    pub(crate) const ESCAPE_EXPR: &str = "Elixir.RustQ.Rust.AST.EscapeExpr";
     pub(crate) const TOKEN_MACRO: &str = "Elixir.RustQ.Rust.AST.TokenMacro";
     pub(crate) const MACRO_CALL: &str = "Elixir.RustQ.Rust.AST.MacroCall";
     pub(crate) const ATOM_VALUE: &str = "Elixir.RustQ.Rust.AST.AtomValue";
@@ -215,6 +216,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::CLOSURE => decode_expr_closure(term),
         ast_modules::LITERAL => decode_expr_literal(term),
         ast_modules::BYTE_STRING => decode_expr_byte_string(term),
+        ast_modules::ESCAPE_EXPR => decode_expr_escape_expr(term),
         ast_modules::TOKEN_MACRO => decode_expr_token_macro(term),
         ast_modules::MACRO_CALL => decode_expr_macro_call(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
@@ -690,10 +692,15 @@ pub(crate) fn decode_expr_byte_string<'a>(term: Term<'a>) -> NifResult<Expr> {
     super::parse_byte_string_expr(value)
 }
 
+pub(crate) fn decode_expr_escape_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let source = super::string_field(term, "source")?;
+    super::parse_expr(&source)
+}
+
 pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {
     let path = super::path_parts(required_field(required_field(term, "path")?, "parts")?)?;
     let tokens = super::string_field(term, "tokens")?;
-    super::parse_expr(&format!("{}!({})", path, tokens))
+    super::parse_expr(format!("{}!({})", path, tokens))
 }
 
 pub(crate) fn decode_expr_ok<'a>(term: Term<'a>) -> NifResult<Expr> {

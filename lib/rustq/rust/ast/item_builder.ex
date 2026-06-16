@@ -4,6 +4,36 @@ defmodule RustQ.Rust.AST.ItemBuilder do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
 
+  def field(name, type, opts \\ []),
+    do: %AST.StructField{name: name, type: type, vis: Keyword.get(opts, :vis)}
+
+  @doc false
+  defmacro struct(name, opts \\ [], do: body) do
+    quote do
+      %AST.Struct{
+        name: unquote(name),
+        vis: Keyword.get(unquote(opts), :vis),
+        lifetime: Keyword.get(unquote(opts), :lifetime),
+        derive: Keyword.get(unquote(opts), :derive, []),
+        attrs: Keyword.get(unquote(opts), :attrs, []),
+        fields: A.flatten(unquote(block_values(body)))
+      }
+    end
+  end
+
+  @doc false
+  defmacro impl(target, opts \\ [], do: body) do
+    quote do
+      %AST.Impl{
+        target: unquote(target),
+        trait:
+          Keyword.get(unquote(opts), :trait) && A.expr_path(Keyword.fetch!(unquote(opts), :trait)),
+        attrs: Keyword.get(unquote(opts), :attrs, []),
+        items: A.flatten(unquote(block_values(body)))
+      }
+    end
+  end
+
   @doc false
   defmacro function(name, opts \\ [], do: body) do
     quote do

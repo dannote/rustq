@@ -385,6 +385,10 @@ Recently completed:
 - Resource decoder helpers now render through builder-authored RustQ AST, and
   the AST surface covers type aliases, `let ... else`, array literals, recursive
   grouped-use fallback rendering, and struct/enum general attributes.
+- Item-level generator authoring now has builder macros for `struct`, `impl`,
+  and `function`, plus explicit `A.escape_expr/1` for visible compatibility
+  boundaries. Rustler resources and options decoders use these builder-authored
+  AST paths instead of templates on their default paths.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

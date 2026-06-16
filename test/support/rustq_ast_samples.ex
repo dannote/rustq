@@ -81,6 +81,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:closure), do: "|value| value"
   defp semantic_fragment(:literal), do: "1i64"
   defp semantic_fragment(:byte_string), do: ~s|b"ref"|
+  defp semantic_fragment(:escape_expr), do: "value.unwrap()"
   defp semantic_fragment(:token_macro), do: "quote!(None)"
   defp semantic_fragment(:macro_call), do: ~s|format!("{}", value)|
   defp semantic_fragment(:atom_value), do: "atoms::ok()"
@@ -312,6 +313,9 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:byte_string),
     do: function_sample(:byte_string_sample, A.byte_string("ref"), returns: "&'static [u8; 3]")
+
+  def sample_for(:escape_expr),
+    do: function_sample(:escape_expr_sample, A.escape_expr("value.unwrap()"), returns: "i64")
 
   def sample_for(:token_macro),
     do:

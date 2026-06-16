@@ -4,29 +4,31 @@ defmodule RustQ.Rustler.Resource do
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
 
-  import RustQ.Rust.AST.ItemBuilder
+  import RustQ.Rust.AST.ItemBuilder, only: [field: 3, function: 3, impl: 3]
 
   require A
-  require RustQ.Rust.AST.ItemBuilder
+  require I
 
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts \\ []) do
-    struct = %AST.Struct{
-      name: String.to_atom(to_string(name)),
-      fields:
-        opts
-        |> Keyword.get(:fields, [])
-        |> Enum.map(fn {field, type} -> %AST.StructField{name: field, type: type, vis: :pub} end)
-    }
+    struct_item = resource_struct_ast(name, Keyword.get(opts, :fields, []))
+    impl_item = resource_impl_ast(name)
 
-    impl = %AST.Impl{
-      target: A.type_path(name),
-      trait: A.path([:rustler, :Resource]),
-      attrs: [A.resource_impl_attr()]
-    }
+    [Rust.item(AST.render_item_native(struct_item)), Rust.item(AST.render_item_native(impl_item))]
+  end
 
-    [Rust.item(AST.render_item_native(struct)), Rust.item(AST.render_item_native(impl))]
+  defp resource_struct_ast(name, fields) do
+    I.struct String.to_atom(to_string(name)) do
+      Enum.map(fields, fn {field_name, type} -> field(field_name, type, vis: :pub) end)
+    end
+  end
+
+  defp resource_impl_ast(name) do
+    impl A.type_path(name), trait: [:rustler, :Resource], attrs: [A.resource_impl_attr()] do
+      []
+    end
   end
 
   @spec type_alias(atom() | String.t(), keyword()) :: Rust.TypeAlias.t()
