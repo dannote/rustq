@@ -187,6 +187,11 @@ Rust for Rustler term APIs, generic `syn` parsing/assembly, or collection glue.
 Prefer extending `RustQ.Rust.AST` and `RustQ.Meta.Lower` before adding new
 primitive helpers.
 
+`RustQ.Meta.Type` is the typespec-driven path for `defrust`. `RustQ.Rustler.Schema`
+remains the explicit public schema DSL for Rustler struct/tagged-enum generation;
+the two may share internals later, but their authoring surfaces are currently
+separate by design.
+
 ## Optional rustfmt
 
 Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:

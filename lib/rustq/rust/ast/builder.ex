@@ -71,6 +71,8 @@ defmodule RustQ.Rust.AST.Builder do
   def function_arg(name, type), do: %AST.FunctionArg{name: name, type: type}
   def function_args(args), do: Enum.map(args, &function_arg/1)
 
+  def derive(paths), do: %AST.Derive{paths: List.wrap(paths)}
+
   def macro_item(source), do: %AST.MacroItem{source: source}
 
   def let(name, expression, opts \\ []),

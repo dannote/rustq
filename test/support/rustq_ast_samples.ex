@@ -25,6 +25,7 @@ defmodule RustQ.ASTSamples do
 
   defp semantic_fragment(:module), do: "mod sample"
   defp semantic_fragment(:function_arg), do: "value: u32"
+  defp semantic_fragment(:derive), do: "#[derive(Clone, serde::Serialize)]"
   defp semantic_fragment(:struct_field), do: "value: u32"
   defp semantic_fragment(:enum_variant), do: "Unit"
   defp semantic_fragment(:type_path), do: "type_path_VALUE: u32"
@@ -86,6 +87,14 @@ defmodule RustQ.ASTSamples do
       returns: "u32",
       body: [A.return(:value)]
     }
+
+  def sample_for(:derive) do
+    %AST.Struct{
+      name: :DeriveSample,
+      derive: [%AST.Derive{paths: [:Clone, [:serde, :Serialize]]}],
+      fields: [%AST.StructField{name: :value, type: A.type_path(:u32)}]
+    }
+  end
 
   def sample_for(:struct) do
     %AST.Struct{name: :Sample, fields: [%AST.StructField{name: :value, type: A.type_path(:u32)}]}

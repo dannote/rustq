@@ -246,6 +246,17 @@ Do **not** dogfood by creating one Rust helper per expression/pattern shape.
 
 Goal: make `@type` a credible source for Rust/Rustler surfaces, not just a demo.
 
+`RustQ.Meta.Type` and `RustQ.Rustler.Schema` are intentionally separate for now:
+
+- `RustQ.Meta.Type` is typespec-driven and feeds `defrust`; it is best for code
+  that already has meaningful Elixir `@spec`/`@type` declarations.
+- `RustQ.Rustler.Schema` is the explicit public schema DSL for projects that want
+  data-first Rustler struct/tagged-enum generation without opting into
+  `defrust`.
+
+Convergence should only happen if a shared lower-level schema model emerges
+without making either authoring surface worse.
+
 1. Add more tests for:
    - nested maps
    - optional map fields

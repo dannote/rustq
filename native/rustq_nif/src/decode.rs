@@ -5,7 +5,7 @@ use syn::{Arm, Expr, Field, Item, Pat, Stmt, Type};
 use crate::generated_ast::{
     atom, atom_key, decode_arm, decode_ast_expr, decode_ast_item, decode_ast_pat, decode_ast_stmt,
     decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
-    optional_map_get,
+    optional_map_get, struct_name,
 };
 use crate::{parse_expr, parse_path, parse_syn, parse_type};
 
@@ -67,22 +67,47 @@ pub(crate) fn decode_vis(term: Term) -> NifResult<syn::Visibility> {
 }
 
 pub(crate) fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
-    let values = term
+    let paths = term
         .decode::<Vec<Term>>()?
         .into_iter()
-        .map(atom_or_string)
-        .collect::<NifResult<Vec<String>>>()?;
+        .map(decode_derive_paths)
+        .collect::<NifResult<Vec<Vec<syn::Path>>>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-    if values.is_empty() {
+    if paths.is_empty() {
         Ok(Vec::new())
     } else {
-        let paths = values
-            .into_iter()
-            .map(|value| syn::parse_str::<syn::Path>(&value))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| rustler::Error::BadArg)?;
         Ok(vec![syn::parse_quote!(#[derive(#(#paths),*)])])
     }
+}
+
+fn decode_derive_paths(term: Term) -> NifResult<Vec<syn::Path>> {
+    if struct_name(term).ok().as_deref() == Some("Elixir.RustQ.Rust.AST.Derive") {
+        return term
+            .map_get(atom(term.get_env(), "paths")?)?
+            .decode::<Vec<Term>>()?
+            .into_iter()
+            .map(decode_path_value)
+            .collect();
+    }
+
+    Ok(vec![decode_path_value(term)?])
+}
+
+fn decode_path_value(term: Term) -> NifResult<syn::Path> {
+    let source = if let Ok(parts) = term.decode::<Vec<Term>>() {
+        parts
+            .into_iter()
+            .map(atom_or_string)
+            .collect::<NifResult<Vec<String>>>()?
+            .join("::")
+    } else {
+        atom_or_string(term)?
+    };
+
+    syn::parse_str::<syn::Path>(&source).map_err(|_| rustler::Error::BadArg)
 }
 
 // Collection decoders for generated AST nodes.

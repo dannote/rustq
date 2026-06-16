@@ -109,6 +109,10 @@ defmodule RustQ.Rust.AST do
       )
   )
 
+  defnode(Derive, :field, [:paths],
+    type: quote(do: %__MODULE__{paths: [[atom() | String.t()] | atom() | String.t()]})
+  )
+
   defnode(Struct, :item, [:name, fields: [], vis: nil, derive: [], lifetime: nil],
     type:
       quote(
@@ -116,7 +120,7 @@ defmodule RustQ.Rust.AST do
           name: atom(),
           fields: [RustQ.Rust.AST.StructField.t()],
           vis: RustQ.Rust.AST.vis(),
-          derive: [atom()],
+          derive: [RustQ.Rust.AST.Derive.t() | atom()],
           lifetime: atom() | nil
         }
       )
@@ -134,7 +138,7 @@ defmodule RustQ.Rust.AST do
           name: atom(),
           variants: [RustQ.Rust.AST.EnumVariant.t()],
           vis: RustQ.Rust.AST.vis(),
-          derive: [atom()]
+          derive: [RustQ.Rust.AST.Derive.t() | atom()]
         }
       )
   )
@@ -324,6 +328,7 @@ defmodule RustQ.Rust.AST do
       MacroItem,
       FunctionArg,
       Function,
+      Derive,
       Struct,
       StructField,
       Enum,
@@ -392,11 +397,17 @@ defmodule RustQ.Rust.AST do
   def render_function_native(%Function{} = function), do: render_item_native(function)
 
   defp render_native(item, fallback) do
-    RustQ.Native.render_ast(item)
-  rescue
-    _error -> fallback.(item)
-  catch
-    :exit, _reason -> fallback.(item)
+    if Application.get_env(:rustq, :strict_native_ast, false) do
+      RustQ.Native.render_ast(item)
+    else
+      try do
+        RustQ.Native.render_ast(item)
+      rescue
+        _error -> fallback.(item)
+      catch
+        :exit, _reason -> fallback.(item)
+      end
+    end
   end
 
   def render_use(%Use{tree: tree}), do: ["use ", tree, ";"]
@@ -672,10 +683,16 @@ defmodule RustQ.Rust.AST do
   defp render_derive(values) do
     [
       "#[derive(",
-      values |> Elixir.Enum.map(&to_string/1) |> Elixir.Enum.intersperse(", "),
+      values |> Elixir.Enum.flat_map(&derive_paths/1) |> Elixir.Enum.intersperse(", "),
       ")]\n"
     ]
   end
+
+  defp derive_paths(%Derive{paths: paths}), do: Elixir.Enum.map(paths, &derive_path/1)
+  defp derive_paths(value), do: [derive_path(value)]
+
+  defp derive_path(parts) when is_list(parts), do: Elixir.Enum.map_join(parts, "::", &to_string/1)
+  defp derive_path(value), do: to_string(value)
 
   defp render_vis(:pub), do: "pub "
   defp render_vis(:crate), do: "pub(crate) "
