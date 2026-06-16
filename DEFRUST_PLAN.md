@@ -16,8 +16,8 @@ of the current branch and the plan below reflects the current codebase:
   `RustQ.Rust.AST.*`
 - self-hosted native AST decoder generation in `RustQ.NativeCodegen.*`
 - native primitive modules under `native/rustq_nif/src`
-- behavioral and primitive-boundary tests under `test/rustq/ast`,
-  `test/rustq/meta`, and `test/rustq/native_codegen`
+- behavioral tests under `test/rustq/ast`, `test/rustq/meta`, and
+  `test/rustq/native_codegen`
 
 ## Non-negotiable design principles
 
@@ -57,8 +57,8 @@ of the current branch and the plan below reflects the current codebase:
      a strong reason.
 
 6. **Behavioral tests over source trivia**
-   - Prefer native render behavior and schema coverage to brittle generated-source
-     substring checks.
+   - Prefer native render behavior, schema coverage, and structural AST checks to
+     brittle generated-source substring checks or source-scanning allowlists.
    - Every new `RustQ.Rust.AST.Schema` node must have native behavioral rendering
      coverage.
 
@@ -160,14 +160,14 @@ Native Rust is split by responsibility:
 Goal: make it hard to accidentally regress into ad hoc string generation or new
 native wrapper sprawl.
 
-1. Expand primitive-boundary inventory tests so each native module has a clear
-   expected responsibility:
+1. Keep native module responsibilities documented in this plan and in comments
+   near the primitive boundaries:
    - `template.rs`: template mutation/parsing only
    - `parse*.rs`: `syn` parsing/assembly only
    - `decode.rs`: Rustler term decode and generic glue only
    - `lib.rs`: NIF entrypoints only
-2. Add tests that fail if `generated_ast.rs` starts calling new `super::` helpers
-   outside an explicit allowlist.
+2. Avoid source-scanning allowlist tests for generated Rust; use behavioral
+   native rendering tests and structural Elixir AST tests instead.
 3. Keep `AGENTS.md` and this file aligned whenever a new primitive category is
    accepted.
 4. Add a small changelog-like section to this plan for primitive additions and
@@ -219,7 +219,7 @@ Every new node must update:
 - builder support where useful
 - native dispatch/decoder generation
 - behavioral sample in `test/support/rustq_ast_samples.ex`
-- primitive-boundary expectations if it removes or adds native code
+- behavioral/structural expectations if it removes or adds native code
 
 ### Phase 4 — Dogfood remaining decode bridge clusters
 
@@ -293,17 +293,16 @@ stable template API.
 
 The next practical sequence should be:
 
-1. Add a `super::` primitive allowlist test for generated native support.
-2. Refactor `RustQ.Meta.Lower` around an explicit expected-type/context lowering
+1. Refactor `RustQ.Meta.Lower` around an explicit expected-type/context lowering
    helper.
-3. Add nested branch tests for `Option`, `Result`, and `NifResult`.
-4. Add real generic type AST support so `Option`, `Result`, `Vec`, and path
+2. Add nested branch tests for `Option`, `Result`, and `NifResult`.
+3. Add real generic type AST support so `Option`, `Result`, `Vec`, and path
    generics no longer format strings in generated Rust.
-5. Move type container decoding away from `format!(...)` + `parse_type` toward
+4. Move type container decoding away from `format!(...)` + `parse_type` toward
    typed AST or token construction.
-6. Decide whether `path_parts`/`decode_lifetime_list` should be dogfooded or
+5. Decide whether `path_parts`/`decode_lifetime_list` should be dogfooded or
    consolidated as one generic string-list primitive.
-7. Revisit public docs once the lowering/context refactor is stable.
+6. Revisit public docs once the lowering/context refactor is stable.
 
 ## Verification gates
 

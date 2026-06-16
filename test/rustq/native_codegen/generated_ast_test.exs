@@ -3,13 +3,10 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
 
   alias RustQ.Rust.AST
 
-  test "generates AST support smoke source" do
+  test "generates parseable AST support" do
     source = RustQ.NativeCodegen.generated_ast_support()
 
-    assert source =~ "pub(crate) mod atoms"
-    assert source =~ "pub(crate) mod ast_modules"
-    assert source =~ "pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item>"
-    refute source =~ ~s|pub(crate) const ARM: &str = "Elixir.RustQ.Rust.AST.Arm";|
+    assert {:ok, _template} = RustQ.parse(source, "generated_ast.rs")
   end
 
   test "generated modules are AST-backed" do
