@@ -7,7 +7,84 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   require A
 
-  test "dogfooded item and type decoders render constants, structs, and enums" do
+  test "behavioral examples cover every current AST schema node" do
+    covered =
+      MapSet.new([
+        :use,
+        :module,
+        :const,
+        :macro_item,
+        :function,
+        :struct,
+        :struct_field,
+        :enum,
+        :enum_variant,
+        :type_path,
+        :type_ref,
+        :type_option,
+        :type_result,
+        :type_nif_result,
+        :type_vec,
+        :type_unit,
+        :let,
+        :expr_stmt,
+        :return,
+        :var,
+        :path,
+        :field,
+        :path_call,
+        :method_call,
+        :struct_literal,
+        :local_call,
+        :ref,
+        :try,
+        :tuple,
+        :literal,
+        :token_macro,
+        :atom_value,
+        :none,
+        :some,
+        :ok,
+        :err,
+        :nif_raise_atom,
+        :match,
+        :if,
+        :binary_op,
+        :arm,
+        :pat_var,
+        :pat_wildcard,
+        :pat_path,
+        :pat_literal,
+        :pat_none,
+        :pat_some,
+        :pat_atom_guard,
+        :pat_tuple,
+        :pat_ok,
+        :pat_err,
+        :pat_path_tuple,
+        :pat_struct
+      ])
+
+    current =
+      RustQ.Rust.AST.Schema.nodes()
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+
+    assert MapSet.subset?(current, covered)
+  end
+
+  test "dogfooded item and type decoders render use, module, macro, constants, structs, and enums" do
+    use_source = Native.render_ast(%AST.Use{tree: "std::fmt"})
+
+    module_source =
+      Native.render_ast(%AST.Module{
+        name: :generated,
+        vis: :crate,
+        items: [%AST.Const{name: :ANSWER, type: A.type_path(:u32), expr: A.lit(42)}]
+      })
+
+    macro_source = Native.render_ast(%AST.MacroItem{source: "type Alias = u32;"})
+
     const_source =
       Native.render_ast(%AST.Const{
         name: :LIMIT,
@@ -40,6 +117,10 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
         ]
       })
 
+    assert use_source =~ "use std::fmt;"
+    assert module_source =~ "pub(crate) mod generated"
+    assert module_source =~ "const ANSWER: u32 = 42i64;"
+    assert macro_source =~ "type Alias = u32;"
     assert const_source =~ "pub(crate) const LIMIT: Option<&'a str> = None;"
     assert struct_source =~ "pub struct Holder<'a>"
     assert struct_source =~ "pub value: &'a str"

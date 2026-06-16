@@ -302,18 +302,23 @@ fn string_field(term: Term, key: &str) -> NifResult<String> {
     term.map_get(atom(term.get_env(), key)?)?.decode()
 }
 
-fn decode_optional_type_field(term: Term, key: &str) -> NifResult<Option<Type>> {
+fn decode_optional_field<T>(
+    term: Term,
+    key: &str,
+    decoder: fn(Term) -> NifResult<T>,
+) -> NifResult<Option<T>> {
     match optional_map_get(term, key)? {
-        Some(type_term) if !is_nil(type_term)? => Ok(Some(decode_type(type_term)?)),
+        Some(value) if !is_nil(value)? => Ok(Some(decoder(value)?)),
         _ => Ok(None),
     }
 }
 
+fn decode_optional_type_field(term: Term, key: &str) -> NifResult<Option<Type>> {
+    decode_optional_field(term, key, decode_type)
+}
+
 fn decode_optional_expr_field(term: Term, key: &str) -> NifResult<Option<Expr>> {
-    match optional_map_get(term, key)? {
-        Some(expr_term) if !is_nil(expr_term)? => Ok(Some(decode_expr(expr_term)?)),
-        _ => Ok(None),
-    }
+    decode_optional_field(term, key, decode_expr)
 }
 
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
@@ -364,19 +369,19 @@ fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
 fn decode_literal_expr(term: Term) -> NifResult<Expr> {
     if let Ok(value) = term.decode::<bool>() {
         return if value {
-            Ok(syn::parse2(quote!(true)).map_err(|_| rustler::Error::BadArg)?)
+            parse_syn::<Expr>(quote!(true))
         } else {
-            Ok(syn::parse2(quote!(false)).map_err(|_| rustler::Error::BadArg)?)
+            parse_syn::<Expr>(quote!(false))
         };
     }
     if let Ok(value) = term.decode::<i64>() {
-        return Ok(syn::parse2(quote!(#value)).map_err(|_| rustler::Error::BadArg)?);
+        return parse_syn::<Expr>(quote!(#value));
     }
     if let Ok(value) = term.decode::<f64>() {
-        return Ok(syn::parse2(quote!(#value)).map_err(|_| rustler::Error::BadArg)?);
+        return parse_syn::<Expr>(quote!(#value));
     }
     if let Ok(value) = term.decode::<String>() {
-        return Ok(syn::parse2(quote!(#value)).map_err(|_| rustler::Error::BadArg)?);
+        return parse_syn::<Expr>(quote!(#value));
     }
     Err(rustler::Error::BadArg)
 }
