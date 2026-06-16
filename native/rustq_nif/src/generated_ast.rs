@@ -72,6 +72,11 @@ pub(crate) fn atom_key(term: Term, key: &str) -> NifResult<String> {
     term.map_get(atom(term.get_env(), key)?)?.atom_to_string()
 }
 
+pub(crate) fn struct_name(term: Term) -> NifResult<String> {
+    term.map_get(atom(term.get_env(), "__struct__")?)?
+        .atom_to_string()
+}
+
 pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<String>> {
     let value = term.map_get(atom(term.get_env(), key)?)?;
     if is_nil(value)? {
@@ -83,11 +88,6 @@ pub(crate) fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<Strin
 
 pub(crate) fn is_nil(term: Term) -> NifResult<bool> {
     Ok(term.is_atom() && term.atom_to_string()? == "nil")
-}
-
-pub(crate) fn struct_name(term: Term) -> NifResult<String> {
-    term.map_get(atom(term.get_env(), "__struct__")?)?
-        .atom_to_string()
 }
 
 pub(crate) fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
