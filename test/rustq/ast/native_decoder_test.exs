@@ -115,6 +115,37 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert binary_source =~ "left == right && ok"
   end
 
+  test "generated pattern decoders render tuple, path tuple, and struct patterns" do
+    source =
+      Native.render_ast(%AST.Function{
+        name: :pattern_exprs,
+        args: [],
+        returns: "i32",
+        body:
+          A.block do
+            A.return do
+              A.match A.var(:event) do
+                A.arm %AST.PatTuple{patterns: [A.pat(:left), A.pat(:right)]} do
+                  A.return(:left)
+                end
+
+                A.arm A.path_tuple_pat([:Event, :Click], [A.pat(:click)]) do
+                  A.return(:click)
+                end
+
+                A.arm A.struct_pat([:Click], name: A.pat(:name)) do
+                  A.return(:name)
+                end
+              end
+            end
+          end
+      })
+
+    assert source =~ "(left, right) =>"
+    assert source =~ "Event::Click(click) =>"
+    assert source =~ "Click { name: name } =>"
+  end
+
   test "generated expression decoders render match, if, and raise atom expressions" do
     match_source =
       Native.render_ast(%AST.Function{

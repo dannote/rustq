@@ -268,11 +268,26 @@ defmodule RustQ.NativeCodegen do
     end
   end
 
-  defp pat_decoder_path(name)
-       when name in [:pat_atom_guard, :pat_path_tuple, :pat_struct, :pat_tuple],
-       do: [:super, pat_decoder(name)]
+  defp pat_decoder_path(:pat_atom_guard), do: [:super, :decode_pat_atom_guard]
 
-  defp pat_decoder_path(name), do: [pat_decoder(name)]
+  defp pat_decoder_path(name)
+       when name in [
+              :pat_var,
+              :pat_wildcard,
+              :pat_path,
+              :pat_literal,
+              :pat_none,
+              :pat_some,
+              :pat_tuple,
+              :pat_ok,
+              :pat_err,
+              :pat_path_tuple,
+              :pat_struct
+            ],
+       do: [pat_decoder(name)]
+
+  defp pat_decoder_path(name),
+    do: raise(ArgumentError, "missing pattern decoder for #{inspect(name)}")
 
   defp pat_decoder(name), do: String.to_atom("decode_#{name}")
 
@@ -416,8 +431,63 @@ defmodule RustQ.NativeCodegen do
         A.return(A.path_call([:super, :decode_pat_literal_value], [map_get(:term, "value")]))
       end,
       unary_pat_decoder(:decode_pat_some, "pattern", "Some(#pat)"),
+      function :decode_pat_tuple,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Pat>" do
+        A.let(
+          :patterns,
+          A.try(A.path_call([:super, :decode_pat_list], [map_get(:term, "patterns")]))
+        )
+
+        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "(#(#patterns),*)")]))
+      end,
       unary_pat_decoder(:decode_pat_ok, "pattern", "Ok(#pat)"),
-      unary_pat_decoder(:decode_pat_err, "pattern", "Err(#pat)")
+      unary_pat_decoder(:decode_pat_err, "pattern", "Err(#pat)"),
+      function :decode_pat_path_tuple,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Pat>" do
+        A.let(
+          :path,
+          A.try(
+            A.path_call([:super, :parse_path], [
+              A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+            ])
+          )
+        )
+
+        A.let(
+          :patterns,
+          A.try(A.path_call([:super, :decode_pat_list], [map_get(:term, "patterns")]))
+        )
+
+        A.return(
+          A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path(#(#patterns),*)")])
+        )
+      end,
+      function :decode_pat_struct,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Pat>" do
+        A.let(
+          :path,
+          A.try(
+            A.path_call([:super, :parse_path], [
+              A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+            ])
+          )
+        )
+
+        A.let(
+          :fields,
+          A.try(A.path_call([:super, :decode_pat_struct_fields], [map_get(:term, "fields")]))
+        )
+
+        A.return(
+          A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path { #(#fields),* }")])
+        )
+      end
     ]
   end
 

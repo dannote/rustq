@@ -367,48 +367,22 @@ fn decode_pat_atom_guard(_term: Term) -> NifResult<Pat> {
     Err(rustler::Error::BadArg)
 }
 
-fn decode_pat_path_tuple(term: Term) -> NifResult<Pat> {
-    let env = term.get_env();
-    let path = parse_path(&path_parts(
-        term.map_get(atom(env, "path")?)?
-            .map_get(atom(env, "parts")?)?,
-    )?)?;
-    let patterns = term
-        .map_get(atom(env, "patterns")?)?
-        .decode::<Vec<Term>>()?
+fn decode_pat_list(term: Term) -> NifResult<Vec<Pat>> {
+    term.decode::<Vec<Term>>()?
         .into_iter()
         .map(decode_pat)
-        .collect::<NifResult<Vec<Pat>>>()?;
-    parse_pat(quote!(#path(#(#patterns),*)))
+        .collect()
 }
 
-fn decode_pat_struct(term: Term) -> NifResult<Pat> {
-    let env = term.get_env();
-    let path = parse_path(&path_parts(
-        term.map_get(atom(env, "path")?)?
-            .map_get(atom(env, "parts")?)?,
-    )?)?;
-    let fields = term
-        .map_get(atom(env, "fields")?)?
-        .decode::<Vec<(Term, Term)>>()?
+fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
+    term.decode::<Vec<(Term, Term)>>()?
         .into_iter()
         .map(|(name, pattern)| {
             let name = format_ident!("{}", atom_or_string(name)?);
             let pattern = decode_pat(pattern)?;
             Ok(quote!(#name: #pattern))
         })
-        .collect::<NifResult<Vec<_>>>()?;
-    parse_pat(quote!(#path { #(#fields),* }))
-}
-
-fn decode_pat_tuple(term: Term) -> NifResult<Pat> {
-    let patterns = term
-        .map_get(atom(term.get_env(), "patterns")?)?
-        .decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_pat)
-        .collect::<NifResult<Vec<Pat>>>()?;
-    parse_pat(quote!((#(#patterns),*)))
+        .collect()
 }
 
 fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {

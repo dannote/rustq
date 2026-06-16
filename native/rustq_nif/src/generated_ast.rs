@@ -144,11 +144,11 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
         ast_modules::PAT_NONE => decode_pat_none(term),
         ast_modules::PAT_SOME => decode_pat_some(term),
         ast_modules::PAT_ATOM_GUARD => super::decode_pat_atom_guard(term),
-        ast_modules::PAT_TUPLE => super::decode_pat_tuple(term),
+        ast_modules::PAT_TUPLE => decode_pat_tuple(term),
         ast_modules::PAT_OK => decode_pat_ok(term),
         ast_modules::PAT_ERR => decode_pat_err(term),
-        ast_modules::PAT_PATH_TUPLE => super::decode_pat_path_tuple(term),
-        ast_modules::PAT_STRUCT => super::decode_pat_struct(term),
+        ast_modules::PAT_PATH_TUPLE => decode_pat_path_tuple(term),
+        ast_modules::PAT_STRUCT => decode_pat_struct(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -219,6 +219,11 @@ pub(crate) fn decode_pat_some(term: Term) -> NifResult<Pat> {
     super::parse_pat(quote!(Some(# pat)))
 }
 
+pub(crate) fn decode_pat_tuple(term: Term) -> NifResult<Pat> {
+    let patterns = super::decode_pat_list(term.map_get(super::atom(term.get_env(), "patterns")?)?)?;
+    super::parse_pat(quote!((# (# patterns),*)))
+}
+
 pub(crate) fn decode_pat_ok(term: Term) -> NifResult<Pat> {
     let pat = super::decode_pat(term.map_get(super::atom(term.get_env(), "pattern")?)?)?;
     super::parse_pat(quote!(Ok(# pat)))
@@ -227,6 +232,25 @@ pub(crate) fn decode_pat_ok(term: Term) -> NifResult<Pat> {
 pub(crate) fn decode_pat_err(term: Term) -> NifResult<Pat> {
     let pat = super::decode_pat(term.map_get(super::atom(term.get_env(), "pattern")?)?)?;
     super::parse_pat(quote!(Err(# pat)))
+}
+
+pub(crate) fn decode_pat_path_tuple(term: Term) -> NifResult<Pat> {
+    let path = super::parse_path(&super::path_parts(
+        term.map_get(super::atom(term.get_env(), "path")?)?
+            .map_get(super::atom(term.get_env(), "parts")?)?,
+    )?)?;
+    let patterns = super::decode_pat_list(term.map_get(super::atom(term.get_env(), "patterns")?)?)?;
+    super::parse_pat(quote!(# path(# (# patterns),*)))
+}
+
+pub(crate) fn decode_pat_struct(term: Term) -> NifResult<Pat> {
+    let path = super::parse_path(&super::path_parts(
+        term.map_get(super::atom(term.get_env(), "path")?)?
+            .map_get(super::atom(term.get_env(), "parts")?)?,
+    )?)?;
+    let fields =
+        super::decode_pat_struct_fields(term.map_get(super::atom(term.get_env(), "fields")?)?)?;
+    super::parse_pat(quote!(# path { # (# fields),* }))
 }
 
 pub(crate) fn decode_stmt_expr_stmt(term: Term) -> NifResult<Stmt> {
