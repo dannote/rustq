@@ -260,59 +260,6 @@ fn parse_let_stmt(
     }
 }
 
-fn expr_ident(ident: proc_macro2::Ident) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(#ident))
-}
-
-fn expr_atom_value(name: proc_macro2::Ident) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(atoms::#name()))
-}
-
-fn expr_field(receiver: Expr, field: proc_macro2::Ident) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(#receiver.#field))
-}
-
-fn expr_path_call(path: syn::Path, args: Vec<Expr>) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(#path(#(#args),*)))
-}
-
-fn expr_method_call(
-    receiver: Expr,
-    method: proc_macro2::Ident,
-    args: Vec<Expr>,
-) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(#receiver.#method(#(#args),*)))
-}
-
-fn expr_tuple(values: Vec<Expr>) -> NifResult<Expr> {
-    parse_expr_tokens(quote!((#(#values),*)))
-}
-
-fn expr_binary(left: Expr, op: &str, right: Expr) -> NifResult<Expr> {
-    match op {
-        "eq" => parse_expr_tokens(quote!(#left == #right)),
-        "and" => parse_expr_tokens(quote!(#left && #right)),
-        "or" => parse_expr_tokens(quote!(#left || #right)),
-        _ => Err(rustler::Error::BadArg),
-    }
-}
-
-fn expr_match(expr: Expr, arms: Vec<Arm>) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(match #expr { #(#arms)* }))
-}
-
-fn expr_if(condition: Expr, then_block: syn::Block, else_block: syn::Block) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(if #condition #then_block else #else_block))
-}
-
-fn expr_struct_literal(path: Expr, fields: Vec<proc_macro2::TokenStream>) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(#path { #(#fields),* }))
-}
-
-fn expr_nif_raise_atom(name: String) -> NifResult<Expr> {
-    parse_expr_tokens(quote!(rustler::Error::RaiseAtom(#name)))
-}
-
 fn decode_expr(term: Term) -> NifResult<Expr> {
     decode_ast_expr(term)
 }
@@ -422,30 +369,6 @@ fn decode_pat_list(term: Term) -> NifResult<Vec<Pat>> {
         .into_iter()
         .map(decode_pat)
         .collect()
-}
-
-fn pat_ident(ident: proc_macro2::Ident) -> NifResult<Pat> {
-    parse_pat(quote!(#ident))
-}
-
-fn pat_path(path: syn::Path) -> NifResult<Pat> {
-    parse_pat(quote!(#path))
-}
-
-fn pat_tuple(patterns: Vec<Pat>) -> NifResult<Pat> {
-    parse_pat(quote!((#(#patterns),*)))
-}
-
-fn pat_path_tuple(path: syn::Path, patterns: Vec<Pat>) -> NifResult<Pat> {
-    parse_pat(quote!(#path(#(#patterns),*)))
-}
-
-fn pat_struct(path: syn::Path, fields: Vec<proc_macro2::TokenStream>) -> NifResult<Pat> {
-    parse_pat(quote!(#path { #(#fields),* }))
-}
-
-fn arm_match(pat: Pat, block: syn::Block) -> NifResult<Arm> {
-    parse_arm(quote!(#pat => #block,))
 }
 
 fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
