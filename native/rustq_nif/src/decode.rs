@@ -1,8 +1,6 @@
 use quote::{format_ident, quote};
 use rustler::{NifResult, Term};
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
-use syn::{Arm, Expr, Field, FnArg, Item, Pat, Stmt, Type};
+use syn::{Arm, Expr, Field, Item, Pat, Stmt, Type};
 
 use crate::generated_ast::{
     atom, atom_key, decode_arm, decode_ast_expr, decode_ast_item, decode_ast_pat, decode_ast_stmt,
@@ -19,90 +17,6 @@ pub(crate) fn decode_item_list(term: Term) -> NifResult<Vec<Item>> {
         .collect::<NifResult<Vec<Item>>>()
 }
 
-pub(crate) fn parse_item_use(tree: String) -> NifResult<syn::ItemUse> {
-    syn::parse_str(&format!("use {tree};")).map_err(|_| rustler::Error::BadArg)
-}
-
-pub(crate) fn parse_item_module(
-    name: syn::Ident,
-    vis: syn::Visibility,
-    items: Vec<Item>,
-) -> NifResult<syn::ItemMod> {
-    syn::parse2(quote!(#vis mod #name { #(#items)* })).map_err(|_| rustler::Error::BadArg)
-}
-
-pub(crate) fn parse_item_const(
-    name: syn::Ident,
-    ty: Type,
-    expr: Expr,
-    vis: syn::Visibility,
-) -> NifResult<syn::ItemConst> {
-    syn::parse2(quote!(#vis const #name: #ty = #expr;)).map_err(|_| rustler::Error::BadArg)
-}
-
-pub(crate) fn parse_macro_item(source: String) -> NifResult<Item> {
-    syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
-}
-
-pub(crate) fn parse_item_function(
-    name: syn::Ident,
-    vis: syn::Visibility,
-    args: Vec<(String, Type)>,
-    returns: Type,
-    lifetime: Option<String>,
-    stmts: Vec<Stmt>,
-) -> NifResult<syn::ItemFn> {
-    let inputs = args
-        .into_iter()
-        .map(|(name, ty)| {
-            let ident = format_ident!("{}", name);
-            syn::parse2::<FnArg>(quote!(#ident: #ty))
-        })
-        .collect::<Result<Punctuated<FnArg, Comma>, syn::Error>>()
-        .map_err(|_| rustler::Error::BadArg)?;
-    let block =
-        syn::parse2::<syn::Block>(quote!({ #(#stmts)* })).map_err(|_| rustler::Error::BadArg)?;
-
-    if let Some(lifetime) = lifetime {
-        let lifetime =
-            syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        syn::parse2(quote!(#vis fn #name <#lifetime> (#inputs) -> #returns #block))
-            .map_err(|_| rustler::Error::BadArg)
-    } else {
-        syn::parse2(quote!(#vis fn #name (#inputs) -> #returns #block))
-            .map_err(|_| rustler::Error::BadArg)
-    }
-}
-
-pub(crate) fn parse_item_struct(
-    name: syn::Ident,
-    vis: syn::Visibility,
-    derive: Vec<syn::Attribute>,
-    lifetime: Option<String>,
-    fields: Vec<Field>,
-) -> NifResult<syn::ItemStruct> {
-    let generics = if let Some(lifetime) = lifetime {
-        let lifetime =
-            syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        quote!(<#lifetime>)
-    } else {
-        quote!()
-    };
-
-    syn::parse2(quote!(#(#derive)* #vis struct #name #generics { #(#fields)* }))
-        .map_err(|_| rustler::Error::BadArg)
-}
-
-pub(crate) fn parse_struct_field(
-    name: syn::Ident,
-    ty: Type,
-    vis: syn::Visibility,
-) -> NifResult<Field> {
-    let item: syn::ItemStruct = syn::parse2(quote!(struct __RustQ { #vis #name: #ty, }))
-        .map_err(|_| rustler::Error::BadArg)?;
-    item.fields.into_iter().next().ok_or(rustler::Error::BadArg)
-}
-
 pub(crate) fn decode_struct_field_list(term: Term) -> NifResult<Vec<Field>> {
     decode_list(term, decode_struct_field)
 }
@@ -111,26 +25,8 @@ pub(crate) fn decode_enum_variant_list(term: Term) -> NifResult<Vec<syn::Variant
     decode_list(term, decode_enum_variant)
 }
 
-pub(crate) fn parse_item_enum(
-    name: syn::Ident,
-    vis: syn::Visibility,
-    derive: Vec<syn::Attribute>,
-    variants: Vec<syn::Variant>,
-) -> NifResult<syn::ItemEnum> {
-    syn::parse2(quote!(#(#derive)* #vis enum #name { #(#variants),* }))
-        .map_err(|_| rustler::Error::BadArg)
-}
-
 pub(crate) fn decode_type_list(term: Term) -> NifResult<Vec<Type>> {
     decode_list(term, decode_type)
-}
-
-pub(crate) fn parse_enum_variant(name: syn::Ident, tuple: Vec<Type>) -> NifResult<syn::Variant> {
-    if tuple.is_empty() {
-        syn::parse2(quote!(#name)).map_err(|_| rustler::Error::BadArg)
-    } else {
-        syn::parse2(quote!(#name(#(#tuple),*))).map_err(|_| rustler::Error::BadArg)
-    }
 }
 
 // Rust syntax attribute/visibility decoders shared by handwritten and generated code.
@@ -379,32 +275,4 @@ pub(crate) fn decode_lifetime_list(term: Term) -> NifResult<Vec<String>> {
         .into_iter()
         .map(atom_or_string)
         .collect::<NifResult<Vec<String>>>()
-}
-
-pub(crate) fn parse_type_path(path: String, lifetimes: Vec<String>) -> NifResult<Type> {
-    if lifetimes.is_empty() {
-        parse_type(&path)
-    } else {
-        parse_type(&format!(
-            "{}<{}>",
-            path,
-            lifetimes
-                .into_iter()
-                .map(|value| format!("'{}", value))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ))
-    }
-}
-
-pub(crate) fn parse_type_ref(
-    inner: Type,
-    mutable: bool,
-    lifetime: Option<String>,
-) -> NifResult<Type> {
-    let lifetime = lifetime
-        .map(|value| format!("'{} ", value))
-        .unwrap_or_default();
-    let mutability = if mutable { "mut " } else { "" };
-    parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
 }

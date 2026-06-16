@@ -7,7 +7,7 @@ mod parse;
 mod template;
 
 pub(crate) use decode::*;
-pub(crate) use parse::{parse_expr, parse_path, parse_syn, parse_type};
+pub(crate) use parse::*;
 use template::{render_source, template_error};
 
 use generated_ast::{atoms, decode_ast_item};
