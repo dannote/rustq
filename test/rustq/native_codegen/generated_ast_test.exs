@@ -1,19 +1,51 @@
 defmodule RustQ.NativeCodegen.GeneratedASTTest do
   use ExUnit.Case, async: true
 
-  test "generates AST support modules and dispatch functions" do
+  alias RustQ.Rust.AST
+
+  test "generates AST support smoke source" do
     source = RustQ.NativeCodegen.generated_ast_support()
 
-    assert source =~ "use rustler::{Atom, Env, NifResult, Term};"
     assert source =~ "pub(crate) mod atoms"
     assert source =~ "pub(crate) mod ast_modules"
     assert source =~ "pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item>"
-    assert source =~ "pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type>"
-    assert source =~ "pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat>"
-    assert source =~ "pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt>"
-    assert source =~ "pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr>"
-    assert source =~ ~s|pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";|
     refute source =~ ~s|pub(crate) const ARM: &str = "Elixir.RustQ.Rust.AST.Arm";|
+  end
+
+  test "generated modules are AST-backed" do
+    modules = RustQ.NativeCodegen.Modules.asts()
+
+    assert %AST.Module{name: :atoms, items: [%AST.MacroItem{}], vis: :crate} =
+             Enum.find(modules, &match?(%AST.Module{name: :atoms}, &1))
+
+    assert %AST.Module{name: :ast_modules, items: constants, vis: :crate} =
+             Enum.find(modules, &match?(%AST.Module{name: :ast_modules}, &1))
+
+    constant_names = constants |> Enum.map(& &1.name) |> MapSet.new()
+    assert MapSet.member?(constant_names, :FUNCTION)
+    refute MapSet.member?(constant_names, :ARM)
+    refute MapSet.member?(constant_names, :STRUCT_FIELD)
+    refute MapSet.member?(constant_names, :ENUM_VARIANT)
+  end
+
+  test "dispatch functions are AST-backed" do
+    dispatch = RustQ.NativeCodegen.Dispatch.asts()
+    names = dispatch |> Enum.map(& &1.name) |> MapSet.new()
+
+    assert MapSet.subset?(
+             MapSet.new([
+               :decode_ast_item,
+               :decode_ast_type,
+               :decode_ast_pat,
+               :decode_ast_stmt,
+               :decode_ast_expr
+             ]),
+             names
+           )
+
+    for function <- dispatch do
+      assert %AST.Function{body: [%AST.Return{expr: %AST.Match{}}]} = function
+    end
   end
 
   test "dogfooded decoder modules cover generated decoder categories" do

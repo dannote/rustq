@@ -31,6 +31,13 @@ Preferred order:
    - Prefer `defstruct`, `@type t`, and RustQ AST schema introspection over parallel hand-written schema maps.
    - Avoid duplicating field/type/category metadata unless there is no better source.
 
+7. **Self-hosting invariants**
+   - Do not introduce trivial Rust wrapper functions for semantic forms already written in `defrust`.
+   - Do not add parallel constructor registries or data tables for `expr!`, `pat!`, `stmt!`, or `arm!` shapes.
+   - Extend `RustQ.Meta.Lower` and existing RustQ AST nodes before adding new primitive Rust helpers.
+   - Funnel token-only semantic escapes through generic primitives such as `parse_syn::<T>(quote!(...))` rather than one helper per shape.
+   - Every new `RustQ.Rust.AST.Schema` node must get behavioral native rendering coverage.
+
 Before writing generated Rust as a string, ask:
 
 > Can this be valid Elixir, `defrust`, or `RustQ.Rust.AST.Builder` instead?

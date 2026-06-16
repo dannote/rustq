@@ -94,6 +94,33 @@ defmodule RustQ.Meta.LowerTest do
            ] = else_body
   end
 
+  test "ordinary syntax lowers to RustQ AST while explicit expr helpers target syn" do
+    draw_rect = Enum.find(Generated.__rustq_asts__(), &(&1.name == :draw_rect))
+
+    decode_expr_ref =
+      Enum.find(RustQ.NativeCodegen.Decoders.asts(), &(&1.name == :decode_expr_ref))
+
+    assert Enum.any?(
+             draw_rect.body,
+             &match?(%RustQ.Rust.AST.ExprStmt{expr: %RustQ.Rust.AST.MethodCall{}}, &1)
+           )
+
+    assert inspect(draw_rect) =~ "RustQ.Rust.AST.Ref"
+
+    assert %RustQ.Rust.AST.Function{
+             body: [
+               %RustQ.Rust.AST.Let{},
+               %RustQ.Rust.AST.Let{},
+               %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{then: then_body, else: else_body}}
+             ]
+           } = decode_expr_ref
+
+    assert [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.PathCall{path: then_path}}] = then_body
+    assert [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.PathCall{path: else_path}}] = else_body
+    assert then_path.parts == [:super, "parse_syn::<Expr>"]
+    assert else_path.parts == [:super, "parse_syn::<Expr>"]
+  end
+
   test "dogfooded decoder wrappers lower Super calls and Rust constructors" do
     decoders = RustQ.NativeCodegen.Decoders.asts()
 
