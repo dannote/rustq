@@ -1,4 +1,4 @@
-defmodule RustQ.NativeASTDecoderTest do
+defmodule RustQ.Rust.AST.NativeDecoderTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Native

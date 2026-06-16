@@ -1,4 +1,4 @@
-defmodule RustQ.Rust.ASTBuilderTest do
+defmodule RustQ.Rust.AST.BuilderTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Rust.AST

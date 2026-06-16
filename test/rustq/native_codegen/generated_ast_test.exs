@@ -1,4 +1,4 @@
-defmodule RustQ.NativeCodegenTest do
+defmodule RustQ.NativeCodegen.GeneratedASTTest do
   use ExUnit.Case, async: true
 
   test "generates AST helper functions through RustQ AST rendering" do
