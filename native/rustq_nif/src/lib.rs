@@ -14,9 +14,8 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_type, decode_pat_none,
-    decode_pat_var, decode_pat_wildcard, expect_struct, is_nil, optional_atom_key,
-    optional_map_get, struct_name,
+    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_pat, decode_ast_type,
+    expect_struct, is_nil, optional_atom_key, optional_map_get, struct_name,
 };
 
 #[derive(NifMap)]
@@ -452,7 +451,7 @@ fn decode_arm(term: Term) -> NifResult<Arm> {
     }
 }
 
-fn decode_pat_literal(term: Term) -> NifResult<Pat> {
+fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     if let Ok(value) = term.decode::<String>() {
         return parse_pat(quote!(#value));
     }
@@ -470,74 +469,55 @@ fn parse_pat(tokens: proc_macro2::TokenStream) -> NifResult<Pat> {
 }
 
 fn decode_pat(term: Term) -> NifResult<Pat> {
-    let module = struct_name(term)?;
-    let env = term.get_env();
+    decode_ast_pat(term)
+}
 
-    match module.as_str() {
-        ast_modules::PAT_VAR => decode_pat_var(term),
-        ast_modules::PAT_WILDCARD => decode_pat_wildcard(term),
-        ast_modules::PAT_PATH => {
-            let path = parse_path(&path_parts(
-                term.map_get(atom(env, "path")?)?
-                    .map_get(atom(env, "parts")?)?,
-            )?)?;
-            parse_pat(quote!(#path))
-        }
-        ast_modules::PAT_LITERAL => decode_pat_literal(term.map_get(atom(env, "value")?)?),
-        ast_modules::PAT_NONE => decode_pat_none(term),
-        ast_modules::PAT_SOME => {
-            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
-            parse_pat(quote!(Some(#pat)))
-        }
-        ast_modules::PAT_OK => {
-            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
-            parse_pat(quote!(Ok(#pat)))
-        }
-        ast_modules::PAT_ERR => {
-            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
-            parse_pat(quote!(Err(#pat)))
-        }
-        ast_modules::PAT_PATH_TUPLE => {
-            let path = parse_path(&path_parts(
-                term.map_get(atom(env, "path")?)?
-                    .map_get(atom(env, "parts")?)?,
-            )?)?;
-            let patterns = term
-                .map_get(atom(env, "patterns")?)?
-                .decode::<Vec<Term>>()?
-                .into_iter()
-                .map(decode_pat)
-                .collect::<NifResult<Vec<Pat>>>()?;
-            parse_pat(quote!(#path(#(#patterns),*)))
-        }
-        ast_modules::PAT_STRUCT => {
-            let path = parse_path(&path_parts(
-                term.map_get(atom(env, "path")?)?
-                    .map_get(atom(env, "parts")?)?,
-            )?)?;
-            let fields = term
-                .map_get(atom(env, "fields")?)?
-                .decode::<Vec<(Term, Term)>>()?
-                .into_iter()
-                .map(|(name, pattern)| {
-                    let name = format_ident!("{}", atom_or_string(name)?);
-                    let pattern = decode_pat(pattern)?;
-                    Ok(quote!(#name: #pattern))
-                })
-                .collect::<NifResult<Vec<_>>>()?;
-            parse_pat(quote!(#path { #(#fields),* }))
-        }
-        ast_modules::PAT_TUPLE => {
-            let patterns = term
-                .map_get(atom(env, "patterns")?)?
-                .decode::<Vec<Term>>()?
-                .into_iter()
-                .map(decode_pat)
-                .collect::<NifResult<Vec<Pat>>>()?;
-            parse_pat(quote!((#(#patterns),*)))
-        }
-        _ => Err(rustler::Error::BadArg),
-    }
+fn decode_pat_atom_guard(_term: Term) -> NifResult<Pat> {
+    Err(rustler::Error::BadArg)
+}
+
+fn decode_pat_path_tuple(term: Term) -> NifResult<Pat> {
+    let env = term.get_env();
+    let path = parse_path(&path_parts(
+        term.map_get(atom(env, "path")?)?
+            .map_get(atom(env, "parts")?)?,
+    )?)?;
+    let patterns = term
+        .map_get(atom(env, "patterns")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_pat)
+        .collect::<NifResult<Vec<Pat>>>()?;
+    parse_pat(quote!(#path(#(#patterns),*)))
+}
+
+fn decode_pat_struct(term: Term) -> NifResult<Pat> {
+    let env = term.get_env();
+    let path = parse_path(&path_parts(
+        term.map_get(atom(env, "path")?)?
+            .map_get(atom(env, "parts")?)?,
+    )?)?;
+    let fields = term
+        .map_get(atom(env, "fields")?)?
+        .decode::<Vec<(Term, Term)>>()?
+        .into_iter()
+        .map(|(name, pattern)| {
+            let name = format_ident!("{}", atom_or_string(name)?);
+            let pattern = decode_pat(pattern)?;
+            Ok(quote!(#name: #pattern))
+        })
+        .collect::<NifResult<Vec<_>>>()?;
+    parse_pat(quote!(#path { #(#fields),* }))
+}
+
+fn decode_pat_tuple(term: Term) -> NifResult<Pat> {
+    let patterns = term
+        .map_get(atom(term.get_env(), "patterns")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_pat)
+        .collect::<NifResult<Vec<Pat>>>()?;
+    parse_pat(quote!((#(#patterns),*)))
 }
 
 fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {

@@ -17,6 +17,7 @@ defmodule RustQ.NativeCodegen do
       helper_items(),
       decode_ast_item_item(),
       decode_ast_type_item(),
+      decode_ast_pat_item(),
       decode_pat_helper_items()
     ]
     |> List.flatten()
@@ -267,6 +268,47 @@ defmodule RustQ.NativeCodegen do
 
   defp type_decoder(name), do: String.to_atom("decode_#{name}")
 
+  defp decode_ast_pat_item do
+    %AST.Function{
+      name: :decode_ast_pat,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Pat>",
+      body:
+        A.block do
+          A.return do
+            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+              decode_ast_pat_arms()
+            end
+          end
+        end
+    }
+  end
+
+  defp decode_ast_pat_arms do
+    Schema.nodes(:pat)
+    |> Enum.map(&decode_ast_pat_arm/1)
+    |> Kernel.++([
+      A.arm A.wildcard() do
+        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+      end
+    ])
+  end
+
+  defp decode_ast_pat_arm(%Schema.Node{name: name, rust_const: rust_const}) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
+      A.return(A.path_call(pat_decoder_path(name), [:term]))
+    end
+  end
+
+  defp pat_decoder_path(name)
+       when name in [:pat_atom_guard, :pat_path_tuple, :pat_struct, :pat_tuple],
+       do: [:super, pat_decoder(name)]
+
+  defp pat_decoder_path(name), do: [pat_decoder(name)]
+
+  defp pat_decoder(name), do: String.to_atom("decode_#{name}")
+
   defp decode_pat_helper_items do
     [
       %AST.Function{
@@ -303,8 +345,66 @@ defmodule RustQ.NativeCodegen do
           A.block do
             A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "None")]))
           end
-      }
+      },
+      %AST.Function{
+        name: :decode_pat_path,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Pat>",
+        body:
+          A.block do
+            A.let(
+              :path,
+              A.try(
+                A.path_call([:super, :parse_path], [
+                  A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+                ])
+              )
+            )
+
+            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path")]))
+          end
+      },
+      %AST.Function{
+        name: :decode_pat_literal,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Pat>",
+        body:
+          A.block do
+            A.return(A.path_call([:super, :decode_pat_literal_value], [map_get(:term, "value")]))
+          end
+      },
+      unary_pat_decoder(:decode_pat_some, "pattern", "Some(#pat)"),
+      unary_pat_decoder(:decode_pat_ok, "pattern", "Ok(#pat)"),
+      unary_pat_decoder(:decode_pat_err, "pattern", "Err(#pat)")
     ]
+  end
+
+  defp unary_pat_decoder(name, field, tokens) do
+    %AST.Function{
+      name: name,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Pat>",
+      body:
+        A.block do
+          A.let(:pat, A.try(A.path_call([:super, :decode_pat], [map_get(:term, field)])))
+          A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, tokens)]))
+        end
+    }
+  end
+
+  defp path_parts_term(term) do
+    A.try(A.method(map_get(term, "path"), :map_get, [atom_expr(term, "parts")]))
+  end
+
+  defp map_get(receiver, key) do
+    A.try(A.method(receiver, :map_get, [atom_expr(receiver, key)]))
+  end
+
+  defp atom_expr(receiver, key) do
+    A.try(A.path_call([:super, :atom], [A.method(receiver, :get_env), key]))
   end
 
   defp format_rust(source) do
