@@ -373,6 +373,9 @@ Recently completed:
 - RustQ AST now models `static` items, including native decoder support, and
   `RustQ.Rustler.CachedAtoms` uses that AST for its per-atom statics/functions
   while retaining the shared helper template.
+- Rusty-Elixir supports idiomatic Rust-facing attributes on `defrust`, starting
+  with `@nif schedule: "DirtyCpu"` and `@allow :dead_code`, lowered through a
+  structural `Attribute` AST node.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

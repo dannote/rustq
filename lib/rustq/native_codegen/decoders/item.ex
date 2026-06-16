@@ -64,7 +64,8 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     returns = unwrap!(Super.decode_type(unwrap!(required_field(term, "returns"))))
     lifetime = unwrap!(optional_atom_key(term, "lifetime"))
     stmts = unwrap!(Super.decode_stmt_list(unwrap!(required_field(term, "body"))))
-    Super.parse_item_function_args(name, vis, args, returns, lifetime, stmts)
+    attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
+    Super.parse_item_function_args(name, vis, args, returns, lifetime, stmts, attrs)
   end
 
   @spec decode_derive_path_list(term()) :: R.nif_result(R.vec(Path.t()))

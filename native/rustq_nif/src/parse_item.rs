@@ -110,6 +110,7 @@ pub(crate) fn parse_item_function_args(
     returns: Type,
     lifetime: Option<String>,
     stmts: Vec<Stmt>,
+    attrs: Vec<syn::Attribute>,
 ) -> NifResult<syn::ItemFn> {
     let inputs = args;
     let block = parse_syn::<syn::Block>(quote!({ #(#stmts)* }))?;
@@ -117,9 +118,9 @@ pub(crate) fn parse_item_function_args(
     if let Some(lifetime) = lifetime {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        parse_syn(quote!(#vis fn #name <#lifetime> (#(#inputs),*) -> #returns #block))
+        parse_syn(quote!(#(#attrs)* #vis fn #name <#lifetime> (#(#inputs),*) -> #returns #block))
     } else {
-        parse_syn(quote!(#vis fn #name (#(#inputs),*) -> #returns #block))
+        parse_syn(quote!(#(#attrs)* #vis fn #name (#(#inputs),*) -> #returns #block))
     }
 }
 

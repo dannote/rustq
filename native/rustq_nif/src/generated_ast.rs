@@ -260,7 +260,8 @@ pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {
     let returns = super::decode_type(required_field(term, "returns")?)?;
     let lifetime = optional_atom_key(term, "lifetime")?;
     let stmts = super::decode_stmt_list(required_field(term, "body")?)?;
-    super::parse_item_function_args(name, vis, args, returns, lifetime, stmts)
+    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
+    super::parse_item_function_args(name, vis, args, returns, lifetime, stmts, attrs)
 }
 
 pub(crate) fn decode_derive_path_list<'a>(term: Term<'a>) -> NifResult<Vec<Path>> {

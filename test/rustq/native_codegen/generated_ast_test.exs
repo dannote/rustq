@@ -21,6 +21,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     constant_names = constants |> Enum.map(& &1.name) |> MapSet.new()
     assert MapSet.member?(constant_names, :FUNCTION)
     refute MapSet.member?(constant_names, :ARM)
+    refute MapSet.member?(constant_names, :ATTRIBUTE)
     refute MapSet.member?(constant_names, :DERIVE)
     refute MapSet.member?(constant_names, :FUNCTION_ARG)
     refute MapSet.member?(constant_names, :STRUCT_FIELD)

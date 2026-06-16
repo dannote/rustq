@@ -19,6 +19,8 @@ defmodule RustQ.Meta do
     quote do
       import RustQ.Meta
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
+      Module.register_attribute(__MODULE__, :nif, accumulate: false)
+      Module.register_attribute(__MODULE__, :allow, accumulate: true)
       @before_compile RustQ.Meta
     end
   end
@@ -31,7 +33,8 @@ defmodule RustQ.Meta do
       if arity == 0, do: [], else: for(index <- 1..arity//1, do: Macro.var(:"_arg#{index}", nil))
 
     quote do
-      @rustq_defs {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast))}
+      @rustq_defs {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast)),
+                   RustQ.Meta.__take_pending_attrs__(__MODULE__)}
       def unquote(name)(unquote_splicing(stub_args)), do: :erlang.nif_error(:rustq_defrust_stub)
     end
   end
@@ -72,7 +75,32 @@ defmodule RustQ.Meta do
     end
   end
 
-  defp build_ast({call_ast, body_ast}, specs, type_aliases) do
+  def __take_pending_attrs__(module), do: pending_attrs(module)
+
+  defp pending_attrs(module) do
+    nif = Module.get_attribute(module, :nif)
+    allow = Module.get_attribute(module, :allow) |> List.wrap() |> Enum.reverse()
+    Module.delete_attribute(module, :nif)
+    Module.delete_attribute(module, :allow)
+
+    []
+    |> add_nif_attr(nif)
+    |> Kernel.++(Enum.map(allow, &allow_attr/1))
+  end
+
+  defp add_nif_attr(attrs, nil), do: attrs
+  defp add_nif_attr(attrs, false), do: attrs
+  defp add_nif_attr(attrs, true), do: attrs ++ [%AST.Attribute{path: [:rustler, :nif]}]
+
+  defp add_nif_attr(attrs, opts) when is_list(opts),
+    do: attrs ++ [%AST.Attribute{path: [:rustler, :nif], args: opts}]
+
+  defp allow_attr(values), do: %AST.Attribute{path: [:allow], args: List.wrap(values)}
+
+  defp build_ast({call_ast, body_ast}, specs, type_aliases),
+    do: build_ast({call_ast, body_ast, []}, specs, type_aliases)
+
+  defp build_ast({call_ast, body_ast, attrs}, specs, type_aliases) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
@@ -89,7 +117,8 @@ defmodule RustQ.Meta do
       args: args,
       returns: return_type.ast,
       body: body,
-      lifetime: lifetime
+      lifetime: lifetime,
+      attrs: attrs
     }
   end
 

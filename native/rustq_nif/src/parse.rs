@@ -43,6 +43,16 @@ impl ParseSynTokens for Pat {
     }
 }
 
+impl ParseSynTokens for syn::Attribute {
+    fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
+        syn::Attribute::parse_outer
+            .parse2(tokens)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| syn::Error::new(proc_macro2::Span::call_site(), "missing attribute"))
+    }
+}
+
 pub(crate) fn parse_syn<T: ParseSynTokens>(tokens: proc_macro2::TokenStream) -> NifResult<T> {
     T::parse_syn_tokens(tokens).map_err(|_| rustler::Error::BadArg)
 }

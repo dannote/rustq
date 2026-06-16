@@ -76,6 +76,57 @@ pub(crate) fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
     }
 }
 
+enum AttributeArg {
+    Ident(proc_macro2::Ident),
+    NameValueString(proc_macro2::Ident, String),
+}
+
+impl ToTokens for AttributeArg {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            AttributeArg::Ident(ident) => tokens.extend(quote!(#ident)),
+            AttributeArg::NameValueString(ident, value) => tokens.extend(quote!(#ident = #value)),
+        }
+    }
+}
+
+pub(crate) fn decode_attribute_list(term: Term) -> NifResult<Vec<syn::Attribute>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_attribute)
+        .collect()
+}
+
+fn decode_attribute(term: Term) -> NifResult<syn::Attribute> {
+    let path = path_from_parts(decode_string_list(term.map_get(atom(term.get_env(), "path")?)?)?)?;
+    let args = decode_attribute_args(term.map_get(atom(term.get_env(), "args")?)?)?;
+
+    if args.is_empty() {
+        parse_syn(quote!(#[#path]))
+    } else {
+        parse_syn(quote!(#[#path(#(#args),*)]))
+    }
+}
+
+fn decode_attribute_args(term: Term) -> NifResult<Vec<AttributeArg>> {
+    if let Ok(args) = term.decode::<Vec<(Term, Term)>>() {
+        return args
+            .into_iter()
+            .map(|(key, value)| {
+                Ok(AttributeArg::NameValueString(
+                    format_ident!("{}", atom_or_string(key)?),
+                    value.decode::<String>()?,
+                ))
+            })
+            .collect();
+    }
+
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(|value| Ok(AttributeArg::Ident(format_ident!("{}", atom_or_string(value)?))))
+        .collect()
+}
+
 pub(crate) fn decode_derive_path_terms(term: Term) -> NifResult<Vec<Term>> {
     term.decode::<Vec<Term>>()?
         .into_iter()

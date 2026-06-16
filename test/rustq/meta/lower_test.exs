@@ -1,9 +1,37 @@
 Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
 
+defmodule RustQ.Meta.AttrCase do
+  use RustQ.Meta
+
+  alias RustQ.Type, as: R
+
+  @allow :dead_code
+  @nif schedule: "DirtyCpu"
+  @spec render(term()) :: R.nif_result(term())
+  defrust render(term) do
+    render_impl(term)
+  end
+end
+
 defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.GeneratedCase, as: Generated
+
+  test "defrust consumes idiomatic Rust-facing attributes" do
+    assert %RustQ.Rust.AST.Function{attrs: attrs} =
+             RustQ.Meta.AttrCase.__rustq_asts__()
+             |> Enum.find(&(&1.name == :render))
+
+    assert [
+             %RustQ.Rust.AST.Attribute{path: [:rustler, :nif], args: [schedule: "DirtyCpu"]},
+             %RustQ.Rust.AST.Attribute{path: [:allow], args: [:dead_code]}
+           ] = attrs
+
+    source = RustQ.Meta.AttrCase.__rustq_source__()
+    assert source =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
+    assert source =~ "#[allow(dead_code)]"
+  end
 
   test "generated ASTs are retained before fragment validation" do
     [draw_save, decode_mode, draw_rect, maybe_save | _] = Generated.__rustq_asts__()

@@ -83,6 +83,9 @@ defmodule RustQ.Rust.AST.Builder do
   def function_args(args), do: Enum.map(args, &function_arg/1)
 
   def derive(paths), do: %AST.Derive{paths: List.wrap(paths)}
+  def attr(path, args \\ []), do: %AST.Attribute{path: List.wrap(path), args: args}
+  def nif_attr(opts \\ []), do: attr([:rustler, :nif], opts)
+  def allow_attr(value), do: attr([:allow], List.wrap(value))
 
   def macro_item(source), do: %AST.MacroItem{source: source}
   def macro_item_call(path, args \\ []), do: %AST.MacroItemCall{path: expr_path(path), args: args}
@@ -198,6 +201,7 @@ defmodule RustQ.Rust.AST.Builder do
   def expr(%{__struct__: module} = value)
       when module in [
              AST.Use,
+             AST.Attribute,
              AST.Module,
              AST.Const,
              AST.Static,

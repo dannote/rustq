@@ -38,6 +38,7 @@ defmodule RustQ.ASTSamples do
 
   defp semantic_fragment(:module), do: "mod sample"
   defp semantic_fragment(:macro_item_call), do: "rustler::atoms!"
+  defp semantic_fragment(:attribute), do: ~s|#[allow(dead_code)]|
   defp semantic_fragment(:function_arg), do: "value: u32"
   defp semantic_fragment(:derive), do: "#[derive(Clone, serde::Serialize)]"
   defp semantic_fragment(:struct_field), do: "value: u32"
@@ -107,6 +108,13 @@ defmodule RustQ.ASTSamples do
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
   def sample_for(:macro_item_call), do: A.macro_item_call([:rustler, :atoms], [:ok, :error])
   def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")
+
+  def sample_for(:attribute),
+    do:
+      function_sample(:attribute_sample, A.lit(1),
+        returns: "i64",
+        attrs: [A.allow_attr(:dead_code)]
+      )
 
   def sample_for(:function_arg),
     do: %AST.Function{
@@ -309,7 +317,13 @@ defmodule RustQ.ASTSamples do
         true -> [A.return(expr)]
       end
 
-    %AST.Function{name: name, args: Keyword.get(opts, :args, []), returns: returns, body: body}
+    %AST.Function{
+      name: name,
+      args: Keyword.get(opts, :args, []),
+      returns: returns,
+      body: body,
+      attrs: Keyword.get(opts, :attrs, [])
+    }
   end
 
   defp match_sample(name, pattern, opts \\ []) do

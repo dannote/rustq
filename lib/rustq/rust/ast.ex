@@ -84,6 +84,17 @@ defmodule RustQ.Rust.AST do
       )
   )
 
+  defnode(Attribute, :field, [:path, args: [], style: :outer],
+    type:
+      quote(
+        do: %__MODULE__{
+          path: [atom() | String.t()],
+          args: keyword() | [atom() | String.t()],
+          style: :outer | :inner
+        }
+      )
+  )
+
   defnode(Module, :item, [:name, items: [], vis: nil],
     type:
       quote(
@@ -132,7 +143,10 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type() | String.t()})
   )
 
-  defnode(Function, :item, [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil],
+  defnode(
+    Function,
+    :item,
+    [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil, attrs: []],
     type:
       quote(
         do: %__MODULE__{
@@ -141,7 +155,8 @@ defmodule RustQ.Rust.AST do
           returns: RustQ.Rust.AST.type() | String.t(),
           body: [RustQ.Rust.AST.stmt()],
           lifetime: atom() | nil,
-          vis: RustQ.Rust.AST.vis()
+          vis: RustQ.Rust.AST.vis(),
+          attrs: [RustQ.Rust.AST.Attribute.t()]
         }
       )
   )
@@ -380,6 +395,7 @@ defmodule RustQ.Rust.AST do
   def __rustq_ast_modules__ do
     [
       Use,
+      Attribute,
       Module,
       Const,
       Static,
@@ -552,6 +568,7 @@ defmodule RustQ.Rust.AST do
     lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""
 
     [
+      render_attrs(function.attrs),
       render_vis(function.vis),
       "fn ",
       Atom.to_string(function.name),
@@ -566,6 +583,25 @@ defmodule RustQ.Rust.AST do
     ]
     |> IO.iodata_to_binary()
   end
+
+  defp render_attrs(attrs), do: Elixir.Enum.map(attrs, &[render_attr(&1), "\n"])
+
+  defp render_attr(%Attribute{style: :outer, path: path, args: []}),
+    do: ["#[", render_attr_path(path), "]"]
+
+  defp render_attr(%Attribute{style: :outer, path: path, args: args}),
+    do: ["#[", render_attr_path(path), "(", render_attr_args(args), ")]"]
+
+  defp render_attr_path(path), do: Elixir.Enum.map_join(path, "::", &to_string/1)
+
+  defp render_attr_args(args) when is_list(args) do
+    args
+    |> Elixir.Enum.map(&render_attr_arg/1)
+    |> Elixir.Enum.intersperse(", ")
+  end
+
+  defp render_attr_arg({key, value}), do: [to_string(key), " = ", inspect(value)]
+  defp render_attr_arg(value), do: to_string(value)
 
   def render_function_arg(%FunctionArg{name: name, type: type}) do
     "#{name}: #{render_type(type)}"
