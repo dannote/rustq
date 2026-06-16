@@ -14,8 +14,9 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_pat, decode_ast_stmt,
-    decode_ast_type, expect_struct, is_nil, optional_atom_key, optional_map_get, struct_name,
+    ast_modules, atom, atom_key, atoms, decode_ast_expr, decode_ast_item, decode_ast_pat,
+    decode_ast_stmt, decode_ast_type, expect_struct, is_nil, optional_atom_key, optional_map_get,
+    struct_name,
 };
 
 #[derive(NifMap)]
@@ -262,6 +263,10 @@ fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
 }
 
 fn decode_expr(term: Term) -> NifResult<Expr> {
+    decode_ast_expr(term)
+}
+
+fn decode_expr_manual(term: Term) -> NifResult<Expr> {
     let module = struct_name(term)?;
     let env = term.get_env();
 

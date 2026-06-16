@@ -4,7 +4,7 @@ use quote::quote;
 
 use rustler::{Atom, Env, NifResult, Term};
 
-use syn::{Item, Pat, Stmt, Type};
+use syn::{Expr, Item, Pat, Stmt, Type};
 
 pub(crate) mod atoms {
     rustler::atoms! {
@@ -162,6 +162,33 @@ pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
     }
 }
 
+pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
+    match struct_name(term)?.as_str() {
+        ast_modules::VAR => decode_expr_var(term),
+        ast_modules::PATH => decode_expr_path(term),
+        ast_modules::FIELD => super::decode_expr_manual(term),
+        ast_modules::PATH_CALL => super::decode_expr_manual(term),
+        ast_modules::METHOD_CALL => super::decode_expr_manual(term),
+        ast_modules::STRUCT_LITERAL => super::decode_expr_manual(term),
+        ast_modules::LOCAL_CALL => super::decode_expr_manual(term),
+        ast_modules::REF => super::decode_expr_manual(term),
+        ast_modules::TRY => super::decode_expr_manual(term),
+        ast_modules::TUPLE => super::decode_expr_manual(term),
+        ast_modules::LITERAL => super::decode_expr_manual(term),
+        ast_modules::TOKEN_MACRO => super::decode_expr_manual(term),
+        ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
+        ast_modules::NONE => decode_expr_none(term),
+        ast_modules::SOME => super::decode_expr_manual(term),
+        ast_modules::OK => super::decode_expr_manual(term),
+        ast_modules::ERR => super::decode_expr_manual(term),
+        ast_modules::NIF_RAISE_ATOM => super::decode_expr_manual(term),
+        ast_modules::MATCH => super::decode_expr_manual(term),
+        ast_modules::IF => super::decode_expr_manual(term),
+        ast_modules::BINARY_OP => super::decode_expr_manual(term),
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
 pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat> {
     let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
     super::parse_pat(quote!(# ident))
@@ -210,4 +237,24 @@ pub(crate) fn decode_stmt_expr_stmt(term: Term) -> NifResult<Stmt> {
 pub(crate) fn decode_stmt_return(term: Term) -> NifResult<Stmt> {
     let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
     Ok(Stmt::Expr(expr, None))
+}
+
+pub(crate) fn decode_expr_var(term: Term) -> NifResult<Expr> {
+    let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
+    super::parse_expr(&quote!(# ident).to_string())
+}
+
+pub(crate) fn decode_expr_path(term: Term) -> NifResult<Expr> {
+    super::parse_expr(&super::path_parts(
+        term.map_get(super::atom(term.get_env(), "parts")?)?,
+    )?)
+}
+
+pub(crate) fn decode_expr_atom_value(term: Term) -> NifResult<Expr> {
+    let name = quote::format_ident!("{}", super::atom_key(term, "name")?);
+    super::parse_expr(&quote!(atoms::# name()).to_string())
+}
+
+pub(crate) fn decode_expr_none(_term: Term) -> NifResult<Expr> {
+    super::parse_expr("None")
 }

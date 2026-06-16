@@ -11,7 +11,7 @@ defmodule RustQ.NativeCodegen do
     [
       A.use("quote::quote"),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
-      A.use("syn::{Item, Pat, Stmt, Type}"),
+      A.use("syn::{Expr, Item, Pat, Stmt, Type}"),
       atoms_module(),
       ast_modules_module(),
       helper_items(),
@@ -19,8 +19,10 @@ defmodule RustQ.NativeCodegen do
       decode_ast_type_item(),
       decode_ast_pat_item(),
       decode_ast_stmt_item(),
+      decode_ast_expr_item(),
       decode_pat_helper_items(),
-      decode_stmt_helper_items()
+      decode_stmt_helper_items(),
+      decode_expr_helper_items()
     ]
     |> List.flatten()
     |> AST.render_file_native()
@@ -348,6 +350,46 @@ defmodule RustQ.NativeCodegen do
   defp stmt_decoder_path(:expr_stmt), do: [:decode_stmt_expr_stmt]
   defp stmt_decoder_path(:return), do: [:decode_stmt_return]
 
+  defp decode_ast_expr_item do
+    %AST.Function{
+      name: :decode_ast_expr,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Expr>",
+      body:
+        A.block do
+          A.return do
+            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+              decode_ast_expr_arms()
+            end
+          end
+        end
+    }
+  end
+
+  defp decode_ast_expr_arms do
+    Schema.nodes(:expr)
+    |> Enum.map(&decode_ast_expr_arm/1)
+    |> Kernel.++([
+      A.arm A.wildcard() do
+        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+      end
+    ])
+  end
+
+  defp decode_ast_expr_arm(%Schema.Node{name: name, rust_const: rust_const}) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
+      A.return(A.path_call(expr_decoder_path(name), [:term]))
+    end
+  end
+
+  defp expr_decoder_path(name) when name in [:var, :path, :atom_value, :none],
+    do: [expr_decoder(name)]
+
+  defp expr_decoder_path(_name), do: [:super, :decode_expr_manual]
+
+  defp expr_decoder(name), do: String.to_atom("decode_expr_#{name}")
+
   defp decode_pat_helper_items do
     [
       %AST.Function{
@@ -443,6 +485,73 @@ defmodule RustQ.NativeCodegen do
           A.block do
             A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
             A.return(A.ok(A.path_call([:Stmt, :Expr], [:expr, A.none()])))
+          end
+      }
+    ]
+  end
+
+  defp decode_expr_helper_items do
+    [
+      %AST.Function{
+        name: :decode_expr_var,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :ident,
+              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr], [
+                A.ref(A.method(A.token_macro(:quote, "#ident"), :to_string))
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_path,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.return(
+              A.path_call([:super, :parse_expr], [
+                A.ref(A.try(A.path_call([:super, :path_parts], [map_get(:term, "parts")])))
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_atom_value,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :name,
+              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr], [
+                A.ref(A.method(A.token_macro(:quote, "atoms::#name()"), :to_string))
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_none,
+        vis: :crate,
+        args: [_term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.return(A.path_call([:super, :parse_expr], ["None"]))
           end
       }
     ]
