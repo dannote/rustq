@@ -89,8 +89,22 @@ defmodule RustQ.Meta.LowerTest do
            ] = else_body
   end
 
-  test "dogfooded decoder wrappers lower Super calls to parent Rust module paths" do
+  test "dogfooded decoder wrappers lower Super calls and Rust constructors" do
     decoders = RustQ.NativeCodegen.Decoders.__rustq_asts__()
+
+    assert %RustQ.Rust.AST.Function{
+             name: :decode_stmt_return,
+             body: [
+               %RustQ.Rust.AST.Let{},
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.Ok{
+                   expr: %RustQ.Rust.AST.PathCall{
+                     path: %RustQ.Rust.AST.Path{parts: [:Stmt, :Expr]}
+                   }
+                 }
+               }
+             ]
+           } = Enum.find(decoders, &(&1.name == :decode_stmt_return))
 
     assert %RustQ.Rust.AST.Function{
              name: :decode_expr_none,

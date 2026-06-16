@@ -452,13 +452,6 @@ defmodule RustQ.NativeCodegen do
         )
 
         A.return(A.path_call([:super, :parse_let_stmt], [:pat_tokens, :ty, :expr]))
-      end,
-      function :decode_stmt_return,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Stmt>" do
-        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-        A.return(A.ok(A.path_call([:Stmt, :Expr], [:expr, A.none()])))
       end
     ]
   end

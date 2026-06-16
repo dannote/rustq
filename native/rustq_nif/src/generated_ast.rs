@@ -220,6 +220,11 @@ pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
     super::parse_stmt(quote!(# expr;))
 }
 
+pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let expr = super::decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
+    Ok(Stmt::Expr(expr, None))
+}
+
 pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr> {
     super::parse_expr_tokens(quote!(None))
 }
@@ -299,11 +304,6 @@ pub(crate) fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
         None => None,
     };
     super::parse_let_stmt(pat_tokens, ty, expr)
-}
-
-pub(crate) fn decode_stmt_return(term: Term) -> NifResult<Stmt> {
-    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
-    Ok(Stmt::Expr(expr, None))
 }
 
 pub(crate) fn decode_expr_var(term: Term) -> NifResult<Expr> {

@@ -249,6 +249,12 @@ defmodule RustQ.Meta.Lower do
       super_alias_ast?(receiver) ->
         %AST.PathCall{path: %AST.Path{parts: [:super, function]}, args: args}
 
+      rust_constructor_alias?(receiver) ->
+        %AST.PathCall{
+          path: %AST.Path{parts: alias_parts(receiver) ++ [rust_variant(function)]},
+          args: args
+        }
+
       alias_ast?(receiver) ->
         %AST.PathCall{path: %AST.Path{parts: alias_parts(receiver) ++ [function]}, args: args}
 
@@ -392,6 +398,11 @@ defmodule RustQ.Meta.Lower do
 
   defp super_alias_ast?({:__aliases__, _, [:Super]}), do: true
   defp super_alias_ast?(_other), do: false
+
+  defp rust_constructor_alias?({:__aliases__, _, [module]}) when module in [:Stmt], do: true
+  defp rust_constructor_alias?(_other), do: false
+
+  defp rust_variant(name), do: name |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
 
   defp alias_parts({:__aliases__, _, parts}), do: parts
 end

@@ -28,6 +28,14 @@ defmodule RustQ.NativeCodegen.Decoders do
     quote_stmt!("#expr;")
   end
 
+  @spec decode_stmt_return(term()) :: R.nif_result(R.stmt())
+  defrust decode_stmt_return(term) do
+    expr =
+      unwrap!(Super.decode_expr(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "expr"))))))
+
+    {:ok, Stmt.expr(expr, none())}
+  end
+
   @spec decode_expr_none(term()) :: R.nif_result(R.expr())
   defrust decode_expr_none(_term) do
     quote_expr!("None")

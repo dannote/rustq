@@ -28,6 +28,8 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat>"
     assert source =~ "pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt>"
     assert source =~ "pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr>"
+    assert source =~ "pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt>"
+    assert source =~ "Ok(Stmt::Expr(expr, None))"
     assert source =~ "pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr>"
     assert source =~ "super::parse_expr_tokens(quote!(None))"
     assert source =~ "pub(crate) fn decode_expr_tuple(term: Term) -> NifResult<Expr>"
