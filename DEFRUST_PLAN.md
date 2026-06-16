@@ -304,17 +304,15 @@ stable template API.
 
 The next practical sequence should be:
 
-1. Add AST support for attributes/derive so `decode_derive/1` no longer parses
-   derive attributes from strings/paths.
-2. Keep `path_parts`/`decode_lifetime_list` consolidated through the generic
+1. Keep `path_parts`/`decode_lifetime_list` consolidated through the generic
    string-list primitive unless Rusty-Elixir gains iterator/list lowering that
    makes a dogfooded version clearer.
-3. Continue reducing type parsing boundaries: `TypePath` now has structured
+2. Continue reducing type parsing boundaries: `TypePath` now has structured
    generics, container decoders use generic type construction, and `TypeRef`
    uses token construction; lifetime-heavy path assembly still has parse-boundary code.
-4. Expand schema/type behavioral coverage for nested maps, optional fields,
+3. Expand schema/type behavioral coverage for nested maps, optional fields,
    struct lifetimes, tuple enum variants, and invalid atom behavior.
-5. Revisit public docs once the lowering/context refactor is stable.
+4. Revisit public docs once the lowering/context refactor is stable.
 
 Recently completed:
 
@@ -329,6 +327,12 @@ Recently completed:
   Rust type strings.
 - Function arguments are now modeled as `RustQ.Rust.AST.FunctionArg` and decoded
   through typed function-argument support.
+- Derive attributes are now modeled as `RustQ.Rust.AST.Derive`, including nested
+  derive paths such as `serde::Serialize`.
+- Type alias generation exposes structural `__rustq_type_asts__/0`, allowing
+  behavior tests without scanning generated Rust source.
+- Strict native AST rendering can be enabled with `config :rustq,
+  :strict_native_ast, true` to avoid silent fallback rendering.
 - `path_parts` and `decode_lifetime_list` share one generic string-list native
   primitive.
 

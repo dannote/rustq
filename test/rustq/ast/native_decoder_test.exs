@@ -9,6 +9,16 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   require A
 
+  test "strict native AST mode does not fall back silently" do
+    invalid = %AST.Function{name: :bad, args: [], returns: %AST.TypePath{parts: []}, body: []}
+
+    Application.put_env(:rustq, :strict_native_ast, true)
+
+    assert_raise ArgumentError, fn -> AST.render_function_native(invalid) end
+  after
+    Application.delete_env(:rustq, :strict_native_ast)
+  end
+
   test "behavioral examples cover every current AST schema node" do
     samples = RustQ.ASTSamples.all()
 

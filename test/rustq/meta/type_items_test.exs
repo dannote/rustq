@@ -72,29 +72,67 @@ defmodule RustQ.Meta.TypeItemsTest do
            } = RustQ.Meta.Type.from_spec_ast(quote(do: MyMap.t(String.t(), R.u32())))
   end
 
-  test "type aliases generate Rust items and decoders" do
-    source = Generated.__rustq_source__()
+  test "type aliases generate structural Rust ASTs and decoders" do
+    type_asts = Generated.__rustq_type_asts__()
 
-    assert source =~ "pub enum Mode"
-    assert source =~ "SrcOver,"
-    assert source =~ "pub fn decode_mode_atom(value: Atom) -> NifResult<Mode>"
+    assert %RustQ.Rust.AST.Enum{
+             name: :Mode,
+             derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
+             variants: [
+               %RustQ.Rust.AST.EnumVariant{name: :SrcOver},
+               %RustQ.Rust.AST.EnumVariant{name: :Multiply}
+             ]
+           } = Enum.find(type_asts, &match?(%RustQ.Rust.AST.Enum{name: :Mode}, &1))
 
-    assert source =~ "pub struct Click"
-    assert source =~ "pub name: String,"
-    assert source =~ "pub struct Resize"
-    assert source =~ "pub width: u32,"
+    assert %RustQ.Rust.AST.Function{
+             name: :decode_mode_atom,
+             args: [%RustQ.Rust.AST.FunctionArg{name: :value, type: "Atom"}],
+             body: [
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.Match{
+                   arms: [
+                     _,
+                     _,
+                     %RustQ.Rust.AST.Arm{
+                       pattern: %RustQ.Rust.AST.PatWildcard{},
+                       body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Err{}}]
+                     }
+                   ]
+                 }
+               }
+             ]
+           } =
+             Enum.find(type_asts, &match?(%RustQ.Rust.AST.Function{name: :decode_mode_atom}, &1))
 
-    assert source =~ "pub enum Event"
-    assert source =~ "Click(Click),"
-    assert source =~ "Resize(Resize),"
-    assert source =~ "pub fn decode_event<'a>(term: Term<'a>) -> NifResult<Event>"
-    assert source =~ ~s|"Elixir.Click" => decode_click(term).map(Event::Click)|
+    assert %RustQ.Rust.AST.Struct{
+             name: :NestedOpts,
+             lifetime: :a,
+             fields: [
+               %RustQ.Rust.AST.StructField{
+                 name: :rect,
+                 type: %RustQ.Rust.AST.TypePath{parts: ["RectOpts"], lifetimes: [:a]}
+               },
+               %RustQ.Rust.AST.StructField{
+                 name: :label,
+                 type: %RustQ.Rust.AST.TypeOption{
+                   inner: %RustQ.Rust.AST.TypePath{parts: [:String]}
+                 }
+               }
+             ]
+           } = Enum.find(type_asts, &match?(%RustQ.Rust.AST.Struct{name: :NestedOpts}, &1))
 
-    assert source =~ "pub struct RectOpts"
-    assert source =~ "pub x: f32,"
-    assert source =~ "pub fill: Option<Term<'a>>,"
-    assert source =~ "pub fn decode_rect_opts<'a>(term: Term<'a>) -> NifResult<RectOpts<'a>>"
-    assert source =~ "x: term.map_get(atoms::x())?.decode()?"
-    assert source =~ "Ok(value) => Some(value.decode()?)"
+    assert %RustQ.Rust.AST.Enum{
+             name: :Event,
+             variants: [
+               %RustQ.Rust.AST.EnumVariant{
+                 name: :Click,
+                 tuple: [%RustQ.Rust.AST.TypePath{parts: ["Click"]}]
+               },
+               %RustQ.Rust.AST.EnumVariant{
+                 name: :Resize,
+                 tuple: [%RustQ.Rust.AST.TypePath{parts: ["Resize"]}]
+               }
+             ]
+           } = Enum.find(type_asts, &match?(%RustQ.Rust.AST.Enum{name: :Event}, &1))
   end
 end

@@ -42,7 +42,8 @@ defmodule RustQ.Meta do
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
 
     asts = Enum.map(defs, &build_ast(&1, specs, type_aliases))
-    type_items = build_type_items(type_aliases)
+    type_asts = build_type_asts(type_aliases)
+    type_items = Enum.map(type_asts, &validate_item_ast/1)
     function_items = Enum.map(asts, &validate_item_ast/1)
     items = type_items ++ function_items
 
@@ -56,6 +57,9 @@ defmodule RustQ.Meta do
 
       @doc false
       def __rustq_types__, do: unquote(Macro.escape(type_aliases))
+
+      @doc false
+      def __rustq_type_asts__, do: unquote(Macro.escape(type_asts))
 
       @doc false
       def __rustq_type_items__, do: unquote(Macro.escape(type_items))
@@ -97,7 +101,7 @@ defmodule RustQ.Meta do
     RustQ.parse_fragment!(:item, AST.render_item_native(item))
   end
 
-  defp build_type_items(type_aliases) do
+  defp build_type_asts(type_aliases) do
     type_aliases
     |> Map.values()
     |> Enum.flat_map(&type_items/1)
@@ -108,41 +112,39 @@ defmodule RustQ.Meta do
          rust: rust_name,
          meta: %{variants: variants, elixir_name: elixir_name}
        }) do
-    enum =
-      validate_item_ast(%AST.Enum{
-        name: String.to_atom(rust_name),
-        vis: :pub,
-        derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
-        variants:
-          variants
-          |> Enum.map(&rust_variant/1)
-          |> Enum.map(&%AST.EnumVariant{name: String.to_atom(&1)})
-      })
+    enum = %AST.Enum{
+      name: String.to_atom(rust_name),
+      vis: :pub,
+      derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
+      variants:
+        variants
+        |> Enum.map(&rust_variant/1)
+        |> Enum.map(&%AST.EnumVariant{name: String.to_atom(&1)})
+    }
 
-    decoder =
-      validate_item_ast(%AST.Function{
-        name: String.to_atom("decode_#{elixir_name}_atom"),
-        vis: :pub,
-        args: [value: "Atom"],
-        returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
-        body:
-          A.block do
-            A.return do
-              A.match A.var(:value) do
-                Enum.map(variants, fn variant ->
-                  A.arm %AST.PatAtomGuard{name: variant} do
-                    A.return(A.ok(A.path([rust_name, rust_variant(variant)])))
+    decoder = %AST.Function{
+      name: String.to_atom("decode_#{elixir_name}_atom"),
+      vis: :pub,
+      args: [%AST.FunctionArg{name: :value, type: "Atom"}],
+      returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
+      body:
+        A.block do
+          A.return do
+            A.match A.var(:value) do
+              Enum.map(variants, fn variant ->
+                A.arm %AST.PatAtomGuard{name: variant} do
+                  A.return(A.ok(A.path([rust_name, rust_variant(variant)])))
+                end
+              end) ++
+                [
+                  A.arm A.wildcard() do
+                    A.return(A.err(A.path([:rustler, :Error, :BadArg])))
                   end
-                end) ++
-                  [
-                    A.arm A.wildcard() do
-                      A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-                    end
-                  ]
-              end
+                ]
             end
           end
-      })
+        end
+    }
 
     [enum, decoder]
   end
@@ -152,29 +154,27 @@ defmodule RustQ.Meta do
          rust: rust_name,
          meta: %{elixir_name: elixir_name, variants: variants}
        }) do
-    enum =
-      validate_item_ast(%AST.Enum{
-        name: String.to_atom(rust_name),
-        vis: :pub,
-        derive: [:Clone, :Debug],
-        variants:
-          Enum.map(variants, fn {tag, types} ->
-            %AST.EnumVariant{
-              name: tag |> rust_variant() |> String.to_atom(),
-              tuple: Enum.map(types, & &1.ast)
-            }
-          end)
-      })
+    enum = %AST.Enum{
+      name: String.to_atom(rust_name),
+      vis: :pub,
+      derive: [:Clone, :Debug],
+      variants:
+        Enum.map(variants, fn {tag, types} ->
+          %AST.EnumVariant{
+            name: tag |> rust_variant() |> String.to_atom(),
+            tuple: Enum.map(types, & &1.ast)
+          }
+        end)
+    }
 
-    decoder =
-      validate_item_ast(%AST.Function{
-        name: String.to_atom("decode_#{elixir_name}"),
-        vis: :pub,
-        args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}],
-        returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
-        lifetime: :a,
-        body: tuple_enum_decoder_body(rust_name, variants)
-      })
+    decoder = %AST.Function{
+      name: String.to_atom("decode_#{elixir_name}"),
+      vis: :pub,
+      args: [%AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}],
+      returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
+      lifetime: :a,
+      body: tuple_enum_decoder_body(rust_name, variants)
+    }
 
     [enum, decoder]
   end
@@ -184,29 +184,27 @@ defmodule RustQ.Meta do
       if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
         do: :a
 
-    struct =
-      validate_item_ast(%AST.Struct{
-        name: String.to_atom(rust_name),
-        vis: :pub,
-        derive: [:Clone, :Debug],
-        lifetime: lifetime,
-        fields: Enum.map(fields, &struct_field_ast/1)
-      })
+    struct = %AST.Struct{
+      name: String.to_atom(rust_name),
+      vis: :pub,
+      derive: [:Clone, :Debug],
+      lifetime: lifetime,
+      fields: Enum.map(fields, &struct_field_ast/1)
+    }
 
-    decoder =
-      validate_item_ast(%AST.Function{
-        name: String.to_atom("decode_#{Macro.underscore(rust_name)}"),
-        vis: :pub,
-        args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}],
-        returns: %AST.TypeNifResult{
-          inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
-        },
-        lifetime: :a,
-        body:
-          A.block do
-            A.return(A.ok(A.struct([rust_name], Enum.map(fields, &struct_decoder_field/1))))
-          end
-      })
+    decoder = %AST.Function{
+      name: String.to_atom("decode_#{Macro.underscore(rust_name)}"),
+      vis: :pub,
+      args: [%AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}],
+      returns: %AST.TypeNifResult{
+        inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
+      },
+      lifetime: :a,
+      body:
+        A.block do
+          A.return(A.ok(A.struct([rust_name], Enum.map(fields, &struct_decoder_field/1))))
+        end
+    }
 
     [struct, decoder]
   end
