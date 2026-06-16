@@ -11,12 +11,9 @@ use syn::{
     Lifetime, Pat, Signature, Stmt, Type,
 };
 
-mod atoms {
-    rustler::atoms! {
-        ok,
-        error,
-    }
-}
+mod generated_ast;
+
+use generated_ast::{ast_modules, atoms};
 
 #[derive(NifMap)]
 struct ErrorInfo {
@@ -60,15 +57,15 @@ fn render_ast(ast: Term) -> NifResult<String> {
 
 fn decode_ast_item(term: Term) -> NifResult<Item> {
     match struct_name(term)?.as_str() {
-        "Elixir.RustQ.Rust.AST.Function" => Ok(Item::Fn(decode_ast_function(term)?)),
-        "Elixir.RustQ.Rust.AST.Struct" => Ok(Item::Struct(decode_ast_struct(term)?)),
-        "Elixir.RustQ.Rust.AST.Enum" => Ok(Item::Enum(decode_ast_enum(term)?)),
+        ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
+        ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
+        ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
         _ => Err(rustler::Error::BadArg),
     }
 }
 
 fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
-    expect_struct(term, "Elixir.RustQ.Rust.AST.Function")?;
+    expect_struct(term, ast_modules::FUNCTION)?;
     let env = term.get_env();
     let name = format_ident!("{}", atom_key(term, "name")?);
     let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
@@ -99,7 +96,7 @@ fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
 }
 
 fn decode_ast_struct(term: Term) -> NifResult<syn::ItemStruct> {
-    expect_struct(term, "Elixir.RustQ.Rust.AST.Struct")?;
+    expect_struct(term, ast_modules::STRUCT)?;
     let env = term.get_env();
     let name = format_ident!("{}", atom_key(term, "name")?);
     let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
@@ -125,7 +122,7 @@ fn decode_ast_struct(term: Term) -> NifResult<syn::ItemStruct> {
 }
 
 fn decode_struct_field(term: Term) -> NifResult<Field> {
-    expect_struct(term, "Elixir.RustQ.Rust.AST.StructField")?;
+    expect_struct(term, ast_modules::STRUCT_FIELD)?;
     let env = term.get_env();
     let name = format_ident!("{}", atom_key(term, "name")?);
     let ty = decode_type(term.map_get(atom(env, "type")?)?)?;
@@ -136,7 +133,7 @@ fn decode_struct_field(term: Term) -> NifResult<Field> {
 }
 
 fn decode_ast_enum(term: Term) -> NifResult<syn::ItemEnum> {
-    expect_struct(term, "Elixir.RustQ.Rust.AST.Enum")?;
+    expect_struct(term, ast_modules::ENUM)?;
     let env = term.get_env();
     let name = format_ident!("{}", atom_key(term, "name")?);
     let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
@@ -153,7 +150,7 @@ fn decode_ast_enum(term: Term) -> NifResult<syn::ItemEnum> {
 }
 
 fn decode_enum_variant(term: Term) -> NifResult<syn::Variant> {
-    expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant")?;
+    expect_struct(term, ast_modules::ENUM_VARIANT)?;
     let name = format_ident!("{}", atom_key(term, "name")?);
     let tuple = term
         .map_get(atom(term.get_env(), "tuple")?)?
@@ -211,7 +208,7 @@ fn decode_stmt(term: Term) -> NifResult<Stmt> {
     let module = struct_name(term)?;
 
     match module.as_str() {
-        "Elixir.RustQ.Rust.AST.Let" => {
+        ast_modules::LET => {
             let env = term.get_env();
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
@@ -228,11 +225,11 @@ fn decode_stmt(term: Term) -> NifResult<Stmt> {
                 Ok(syn::parse2(quote!(let #pat = #expr;)).map_err(|_| rustler::Error::BadArg)?)
             }
         }
-        "Elixir.RustQ.Rust.AST.ExprStmt" => {
+        ast_modules::EXPR_STMT => {
             let expr = decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
             Ok(syn::parse2(quote!(#expr;)).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Return" => {
+        ast_modules::RETURN => {
             let expr = decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
             Ok(Stmt::Expr(expr, None))
         }
@@ -245,19 +242,17 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
     let env = term.get_env();
 
     match module.as_str() {
-        "Elixir.RustQ.Rust.AST.Var" => {
+        ast_modules::VAR => {
             let ident = format_ident!("{}", atom_key(term, "name")?);
             Ok(syn::parse2(quote!(#ident)).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Path" => {
-            parse_expr(&path_parts(term.map_get(atom(env, "parts")?)?)?)
-        }
-        "Elixir.RustQ.Rust.AST.Field" => {
+        ast_modules::PATH => parse_expr(&path_parts(term.map_get(atom(env, "parts")?)?)?),
+        ast_modules::FIELD => {
             let receiver = decode_expr(term.map_get(atom(env, "receiver")?)?)?;
             let field = format_ident!("{}", atom_key(term, "field")?);
             Ok(syn::parse2(quote!(#receiver.#field)).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.PathCall" => {
+        ast_modules::PATH_CALL => {
             let path = parse_path(&path_parts(
                 term.map_get(atom(env, "path")?)?
                     .map_get(atom(env, "parts")?)?,
@@ -265,14 +260,14 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
             let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
             Ok(syn::parse2(quote!(#path(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.MethodCall" => {
+        ast_modules::METHOD_CALL => {
             let receiver = decode_expr(term.map_get(atom(env, "receiver")?)?)?;
             let method = format_ident!("{}", atom_key(term, "method")?);
             let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
             Ok(syn::parse2(quote!(#receiver.#method(#(#args),*)))
                 .map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.LocalCall" => {
+        ast_modules::LOCAL_CALL => {
             let name = atom_key(term, "name")?;
             let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
             if name.ends_with('!') {
@@ -290,7 +285,7 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
                 Ok(syn::parse2(quote!(#name(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
             }
         }
-        "Elixir.RustQ.Rust.AST.StructLiteral" => {
+        ast_modules::STRUCT_LITERAL => {
             let path = decode_expr(term.map_get(atom(env, "path")?)?)?;
             let fields = term
                 .map_get(atom(env, "fields")?)?
@@ -304,7 +299,7 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
                 .collect::<NifResult<Vec<_>>>()?;
             Ok(syn::parse2(quote!(#path { #(#fields),* })).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Ref" => {
+        ast_modules::REF => {
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
             if term.map_get(atom(env, "mutable")?)?.decode::<bool>()? {
                 Ok(syn::parse2(quote!(&mut #expr)).map_err(|_| rustler::Error::BadArg)?)
@@ -312,43 +307,41 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
                 Ok(syn::parse2(quote!(&#expr)).map_err(|_| rustler::Error::BadArg)?)
             }
         }
-        "Elixir.RustQ.Rust.AST.Try" => {
+        ast_modules::TRY => {
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
             Ok(syn::parse2(quote!(#expr?)).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Tuple" => {
+        ast_modules::TUPLE => {
             let values = decode_expr_list(term.map_get(atom(env, "values")?)?)?;
             Ok(syn::parse2(quote!((#(#values),*))).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Literal" => decode_literal_expr(term.map_get(atom(env, "value")?)?),
-        "Elixir.RustQ.Rust.AST.AtomValue" => {
+        ast_modules::LITERAL => decode_literal_expr(term.map_get(atom(env, "value")?)?),
+        ast_modules::ATOM_VALUE => {
             let name = format_ident!("{}", atom_key(term, "name")?);
             Ok(syn::parse2(quote!(atoms::#name())).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.None" => {
-            Ok(syn::parse2(quote!(None)).map_err(|_| rustler::Error::BadArg)?)
-        }
-        "Elixir.RustQ.Rust.AST.Some" => {
+        ast_modules::NONE => Ok(syn::parse2(quote!(None)).map_err(|_| rustler::Error::BadArg)?),
+        ast_modules::SOME => {
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
             Ok(syn::parse2(quote!(Some(#expr))).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Ok" => match optional_map_get(term, "expr")? {
+        ast_modules::OK => match optional_map_get(term, "expr")? {
             Some(expr_term) if !is_nil(expr_term)? => {
                 let expr = decode_expr(expr_term)?;
                 Ok(syn::parse2(quote!(Ok(#expr))).map_err(|_| rustler::Error::BadArg)?)
             }
             _ => Ok(syn::parse2(quote!(Ok(()))).map_err(|_| rustler::Error::BadArg)?),
         },
-        "Elixir.RustQ.Rust.AST.Err" => {
+        ast_modules::ERR => {
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
             Ok(syn::parse2(quote!(Err(#expr))).map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.NifRaiseAtom" => {
+        ast_modules::NIF_RAISE_ATOM => {
             let name = atom_key(term, "name")?;
             Ok(syn::parse2(quote!(rustler::Error::RaiseAtom(#name)))
                 .map_err(|_| rustler::Error::BadArg)?)
         }
-        "Elixir.RustQ.Rust.AST.Match" => {
+        ast_modules::MATCH => {
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
             let arms = term
                 .map_get(atom(env, "arms")?)?
@@ -364,7 +357,7 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
 }
 
 fn decode_arm(term: Term) -> NifResult<Arm> {
-    expect_struct(term, "Elixir.RustQ.Rust.AST.Arm")?;
+    expect_struct(term, ast_modules::ARM)?;
     let env = term.get_env();
     let pat_term = term.map_get(atom(env, "pattern")?)?;
     let body = decode_stmt_list(term.map_get(atom(env, "body")?)?)?;
@@ -372,7 +365,7 @@ fn decode_arm(term: Term) -> NifResult<Arm> {
         syn::parse2::<syn::Block>(quote!({ #(#body)* })).map_err(|_| rustler::Error::BadArg)?;
 
     match struct_name(pat_term)?.as_str() {
-        "Elixir.RustQ.Rust.AST.PatAtomGuard" => {
+        ast_modules::PAT_ATOM_GUARD => {
             let name = format_ident!("{}", atom_key(pat_term, "name")?);
             syn::parse2(quote!(value if value == atoms::#name() => #block,))
                 .map_err(|_| rustler::Error::BadArg)
@@ -406,28 +399,26 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
     let env = term.get_env();
 
     match module.as_str() {
-        "Elixir.RustQ.Rust.AST.PatVar" => {
+        ast_modules::PAT_VAR => {
             let ident = format_ident!("{}", atom_key(term, "name")?);
             parse_pat(quote!(#ident))
         }
-        "Elixir.RustQ.Rust.AST.PatWildcard" => parse_pat(quote!(_)),
-        "Elixir.RustQ.Rust.AST.PatLiteral" => {
-            decode_pat_literal(term.map_get(atom(env, "value")?)?)
-        }
-        "Elixir.RustQ.Rust.AST.PatNone" => parse_pat(quote!(None)),
-        "Elixir.RustQ.Rust.AST.PatSome" => {
+        ast_modules::PAT_WILDCARD => parse_pat(quote!(_)),
+        ast_modules::PAT_LITERAL => decode_pat_literal(term.map_get(atom(env, "value")?)?),
+        ast_modules::PAT_NONE => parse_pat(quote!(None)),
+        ast_modules::PAT_SOME => {
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
             parse_pat(quote!(Some(#pat)))
         }
-        "Elixir.RustQ.Rust.AST.PatOk" => {
+        ast_modules::PAT_OK => {
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
             parse_pat(quote!(Ok(#pat)))
         }
-        "Elixir.RustQ.Rust.AST.PatErr" => {
+        ast_modules::PAT_ERR => {
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
             parse_pat(quote!(Err(#pat)))
         }
-        "Elixir.RustQ.Rust.AST.PatPathTuple" => {
+        ast_modules::PAT_PATH_TUPLE => {
             let path = parse_path(&path_parts(
                 term.map_get(atom(env, "path")?)?
                     .map_get(atom(env, "parts")?)?,
@@ -440,7 +431,7 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
                 .collect::<NifResult<Vec<Pat>>>()?;
             parse_pat(quote!(#path(#(#patterns),*)))
         }
-        "Elixir.RustQ.Rust.AST.PatStruct" => {
+        ast_modules::PAT_STRUCT => {
             let path = parse_path(&path_parts(
                 term.map_get(atom(env, "path")?)?
                     .map_get(atom(env, "parts")?)?,
@@ -457,7 +448,7 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
                 .collect::<NifResult<Vec<_>>>()?;
             parse_pat(quote!(#path { #(#fields),* }))
         }
-        "Elixir.RustQ.Rust.AST.PatTuple" => {
+        ast_modules::PAT_TUPLE => {
             let patterns = term
                 .map_get(atom(env, "patterns")?)?
                 .decode::<Vec<Term>>()?
@@ -534,8 +525,8 @@ fn decode_type(term: Term) -> NifResult<Type> {
     let env = term.get_env();
 
     match module.as_str() {
-        "Elixir.RustQ.Rust.AST.TypeUnit" => parse_type("()"),
-        "Elixir.RustQ.Rust.AST.TypePath" => {
+        ast_modules::TYPE_UNIT => parse_type("()"),
+        ast_modules::TYPE_PATH => {
             let path = path_parts(term.map_get(atom(env, "parts")?)?)?;
             let lifetimes = term
                 .map_get(atom(env, "lifetimes")?)?
@@ -558,7 +549,7 @@ fn decode_type(term: Term) -> NifResult<Type> {
                 ))
             }
         }
-        "Elixir.RustQ.Rust.AST.TypeRef" => {
+        ast_modules::TYPE_REF => {
             let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
             let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
             let lifetime = optional_atom_key(term, "lifetime")?;
@@ -568,20 +559,20 @@ fn decode_type(term: Term) -> NifResult<Type> {
             let mutability = if mutable { "mut " } else { "" };
             parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
         }
-        "Elixir.RustQ.Rust.AST.TypeOption" => {
+        ast_modules::TYPE_OPTION => {
             let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
             syn::parse2(quote!(Option<#inner>)).map_err(|_| rustler::Error::BadArg)
         }
-        "Elixir.RustQ.Rust.AST.TypeResult" => {
+        ast_modules::TYPE_RESULT => {
             let ok = decode_type(term.map_get(atom(env, "ok")?)?)?;
             let error = decode_type(term.map_get(atom(env, "error")?)?)?;
             syn::parse2(quote!(Result<#ok, #error>)).map_err(|_| rustler::Error::BadArg)
         }
-        "Elixir.RustQ.Rust.AST.TypeNifResult" => {
+        ast_modules::TYPE_NIF_RESULT => {
             let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
             syn::parse2(quote!(NifResult<#inner>)).map_err(|_| rustler::Error::BadArg)
         }
-        "Elixir.RustQ.Rust.AST.TypeVec" => {
+        ast_modules::TYPE_VEC => {
             let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
             syn::parse2(quote!(Vec<#inner>)).map_err(|_| rustler::Error::BadArg)
         }

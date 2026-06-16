@@ -49,6 +49,7 @@ defmodule RustQ.MixProject do
         "rust.fmt --check",
         "rust.check",
         "rust.clippy",
+        "rustq.gen --check",
         "rustq.templates.check",
         "test",
         "credo --strict",
@@ -96,6 +97,7 @@ defmodule RustQ.MixProject do
         "priv/fixtures/rustler_template_check/src/lib.rs",
         ".formatter.exs",
         "mix.exs",
+        "rustq.exs",
         "README.md",
         "CHANGELOG.md",
         "LICENSE"
