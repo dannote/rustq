@@ -117,6 +117,7 @@ defmodule RustQ.Rust.AST.Builder do
   def lit(value), do: %AST.Literal{value: value}
   def token_macro(path, tokens), do: %AST.TokenMacro{path: expr_path(path), tokens: tokens}
   def vec(values), do: %AST.VecLiteral{values: Enum.map(values, &expr/1)}
+  def closure(args, body), do: %AST.Closure{args: args, body: expr(body)}
 
   def call(name, args \\ []) when is_atom(name),
     do: %AST.LocalCall{name: name, args: Enum.map(List.wrap(args), &expr/1)}
@@ -184,6 +185,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Try,
              AST.Tuple,
              AST.VecLiteral,
+             AST.Closure,
              AST.Literal,
              AST.TokenMacro,
              AST.AtomValue,

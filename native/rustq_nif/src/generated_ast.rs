@@ -6,7 +6,7 @@ use rustler::{Atom, Env, NifResult, Term};
 
 use syn::{
     Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat,
-    Stmt, Type, Variant,
+    Path, Stmt, Type, Variant,
 };
 
 pub(crate) mod atoms {
@@ -44,6 +44,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TRY: &str = "Elixir.RustQ.Rust.AST.Try";
     pub(crate) const TUPLE: &str = "Elixir.RustQ.Rust.AST.Tuple";
     pub(crate) const VEC_LITERAL: &str = "Elixir.RustQ.Rust.AST.VecLiteral";
+    pub(crate) const CLOSURE: &str = "Elixir.RustQ.Rust.AST.Closure";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
     pub(crate) const TOKEN_MACRO: &str = "Elixir.RustQ.Rust.AST.TokenMacro";
     pub(crate) const ATOM_VALUE: &str = "Elixir.RustQ.Rust.AST.AtomValue";
@@ -181,6 +182,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::TRY => decode_expr_try(term),
         ast_modules::TUPLE => decode_expr_tuple(term),
         ast_modules::VEC_LITERAL => decode_expr_vec_literal(term),
+        ast_modules::CLOSURE => decode_expr_closure(term),
         ast_modules::LITERAL => decode_expr_literal(term),
         ast_modules::TOKEN_MACRO => decode_expr_token_macro(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
@@ -230,6 +232,14 @@ pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {
     super::parse_item_function_args(name, vis, args, returns, lifetime, stmts)
 }
 
+pub(crate) fn decode_derive_path_list<'a>(term: Term<'a>) -> NifResult<Vec<Path>> {
+    let terms = super::decode_derive_path_terms(term)?;
+    terms
+        .into_iter()
+        .map(|derive_path| super::decode_path_value(derive_path))
+        .collect()
+}
+
 pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Struct")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
@@ -277,9 +287,18 @@ pub(crate) fn decode_enum_variant<'a>(term: Term<'a>) -> NifResult<Variant> {
     super::parse_enum_variant(name, tuple)
 }
 
+pub(crate) fn path_parts<'a>(term: Term<'a>) -> NifResult<String> {
+    let parts = super::decode_string_list(term)?;
+    Ok(parts.join("::"))
+}
+
+pub(crate) fn decode_lifetime_list<'a>(term: Term<'a>) -> NifResult<Vec<String>> {
+    super::decode_string_list(term)
+}
+
 pub(crate) fn decode_type_path<'a>(term: Term<'a>) -> NifResult<Type> {
-    let parts = super::path_parts(required_field(term, "parts")?)?;
-    let lifetimes = super::decode_lifetime_list(required_field(term, "lifetimes")?)?;
+    let parts = path_parts(required_field(term, "parts")?)?;
+    let lifetimes = decode_lifetime_list(required_field(term, "lifetimes")?)?;
     let generics = super::decode_type_list(required_field(term, "generics")?)?;
     super::parse_type_path_with_generics(parts, lifetimes, generics)
 }
@@ -495,6 +514,12 @@ pub(crate) fn decode_expr_tuple<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_vec_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
     let values = super::decode_expr_list(required_field(term, "values")?)?;
     super::parse_syn::<Expr>(quote!(vec![# (# values),*]))
+}
+
+pub(crate) fn decode_expr_closure<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let args = super::decode_ident_list(required_field(term, "args")?)?;
+    let body = super::decode_expr(required_field(term, "body")?)?;
+    super::parse_syn::<Expr>(quote!(|# (# args),*| # body))
 }
 
 pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {

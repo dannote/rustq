@@ -342,6 +342,11 @@ Recently completed:
   item decoders.
 - Rusty-Elixir list literals now lower to an AST-backed `VecLiteral`, which
   renders native Rust `vec![...]` and is dogfooded by generic type construction.
+- Rusty-Elixir `Enum.map/2` with a single-argument anonymous function now lowers
+  to an AST-backed iterator chain with a `Closure` node.
+- `path_parts` and `decode_lifetime_list` are now dogfooded defrust helpers, and
+  derive path decoding uses the new iterator lowering before native derive
+  attribute assembly.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

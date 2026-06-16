@@ -49,6 +49,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:try), do: "fallible()?"
   defp semantic_fragment(:tuple), do: "(1i64, 2i64)"
   defp semantic_fragment(:vec_literal), do: "vec![1i64, 2i64]"
+  defp semantic_fragment(:closure), do: "|value| value"
   defp semantic_fragment(:literal), do: "1i64"
   defp semantic_fragment(:token_macro), do: "quote!(None)"
   defp semantic_fragment(:atom_value), do: "atoms::ok()"
@@ -174,6 +175,12 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:vec_literal),
     do: function_sample(:vec_literal_sample, A.vec([A.lit(1), A.lit(2)]), returns: "Vec<i64>")
+
+  def sample_for(:closure),
+    do:
+      function_sample(:closure_sample, A.closure([:value], A.var(:value)),
+        returns: "impl Fn(i64) -> i64"
+      )
 
   def sample_for(:literal), do: function_sample(:literal_sample, A.lit(1), returns: "i64")
 

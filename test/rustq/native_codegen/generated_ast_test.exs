@@ -77,6 +77,49 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     end
   end
 
+  test "dogfooded type helpers cover path and lifetime list boundaries" do
+    type_decoders = RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
+
+    assert %AST.Function{name: :path_parts, body: path_body} =
+             Enum.find(type_decoders, &(&1.name == :path_parts))
+
+    assert %AST.Let{
+             expr: %AST.Try{
+               expr: %AST.PathCall{path: %AST.Path{parts: [:super, :decode_string_list]}}
+             }
+           } =
+             hd(path_body)
+
+    assert %AST.Return{expr: %AST.Ok{expr: %AST.MethodCall{method: :join}}} = List.last(path_body)
+
+    assert %AST.Function{name: :decode_lifetime_list, body: lifetime_body} =
+             Enum.find(type_decoders, &(&1.name == :decode_lifetime_list))
+
+    assert [
+             %AST.Return{
+               expr: %AST.PathCall{path: %AST.Path{parts: [:super, :decode_string_list]}}
+             }
+           ] =
+             lifetime_body
+  end
+
+  test "dogfooded derive decoder uses iterator lowering" do
+    item_decoders = RustQ.NativeCodegen.Decoders.Item.__rustq_asts__()
+
+    assert %AST.Function{name: :decode_derive_path_list, body: body} =
+             Enum.find(item_decoders, &(&1.name == :decode_derive_path_list))
+
+    assert %AST.Return{
+             expr: %AST.MethodCall{
+               method: :collect,
+               receiver: %AST.MethodCall{
+                 method: :map,
+                 args: [%AST.Closure{args: [:derive_path]}]
+               }
+             }
+           } = List.last(body)
+  end
+
   test "dogfooded item decoders expose structural AST boundaries" do
     item_decoders = RustQ.NativeCodegen.Decoders.Item.__rustq_asts__()
 

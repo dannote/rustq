@@ -43,6 +43,15 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_function_args(name, vis, args, returns, lifetime, stmts)
   end
 
+  @spec decode_derive_path_list(term()) :: R.nif_result(R.vec(Path.t()))
+  defrust decode_derive_path_list(term) do
+    terms = unwrap!(Super.decode_derive_path_terms(term))
+
+    Enum.map(terms, fn derive_path ->
+      Super.decode_path_value(derive_path)
+    end)
+  end
+
   @spec decode_ast_struct(term()) :: R.nif_result(ItemStruct.t())
   defrust decode_ast_struct(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Struct"))

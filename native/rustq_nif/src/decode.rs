@@ -67,14 +67,7 @@ pub(crate) fn decode_vis(term: Term) -> NifResult<syn::Visibility> {
 }
 
 pub(crate) fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
-    let paths = term
-        .decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_derive_paths)
-        .collect::<NifResult<Vec<Vec<syn::Path>>>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    let paths = crate::generated_ast::decode_derive_path_list(term)?;
 
     if paths.is_empty() {
         Ok(Vec::new())
@@ -83,20 +76,21 @@ pub(crate) fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
     }
 }
 
-fn decode_derive_paths(term: Term) -> NifResult<Vec<syn::Path>> {
-    if struct_name(term).ok().as_deref() == Some("Elixir.RustQ.Rust.AST.Derive") {
-        return term
-            .map_get(atom(term.get_env(), "paths")?)?
-            .decode::<Vec<Term>>()?
-            .into_iter()
-            .map(decode_path_value)
-            .collect();
-    }
-
-    Ok(vec![decode_path_value(term)?])
+pub(crate) fn decode_derive_path_terms(term: Term) -> NifResult<Vec<Term>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(|term| {
+            if struct_name(term).ok().as_deref() == Some("Elixir.RustQ.Rust.AST.Derive") {
+                term.map_get(atom(term.get_env(), "paths")?)?.decode::<Vec<Term>>()
+            } else {
+                Ok(vec![term])
+            }
+        })
+        .collect::<NifResult<Vec<Vec<Term>>>>()
+        .map(|terms| terms.into_iter().flatten().collect())
 }
 
-fn decode_path_value(term: Term) -> NifResult<syn::Path> {
+pub(crate) fn decode_path_value(term: Term) -> NifResult<syn::Path> {
     let source = if let Ok(parts) = term.decode::<Vec<Term>>() {
         parts
             .into_iter()
@@ -303,6 +297,15 @@ pub(crate) fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
     decode_list(term, decode_expr)
 }
 
+pub(crate) fn decode_ident_list(term: Term) -> NifResult<Vec<proc_macro2::Ident>> {
+    decode_string_list(term).map(|names| {
+        names
+            .into_iter()
+            .map(|name| format_ident!("{}", name))
+            .collect()
+    })
+}
+
 pub(crate) fn decode_literal_expr(term: Term) -> NifResult<Expr> {
     match decode_literal_term(term)? {
         LiteralTerm::Bool(true) => parse_syn::<Expr>(quote!(true)),
@@ -335,11 +338,8 @@ pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
     decode_ast_type(term)
 }
 
-pub(crate) fn decode_lifetime_list(term: Term) -> NifResult<Vec<String>> {
-    decode_string_list(term)
-}
 
-fn decode_string_list(term: Term) -> NifResult<Vec<String>> {
+pub(crate) fn decode_string_list(term: Term) -> NifResult<Vec<String>> {
     term.decode::<Vec<Term>>()?
         .into_iter()
         .map(atom_or_string)

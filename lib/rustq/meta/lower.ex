@@ -226,6 +226,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
+  defp lower_expr({{:., _, [{:__aliases__, _, [:Enum]}, :map]}, _, [collection, mapper]}),
+    do: lower_enum_map(collection, mapper)
+
   defp lower_expr({:expr!, _, [expression]}), do: semantic_expr(expression)
   defp lower_expr({:pat!, _, [pattern]}), do: semantic_pat(pattern)
   defp lower_expr({:stmt!, _, [expression]}), do: semantic_stmt(expression)
@@ -313,6 +316,32 @@ defmodule RustQ.Meta.Lower do
     raise ArgumentError, "unsupported defrust expression: #{Macro.to_string(other)}"
   end
 
+  defp lower_enum_map(collection, {:fn, _, [{:->, _, [[arg], body]}]}) do
+    collection
+    |> lower_expr()
+    |> method_chain(:into_iter)
+    |> method_chain(:map, [lower_closure(arg, body)])
+    |> method_chain(:collect)
+  end
+
+  defp lower_enum_map(_collection, other) do
+    raise ArgumentError, "unsupported Enum.map mapper in defrust: #{Macro.to_string(other)}"
+  end
+
+  defp lower_closure({name, _, context}, body) when is_atom(name) and is_atom(context),
+    do: %AST.Closure{args: [name], body: lower_expr(closure_body_expr(body))}
+
+  defp lower_closure(other, _body) do
+    raise ArgumentError,
+          "unsupported Enum.map closure argument in defrust: #{Macro.to_string(other)}"
+  end
+
+  defp closure_body_expr([expression]), do: expression
+  defp closure_body_expr(expression), do: expression
+
+  defp method_chain(receiver, method, args \\ []),
+    do: %AST.MethodCall{receiver: receiver, method: method, args: args}
+
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
 
@@ -353,6 +382,9 @@ defmodule RustQ.Meta.Lower do
 
   defp semantic_expr({:tuple, _, [values]}), do: raw_expr("(#{semantic_splice(values)})")
   defp semantic_expr({:vec, _, [values]}), do: raw_expr("vec![#{semantic_splice(values)}]")
+
+  defp semantic_expr({:closure, _, [args, body]}),
+    do: raw_expr("|#{semantic_splice(args)}| #{semantic_interpolation(body)}")
 
   defp semantic_expr({:binary, _, [left, op, right]}),
     do:
@@ -513,6 +545,12 @@ defmodule RustQ.Meta.Lower do
 
   defp mark_mutable_expr_fallback(%AST.Tuple{} = expr, mutable_vars),
     do: %{expr | values: Enum.map(expr.values, &mark_mutable_expr(&1, mutable_vars))}
+
+  defp mark_mutable_expr_fallback(%AST.VecLiteral{} = expr, mutable_vars),
+    do: %{expr | values: Enum.map(expr.values, &mark_mutable_expr(&1, mutable_vars))}
+
+  defp mark_mutable_expr_fallback(%AST.Closure{} = expr, mutable_vars),
+    do: %{expr | body: mark_mutable_expr(expr.body, mutable_vars)}
 
   defp mark_mutable_expr_fallback(%AST.Some{} = expr, mutable_vars),
     do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}

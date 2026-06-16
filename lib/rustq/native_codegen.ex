@@ -9,7 +9,7 @@ defmodule RustQ.NativeCodegen do
       A.use("quote::quote"),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
       A.use(
-        "syn::{Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat, Stmt, Type, Variant}"
+        "syn::{Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat, Path, Stmt, Type, Variant}"
       ),
       RustQ.NativeCodegen.Modules.asts(),
       RustQ.NativeCodegen.Helpers.asts(),
