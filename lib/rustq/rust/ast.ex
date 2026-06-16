@@ -187,6 +187,11 @@ defmodule RustQ.Rust.AST do
     defstruct []
   end
 
+  defmodule PatLiteral do
+    @moduledoc false
+    defstruct [:value]
+  end
+
   defmodule PatNone do
     @moduledoc false
     defstruct []
@@ -411,6 +416,8 @@ defmodule RustQ.Rust.AST do
 
   def render_pattern(%PatVar{name: name}), do: Atom.to_string(name)
   def render_pattern(%PatWildcard{}), do: "_"
+  def render_pattern(%PatLiteral{value: value}) when is_binary(value), do: inspect(value)
+  def render_pattern(%PatLiteral{value: value}) when is_atom(value), do: Atom.to_string(value)
   def render_pattern(%PatNone{}), do: "None"
   def render_pattern(%PatSome{pattern: pattern}), do: ["Some(", render_pattern(pattern), ")"]
   def render_pattern(%PatOk{pattern: pattern}), do: ["Ok(", render_pattern(pattern), ")"]

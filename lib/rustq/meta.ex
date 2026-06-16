@@ -180,7 +180,7 @@ defmodule RustQ.Meta do
         args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}],
         returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
         lifetime: :a,
-        body: [%AST.Return{expr: %AST.LocalCall{name: :todo!, args: []}}]
+        body: tuple_enum_decoder_body(rust_name, variants)
       })
 
     [enum, decoder]
@@ -237,21 +237,117 @@ defmodule RustQ.Meta do
   defp struct_decoder_field({name, _type, :required}) do
     {name,
      %AST.Try{
-       expr: %AST.LocalCall{
-         name: :decode_required,
-         args: [%AST.Var{name: :term}, atom_call(name)]
+       expr: %AST.MethodCall{
+         receiver: %AST.Try{
+           expr: %AST.MethodCall{
+             receiver: %AST.Var{name: :term},
+             method: :map_get,
+             args: [atom_call(name)]
+           }
+         },
+         method: :decode,
+         args: []
        }
      }}
   end
 
   defp struct_decoder_field({name, _type, :optional}) do
     {name,
-     %AST.Try{
-       expr: %AST.LocalCall{
-         name: :decode_optional,
-         args: [%AST.Var{name: :term}, atom_call(name)]
-       }
+     %AST.Match{
+       expr: %AST.MethodCall{
+         receiver: %AST.Var{name: :term},
+         method: :map_get,
+         args: [atom_call(name)]
+       },
+       arms: [
+         %AST.Arm{
+           pattern: %AST.PatOk{pattern: %AST.PatVar{name: :value}},
+           body: [
+             %AST.Return{
+               expr: %AST.Some{
+                 expr: %AST.Try{
+                   expr: %AST.MethodCall{
+                     receiver: %AST.Var{name: :value},
+                     method: :decode,
+                     args: []
+                   }
+                 }
+               }
+             }
+           ]
+         },
+         %AST.Arm{
+           pattern: %AST.PatErr{pattern: %AST.PatWildcard{}},
+           body: [%AST.Return{expr: %AST.None{}}]
+         }
+       ]
      }}
+  end
+
+  defp tuple_enum_decoder_body(rust_name, variants) do
+    struct_name_expr =
+      %AST.Try{
+        expr: %AST.MethodCall{
+          receiver: %AST.Try{
+            expr: %AST.MethodCall{
+              receiver: %AST.Var{name: :term},
+              method: :map_get,
+              args: [struct_atom_expr()]
+            }
+          },
+          method: :atom_to_string,
+          args: []
+        }
+      }
+
+    [
+      %AST.Let{pattern: %AST.PatVar{name: :struct_name}, expr: struct_name_expr},
+      %AST.Return{
+        expr: %AST.Match{
+          expr: %AST.MethodCall{receiver: %AST.Var{name: :struct_name}, method: :as_str, args: []},
+          arms:
+            Enum.map(variants, fn {tag, [%Type{meta: %{rust_name: variant_name}}]} ->
+              %AST.Arm{
+                pattern: %AST.PatLiteral{value: "Elixir.#{variant_name}"},
+                body: [
+                  %AST.Return{
+                    expr: %AST.MethodCall{
+                      receiver: %AST.LocalCall{
+                        name: String.to_atom("decode_#{Macro.underscore(variant_name)}"),
+                        args: [%AST.Var{name: :term}]
+                      },
+                      method: :map,
+                      args: [%AST.Path{parts: [rust_name, rust_variant(tag)]}]
+                    }
+                  }
+                ]
+              }
+            end) ++
+              [
+                %AST.Arm{
+                  pattern: %AST.PatWildcard{},
+                  body: [
+                    %AST.Return{
+                      expr: %AST.Err{expr: %AST.Path{parts: [:rustler, :Error, :BadArg]}}
+                    }
+                  ]
+                }
+              ]
+        }
+      }
+    ]
+  end
+
+  defp struct_atom_expr do
+    %AST.Try{
+      expr: %AST.PathCall{
+        path: %AST.Path{parts: [:rustler, :Atom, :from_str]},
+        args: [
+          %AST.MethodCall{receiver: %AST.Var{name: :term}, method: :get_env, args: []},
+          %AST.Literal{value: "__struct__"}
+        ]
+      }
+    }
   end
 
   defp atom_call(name), do: %AST.PathCall{path: %AST.Path{parts: [:atoms, name]}, args: []}

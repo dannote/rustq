@@ -384,6 +384,17 @@ fn decode_arm(term: Term) -> NifResult<Arm> {
     }
 }
 
+fn decode_pat_literal(term: Term) -> NifResult<Pat> {
+    if let Ok(value) = term.decode::<String>() {
+        return parse_pat(quote!(#value));
+    }
+    if term.is_atom() {
+        let value = term.atom_to_string()?;
+        return parse_pat(quote!(#value));
+    }
+    Err(rustler::Error::BadArg)
+}
+
 fn parse_pat(tokens: proc_macro2::TokenStream) -> NifResult<Pat> {
     Pat::parse_single
         .parse2(tokens)
@@ -400,6 +411,9 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
             parse_pat(quote!(#ident))
         }
         "Elixir.RustQ.Rust.AST.PatWildcard" => parse_pat(quote!(_)),
+        "Elixir.RustQ.Rust.AST.PatLiteral" => {
+            decode_pat_literal(term.map_get(atom(env, "value")?)?)
+        }
         "Elixir.RustQ.Rust.AST.PatNone" => parse_pat(quote!(None)),
         "Elixir.RustQ.Rust.AST.PatSome" => {
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
