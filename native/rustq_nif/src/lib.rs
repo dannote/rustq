@@ -14,8 +14,8 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_pat, decode_ast_type,
-    expect_struct, is_nil, optional_atom_key, optional_map_get, struct_name,
+    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_pat, decode_ast_stmt,
+    decode_ast_type, expect_struct, is_nil, optional_atom_key, optional_map_get, struct_name,
 };
 
 #[derive(NifMap)]
@@ -241,35 +241,23 @@ fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
 }
 
 fn decode_stmt(term: Term) -> NifResult<Stmt> {
-    let module = struct_name(term)?;
+    decode_ast_stmt(term)
+}
 
-    match module.as_str() {
-        ast_modules::LET => {
-            let env = term.get_env();
-            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
-            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-            let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
+fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
+    let env = term.get_env();
+    let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
+    let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+    let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
 
-            if mutable {
-                let Pat::Ident(mut pat_ident) = pat else {
-                    return Err(rustler::Error::BadArg);
-                };
-                pat_ident.mutability = Some(Default::default());
-                Ok(syn::parse2(quote!(let #pat_ident = #expr;))
-                    .map_err(|_| rustler::Error::BadArg)?)
-            } else {
-                Ok(syn::parse2(quote!(let #pat = #expr;)).map_err(|_| rustler::Error::BadArg)?)
-            }
-        }
-        ast_modules::EXPR_STMT => {
-            let expr = decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
-            Ok(syn::parse2(quote!(#expr;)).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::RETURN => {
-            let expr = decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
-            Ok(Stmt::Expr(expr, None))
-        }
-        _ => Err(rustler::Error::BadArg),
+    if mutable {
+        let Pat::Ident(mut pat_ident) = pat else {
+            return Err(rustler::Error::BadArg);
+        };
+        pat_ident.mutability = Some(Default::default());
+        Ok(syn::parse2(quote!(let #pat_ident = #expr;)).map_err(|_| rustler::Error::BadArg)?)
+    } else {
+        Ok(syn::parse2(quote!(let #pat = #expr;)).map_err(|_| rustler::Error::BadArg)?)
     }
 }
 
@@ -466,6 +454,10 @@ fn parse_pat(tokens: proc_macro2::TokenStream) -> NifResult<Pat> {
     Pat::parse_single
         .parse2(tokens)
         .map_err(|_| rustler::Error::BadArg)
+}
+
+fn parse_stmt(tokens: proc_macro2::TokenStream) -> NifResult<Stmt> {
+    syn::parse2(tokens).map_err(|_| rustler::Error::BadArg)
 }
 
 fn decode_pat(term: Term) -> NifResult<Pat> {

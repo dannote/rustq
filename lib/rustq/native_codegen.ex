@@ -11,14 +11,16 @@ defmodule RustQ.NativeCodegen do
     [
       A.use("quote::quote"),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
-      A.use("syn::{Item, Pat, Type}"),
+      A.use("syn::{Item, Pat, Stmt, Type}"),
       atoms_module(),
       ast_modules_module(),
       helper_items(),
       decode_ast_item_item(),
       decode_ast_type_item(),
       decode_ast_pat_item(),
-      decode_pat_helper_items()
+      decode_ast_stmt_item(),
+      decode_pat_helper_items(),
+      decode_stmt_helper_items()
     ]
     |> List.flatten()
     |> AST.render_file_native()
@@ -309,6 +311,43 @@ defmodule RustQ.NativeCodegen do
 
   defp pat_decoder(name), do: String.to_atom("decode_#{name}")
 
+  defp decode_ast_stmt_item do
+    %AST.Function{
+      name: :decode_ast_stmt,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Stmt>",
+      body:
+        A.block do
+          A.return do
+            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+              decode_ast_stmt_arms()
+            end
+          end
+        end
+    }
+  end
+
+  defp decode_ast_stmt_arms do
+    Schema.nodes(:stmt)
+    |> Enum.map(&decode_ast_stmt_arm/1)
+    |> Kernel.++([
+      A.arm A.wildcard() do
+        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+      end
+    ])
+  end
+
+  defp decode_ast_stmt_arm(%Schema.Node{name: name, rust_const: rust_const}) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
+      A.return(A.path_call(stmt_decoder_path(name), [:term]))
+    end
+  end
+
+  defp stmt_decoder_path(:let), do: [:super, :decode_stmt_let]
+  defp stmt_decoder_path(:expr_stmt), do: [:decode_stmt_expr_stmt]
+  defp stmt_decoder_path(:return), do: [:decode_stmt_return]
+
   defp decode_pat_helper_items do
     [
       %AST.Function{
@@ -378,6 +417,34 @@ defmodule RustQ.NativeCodegen do
       unary_pat_decoder(:decode_pat_some, "pattern", "Some(#pat)"),
       unary_pat_decoder(:decode_pat_ok, "pattern", "Ok(#pat)"),
       unary_pat_decoder(:decode_pat_err, "pattern", "Err(#pat)")
+    ]
+  end
+
+  defp decode_stmt_helper_items do
+    [
+      %AST.Function{
+        name: :decode_stmt_expr_stmt,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Stmt>",
+        body:
+          A.block do
+            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+
+            A.return(A.path_call([:super, :parse_stmt], [A.token_macro(:quote, "#expr;")]))
+          end
+      },
+      %AST.Function{
+        name: :decode_stmt_return,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Stmt>",
+        body:
+          A.block do
+            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+            A.return(A.ok(A.path_call([:Stmt, :Expr], [:expr, A.none()])))
+          end
+      }
     ]
   end
 

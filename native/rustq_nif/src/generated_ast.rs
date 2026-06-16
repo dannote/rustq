@@ -4,7 +4,7 @@ use quote::quote;
 
 use rustler::{Atom, Env, NifResult, Term};
 
-use syn::{Item, Pat, Type};
+use syn::{Item, Pat, Stmt, Type};
 
 pub(crate) mod atoms {
     rustler::atoms! {
@@ -153,6 +153,15 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
     }
 }
 
+pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
+    match struct_name(term)?.as_str() {
+        ast_modules::LET => super::decode_stmt_let(term),
+        ast_modules::EXPR_STMT => decode_stmt_expr_stmt(term),
+        ast_modules::RETURN => decode_stmt_return(term),
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
 pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat> {
     let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
     super::parse_pat(quote!(# ident))
@@ -191,4 +200,14 @@ pub(crate) fn decode_pat_ok(term: Term) -> NifResult<Pat> {
 pub(crate) fn decode_pat_err(term: Term) -> NifResult<Pat> {
     let pat = super::decode_pat(term.map_get(super::atom(term.get_env(), "pattern")?)?)?;
     super::parse_pat(quote!(Err(# pat)))
+}
+
+pub(crate) fn decode_stmt_expr_stmt(term: Term) -> NifResult<Stmt> {
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    super::parse_stmt(quote!(# expr;))
+}
+
+pub(crate) fn decode_stmt_return(term: Term) -> NifResult<Stmt> {
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    Ok(Stmt::Expr(expr, None))
 }
