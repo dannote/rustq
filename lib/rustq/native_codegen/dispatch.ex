@@ -74,6 +74,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp item_decoder(:module), do: {:Mod, :decode_ast_module}
   defp item_decoder(:const), do: {:Const, :decode_ast_const}
   defp item_decoder(:static), do: {:Static, :decode_ast_static}
+  defp item_decoder(:type_alias), do: {:Type, :decode_ast_type_alias}
   defp item_decoder(:impl), do: {:Impl, :decode_ast_impl}
   defp item_decoder(:function), do: {:Fn, :decode_ast_function}
   defp item_decoder(:struct), do: {:Struct, :decode_ast_struct}
@@ -206,6 +207,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp stmt_decoder_path(:let), do: [:decode_stmt_let]
+  defp stmt_decoder_path(:let_else), do: [:decode_stmt_let_else]
   defp stmt_decoder_path(:assign), do: [:decode_stmt_assign]
   defp stmt_decoder_path(:expr_stmt), do: [:decode_stmt_expr_stmt]
   defp stmt_decoder_path(:return), do: [:decode_stmt_return]
@@ -259,6 +261,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
               :try,
               :tuple,
               :vec_literal,
+              :array_literal,
               :closure,
               :literal,
               :byte_string,

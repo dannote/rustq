@@ -78,6 +78,14 @@ pub(crate) fn parse_item_static(
     }
 }
 
+pub(crate) fn parse_item_type(
+    name: syn::Ident,
+    ty: Type,
+    vis: syn::Visibility,
+) -> NifResult<syn::ItemType> {
+    parse_syn(quote!(#vis type #name = #ty;))
+}
+
 pub(crate) fn parse_macro_item(source: String) -> NifResult<Item> {
     syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
@@ -151,6 +159,7 @@ pub(crate) fn parse_item_struct(
     derive: Vec<syn::Attribute>,
     lifetime: Option<String>,
     fields: Vec<Field>,
+    attrs: Vec<syn::Attribute>,
 ) -> NifResult<syn::ItemStruct> {
     let generics = if let Some(lifetime) = lifetime {
         let lifetime =
@@ -160,7 +169,7 @@ pub(crate) fn parse_item_struct(
         quote!()
     };
 
-    parse_syn(quote!(#(#derive)* #vis struct #name #generics { #(#fields)* }))
+    parse_syn(quote!(#(#derive)* #(#attrs)* #vis struct #name #generics { #(#fields)* }))
 }
 
 pub(crate) fn parse_function_arg(name: syn::Ident, ty: Type) -> NifResult<FnArg> {
@@ -181,8 +190,9 @@ pub(crate) fn parse_item_enum(
     vis: syn::Visibility,
     derive: Vec<syn::Attribute>,
     variants: Vec<syn::Variant>,
+    attrs: Vec<syn::Attribute>,
 ) -> NifResult<syn::ItemEnum> {
-    parse_syn(quote!(#(#derive)* #vis enum #name { #(#variants),* }))
+    parse_syn(quote!(#(#derive)* #(#attrs)* #vis enum #name { #(#variants),* }))
 }
 
 pub(crate) fn parse_enum_variant(name: syn::Ident, tuple: Vec<Type>) -> NifResult<syn::Variant> {

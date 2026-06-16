@@ -12,6 +12,7 @@ defmodule RustQ.Rust.AST do
           | Module.t()
           | Const.t()
           | Static.t()
+          | TypeAlias.t()
           | MacroItem.t()
           | MacroItemCall.t()
           | Impl.t()
@@ -20,7 +21,14 @@ defmodule RustQ.Rust.AST do
           | Enum.t()
 
   @type stmt ::
-          Let.t() | Assign.t() | ExprStmt.t() | Return.t() | EarlyReturn.t() | IfLet.t() | For.t()
+          Let.t()
+          | LetElse.t()
+          | Assign.t()
+          | ExprStmt.t()
+          | Return.t()
+          | EarlyReturn.t()
+          | IfLet.t()
+          | For.t()
 
   @type expr ::
           Var.t()
@@ -38,6 +46,7 @@ defmodule RustQ.Rust.AST do
           | Try.t()
           | Tuple.t()
           | VecLiteral.t()
+          | ArrayLiteral.t()
           | Closure.t()
           | Literal.t()
           | ByteString.t()
@@ -134,6 +143,17 @@ defmodule RustQ.Rust.AST do
       )
   )
 
+  defnode(TypeAlias, :item, [:name, :type, vis: nil],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          type: RustQ.Rust.AST.type() | String.t(),
+          vis: RustQ.Rust.AST.vis()
+        }
+      )
+  )
+
   defnode(MacroItem, :item, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
   defnode(MacroItemCall, :item, [:path, args: []],
@@ -184,7 +204,7 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{paths: [[atom() | String.t()] | atom() | String.t()]})
   )
 
-  defnode(Struct, :item, [:name, fields: [], vis: nil, derive: [], lifetime: nil],
+  defnode(Struct, :item, [:name, fields: [], vis: nil, derive: [], lifetime: nil, attrs: []],
     type:
       quote(
         do: %__MODULE__{
@@ -192,7 +212,8 @@ defmodule RustQ.Rust.AST do
           fields: [RustQ.Rust.AST.StructField.t()],
           vis: RustQ.Rust.AST.vis(),
           derive: [RustQ.Rust.AST.Derive.t() | atom()],
-          lifetime: atom() | nil
+          lifetime: atom() | nil,
+          attrs: [RustQ.Rust.AST.Attribute.t()]
         }
       )
   )
@@ -202,14 +223,15 @@ defmodule RustQ.Rust.AST do
       quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type(), vis: RustQ.Rust.AST.vis()})
   )
 
-  defnode(Enum, :item, [:name, variants: [], vis: nil, derive: []],
+  defnode(Enum, :item, [:name, variants: [], vis: nil, derive: [], attrs: []],
     type:
       quote(
         do: %__MODULE__{
           name: atom(),
           variants: [RustQ.Rust.AST.EnumVariant.t()],
           vis: RustQ.Rust.AST.vis(),
-          derive: [RustQ.Rust.AST.Derive.t() | atom()]
+          derive: [RustQ.Rust.AST.Derive.t() | atom()],
+          attrs: [RustQ.Rust.AST.Attribute.t()]
         }
       )
   )
@@ -258,6 +280,17 @@ defmodule RustQ.Rust.AST do
           expr: RustQ.Rust.AST.expr(),
           mutable: boolean(),
           type: RustQ.Rust.AST.type() | String.t() | nil
+        }
+      )
+  )
+
+  defnode(LetElse, :stmt, [:pattern, :expr, else: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          pattern: RustQ.Rust.AST.pat(),
+          expr: RustQ.Rust.AST.expr(),
+          else: [RustQ.Rust.AST.stmt()]
         }
       )
   )
@@ -371,6 +404,10 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]})
   )
 
+  defnode(ArrayLiteral, :expr, [:values],
+    type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]})
+  )
+
   defnode(Closure, :expr, [:args, :body],
     type: quote(do: %__MODULE__{args: [atom()], body: RustQ.Rust.AST.expr()})
   )
@@ -421,7 +458,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           left: RustQ.Rust.AST.expr(),
-          op: :eq | :and | :or,
+          op: :eq | :ne | :lt | :lte | :gt | :gte | :add | :sub | :mul | :div | :and | :or,
           right: RustQ.Rust.AST.expr()
         }
       )
@@ -473,6 +510,7 @@ defmodule RustQ.Rust.AST do
       Module,
       Const,
       Static,
+      TypeAlias,
       MacroItem,
       MacroItemCall,
       Impl,
@@ -491,6 +529,7 @@ defmodule RustQ.Rust.AST do
       TypeVec,
       TypeUnit,
       Let,
+      LetElse,
       Assign,
       ExprStmt,
       Return,
@@ -512,6 +551,7 @@ defmodule RustQ.Rust.AST do
       Try,
       Tuple,
       VecLiteral,
+      ArrayLiteral,
       Closure,
       Literal,
       ByteString,
@@ -546,6 +586,7 @@ defmodule RustQ.Rust.AST do
   def render_item_native(%Module{} = item), do: render_native(item, &render_module/1)
   def render_item_native(%Const{} = item), do: render_native(item, &render_const/1)
   def render_item_native(%Static{} = item), do: render_native(item, &render_static/1)
+  def render_item_native(%TypeAlias{} = item), do: render_native(item, &render_type_alias/1)
   def render_item_native(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
 
   def render_item_native(%MacroItemCall{} = item),
@@ -586,7 +627,7 @@ defmodule RustQ.Rust.AST do
       "use ",
       Elixir.Enum.map_join(base, "::", &to_string/1),
       "::{",
-      Elixir.Enum.map_join(names, ", ", &to_string/1),
+      names |> Elixir.Enum.map(&render_use_group_member/1) |> Elixir.Enum.intersperse(", "),
       "};"
     ]
   end
@@ -631,6 +672,17 @@ defmodule RustQ.Rust.AST do
       render_type(static.type),
       " = ",
       render_expr(static.expr),
+      ";"
+    ]
+  end
+
+  def render_type_alias(%TypeAlias{} = alias_item) do
+    [
+      render_vis(alias_item.vis),
+      "type ",
+      Atom.to_string(alias_item.name),
+      " = ",
+      render_type(alias_item.type),
       ";"
     ]
   end
@@ -721,6 +773,7 @@ defmodule RustQ.Rust.AST do
 
     [
       derive,
+      render_attrs(struct.attrs),
       vis,
       "struct ",
       Atom.to_string(struct.name),
@@ -741,7 +794,16 @@ defmodule RustQ.Rust.AST do
     vis = render_vis(enum.vis)
     variants = enum.variants |> Elixir.Enum.map(&render_enum_variant/1) |> Elixir.Enum.join("\n")
 
-    [derive, vis, "enum ", Atom.to_string(enum.name), " {\n", variants |> indent(), "\n}"]
+    [
+      derive,
+      render_attrs(enum.attrs),
+      vis,
+      "enum ",
+      Atom.to_string(enum.name),
+      " {\n",
+      variants |> indent(),
+      "\n}"
+    ]
     |> IO.iodata_to_binary()
   end
 
@@ -797,6 +859,20 @@ defmodule RustQ.Rust.AST do
     mut = if stmt.mutable, do: "mut ", else: ""
     type = if stmt.type, do: [": ", render_type(stmt.type)], else: []
     ["let ", mut, render_pattern(stmt.pattern), type, " = ", render_expr(stmt.expr), ";"]
+  end
+
+  def render_stmt(%LetElse{} = stmt) do
+    else_body = stmt.else |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+
+    [
+      "let ",
+      render_pattern(stmt.pattern),
+      " = ",
+      render_expr(stmt.expr),
+      " else {\n",
+      indent(else_body),
+      "\n};"
+    ]
   end
 
   def render_stmt(%Assign{} = stmt),
@@ -891,6 +967,7 @@ defmodule RustQ.Rust.AST do
   def render_expr(%Try{expr: expr}), do: [render_expr(expr), "?"]
   def render_expr(%Tuple{values: values}), do: ["(", render_args(values), ")"]
   def render_expr(%VecLiteral{values: values}), do: ["vec![", render_args(values), "]"]
+  def render_expr(%ArrayLiteral{values: values}), do: ["[", render_args(values), "]"]
 
   def render_expr(%Closure{args: args, body: body}) do
     ["|", Elixir.Enum.map_join(args, ", ", &to_string/1), "| ", render_expr(body)]
@@ -1015,6 +1092,19 @@ defmodule RustQ.Rust.AST do
   defp render_binary_op(:div), do: "/"
   defp render_binary_op(:and), do: "&&"
   defp render_binary_op(:or), do: "||"
+
+  defp render_use_group_member({base, names}) when is_list(names) do
+    [
+      to_string(base),
+      "::{",
+      names |> Elixir.Enum.map(&render_use_group_member/1) |> Elixir.Enum.intersperse(", "),
+      "}"
+    ]
+  end
+
+  defp render_use_group_member(:self), do: "self"
+  defp render_use_group_member(:*), do: "*"
+  defp render_use_group_member(value), do: to_string(value)
 
   defp render_unary_op(:not), do: "!"
   defp render_unary_op(:neg), do: "-"

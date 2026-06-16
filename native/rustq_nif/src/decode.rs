@@ -211,6 +211,10 @@ pub(crate) fn parse_let_stmt(
     }
 }
 
+pub(crate) fn parse_let_else_stmt(pat: Pat, expr: Expr, else_block: syn::Block) -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(let #pat = #expr else #else_block;))
+}
+
 pub(crate) fn parse_assign_stmt(target: Expr, expr: Expr) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(#target = #expr;))
 }
@@ -304,6 +308,10 @@ pub(crate) fn parse_unary_expr(op: String, expr: Expr) -> NifResult<Expr> {
 pub(crate) fn parse_byte_string_expr(value: String) -> NifResult<Expr> {
     let bytes = proc_macro2::Literal::byte_string(value.as_bytes());
     parse_syn::<Expr>(quote!(#bytes))
+}
+
+pub(crate) fn parse_array_expr(values: Vec<Expr>) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!([#(#values),*]))
 }
 
 pub(crate) fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {

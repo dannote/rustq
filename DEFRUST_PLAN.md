@@ -382,6 +382,9 @@ Recently completed:
 - `RustQ.Rustler.NifWrappers`, resource structs/impls, and options structs now
   use RustQ AST on their compatible/default paths while retaining legacy
   templates for raw decoder bodies and advanced compatibility cases.
+- Resource decoder helpers now render through builder-authored RustQ AST, and
+  the AST surface covers type aliases, `let ... else`, array literals, recursive
+  grouped-use fallback rendering, and struct/enum general attributes.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

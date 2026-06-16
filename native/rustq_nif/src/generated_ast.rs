@@ -6,7 +6,7 @@ use rustler::{Atom, Env, NifResult, Term};
 
 use syn::{
     Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemImpl, ItemMod, ItemStatic,
-    ItemStruct, ItemUse, Pat, Path, Stmt, Type, Variant,
+    ItemStruct, ItemType, ItemUse, Pat, Path, Stmt, Type, Variant,
 };
 
 pub(crate) mod atoms {
@@ -20,6 +20,7 @@ pub(crate) mod ast_modules {
     pub(crate) const MODULE: &str = "Elixir.RustQ.Rust.AST.Module";
     pub(crate) const CONST: &str = "Elixir.RustQ.Rust.AST.Const";
     pub(crate) const STATIC: &str = "Elixir.RustQ.Rust.AST.Static";
+    pub(crate) const TYPE_ALIAS: &str = "Elixir.RustQ.Rust.AST.TypeAlias";
     pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
     pub(crate) const MACRO_ITEM_CALL: &str = "Elixir.RustQ.Rust.AST.MacroItemCall";
     pub(crate) const IMPL: &str = "Elixir.RustQ.Rust.AST.Impl";
@@ -34,6 +35,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
+    pub(crate) const LET_ELSE: &str = "Elixir.RustQ.Rust.AST.LetElse";
     pub(crate) const ASSIGN: &str = "Elixir.RustQ.Rust.AST.Assign";
     pub(crate) const EXPR_STMT: &str = "Elixir.RustQ.Rust.AST.ExprStmt";
     pub(crate) const RETURN: &str = "Elixir.RustQ.Rust.AST.Return";
@@ -55,6 +57,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TRY: &str = "Elixir.RustQ.Rust.AST.Try";
     pub(crate) const TUPLE: &str = "Elixir.RustQ.Rust.AST.Tuple";
     pub(crate) const VEC_LITERAL: &str = "Elixir.RustQ.Rust.AST.VecLiteral";
+    pub(crate) const ARRAY_LITERAL: &str = "Elixir.RustQ.Rust.AST.ArrayLiteral";
     pub(crate) const CLOSURE: &str = "Elixir.RustQ.Rust.AST.Closure";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
     pub(crate) const BYTE_STRING: &str = "Elixir.RustQ.Rust.AST.ByteString";
@@ -135,6 +138,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
         ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
         ast_modules::STATIC => Ok(Item::Static(decode_ast_static(term)?)),
+        ast_modules::TYPE_ALIAS => Ok(Item::Type(decode_ast_type_alias(term)?)),
         ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
         ast_modules::MACRO_ITEM_CALL => decode_ast_macro_item_call(term),
         ast_modules::IMPL => Ok(Item::Impl(decode_ast_impl(term)?)),
@@ -179,6 +183,7 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
 pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
     match struct_name(term)?.as_str() {
         ast_modules::LET => decode_stmt_let(term),
+        ast_modules::LET_ELSE => decode_stmt_let_else(term),
         ast_modules::ASSIGN => decode_stmt_assign(term),
         ast_modules::EXPR_STMT => decode_stmt_expr_stmt(term),
         ast_modules::RETURN => decode_stmt_return(term),
@@ -206,6 +211,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::TRY => decode_expr_try(term),
         ast_modules::TUPLE => decode_expr_tuple(term),
         ast_modules::VEC_LITERAL => decode_expr_vec_literal(term),
+        ast_modules::ARRAY_LITERAL => decode_expr_array_literal(term),
         ast_modules::CLOSURE => decode_expr_closure(term),
         ast_modules::LITERAL => decode_expr_literal(term),
         ast_modules::BYTE_STRING => decode_expr_byte_string(term),
@@ -267,6 +273,14 @@ pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {
     super::parse_item_const(name, ty, expr, vis)
 }
 
+pub(crate) fn decode_ast_type_alias<'a>(term: Term<'a>) -> NifResult<ItemType> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.TypeAlias")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let ty = super::decode_type(required_field(term, "type")?)?;
+    let vis = super::decode_vis(required_field(term, "vis")?)?;
+    super::parse_item_type(name, ty, vis)
+}
+
 pub(crate) fn decode_ast_static<'a>(term: Term<'a>) -> NifResult<ItemStatic> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Static")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
@@ -304,7 +318,8 @@ pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
     let derive = super::decode_derive(required_field(term, "derive")?)?;
     let lifetime = optional_atom_key(term, "lifetime")?;
     let fields = super::decode_struct_field_list(required_field(term, "fields")?)?;
-    super::parse_item_struct(name, vis, derive, lifetime, fields)
+    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
+    super::parse_item_struct(name, vis, derive, lifetime, fields, attrs)
 }
 
 pub(crate) fn decode_ast_macro_item<'a>(term: Term<'a>) -> NifResult<Item> {
@@ -326,7 +341,8 @@ pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {
     let vis = super::decode_vis(required_field(term, "vis")?)?;
     let derive = super::decode_derive(required_field(term, "derive")?)?;
     let variants = super::decode_enum_variant_list(required_field(term, "variants")?)?;
-    super::parse_item_enum(name, vis, derive, variants)
+    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
+    super::parse_item_enum(name, vis, derive, variants, attrs)
 }
 
 pub(crate) fn decode_function_arg<'a>(term: Term<'a>) -> NifResult<FnArg> {
@@ -498,6 +514,13 @@ pub(crate) fn decode_stmt_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
     super::parse_let_stmt(pat_tokens, ty, expr)
 }
 
+pub(crate) fn decode_stmt_let_else<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let pattern = super::decode_pat(required_field(term, "pattern")?)?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let else_block = super::decode_block(required_field(term, "else")?)?;
+    super::parse_let_else_stmt(pattern, expr, else_block)
+}
+
 pub(crate) fn decode_arm<'a>(term: Term<'a>) -> NifResult<Arm> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Arm")?;
     let pat_term = required_field(term, "pattern")?;
@@ -643,6 +666,11 @@ pub(crate) fn decode_expr_tuple<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_vec_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
     let values = super::decode_expr_list(required_field(term, "values")?)?;
     super::parse_syn::<Expr>(quote!(vec![# (# values),*]))
+}
+
+pub(crate) fn decode_expr_array_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let values = super::decode_expr_list(required_field(term, "values")?)?;
+    super::parse_array_expr(values)
 }
 
 pub(crate) fn decode_expr_closure<'a>(term: Term<'a>) -> NifResult<Expr> {

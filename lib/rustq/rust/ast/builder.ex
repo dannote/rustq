@@ -68,6 +68,9 @@ defmodule RustQ.Rust.AST.Builder do
   def const(name, type, expression, opts \\ []),
     do: %AST.Const{name: name, type: type, expr: expr(expression), vis: Keyword.get(opts, :vis)}
 
+  def type_alias(name, type, opts \\ []),
+    do: %AST.TypeAlias{name: name, type: type, vis: Keyword.get(opts, :vis)}
+
   def static(name, type, expression, opts \\ []),
     do: %AST.Static{
       name: name,
@@ -110,6 +113,9 @@ defmodule RustQ.Rust.AST.Builder do
       mutable: true,
       type: Keyword.get(opts, :type)
     }
+
+  def let_else(pattern, expression, else_body),
+    do: %AST.LetElse{pattern: pat_expr(pattern), expr: expr(expression), else: flatten(else_body)}
 
   def assign(target, expression), do: %AST.Assign{target: expr(target), expr: expr(expression)}
   def stmt(expression), do: %AST.ExprStmt{expr: expr(expression)}
@@ -168,6 +174,8 @@ defmodule RustQ.Rust.AST.Builder do
     do: %AST.MacroCall{path: expr_path(path), args: Enum.map(args, &expr/1)}
 
   def vec(values), do: %AST.VecLiteral{values: Enum.map(values, &expr/1)}
+  def array(values), do: %AST.ArrayLiteral{values: Enum.map(values, &expr/1)}
+  def slice(values), do: ref(array(values))
   def closure(args, body), do: %AST.Closure{args: args, body: expr(body)}
 
   def call(name, args \\ []) when is_atom(name) do
@@ -249,6 +257,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Module,
              AST.Const,
              AST.Static,
+             AST.TypeAlias,
              AST.MacroItem,
              AST.MacroItemCall,
              AST.Impl,
@@ -267,6 +276,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Try,
              AST.Tuple,
              AST.VecLiteral,
+             AST.ArrayLiteral,
              AST.Closure,
              AST.Literal,
              AST.ByteString,

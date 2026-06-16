@@ -32,6 +32,7 @@ defmodule RustQ.ASTSamples do
 
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
   defp base_fragment(%AST.Static{name: name}), do: "static #{name}"
+  defp base_fragment(%AST.TypeAlias{name: name}), do: "type #{name}"
   defp base_fragment(%AST.Impl{target: target}), do: "impl #{AST.render_type(target)}"
   defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
   defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"
@@ -40,6 +41,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:module), do: "mod sample"
   defp semantic_fragment(:macro_item_call), do: "rustler::atoms!"
   defp semantic_fragment(:attribute), do: ~s|#[allow(dead_code)]|
+  defp semantic_fragment(:type_alias), do: "type Bytes = Vec<u8>;"
   defp semantic_fragment(:impl), do: "impl Sample"
   defp semantic_fragment(:function_arg), do: "value: u32"
   defp semantic_fragment(:derive), do: "#[derive(Clone, serde::Serialize)]"
@@ -53,6 +55,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:type_vec), do: "Vec<u8>"
   defp semantic_fragment(:type_unit), do: "type_unit_VALUE: ()"
   defp semantic_fragment(:let), do: "let value = 1i64;"
+  defp semantic_fragment(:let_else), do: "let Some(value) = maybe"
   defp semantic_fragment(:assign), do: "value = 2i64;"
   defp semantic_fragment(:expr_stmt), do: "side_effect();"
   defp semantic_fragment(:return), do: "1i64"
@@ -74,6 +77,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:try), do: "fallible()?"
   defp semantic_fragment(:tuple), do: "(1i64, 2i64)"
   defp semantic_fragment(:vec_literal), do: "vec![1i64, 2i64]"
+  defp semantic_fragment(:array_literal), do: "[1i64, 2i64]"
   defp semantic_fragment(:closure), do: "|value| value"
   defp semantic_fragment(:literal), do: "1i64"
   defp semantic_fragment(:byte_string), do: ~s|b"ref"|
@@ -113,6 +117,9 @@ defmodule RustQ.ASTSamples do
       type: A.type_path(:u32),
       expr: A.lit(1)
     }
+
+  def sample_for(:type_alias),
+    do: A.type_alias(:Bytes, A.type_path(:Vec, generics: [A.type_path(:u8)]))
 
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
   def sample_for(:macro_item_call), do: A.macro_item_call([:rustler, :atoms], [:ok, :error])
@@ -189,6 +196,16 @@ defmodule RustQ.ASTSamples do
     do:
       function_sample(:assign_sample, A.var(:value),
         body: [A.let_mut(:value, A.lit(1)), A.assign(:value, A.lit(2)), A.return(:value)],
+        returns: "i64"
+      )
+
+  def sample_for(:let_else),
+    do:
+      function_sample(:let_else_sample, A.var(:value),
+        body: [
+          A.let_else(A.some_pat(:value), :maybe, [A.early_return(A.lit(0))]),
+          A.return(:value)
+        ],
         returns: "i64"
       )
 
@@ -281,6 +298,9 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:vec_literal),
     do: function_sample(:vec_literal_sample, A.vec([A.lit(1), A.lit(2)]), returns: "Vec<i64>")
+
+  def sample_for(:array_literal),
+    do: function_sample(:array_literal_sample, A.array([A.lit(1), A.lit(2)]), returns: "[i64; 2]")
 
   def sample_for(:closure),
     do:

@@ -162,6 +162,12 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     expr!(vec(values))
   end
 
+  @spec decode_expr_array_literal(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_array_literal(term) do
+    values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
+    Super.parse_array_expr(values)
+  end
+
   @spec decode_expr_closure(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_closure(term) do
     args = unwrap!(Super.decode_ident_list(unwrap!(required_field(term, "args"))))

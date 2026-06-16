@@ -23,6 +23,7 @@ defmodule RustQ.NativeCodegen do
            :ItemMod,
            :ItemStruct,
            :ItemStatic,
+           :ItemType,
            :ItemUse,
            :Pat,
            :Path,

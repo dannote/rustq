@@ -57,5 +57,13 @@ defmodule RustQ.NativeCodegen.Decoders.Stmt do
     Super.parse_let_stmt(pat_tokens, ty, expr)
   end
 
+  @spec decode_stmt_let_else(term()) :: R.nif_result(Stmt.t())
+  defrust decode_stmt_let_else(term) do
+    pattern = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    else_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "else"))))
+    Super.parse_let_else_stmt(pattern, expr, else_block)
+  end
+
   def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

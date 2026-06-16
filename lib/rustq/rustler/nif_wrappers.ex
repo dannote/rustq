@@ -5,6 +5,11 @@ defmodule RustQ.Rustler.NifWrappers do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
 
+  import RustQ.Rust.AST.ItemBuilder
+
+  require A
+  require RustQ.Rust.AST.ItemBuilder
+
   @type spec :: {atom() | String.t(), keyword()}
 
   @spec build([spec()]) :: [Rust.Function.t()]
@@ -21,16 +26,15 @@ defmodule RustQ.Rustler.NifWrappers do
     call_args = args |> Keyword.keys() |> Enum.map_join(", ", &to_string/1)
 
     if ast_compatible?(opts) do
-      ast = %AST.Function{
-        name: String.to_atom(to_string(name)),
-        args:
-          Enum.map(args, fn {arg_name, type} -> %AST.FunctionArg{name: arg_name, type: type} end),
-        returns: Keyword.fetch!(opts, :returns),
-        lifetime: Keyword.get(opts, :lifetime),
-        vis: Keyword.get(opts, :vis),
-        attrs: [nif_attribute(opts)],
-        body: [%AST.Return{expr: A.call(String.to_atom(to_string(impl)), Keyword.keys(args))}]
-      }
+      ast =
+        function String.to_atom(to_string(name)),
+          args: args,
+          returns: Keyword.fetch!(opts, :returns),
+          lifetime: Keyword.get(opts, :lifetime),
+          vis: Keyword.get(opts, :vis),
+          attrs: [nif_attribute(opts)] do
+          A.return(A.call(String.to_atom(to_string(impl)), Keyword.keys(args)))
+        end
 
       Rust.item(AST.render_item_native(ast))
     else

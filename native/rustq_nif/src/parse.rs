@@ -34,6 +34,7 @@ impl_parse_syn_tokens!(
     syn::ItemMod,
     syn::ItemStruct,
     syn::ItemStatic,
+    syn::ItemType,
     syn::ItemUse,
     syn::Variant,
 );
