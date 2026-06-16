@@ -9,6 +9,7 @@ defmodule RustQ.Meta do
 
   alias RustQ.Meta.Lower
   alias RustQ.Meta.Type
+  alias RustQ.Rust
   alias RustQ.Rust.AST
 
   defmacro __using__(_opts) do
@@ -38,8 +39,13 @@ defmodule RustQ.Meta do
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
 
     asts = Enum.map(defs, &build_ast(&1, specs, type_aliases))
-    items = Enum.map(asts, &validate_item_ast/1)
-    source = Enum.map_join(asts, "\n\n", &AST.render_function_native/1)
+    type_items = build_type_items(type_aliases)
+    function_items = Enum.map(asts, &validate_item_ast/1)
+    items = type_items ++ function_items
+
+    type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
+    function_source = Enum.map_join(asts, "\n\n", &AST.render_function_native/1)
+    source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
     quote do
       @doc false
@@ -47,6 +53,9 @@ defmodule RustQ.Meta do
 
       @doc false
       def __rustq_types__, do: unquote(Macro.escape(type_aliases))
+
+      @doc false
+      def __rustq_type_items__, do: unquote(Macro.escape(type_items))
 
       @doc false
       def __rustq_items__, do: unquote(Macro.escape(items))
@@ -77,6 +86,43 @@ defmodule RustQ.Meta do
   defp validate_item_ast(%AST.Function{} = function) do
     RustQ.parse_fragment!(:item, AST.render_function_native(function))
   end
+
+  defp build_type_items(type_aliases) do
+    type_aliases
+    |> Map.values()
+    |> Enum.flat_map(&type_items/1)
+  end
+
+  defp type_items(%Type{
+         kind: :enum,
+         rust: rust_name,
+         meta: %{variants: variants, elixir_name: elixir_name}
+       }) do
+    enum =
+      RustQ.parse_fragment!(
+        :item,
+        Rust.enum(rust_name,
+          vis: :pub,
+          derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
+          variants: Enum.map(variants, &rust_variant/1)
+        )
+      )
+
+    decoder =
+      RustQ.parse_fragment!(
+        :item,
+        RustQ.Rustler.atom_decoder("decode_#{elixir_name}_atom",
+          returns: rust_name,
+          cases: Enum.map(variants, &{&1, "#{rust_name}::#{rust_variant(&1)}"})
+        )
+      )
+
+    [enum, decoder]
+  end
+
+  defp type_items(_type), do: []
+
+  defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
 
   defp arg_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name
 

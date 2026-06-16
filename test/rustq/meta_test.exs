@@ -40,6 +40,9 @@ defmodule RustQ.MetaTest do
     assert source =~ "canvas.save();"
     assert source =~ "Ok(())"
 
+    assert source =~ "pub enum Mode"
+    assert source =~ "SrcOver,"
+    assert source =~ "pub fn decode_mode_atom(value: Atom) -> NifResult<Mode>"
     assert source =~ "fn decode_mode(atom: Atom) -> NifResult<Mode>"
     assert source =~ "match atom"
     assert source =~ "value if value == atoms::src_over() =>"
@@ -53,11 +56,17 @@ defmodule RustQ.MetaTest do
     assert source =~ "let mut paint = decode_paint(opts.fill)?;"
     assert source =~ "apply_blend_mode(&mut paint, raw_opts)?;"
     assert source =~ "canvas.draw_rect(&rect, &paint);"
+    assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
   test "set-theoretic type aliases are available to specs" do
     assert %RustQ.Meta.Type{kind: :enum, rust: "Mode", meta: %{variants: [:src_over, :multiply]}} =
              Generated.__rustq_types__()[{:mode, 0}]
+
+    assert Generated.__rustq_source__() =~ "pub enum Mode"
+
+    assert Generated.__rustq_source__() =~
+             "pub fn decode_mode_atom(value: Atom) -> NifResult<Mode>"
 
     assert Generated.__rustq_source__() =~ "fn decode_mode(atom: Atom) -> NifResult<Mode>"
   end
