@@ -8,7 +8,9 @@ defmodule RustQ.MetaTest do
 
     @type mode :: :src_over | :multiply
 
-    @type event :: {:click, String.t()} | {:resize, R.u32(), R.u32()}
+    @type click :: {:click, String.t()}
+    @type resize :: {:resize, R.u32(), R.u32()}
+    @type event :: click() | resize()
 
     @type rect_opts :: %{
             required(:x) => R.f32(),
@@ -122,6 +124,12 @@ defmodule RustQ.MetaTest do
              Generated.__rustq_types__()[{:mode, 0}]
 
     assert Generated.__rustq_source__() =~ "pub enum Mode"
+
+    assert %RustQ.Meta.Type{
+             kind: :tuple,
+             meta: %{variant: {:click, [%RustQ.Meta.Type{rust: "String"}]}}
+           } =
+             Generated.__rustq_types__()[{:click, 0}]
 
     assert %RustQ.Meta.Type{kind: :tuple_enum, rust: "Event", meta: %{variants: event_variants}} =
              Generated.__rustq_types__()[{:event, 0}]

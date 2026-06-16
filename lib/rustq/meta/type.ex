@@ -12,24 +12,42 @@ defmodule RustQ.Meta.Type do
 
   @spec type_aliases([term()]) :: map()
   def type_aliases(types) do
-    types
-    |> List.wrap()
-    |> Enum.reverse()
-    |> Map.new(fn {:type, {:"::", _, [{name, _, args}, ast]}, _location} ->
-      arity = args |> List.wrap() |> length()
-      rust_name = name |> Atom.to_string() |> Macro.camelize()
-      {{name, arity}, parse_type_alias(name, ast, rust_name)}
-    end)
+    raw =
+      types
+      |> List.wrap()
+      |> Enum.reverse()
+      |> Map.new(fn {:type, {:"::", _, [{name, _, args}, ast]}, _location} ->
+        arity = args |> List.wrap() |> length()
+        rust_name = name |> Atom.to_string() |> Macro.camelize()
+        {{name, arity}, {name, ast, rust_name}}
+      end)
+
+    raw
+    |> Map.keys()
+    |> Enum.reduce(%{}, fn key, aliases -> elem(resolve_alias(key, raw, aliases), 1) end)
   end
 
-  defp parse_type_alias(name, ast, rust_name) do
+  defp resolve_alias(key, raw, aliases) do
+    case Map.fetch(aliases, key) do
+      {:ok, type} ->
+        {type, aliases}
+
+      :error ->
+        {name, ast, rust_name} = Map.fetch!(raw, key)
+        type = parse_type_alias(name, ast, rust_name, raw, aliases)
+        aliases = Map.put(aliases, key, type)
+        {type, aliases}
+    end
+  end
+
+  defp parse_type_alias(name, ast, rust_name, raw, aliases) do
     cond do
       atom_union?(ast) ->
         type(:enum, path(rust_name), %{elixir_name: name, variants: union_members(ast)})
 
       option_union?(ast) ->
         [_nil, inner] = option_members(ast)
-        inner_type = parse(inner, %{})
+        {inner_type, _aliases} = parse_alias_type(inner, raw, aliases)
 
         type(:option, %AST.TypeOption{inner: inner_type.ast}, %{
           elixir_name: name,
@@ -38,8 +56,8 @@ defmodule RustQ.Meta.Type do
 
       result_union?(ast) ->
         {ok, error} = result_members(ast)
-        ok_type = parse(ok, %{})
-        error_type = parse(error, %{})
+        {ok_type, aliases} = parse_alias_type(ok, raw, aliases)
+        {error_type, _aliases} = parse_alias_type(error, raw, aliases)
 
         type(:result, %AST.TypeResult{ok: ok_type.ast, error: error_type.ast}, %{
           elixir_name: name,
@@ -47,14 +65,20 @@ defmodule RustQ.Meta.Type do
           error: error_type
         })
 
-      tuple_union?(ast) ->
+      tuple_union?(ast, raw, aliases) ->
+        {variants, _aliases} = tuple_variants(ast, raw, aliases)
+
         type(:tuple_enum, path(rust_name), %{
           elixir_name: name,
-          variants: tuple_variants(ast)
+          variants: variants
         })
 
+      tuple_type?(ast) ->
+        {variant, _aliases} = tuple_variant(ast, raw, aliases)
+        type(:tuple, path(rust_name), %{elixir_name: name, variant: variant})
+
       map_type?(ast) ->
-        fields = map_fields(ast)
+        {fields, _aliases} = map_fields(ast, raw, aliases)
 
         lifetimes =
           if Enum.any?(fields, fn {_name, type, _presence} ->
@@ -71,6 +95,19 @@ defmodule RustQ.Meta.Type do
         type(:alias, path(rust_name), %{elixir_name: name, ast: ast})
     end
   end
+
+  defp parse_alias_type({name, _meta, args} = ast, raw, aliases)
+       when is_atom(name) and is_list(args) do
+    key = {name, length(args)}
+
+    if Map.has_key?(raw, key) do
+      resolve_alias(key, raw, aliases)
+    else
+      {parse(ast, aliases), aliases}
+    end
+  end
+
+  defp parse_alias_type(ast, _raw, aliases), do: {parse(ast, aliases), aliases}
 
   defp parse({{:., _, [module, function]}, _, args}, aliases),
     do: parse_remote(module, function, args, aliases)
@@ -201,13 +238,22 @@ defmodule RustQ.Meta.Type do
 
   defp parse_external_type(_module, function, _args, _aliases), do: type(:type, path(function))
 
+  defp tuple_type?({tag, _type}) when is_atom(tag), do: tag not in [:ok, :error]
+  defp tuple_type?({:{}, _, [tag | types]}) when is_atom(tag), do: types != []
+  defp tuple_type?(_ast), do: false
+
   defp map_type?({:%{}, _, fields}) when is_list(fields), do: true
   defp map_type?(_ast), do: false
 
-  defp map_fields({:%{}, _, fields}) do
-    Enum.map(fields, fn
-      {{:required, _, [name]}, ast} -> {name, parse(ast, %{}), :required}
-      {{:optional, _, [name]}, ast} -> {name, parse(ast, %{}), :optional}
+  defp map_fields({:%{}, _, fields}, raw, aliases) do
+    Enum.map_reduce(fields, aliases, fn
+      {{:required, _, [name]}, ast}, aliases ->
+        {type, aliases} = parse_alias_type(ast, raw, aliases)
+        {{name, type, :required}, aliases}
+
+      {{:optional, _, [name]}, ast}, aliases ->
+        {type, aliases} = parse_alias_type(ast, raw, aliases)
+        {{name, type, :optional}, aliases}
     end)
   end
 
@@ -237,16 +283,43 @@ defmodule RustQ.Meta.Type do
       Enum.any?(members, &match?({:error, _}, &1))
   end
 
-  defp tuple_union?(ast), do: ast |> union_members() |> Enum.all?(&tagged_tuple?/1)
+  defp tuple_union?({:|, _, _} = ast, raw, aliases),
+    do: ast |> union_members() |> Enum.all?(&tagged_tuple?(&1, raw, aliases))
 
-  defp tagged_tuple?({tag, _type}) when is_atom(tag), do: tag not in [:ok, :error]
-  defp tagged_tuple?({:{}, _, [tag | types]}) when is_atom(tag), do: types != []
-  defp tagged_tuple?(_other), do: false
+  defp tuple_union?(_ast, _raw, _aliases), do: false
 
-  defp tuple_variants(ast), do: ast |> union_members() |> Enum.map(&tuple_variant/1)
+  defp tagged_tuple?({tag, _type}, _raw, _aliases) when is_atom(tag), do: tag not in [:ok, :error]
+  defp tagged_tuple?({:{}, _, [tag | types]}, _raw, _aliases) when is_atom(tag), do: types != []
 
-  defp tuple_variant({tag, type}), do: {tag, [parse(type, %{})]}
-  defp tuple_variant({:{}, _, [tag | types]}), do: {tag, Enum.map(types, &parse(&1, %{}))}
+  defp tagged_tuple?({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
+    {type, _aliases} = parse_alias_type({name, [], args}, raw, aliases)
+    type.kind == :tuple
+  rescue
+    _error -> false
+  end
+
+  defp tagged_tuple?(_other, _raw, _aliases), do: false
+
+  defp tuple_variants(ast, raw, aliases) do
+    ast
+    |> union_members()
+    |> Enum.map_reduce(aliases, &tuple_variant(&1, raw, &2))
+  end
+
+  defp tuple_variant({tag, type}, raw, aliases) do
+    {type, aliases} = parse_alias_type(type, raw, aliases)
+    {{tag, [type]}, aliases}
+  end
+
+  defp tuple_variant({:{}, _, [tag | types]}, raw, aliases) do
+    {types, aliases} = Enum.map_reduce(types, aliases, &parse_alias_type(&1, raw, &2))
+    {{tag, types}, aliases}
+  end
+
+  defp tuple_variant({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
+    {type, aliases} = parse_alias_type({name, [], args}, raw, aliases)
+    {type.meta.variant, aliases}
+  end
 
   defp result_members(ast) do
     members = union_members(ast)
