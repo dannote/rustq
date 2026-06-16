@@ -6,6 +6,20 @@ defmodule RustQ.Rust.ASTBuilderTest do
 
   require A
 
+  test "renders token macro expressions through native AST" do
+    function = %AST.Function{
+      name: :pat_none,
+      args: [],
+      returns: "NifResult<Pat>",
+      body:
+        A.block do
+          A.return(A.call(:parse_pat, [A.token_macro(:quote, "None")]))
+        end
+    }
+
+    assert AST.render_function_native(function) =~ "parse_pat(quote!(None))"
+  end
+
   test "renders item-level Rust AST nodes through native AST" do
     source =
       AST.render_file_native([

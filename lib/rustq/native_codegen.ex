@@ -9,13 +9,15 @@ defmodule RustQ.NativeCodegen do
 
   def generated_ast_support do
     [
+      A.use("quote::quote"),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
-      A.use("syn::{Item, Type}"),
+      A.use("syn::{Item, Pat, Type}"),
       atoms_module(),
       ast_modules_module(),
       helper_items(),
       decode_ast_item_item(),
-      decode_ast_type_item()
+      decode_ast_type_item(),
+      decode_pat_helper_items()
     ]
     |> List.flatten()
     |> AST.render_file_native()
@@ -264,6 +266,46 @@ defmodule RustQ.NativeCodegen do
   end
 
   defp type_decoder(name), do: String.to_atom("decode_#{name}")
+
+  defp decode_pat_helper_items do
+    [
+      %AST.Function{
+        name: :decode_pat_var,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Pat>",
+        body:
+          A.block do
+            A.let(
+              :ident,
+              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
+            )
+
+            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#ident")]))
+          end
+      },
+      %AST.Function{
+        name: :decode_pat_wildcard,
+        vis: :crate,
+        args: [_term: "Term"],
+        returns: "NifResult<Pat>",
+        body:
+          A.block do
+            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "_")]))
+          end
+      },
+      %AST.Function{
+        name: :decode_pat_none,
+        vis: :crate,
+        args: [_term: "Term"],
+        returns: "NifResult<Pat>",
+        body:
+          A.block do
+            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "None")]))
+          end
+      }
+    ]
+  end
 
   defp format_rust(source) do
     path =

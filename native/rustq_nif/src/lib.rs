@@ -14,8 +14,9 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_type, expect_struct, is_nil,
-    optional_atom_key, optional_map_get, struct_name,
+    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_type, decode_pat_none,
+    decode_pat_var, decode_pat_wildcard, expect_struct, is_nil, optional_atom_key,
+    optional_map_get, struct_name,
 };
 
 #[derive(NifMap)]
@@ -352,6 +353,14 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
             Ok(syn::parse2(quote!((#(#values),*))).map_err(|_| rustler::Error::BadArg)?)
         }
         ast_modules::LITERAL => decode_literal_expr(term.map_get(atom(env, "value")?)?),
+        ast_modules::TOKEN_MACRO => {
+            let path = path_parts(
+                term.map_get(atom(env, "path")?)?
+                    .map_get(atom(env, "parts")?)?,
+            )?;
+            let tokens = term.map_get(atom(env, "tokens")?)?.decode::<String>()?;
+            parse_expr(&format!("{}!({})", path, tokens))
+        }
         ast_modules::ATOM_VALUE => {
             let name = format_ident!("{}", atom_key(term, "name")?);
             Ok(syn::parse2(quote!(atoms::#name())).map_err(|_| rustler::Error::BadArg)?)
@@ -465,11 +474,8 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
     let env = term.get_env();
 
     match module.as_str() {
-        ast_modules::PAT_VAR => {
-            let ident = format_ident!("{}", atom_key(term, "name")?);
-            parse_pat(quote!(#ident))
-        }
-        ast_modules::PAT_WILDCARD => parse_pat(quote!(_)),
+        ast_modules::PAT_VAR => decode_pat_var(term),
+        ast_modules::PAT_WILDCARD => decode_pat_wildcard(term),
         ast_modules::PAT_PATH => {
             let path = parse_path(&path_parts(
                 term.map_get(atom(env, "path")?)?
@@ -478,7 +484,7 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
             parse_pat(quote!(#path))
         }
         ast_modules::PAT_LITERAL => decode_pat_literal(term.map_get(atom(env, "value")?)?),
-        ast_modules::PAT_NONE => parse_pat(quote!(None)),
+        ast_modules::PAT_NONE => decode_pat_none(term),
         ast_modules::PAT_SOME => {
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
             parse_pat(quote!(Some(#pat)))

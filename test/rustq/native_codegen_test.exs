@@ -16,5 +16,7 @@ defmodule RustQ.NativeCodegenTest do
     assert source =~ "ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?))"
     assert source =~ "pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type>"
     assert source =~ "ast_modules::TYPE_PATH => super::decode_type_path(term)"
+    assert source =~ "pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat>"
+    assert source =~ "super::parse_pat(quote!(# ident))"
   end
 end

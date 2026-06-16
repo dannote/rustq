@@ -30,6 +30,7 @@ defmodule RustQ.Rust.AST do
           | Try.t()
           | Tuple.t()
           | Literal.t()
+          | TokenMacro.t()
           | AtomValue.t()
           | None.t()
           | Some.t()
@@ -224,6 +225,10 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{value: String.t() | integer() | float() | boolean()})
   )
 
+  defnode(TokenMacro, :expr, [:path, :tokens],
+    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), tokens: String.t()})
+  )
+
   defnode(AtomValue, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
   defnode(None, :expr, [], type: quote(do: %__MODULE__{}))
@@ -331,6 +336,7 @@ defmodule RustQ.Rust.AST do
       Try,
       Tuple,
       Literal,
+      TokenMacro,
       AtomValue,
       None,
       Some,
@@ -557,6 +563,10 @@ defmodule RustQ.Rust.AST do
 
   def render_expr(%Literal{value: true}), do: "true"
   def render_expr(%Literal{value: false}), do: "false"
+
+  def render_expr(%TokenMacro{path: path, tokens: tokens}),
+    do: [render_expr(path), "!(", tokens, ")"]
+
   def render_expr(%AtomValue{name: name}), do: ["atoms::", Atom.to_string(name), "()"]
   def render_expr(%None{}), do: "None"
   def render_expr(%Some{expr: expr}), do: ["Some(", render_expr(expr), ")"]
