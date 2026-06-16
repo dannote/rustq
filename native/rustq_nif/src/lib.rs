@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use quote::{format_ident, quote};
-use rustler::{Atom, Encoder, Env, NifMap, NifResult, Term};
+use rustler::{Encoder, Env, NifMap, NifResult, Term};
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
@@ -13,7 +13,10 @@ use syn::{
 
 mod generated_ast;
 
-use generated_ast::{ast_modules, atoms};
+use generated_ast::{
+    ast_modules, atom, atom_key, atoms, expect_struct, is_nil, optional_atom_key, optional_map_get,
+    struct_name,
+};
 
 #[derive(NifMap)]
 struct ErrorInfo {
@@ -590,47 +593,6 @@ fn parse_path(source: &str) -> NifResult<syn::Path> {
 
 fn parse_expr(source: &str) -> NifResult<Expr> {
     syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
-}
-
-fn atom(env: Env, name: &str) -> NifResult<Atom> {
-    Atom::from_str(env, name)
-}
-
-fn optional_map_get<'a>(term: Term<'a>, key: &str) -> NifResult<Option<Term<'a>>> {
-    match term.map_get(atom(term.get_env(), key)?) {
-        Ok(value) => Ok(Some(value)),
-        Err(_) => Ok(None),
-    }
-}
-
-fn atom_key(term: Term, key: &str) -> NifResult<String> {
-    term.map_get(atom(term.get_env(), key)?)?.atom_to_string()
-}
-
-fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<String>> {
-    let value = term.map_get(atom(term.get_env(), key)?)?;
-    if is_nil(value)? {
-        Ok(None)
-    } else {
-        Ok(Some(value.atom_to_string()?))
-    }
-}
-
-fn is_nil(term: Term) -> NifResult<bool> {
-    Ok(term.is_atom() && term.atom_to_string()? == "nil")
-}
-
-fn struct_name(term: Term) -> NifResult<String> {
-    term.map_get(atom(term.get_env(), "__struct__")?)?
-        .atom_to_string()
-}
-
-fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
-    if struct_name(term)? == expected {
-        Ok(())
-    } else {
-        Err(rustler::Error::BadArg)
-    }
 }
 
 struct Context {
