@@ -352,12 +352,6 @@ defmodule RustQ.NativeCodegen do
 
         A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path")]))
       end,
-      function :decode_pat_literal,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Pat>" do
-        A.return(A.path_call([:super, :decode_pat_literal_value], [map_get(:term, "value")]))
-      end,
       unary_pat_decoder(:decode_pat_some, "pattern", "Some(#pat)"),
       function :decode_pat_tuple,
         vis: :crate,
@@ -459,13 +453,6 @@ defmodule RustQ.NativeCodegen do
 
         A.return(A.path_call([:super, :parse_let_stmt], [:pat_tokens, :ty, :expr]))
       end,
-      function :decode_stmt_expr_stmt,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Stmt>" do
-        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-        A.return(A.path_call([:super, :parse_stmt], [A.token_macro(:quote, "#expr;")]))
-      end,
       function :decode_stmt_return,
         vis: :crate,
         args: [term: "Term"],
@@ -502,12 +489,6 @@ defmodule RustQ.NativeCodegen do
             A.ref(A.try(A.path_call([:super, :path_parts], [map_get(:term, "parts")])))
           ])
         )
-      end,
-      function :decode_expr_literal,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.return(A.path_call([:super, :decode_literal_expr], [map_get(:term, "value")]))
       end,
       function :decode_expr_token_macro,
         vis: :crate,

@@ -211,8 +211,21 @@ pub(crate) fn decode_pat_none<'a>(_term: Term<'a>) -> NifResult<Pat> {
     super::parse_pat(quote!(None))
 }
 
+pub(crate) fn decode_pat_literal<'a>(term: Term<'a>) -> NifResult<Pat> {
+    super::decode_pat_literal_value(term.map_get(atom(term.get_env(), "value")?)?)
+}
+
+pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let expr = super::decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
+    super::parse_stmt(quote!(# expr;))
+}
+
 pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr> {
-    super::parse_expr("None")
+    super::parse_expr_tokens(quote!(None))
+}
+
+pub(crate) fn decode_expr_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
+    super::decode_literal_expr(term.map_get(atom(term.get_env(), "value")?)?)
 }
 
 pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat> {
@@ -226,10 +239,6 @@ pub(crate) fn decode_pat_path(term: Term) -> NifResult<Pat> {
             .map_get(super::atom(term.get_env(), "parts")?)?,
     )?)?;
     super::parse_pat(quote!(# path))
-}
-
-pub(crate) fn decode_pat_literal(term: Term) -> NifResult<Pat> {
-    super::decode_pat_literal_value(term.map_get(super::atom(term.get_env(), "value")?)?)
 }
 
 pub(crate) fn decode_pat_some(term: Term) -> NifResult<Pat> {
@@ -292,11 +301,6 @@ pub(crate) fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
     super::parse_let_stmt(pat_tokens, ty, expr)
 }
 
-pub(crate) fn decode_stmt_expr_stmt(term: Term) -> NifResult<Stmt> {
-    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
-    super::parse_stmt(quote!(# expr;))
-}
-
 pub(crate) fn decode_stmt_return(term: Term) -> NifResult<Stmt> {
     let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
     Ok(Stmt::Expr(expr, None))
@@ -311,10 +315,6 @@ pub(crate) fn decode_expr_path(term: Term) -> NifResult<Expr> {
     super::parse_expr(&super::path_parts(
         term.map_get(super::atom(term.get_env(), "parts")?)?,
     )?)
-}
-
-pub(crate) fn decode_expr_literal(term: Term) -> NifResult<Expr> {
-    super::decode_literal_expr(term.map_get(super::atom(term.get_env(), "value")?)?)
 }
 
 pub(crate) fn decode_expr_token_macro(term: Term) -> NifResult<Expr> {

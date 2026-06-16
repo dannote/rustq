@@ -97,7 +97,7 @@ defmodule RustQ.Meta.LowerTest do
              body: [
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_expr]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_expr_tokens]}
                  }
                }
              ]

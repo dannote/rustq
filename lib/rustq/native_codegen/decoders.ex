@@ -7,17 +7,35 @@ defmodule RustQ.NativeCodegen.Decoders do
 
   @spec decode_pat_wildcard(term()) :: R.nif_result(R.pat())
   defrust decode_pat_wildcard(_term) do
-    Super.parse_pat(token_macro(:quote, "_"))
+    quote_pat!("_")
   end
 
   @spec decode_pat_none(term()) :: R.nif_result(R.pat())
   defrust decode_pat_none(_term) do
-    Super.parse_pat(token_macro(:quote, "None"))
+    quote_pat!("None")
+  end
+
+  @spec decode_pat_literal(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_literal(term) do
+    Super.decode_pat_literal_value(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "value")))))
+  end
+
+  @spec decode_stmt_expr_stmt(term()) :: R.nif_result(R.stmt())
+  defrust decode_stmt_expr_stmt(term) do
+    expr =
+      unwrap!(Super.decode_expr(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "expr"))))))
+
+    quote_stmt!("#expr;")
   end
 
   @spec decode_expr_none(term()) :: R.nif_result(R.expr())
   defrust decode_expr_none(_term) do
-    Super.parse_expr("None")
+    quote_expr!("None")
+  end
+
+  @spec decode_expr_literal(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_literal(term) do
+    Super.decode_literal_expr(unwrap!(term.map_get(unwrap!(atom(term.get_env(), "value")))))
   end
 
   def asts do

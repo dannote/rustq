@@ -203,6 +203,18 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
+  defp lower_expr({:quote_expr!, _, [tokens]}),
+    do: %AST.PathCall{
+      path: %AST.Path{parts: [:super, :parse_expr_tokens]},
+      args: [quote_tokens(tokens)]
+    }
+
+  defp lower_expr({:quote_pat!, _, [tokens]}),
+    do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_pat]}, args: [quote_tokens(tokens)]}
+
+  defp lower_expr({:quote_stmt!, _, [tokens]}),
+    do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_stmt]}, args: [quote_tokens(tokens)]}
+
   defp lower_expr({:badarg, _, []}), do: %AST.Path{parts: [:rustler, :Error, :BadArg]}
 
   defp lower_expr({:==, _, [left, right]}),
@@ -268,6 +280,13 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
+
+  defp quote_tokens(tokens) when is_binary(tokens),
+    do: %AST.TokenMacro{path: %AST.Path{parts: [:quote]}, tokens: tokens}
+
+  defp quote_tokens(other) do
+    raise ArgumentError, "unsupported quote tokens: #{Macro.to_string(other)}"
+  end
 
   defp lower_token_macro_path(atom) when is_atom(atom), do: %AST.Path{parts: [atom]}
   defp lower_token_macro_path({:__aliases__, _, parts}), do: %AST.Path{parts: parts}

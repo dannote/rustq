@@ -18,11 +18,15 @@ Preferred order:
    - If generation needs a Rust construct that RustQ cannot represent yet, first consider adding an AST node and native decoder/rendering support.
    - Keep growing the AST vocabulary rather than accumulating ad hoc string templates.
 
-4. **Use raw Rust strings only as isolated escape hatches**
+4. **Use Rusty-Elixir helper markers before raw strings**
+   - `Super.foo(...)` in `defrust` intentionally lowers to a Rust parent-module call such as `super::foo(...)`.
+   - `quote_expr!(...)`, `quote_pat!(...)`, and `quote_stmt!(...)` are explicit Rust token escape hatches that lower through parser helpers.
+
+5. **Use raw Rust strings only as isolated escape hatches**
    - Acceptable examples: `AST.MacroItem` for macro invocations such as `rustler::atoms!`.
    - If a string fallback is used, keep it local and treat it as a candidate for future AST support.
 
-5. **Schema/typespecs are the source of truth**
+6. **Schema/typespecs are the source of truth**
    - Prefer `defstruct`, `@type t`, and RustQ AST schema introspection over parallel hand-written schema maps.
    - Avoid duplicating field/type/category metadata unless there is no better source.
 
