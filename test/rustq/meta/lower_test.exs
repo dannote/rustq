@@ -51,6 +51,14 @@ defmodule RustQ.Meta.LowerTest do
              }
            } = Enum.find(helpers, &(&1.name == :atom_key))
 
+    assert %RustQ.Rust.AST.Function{name: :optional_atom_key, body: optional_body} =
+             Enum.find(helpers, &(&1.name == :optional_atom_key))
+
+    assert Enum.any?(
+             optional_body,
+             &match?(%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{}}, &1)
+           )
+
     assert %RustQ.Rust.AST.Function{name: :is_nil, body: body} =
              Enum.find(helpers, &(&1.name == :is_nil))
 
@@ -60,5 +68,19 @@ defmodule RustQ.Meta.LowerTest do
              }
            ] =
              body
+
+    assert %RustQ.Rust.AST.Function{
+             name: :expect_struct,
+             body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{else: else_body}}]
+           } =
+             Enum.find(helpers, &(&1.name == :expect_struct))
+
+    assert [
+             %RustQ.Rust.AST.Return{
+               expr: %RustQ.Rust.AST.Err{
+                 expr: %RustQ.Rust.AST.Path{parts: [:rustler, :Error, :BadArg]}
+               }
+             }
+           ] = else_body
   end
 end

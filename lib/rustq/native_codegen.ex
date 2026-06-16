@@ -80,39 +80,6 @@ defmodule RustQ.NativeCodegen do
             end
           end
         end
-      end,
-      function :optional_atom_key,
-        vis: :crate,
-        args: [term: "Term", key: "&str"],
-        returns: "NifResult<Option<String>>" do
-        A.let(
-          :value,
-          A.try(
-            A.method(:term, :map_get, [
-              A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
-            ])
-          )
-        )
-
-        A.return(
-          A.if_expr(
-            A.try(A.call(:is_nil, [:value])),
-            [A.return(A.ok(A.none()))],
-            [A.return(A.ok(A.some(A.try(A.method(:value, :atom_to_string)))))]
-          )
-        )
-      end,
-      function :expect_struct,
-        vis: :crate,
-        args: [term: "Term", expected: "&str"],
-        returns: "NifResult<()>" do
-        A.return(
-          A.if_expr(
-            A.eq(A.try(A.call(:struct_name, [:term])), :expected),
-            [A.return(A.ok())],
-            [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
-          )
-        )
       end
     ]
   end

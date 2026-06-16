@@ -11,8 +11,16 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "pub(crate) fn optional_map_get<'a>"
     assert source =~ "match term.map_get(atom(term.get_env(), key)?)"
     assert source =~ "pub(crate) fn atom_key<'a>(term: Term<'a>, key: &str) -> NifResult<String>"
+
+    assert source =~
+             "pub(crate) fn optional_atom_key<'a>(term: Term<'a>, key: &str) -> NifResult<Option<String>>"
+
     assert source =~ "pub(crate) fn is_nil<'a>(term: Term<'a>) -> NifResult<bool>"
     assert source =~ "pub(crate) fn struct_name<'a>(term: Term<'a>) -> NifResult<String>"
+
+    assert source =~
+             "pub(crate) fn expect_struct<'a>(term: Term<'a>, expected: &str) -> NifResult<()>"
+
     assert source =~ "pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item>"
     assert source =~ "ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?))"
     assert source =~ "pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type>"

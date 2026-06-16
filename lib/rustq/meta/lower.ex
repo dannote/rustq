@@ -203,6 +203,8 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
+  defp lower_expr({:badarg, _, []}), do: %AST.Path{parts: [:rustler, :Error, :BadArg]}
+
   defp lower_expr({:==, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
 
