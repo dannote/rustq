@@ -41,6 +41,11 @@ defmodule RustQ.Meta.LowerTest do
     helpers = RustQ.NativeCodegen.Helpers.__rustq_asts__()
 
     assert %RustQ.Rust.AST.Function{
+             name: :optional_map_get,
+             body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}}]
+           } = Enum.find(helpers, &(&1.name == :optional_map_get))
+
+    assert %RustQ.Rust.AST.Function{
              name: :atom_key,
              args: [
                term: %RustQ.Rust.AST.TypePath{parts: [:Term], lifetimes: [:a]},
@@ -82,5 +87,20 @@ defmodule RustQ.Meta.LowerTest do
                }
              }
            ] = else_body
+  end
+
+  test "dogfooded decoder wrappers lower Super calls to parent Rust module paths" do
+    decoders = RustQ.NativeCodegen.Decoders.__rustq_asts__()
+
+    assert %RustQ.Rust.AST.Function{
+             name: :decode_expr_none,
+             body: [
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.PathCall{
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_expr]}
+                 }
+               }
+             ]
+           } = Enum.find(decoders, &(&1.name == :decode_expr_none))
   end
 end

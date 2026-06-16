@@ -176,6 +176,9 @@ defmodule RustQ.Meta.Type do
   defp parse_rust_type(:f64, [], _aliases), do: type(:f64, path(:f64))
   defp parse_rust_type(:i64, [], _aliases), do: type(:i64, path(:i64))
   defp parse_rust_type(:str, [], _aliases), do: type(:str, %AST.TypeRef{inner: path(:str)})
+  defp parse_rust_type(:expr, [], _aliases), do: type(:expr, path(:Expr))
+  defp parse_rust_type(:pat, [], _aliases), do: type(:pat, path(:Pat))
+  defp parse_rust_type(:stmt, [], _aliases), do: type(:stmt, path(:Stmt))
 
   defp parse_rust_type(:term, [], _aliases),
     do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})

@@ -75,7 +75,7 @@ pub(crate) fn atom(env: Env, name: &str) -> NifResult<Atom> {
 pub(crate) fn optional_map_get<'a>(term: Term<'a>, key: &str) -> NifResult<Option<Term<'a>>> {
     match term.map_get(atom(term.get_env(), key)?) {
         Ok(value) => Ok(Some(value)),
-        Err(_) => Ok(None),
+        Err(_reason) => Ok(None),
     }
 }
 
@@ -203,17 +203,21 @@ pub(crate) fn decode_arm(term: Term) -> NifResult<Arm> {
     }
 }
 
-pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat> {
-    let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
-    super::parse_pat(quote!(# ident))
-}
-
-pub(crate) fn decode_pat_wildcard(_term: Term) -> NifResult<Pat> {
+pub(crate) fn decode_pat_wildcard<'a>(_term: Term<'a>) -> NifResult<Pat> {
     super::parse_pat(quote!(_))
 }
 
-pub(crate) fn decode_pat_none(_term: Term) -> NifResult<Pat> {
+pub(crate) fn decode_pat_none<'a>(_term: Term<'a>) -> NifResult<Pat> {
     super::parse_pat(quote!(None))
+}
+
+pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr> {
+    super::parse_expr("None")
+}
+
+pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat> {
+    let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
+    super::parse_pat(quote!(# ident))
 }
 
 pub(crate) fn decode_pat_path(term: Term) -> NifResult<Pat> {
@@ -327,10 +331,6 @@ pub(crate) fn decode_expr_token_macro(term: Term) -> NifResult<Expr> {
 pub(crate) fn decode_expr_atom_value(term: Term) -> NifResult<Expr> {
     let name = quote::format_ident!("{}", super::atom_key(term, "name")?);
     super::parse_expr(&quote!(atoms::# name()).to_string())
-}
-
-pub(crate) fn decode_expr_none(_term: Term) -> NifResult<Expr> {
-    super::parse_expr("None")
 }
 
 pub(crate) fn decode_expr_field(term: Term) -> NifResult<Expr> {

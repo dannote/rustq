@@ -25,6 +25,7 @@ defmodule RustQ.NativeCodegen do
       decode_ast_stmt_item(),
       decode_ast_expr_item(),
       decode_arm_helper_items(),
+      RustQ.NativeCodegen.Decoders.asts(),
       decode_pat_helper_items(),
       decode_stmt_helper_items(),
       decode_expr_helper_items()
@@ -61,25 +62,6 @@ defmodule RustQ.NativeCodegen do
         args: [env: "Env", name: "&str"],
         returns: "NifResult<Atom>" do
         A.return(A.path_call([:Atom, :from_str], [:env, :name]))
-      end,
-      function :optional_map_get,
-        vis: :crate,
-        lifetime: :a,
-        args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}, key: "&str"],
-        returns: "NifResult<Option<Term<'a>>>" do
-        A.return do
-          A.match A.method(:term, :map_get, [
-                    A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
-                  ]) do
-            A.arm A.ok_pat(:value) do
-              A.return(A.ok(A.some(:value)))
-            end
-
-            A.arm A.err_pat(A.wildcard()) do
-              A.return(A.ok(A.none()))
-            end
-          end
-        end
       end
     ]
   end
@@ -355,18 +337,6 @@ defmodule RustQ.NativeCodegen do
 
         A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#ident")]))
       end,
-      function :decode_pat_wildcard,
-        vis: :crate,
-        args: [_term: "Term"],
-        returns: "NifResult<Pat>" do
-        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "_")]))
-      end,
-      function :decode_pat_none,
-        vis: :crate,
-        args: [_term: "Term"],
-        returns: "NifResult<Pat>" do
-        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "None")]))
-      end,
       function :decode_pat_path,
         vis: :crate,
         args: [term: "Term"],
@@ -566,12 +536,6 @@ defmodule RustQ.NativeCodegen do
             A.ref(A.method(A.token_macro(:quote, "atoms::#name()"), :to_string))
           ])
         )
-      end,
-      function :decode_expr_none,
-        vis: :crate,
-        args: [_term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.return(A.path_call([:super, :parse_expr], ["None"]))
       end,
       function :decode_expr_field,
         vis: :crate,

@@ -5,6 +5,14 @@ defmodule RustQ.NativeCodegen.Helpers do
 
   alias RustQ.Type, as: R
 
+  @spec optional_map_get(term(), R.str()) :: R.nif_result(R.option(term()))
+  defrust optional_map_get(term, key) do
+    case term.map_get(unwrap!(atom(term.get_env(), key))) do
+      {:ok, value} -> {:ok, some(value)}
+      {:error, _reason} -> {:ok, nil}
+    end
+  end
+
   @spec atom_key(term(), R.str()) :: R.nif_result(String.t())
   defrust atom_key(term, key) do
     value = unwrap!(term.map_get(unwrap!(atom(term.get_env(), key))))

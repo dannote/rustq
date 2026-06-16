@@ -138,10 +138,10 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
   defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
 
-  defp lower_match_pattern({:ok, pattern}, %Type{kind: :result}),
+  defp lower_match_pattern({:ok, pattern}, _case_type),
     do: %AST.PatOk{pattern: lower_match_pattern(pattern, nil)}
 
-  defp lower_match_pattern({:error, pattern}, %Type{kind: :result}),
+  defp lower_match_pattern({:error, pattern}, _case_type),
     do: %AST.PatErr{pattern: lower_match_pattern(pattern, nil)}
 
   defp lower_match_pattern({:%, _, [{:__aliases__, _, [module]}, {:%{}, _, fields}]}, %Type{
@@ -233,10 +233,15 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({{:., _meta, [receiver, function]}, _, args}) do
     args = Enum.map(args, &lower_expr/1)
 
-    if alias_ast?(receiver) do
-      %AST.PathCall{path: %AST.Path{parts: alias_parts(receiver) ++ [function]}, args: args}
-    else
-      %AST.MethodCall{receiver: lower_expr(receiver), method: function, args: args}
+    cond do
+      super_alias_ast?(receiver) ->
+        %AST.PathCall{path: %AST.Path{parts: [:super, function]}, args: args}
+
+      alias_ast?(receiver) ->
+        %AST.PathCall{path: %AST.Path{parts: alias_parts(receiver) ++ [function]}, args: args}
+
+      true ->
+        %AST.MethodCall{receiver: lower_expr(receiver), method: function, args: args}
     end
   end
 
@@ -365,6 +370,9 @@ defmodule RustQ.Meta.Lower do
 
   defp alias_ast?({:__aliases__, _, _parts}), do: true
   defp alias_ast?(_other), do: false
+
+  defp super_alias_ast?({:__aliases__, _, [:Super]}), do: true
+  defp super_alias_ast?(_other), do: false
 
   defp alias_parts({:__aliases__, _, parts}), do: parts
 end
