@@ -1,11 +1,64 @@
 defmodule RustQ.Type do
   @moduledoc """
-  Typespec vocabulary for `RustQ.Meta.defrust/2`.
+  Built-in Rust/Rustler type vocabulary for `RustQ.Meta.defrust/2` specs.
 
-  These functions exist so Rust-oriented types can be written in ordinary Elixir
-  `@spec` and `@type` declarations. `RustQ.Meta` reads their quoted AST during
-  compilation; the functions are not meant to be called at runtime.
+  These types make Rust-oriented `@spec` and `@type` declarations visible to
+  Elixir tooling while `RustQ.Meta` reads their quoted AST and maps them to Rust
+  types during code generation.
+
+      alias RustQ.Type, as: R
+
+      @spec draw(R.ref(Canvas.t()), R.f32(), R.f32()) :: R.nif_result(R.unit())
+      defrust draw(canvas, x, y) do
+        canvas.translate({x, y})
+        :ok
+      end
+
+  The functions with matching names are marker helpers for non-typespec macro
+  contexts. They are not runtime APIs.
   """
+
+  @typedoc "Rust `()`; represented as `:ok`/unit-ish data in Elixir specs."
+  @type unit :: :ok
+
+  # `bool`, `atom`, and `term` are built-in Elixir type names and cannot be
+  # redefined as remote types. RustQ still accepts `R.bool()`, `R.atom()`, and
+  # `R.term()` in defrust specs by reading the marker call AST.
+  @typedoc "Rust `u8`."
+  @type u8 :: 0..255
+
+  @typedoc "Rust `u32`."
+  @type u32 :: non_neg_integer()
+
+  @typedoc "Rust `i64`."
+  @type i64 :: integer()
+
+  @typedoc "Rust `f32`."
+  @type f32 :: float()
+
+  @typedoc "Rust `f64`."
+  @type f64 :: float()
+
+  @typedoc "Rust shared reference `&T`."
+  @type ref(t) :: t
+
+  @typedoc "Rust mutable reference `&mut T`."
+  @type mut_ref(t) :: t
+
+  @typedoc "Rust `Option<T>`."
+  @type option(t) :: nil | t
+
+  @typedoc "Rust `Result<Ok, Error>`."
+  @type result(ok, error) :: {:ok, ok} | {:error, error}
+
+  @typedoc "Rustler `NifResult<T>`."
+  @type nif_result(t) :: {:ok, t} | {:error, nif_error()}
+
+  @typedoc "Rust `Vec<T>`."
+  @type vec(t) :: [t]
+
+  @typedoc "Rustler NIF error marker."
+  @type nif_error :: atom()
 
   def atom, do: type_only!()
   def bool, do: type_only!()
