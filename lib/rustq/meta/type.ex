@@ -82,10 +82,6 @@ defmodule RustQ.Meta.Type do
           fields: fields
         })
 
-      tuple_type?(ast) ->
-        {variant, _aliases} = tuple_variant(ast, raw, aliases)
-        type(:tuple, path(rust_name), %{elixir_name: name, variant: variant})
-
       map_type?(ast) ->
         {fields, _aliases} = map_fields(ast, raw, aliases)
 
@@ -247,10 +243,6 @@ defmodule RustQ.Meta.Type do
 
   defp parse_external_type(_module, function, _args, _aliases), do: type(:type, path(function))
 
-  defp tuple_type?({tag, _type}) when is_atom(tag), do: tag not in [:ok, :error]
-  defp tuple_type?({:{}, _, [tag | types]}) when is_atom(tag), do: types != []
-  defp tuple_type?(_ast), do: false
-
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),
     do: true
 
@@ -313,12 +305,9 @@ defmodule RustQ.Meta.Type do
 
   defp tuple_union?(_ast, _raw, _aliases), do: false
 
-  defp tagged_tuple?({tag, _type}, _raw, _aliases) when is_atom(tag), do: tag not in [:ok, :error]
-  defp tagged_tuple?({:{}, _, [tag | types]}, _raw, _aliases) when is_atom(tag), do: types != []
-
   defp tagged_tuple?({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
     {type, _aliases} = parse_alias_type({name, [], args}, raw, aliases)
-    type.kind in [:tuple, :struct]
+    type.kind == :struct
   rescue
     _error -> false
   end
@@ -331,26 +320,9 @@ defmodule RustQ.Meta.Type do
     |> Enum.map_reduce(aliases, &tuple_variant(&1, raw, &2))
   end
 
-  defp tuple_variant({tag, type}, raw, aliases) do
-    {type, aliases} = parse_alias_type(type, raw, aliases)
-    {{tag, [type]}, aliases}
-  end
-
-  defp tuple_variant({:{}, _, [tag | types]}, raw, aliases) do
-    {types, aliases} = Enum.map_reduce(types, aliases, &parse_alias_type(&1, raw, &2))
-    {{tag, types}, aliases}
-  end
-
   defp tuple_variant({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
     {type, aliases} = parse_alias_type({name, [], args}, raw, aliases)
-
-    variant =
-      case type.kind do
-        :tuple -> type.meta.variant
-        :struct -> {String.to_atom(type.meta.rust_name), [type]}
-      end
-
-    {variant, aliases}
+    {{String.to_atom(type.meta.rust_name), [type]}, aliases}
   end
 
   defp result_members(ast) do

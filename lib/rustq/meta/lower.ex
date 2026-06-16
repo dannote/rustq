@@ -125,14 +125,6 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern({:error, pattern}, %Type{kind: :result}),
     do: %AST.PatErr{pattern: lower_match_pattern(pattern, nil)}
 
-  defp lower_match_pattern([{tag, pattern}], %Type{kind: :tuple_enum, rust: rust_name})
-       when is_atom(tag) do
-    %AST.PatPathTuple{
-      path: %AST.Path{parts: [rust_name, rust_variant(tag)]},
-      patterns: [lower_match_pattern(pattern, nil)]
-    }
-  end
-
   defp lower_match_pattern({:%, _, [{:__aliases__, _, [module]}, {:%{}, _, fields}]}, %Type{
          kind: :tuple_enum,
          rust: rust_name
@@ -146,22 +138,6 @@ defmodule RustQ.Meta.Lower do
             Enum.map(fields, fn {name, pattern} -> {name, lower_match_pattern(pattern, nil)} end)
         }
       ]
-    }
-  end
-
-  defp lower_match_pattern({tag, pattern}, %Type{kind: :tuple_enum, rust: rust_name})
-       when is_atom(tag) do
-    %AST.PatPathTuple{
-      path: %AST.Path{parts: [rust_name, rust_variant(tag)]},
-      patterns: [lower_match_pattern(pattern, nil)]
-    }
-  end
-
-  defp lower_match_pattern({:{}, _, [tag | patterns]}, %Type{kind: :tuple_enum, rust: rust_name})
-       when is_atom(tag) do
-    %AST.PatPathTuple{
-      path: %AST.Path{parts: [rust_name, rust_variant(tag)]},
-      patterns: Enum.map(patterns, &lower_match_pattern(&1, nil))
     }
   end
 
@@ -348,5 +324,4 @@ defmodule RustQ.Meta.Lower do
   defp alias_ast?(_other), do: false
 
   defp alias_parts({:__aliases__, _, parts}), do: parts
-  defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
 end
