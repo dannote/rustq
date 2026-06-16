@@ -54,153 +54,121 @@ defmodule RustQ.NativeCodegen do
 
   defp helper_items do
     [
-      %AST.Function{
-        name: :atom,
+      function :atom,
         vis: :crate,
         args: [env: "Env", name: "&str"],
-        returns: "NifResult<Atom>",
-        body:
-          A.block do
-            A.return(A.path_call([:Atom, :from_str], [:env, :name]))
-          end
-      },
-      %AST.Function{
-        name: :optional_map_get,
+        returns: "NifResult<Atom>" do
+        A.return(A.path_call([:Atom, :from_str], [:env, :name]))
+      end,
+      function :optional_map_get,
         vis: :crate,
         lifetime: :a,
         args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}, key: "&str"],
-        returns: "NifResult<Option<Term<'a>>>",
-        body:
-          A.block do
-            A.return do
-              A.match A.method(:term, :map_get, [
-                        A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
-                      ]) do
-                A.arm A.ok_pat(:value) do
-                  A.return(A.ok(A.some(:value)))
-                end
+        returns: "NifResult<Option<Term<'a>>>" do
+        A.return do
+          A.match A.method(:term, :map_get, [
+                    A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
+                  ]) do
+            A.arm A.ok_pat(:value) do
+              A.return(A.ok(A.some(:value)))
+            end
 
-                A.arm A.err_pat(A.wildcard()) do
-                  A.return(A.ok(A.none()))
-                end
-              end
+            A.arm A.err_pat(A.wildcard()) do
+              A.return(A.ok(A.none()))
             end
           end
-      },
-      %AST.Function{
-        name: :atom_key,
+        end
+      end,
+      function :atom_key,
         vis: :crate,
         args: [term: "Term", key: "&str"],
-        returns: "NifResult<String>",
-        body:
-          A.block do
-            A.return(
-              A.method(
-                A.try(
-                  A.method(:term, :map_get, [
-                    A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
-                  ])
-                ),
-                :atom_to_string
-              )
-            )
-          end
-      },
-      %AST.Function{
-        name: :optional_atom_key,
+        returns: "NifResult<String>" do
+        A.return(
+          A.method(
+            A.try(
+              A.method(:term, :map_get, [
+                A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
+              ])
+            ),
+            :atom_to_string
+          )
+        )
+      end,
+      function :optional_atom_key,
         vis: :crate,
         args: [term: "Term", key: "&str"],
-        returns: "NifResult<Option<String>>",
-        body:
-          A.block do
-            A.let(
-              :value,
-              A.try(
-                A.method(:term, :map_get, [
-                  A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
-                ])
-              )
-            )
+        returns: "NifResult<Option<String>>" do
+        A.let(
+          :value,
+          A.try(
+            A.method(:term, :map_get, [
+              A.try(A.call(:atom, [A.method(:term, :get_env), :key]))
+            ])
+          )
+        )
 
-            A.return(
-              A.if_expr(
-                A.try(A.call(:is_nil, [:value])),
-                [A.return(A.ok(A.none()))],
-                [A.return(A.ok(A.some(A.try(A.method(:value, :atom_to_string)))))]
-              )
-            )
-          end
-      },
-      %AST.Function{
-        name: :is_nil,
+        A.return(
+          A.if_expr(
+            A.try(A.call(:is_nil, [:value])),
+            [A.return(A.ok(A.none()))],
+            [A.return(A.ok(A.some(A.try(A.method(:value, :atom_to_string)))))]
+          )
+        )
+      end,
+      function :is_nil,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<bool>",
-        body:
-          A.block do
-            A.return(
-              A.ok(
-                A.and_(
-                  A.method(:term, :is_atom),
-                  A.eq(A.try(A.method(:term, :atom_to_string)), "nil")
-                )
-              )
+        returns: "NifResult<bool>" do
+        A.return(
+          A.ok(
+            A.and_(
+              A.method(:term, :is_atom),
+              A.eq(A.try(A.method(:term, :atom_to_string)), "nil")
             )
-          end
-      },
-      %AST.Function{
-        name: :struct_name,
+          )
+        )
+      end,
+      function :struct_name,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<String>",
-        body:
-          A.block do
-            A.return(
-              A.method(
-                A.try(
-                  A.method(:term, :map_get, [
-                    A.try(A.call(:atom, [A.method(:term, :get_env), "__struct__"]))
-                  ])
-                ),
-                :atom_to_string
-              )
-            )
-          end
-      },
-      %AST.Function{
-        name: :expect_struct,
+        returns: "NifResult<String>" do
+        A.return(
+          A.method(
+            A.try(
+              A.method(:term, :map_get, [
+                A.try(A.call(:atom, [A.method(:term, :get_env), "__struct__"]))
+              ])
+            ),
+            :atom_to_string
+          )
+        )
+      end,
+      function :expect_struct,
         vis: :crate,
         args: [term: "Term", expected: "&str"],
-        returns: "NifResult<()>",
-        body:
-          A.block do
-            A.return(
-              A.if_expr(
-                A.eq(A.try(A.call(:struct_name, [:term])), :expected),
-                [A.return(A.ok())],
-                [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
-              )
-            )
-          end
-      }
+        returns: "NifResult<()>" do
+        A.return(
+          A.if_expr(
+            A.eq(A.try(A.call(:struct_name, [:term])), :expected),
+            [A.return(A.ok())],
+            [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
+          )
+        )
+      end
     ]
   end
 
   defp decode_ast_item_item do
-    %AST.Function{
-      name: :decode_ast_item,
+    function :decode_ast_item,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Item>",
-      body:
-        A.block do
-          A.return do
-            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
-              decode_ast_item_arms()
-            end
-          end
+      returns: "NifResult<Item>" do
+      A.return do
+        A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+          decode_ast_item_arms()
         end
-    }
+      end
+    end
   end
 
   defp decode_ast_item_arms do
@@ -272,20 +240,16 @@ defmodule RustQ.NativeCodegen do
   defp type_decoder(name), do: String.to_atom("decode_#{name}")
 
   defp decode_ast_pat_item do
-    %AST.Function{
-      name: :decode_ast_pat,
+    function :decode_ast_pat,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Pat>",
-      body:
-        A.block do
-          A.return do
-            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
-              decode_ast_pat_arms()
-            end
-          end
+      returns: "NifResult<Pat>" do
+      A.return do
+        A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+          decode_ast_pat_arms()
         end
-    }
+      end
+    end
   end
 
   defp decode_ast_pat_arms do
@@ -313,20 +277,16 @@ defmodule RustQ.NativeCodegen do
   defp pat_decoder(name), do: String.to_atom("decode_#{name}")
 
   defp decode_ast_stmt_item do
-    %AST.Function{
-      name: :decode_ast_stmt,
+    function :decode_ast_stmt,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Stmt>",
-      body:
-        A.block do
-          A.return do
-            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
-              decode_ast_stmt_arms()
-            end
-          end
+      returns: "NifResult<Stmt>" do
+      A.return do
+        A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+          decode_ast_stmt_arms()
         end
-    }
+      end
+    end
   end
 
   defp decode_ast_stmt_arms do
@@ -350,20 +310,16 @@ defmodule RustQ.NativeCodegen do
   defp stmt_decoder_path(:return), do: [:decode_stmt_return]
 
   defp decode_ast_expr_item do
-    %AST.Function{
-      name: :decode_ast_expr,
+    function :decode_ast_expr,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Expr>",
-      body:
-        A.block do
-          A.return do
-            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
-              decode_ast_expr_arms()
-            end
-          end
+      returns: "NifResult<Expr>" do
+      A.return do
+        A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+          decode_ast_expr_arms()
         end
-    }
+      end
+    end
   end
 
   defp decode_ast_expr_arms do
@@ -408,70 +364,50 @@ defmodule RustQ.NativeCodegen do
 
   defp decode_pat_helper_items do
     [
-      %AST.Function{
-        name: :decode_pat_var,
+      function :decode_pat_var,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Pat>",
-        body:
-          A.block do
-            A.let(
-              :ident,
-              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
-            )
+        returns: "NifResult<Pat>" do
+        A.let(
+          :ident,
+          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
+        )
 
-            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#ident")]))
-          end
-      },
-      %AST.Function{
-        name: :decode_pat_wildcard,
+        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#ident")]))
+      end,
+      function :decode_pat_wildcard,
         vis: :crate,
         args: [_term: "Term"],
-        returns: "NifResult<Pat>",
-        body:
-          A.block do
-            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "_")]))
-          end
-      },
-      %AST.Function{
-        name: :decode_pat_none,
+        returns: "NifResult<Pat>" do
+        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "_")]))
+      end,
+      function :decode_pat_none,
         vis: :crate,
         args: [_term: "Term"],
-        returns: "NifResult<Pat>",
-        body:
-          A.block do
-            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "None")]))
-          end
-      },
-      %AST.Function{
-        name: :decode_pat_path,
+        returns: "NifResult<Pat>" do
+        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "None")]))
+      end,
+      function :decode_pat_path,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Pat>",
-        body:
-          A.block do
-            A.let(
-              :path,
-              A.try(
-                A.path_call([:super, :parse_path], [
-                  A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
-                ])
-              )
-            )
+        returns: "NifResult<Pat>" do
+        A.let(
+          :path,
+          A.try(
+            A.path_call([:super, :parse_path], [
+              A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+            ])
+          )
+        )
 
-            A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path")]))
-          end
-      },
-      %AST.Function{
-        name: :decode_pat_literal,
+        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path")]))
+      end,
+      function :decode_pat_literal,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Pat>",
-        body:
-          A.block do
-            A.return(A.path_call([:super, :decode_pat_literal_value], [map_get(:term, "value")]))
-          end
-      },
+        returns: "NifResult<Pat>" do
+        A.return(A.path_call([:super, :decode_pat_literal_value], [map_get(:term, "value")]))
+      end,
       unary_pat_decoder(:decode_pat_some, "pattern", "Some(#pat)"),
       unary_pat_decoder(:decode_pat_ok, "pattern", "Ok(#pat)"),
       unary_pat_decoder(:decode_pat_err, "pattern", "Err(#pat)")
@@ -480,29 +416,20 @@ defmodule RustQ.NativeCodegen do
 
   defp decode_stmt_helper_items do
     [
-      %AST.Function{
-        name: :decode_stmt_expr_stmt,
+      function :decode_stmt_expr_stmt,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Stmt>",
-        body:
-          A.block do
-            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-
-            A.return(A.path_call([:super, :parse_stmt], [A.token_macro(:quote, "#expr;")]))
-          end
-      },
-      %AST.Function{
-        name: :decode_stmt_return,
+        returns: "NifResult<Stmt>" do
+        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+        A.return(A.path_call([:super, :parse_stmt], [A.token_macro(:quote, "#expr;")]))
+      end,
+      function :decode_stmt_return,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Stmt>",
-        body:
-          A.block do
-            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-            A.return(A.ok(A.path_call([:Stmt, :Expr], [:expr, A.none()])))
-          end
-      }
+        returns: "NifResult<Stmt>" do
+        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+        A.return(A.ok(A.path_call([:Stmt, :Expr], [:expr, A.none()])))
+      end
     ]
   end
 
@@ -766,31 +693,23 @@ defmodule RustQ.NativeCodegen do
   end
 
   defp unary_pat_decoder(name, field, tokens) do
-    %AST.Function{
-      name: name,
+    function name,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Pat>",
-      body:
-        A.block do
-          A.let(:pat, A.try(A.path_call([:super, :decode_pat], [map_get(:term, field)])))
-          A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, tokens)]))
-        end
-    }
+      returns: "NifResult<Pat>" do
+      A.let(:pat, A.try(A.path_call([:super, :decode_pat], [map_get(:term, field)])))
+      A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, tokens)]))
+    end
   end
 
   defp unary_expr_decoder(name, field, tokens) do
-    %AST.Function{
-      name: name,
+    function name,
       vis: :crate,
       args: [term: "Term"],
-      returns: "NifResult<Expr>",
-      body:
-        A.block do
-          A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, field)])))
-          A.return(A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, tokens)]))
-        end
-    }
+      returns: "NifResult<Expr>" do
+      A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, field)])))
+      A.return(A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, tokens)]))
+    end
   end
 
   defp path_parts_term(term) do
