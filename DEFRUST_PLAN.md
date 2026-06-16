@@ -128,7 +128,7 @@ operations that cannot be authored as valid Rusty Elixir.
 | Type dispatch | Generated AST builder | `decode_ast_type` routes dogfooded and primitive decoders. |
 | Type decoders | Dogfooded for current AST nodes | `Path`, `Ref`, `Unit`, `Option`, `Result`, `NifResult`, and `Vec` are dogfooded; parsing remains primitive. |
 | Stmt/Expr/Pat/Arm decoders | Dogfooded | Raw token escapes remain only where semantic helpers or direct syn construction are not available yet. |
-| Primitive bridge | Handwritten Rust | Rustler decode details, `syn` parsing, list decoders, and temporary parse helpers. |
+| Primitive bridge | Handwritten Rust, split by responsibility | `parse.rs` owns generic `syn` parsing; `template.rs` owns template/splice rendering; remaining `decode.rs` helpers cover Rustler term APIs, list/optional decode glue, literal handling, and temporary `syn` item/type assembly. |
 | Function decoder | Dogfooded extraction with primitive assembly | `decode_ast_function` field extraction lives in `defrust`; args, lifetimes, block assembly, and parsing remain primitive. |
 
 ## Later work
