@@ -345,6 +345,8 @@ defmodule RustQ.NativeCodegen do
               :field,
               :path_call,
               :method_call,
+              :local_call,
+              :struct_literal,
               :ref,
               :try,
               :tuple,
@@ -353,6 +355,7 @@ defmodule RustQ.NativeCodegen do
               :atom_value,
               :none,
               :some,
+              :ok,
               :err,
               :nif_raise_atom,
               :match,
@@ -361,7 +364,8 @@ defmodule RustQ.NativeCodegen do
             ],
        do: [expr_decoder(name)]
 
-  defp expr_decoder_path(_name), do: [:super, :decode_expr_manual]
+  defp expr_decoder_path(name),
+    do: raise(ArgumentError, "missing expression decoder for #{inspect(name)}")
 
   defp expr_decoder(name), do: String.to_atom("decode_expr_#{name}")
 
@@ -560,6 +564,31 @@ defmodule RustQ.NativeCodegen do
           ])
         )
       end,
+      function :decode_expr_local_call,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(:name, A.try(A.path_call([:super, :atom_key], [:term, "name"])))
+        A.let(:args, A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")])))
+        A.return(A.path_call([:super, :parse_local_call], [:name, :args]))
+      end,
+      function :decode_expr_struct_literal,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(:path, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "path")])))
+
+        A.let(
+          :fields,
+          A.try(A.path_call([:super, :decode_struct_literal_fields], [map_get(:term, "fields")]))
+        )
+
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "#path { #(#fields),* }")
+          ])
+        )
+      end,
       function :decode_expr_ref,
         vis: :crate,
         args: [term: "Term"],
@@ -585,6 +614,41 @@ defmodule RustQ.NativeCodegen do
       end,
       unary_expr_decoder(:decode_expr_try, "expr", "#expr?"),
       unary_expr_decoder(:decode_expr_some, "expr", "Some(#expr)"),
+      function :decode_expr_ok,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.return do
+          A.match A.try(A.path_call([:super, :optional_map_get], [:term, "expr"])) do
+            A.arm A.some_pat(:expr_term) do
+              A.return(
+                A.if_expr(
+                  A.try(A.path_call([:super, :is_nil], [:expr_term])),
+                  [
+                    A.return(
+                      A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "Ok(())")])
+                    )
+                  ],
+                  [
+                    A.let(:expr, A.try(A.path_call([:super, :decode_expr], [:expr_term]))),
+                    A.return(
+                      A.path_call([:super, :parse_expr_tokens], [
+                        A.token_macro(:quote, "Ok(#expr)")
+                      ])
+                    )
+                  ]
+                )
+              )
+            end
+
+            A.arm A.none_pat() do
+              A.return(
+                A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "Ok(())")])
+              )
+            end
+          end
+        end
+      end,
       unary_expr_decoder(:decode_expr_err, "expr", "Err(#expr)"),
       function :decode_expr_nif_raise_atom,
         vis: :crate,

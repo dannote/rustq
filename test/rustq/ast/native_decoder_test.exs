@@ -60,6 +60,31 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ "let tokens: String = read_tokens();"
   end
 
+  test "generated expression decoders render local calls, struct literals, and ok expressions" do
+    source =
+      Native.render_ast(%AST.Function{
+        name: :more_exprs,
+        args: [],
+        returns: "NifResult<Rect>",
+        body:
+          A.block do
+            A.stmt(A.call(:todo!, []))
+
+            A.return(
+              A.ok(
+                A.struct([:Rect],
+                  x: A.var(:x),
+                  y: A.var(:y)
+                )
+              )
+            )
+          end
+      })
+
+    assert source =~ "todo!();"
+    assert source =~ "Ok(Rect { x: x, y: y })"
+  end
+
   test "generated expression decoders render literal, token macro, and binary expressions" do
     literal_source =
       Native.render_ast(%AST.Function{

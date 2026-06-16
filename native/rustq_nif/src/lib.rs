@@ -282,161 +282,32 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
     decode_ast_expr(term)
 }
 
-fn decode_expr_manual(term: Term) -> NifResult<Expr> {
-    let module = struct_name(term)?;
-    let env = term.get_env();
-
-    match module.as_str() {
-        ast_modules::VAR => {
-            let ident = format_ident!("{}", atom_key(term, "name")?);
-            Ok(syn::parse2(quote!(#ident)).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::PATH => parse_expr(&path_parts(term.map_get(atom(env, "parts")?)?)?),
-        ast_modules::FIELD => {
-            let receiver = decode_expr(term.map_get(atom(env, "receiver")?)?)?;
-            let field = format_ident!("{}", atom_key(term, "field")?);
-            Ok(syn::parse2(quote!(#receiver.#field)).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::PATH_CALL => {
-            let path = parse_path(&path_parts(
-                term.map_get(atom(env, "path")?)?
-                    .map_get(atom(env, "parts")?)?,
-            )?)?;
-            let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
-            Ok(syn::parse2(quote!(#path(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::METHOD_CALL => {
-            let receiver = decode_expr(term.map_get(atom(env, "receiver")?)?)?;
-            let method = format_ident!("{}", atom_key(term, "method")?);
-            let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
-            Ok(syn::parse2(quote!(#receiver.#method(#(#args),*)))
-                .map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::LOCAL_CALL => {
-            let name = atom_key(term, "name")?;
-            let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
-            if name.ends_with('!') {
-                let source = format!(
-                    "{}({})",
-                    name,
-                    args.iter()
-                        .map(|arg| quote!(#arg).to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-                parse_expr(&source)
-            } else {
-                let name = format_ident!("{}", name);
-                Ok(syn::parse2(quote!(#name(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
-            }
-        }
-        ast_modules::STRUCT_LITERAL => {
-            let path = decode_expr(term.map_get(atom(env, "path")?)?)?;
-            let fields = term
-                .map_get(atom(env, "fields")?)?
-                .decode::<Vec<(Term, Term)>>()?
-                .into_iter()
-                .map(|(name, expr)| {
-                    let name = format_ident!("{}", atom_or_string(name)?);
-                    let expr = decode_expr(expr)?;
-                    Ok(quote!(#name: #expr))
-                })
-                .collect::<NifResult<Vec<_>>>()?;
-            Ok(syn::parse2(quote!(#path { #(#fields),* })).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::REF => {
-            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-            if term.map_get(atom(env, "mutable")?)?.decode::<bool>()? {
-                Ok(syn::parse2(quote!(&mut #expr)).map_err(|_| rustler::Error::BadArg)?)
-            } else {
-                Ok(syn::parse2(quote!(&#expr)).map_err(|_| rustler::Error::BadArg)?)
-            }
-        }
-        ast_modules::TRY => {
-            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-            Ok(syn::parse2(quote!(#expr?)).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::TUPLE => {
-            let values = decode_expr_list(term.map_get(atom(env, "values")?)?)?;
-            Ok(syn::parse2(quote!((#(#values),*))).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::LITERAL => decode_literal_expr(term.map_get(atom(env, "value")?)?),
-        ast_modules::TOKEN_MACRO => {
-            let path = path_parts(
-                term.map_get(atom(env, "path")?)?
-                    .map_get(atom(env, "parts")?)?,
-            )?;
-            let tokens = term.map_get(atom(env, "tokens")?)?.decode::<String>()?;
-            parse_expr(&format!("{}!({})", path, tokens))
-        }
-        ast_modules::ATOM_VALUE => {
-            let name = format_ident!("{}", atom_key(term, "name")?);
-            Ok(syn::parse2(quote!(atoms::#name())).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::NONE => Ok(syn::parse2(quote!(None)).map_err(|_| rustler::Error::BadArg)?),
-        ast_modules::SOME => {
-            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-            Ok(syn::parse2(quote!(Some(#expr))).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::OK => match optional_map_get(term, "expr")? {
-            Some(expr_term) if !is_nil(expr_term)? => {
-                let expr = decode_expr(expr_term)?;
-                Ok(syn::parse2(quote!(Ok(#expr))).map_err(|_| rustler::Error::BadArg)?)
-            }
-            _ => Ok(syn::parse2(quote!(Ok(()))).map_err(|_| rustler::Error::BadArg)?),
-        },
-        ast_modules::ERR => {
-            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-            Ok(syn::parse2(quote!(Err(#expr))).map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::NIF_RAISE_ATOM => {
-            let name = atom_key(term, "name")?;
-            Ok(syn::parse2(quote!(rustler::Error::RaiseAtom(#name)))
-                .map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::MATCH => {
-            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-            let arms = term
-                .map_get(atom(env, "arms")?)?
-                .decode::<Vec<Term>>()?
-                .into_iter()
-                .map(decode_arm)
-                .collect::<NifResult<Vec<Arm>>>()?;
-            Ok(syn::parse2(quote!(match #expr { #(#arms)* }))
-                .map_err(|_| rustler::Error::BadArg)?)
-        }
-        ast_modules::IF => {
-            let condition = decode_expr(term.map_get(atom(env, "condition")?)?)?;
-            let then_body = decode_stmt_list(term.map_get(atom(env, "then")?)?)?;
-            let else_body = decode_stmt_list(term.map_get(atom(env, "else")?)?)?;
-            let then_block = syn::parse2::<syn::Block>(quote!({ #(#then_body)* }))
-                .map_err(|_| rustler::Error::BadArg)?;
-            let else_block = syn::parse2::<syn::Block>(quote!({ #(#else_body)* }))
-                .map_err(|_| rustler::Error::BadArg)?;
-            Ok(
-                syn::parse2(quote!(if #condition #then_block else #else_block))
-                    .map_err(|_| rustler::Error::BadArg)?,
-            )
-        }
-        ast_modules::BINARY_OP => {
-            let left = decode_expr(term.map_get(atom(env, "left")?)?)?;
-            let right = decode_expr(term.map_get(atom(env, "right")?)?)?;
-            let op = atom_key(term, "op")?;
-            match op.as_str() {
-                "eq" => {
-                    Ok(syn::parse2(quote!(#left == #right)).map_err(|_| rustler::Error::BadArg)?)
-                }
-                "and" => {
-                    Ok(syn::parse2(quote!(#left && #right)).map_err(|_| rustler::Error::BadArg)?)
-                }
-                "or" => {
-                    Ok(syn::parse2(quote!(#left || #right)).map_err(|_| rustler::Error::BadArg)?)
-                }
-                _ => Err(rustler::Error::BadArg),
-            }
-        }
-        _ => Err(rustler::Error::BadArg),
+fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
+    if name.ends_with('!') {
+        let source = format!(
+            "{}({})",
+            name,
+            args.iter()
+                .map(|arg| quote!(#arg).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        parse_expr(&source)
+    } else {
+        let name = format_ident!("{}", name);
+        parse_expr_tokens(quote!(#name(#(#args),*)))
     }
+}
+
+fn decode_struct_literal_fields(term: Term) -> NifResult<Vec<proc_macro2::TokenStream>> {
+    term.decode::<Vec<(Term, Term)>>()?
+        .into_iter()
+        .map(|(name, expr)| {
+            let name = format_ident!("{}", atom_or_string(name)?);
+            let expr = decode_expr(expr)?;
+            Ok(quote!(#name: #expr))
+        })
+        .collect()
 }
 
 fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
