@@ -14,8 +14,8 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_ast_item, expect_struct, is_nil, optional_atom_key,
-    optional_map_get, struct_name,
+    ast_modules, atom, atom_key, atoms, decode_ast_item, decode_ast_type, expect_struct, is_nil,
+    optional_atom_key, optional_map_get, struct_name,
 };
 
 #[derive(NifMap)]
@@ -470,6 +470,13 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
             parse_pat(quote!(#ident))
         }
         ast_modules::PAT_WILDCARD => parse_pat(quote!(_)),
+        ast_modules::PAT_PATH => {
+            let path = parse_path(&path_parts(
+                term.map_get(atom(env, "path")?)?
+                    .map_get(atom(env, "parts")?)?,
+            )?)?;
+            parse_pat(quote!(#path))
+        }
         ast_modules::PAT_LITERAL => decode_pat_literal(term.map_get(atom(env, "value")?)?),
         ast_modules::PAT_NONE => parse_pat(quote!(None)),
         ast_modules::PAT_SOME => {
@@ -587,63 +594,70 @@ fn decode_type(term: Term) -> NifResult<Type> {
         return parse_type(&source);
     }
 
-    let module = struct_name(term)?;
+    decode_ast_type(term)
+}
+
+fn decode_type_unit(_term: Term) -> NifResult<Type> {
+    parse_type("()")
+}
+
+fn decode_type_path(term: Term) -> NifResult<Type> {
     let env = term.get_env();
+    let path = path_parts(term.map_get(atom(env, "parts")?)?)?;
+    let lifetimes = term
+        .map_get(atom(env, "lifetimes")?)?
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(atom_or_string)
+        .collect::<NifResult<Vec<String>>>()?;
 
-    match module.as_str() {
-        ast_modules::TYPE_UNIT => parse_type("()"),
-        ast_modules::TYPE_PATH => {
-            let path = path_parts(term.map_get(atom(env, "parts")?)?)?;
-            let lifetimes = term
-                .map_get(atom(env, "lifetimes")?)?
-                .decode::<Vec<Term>>()?
+    if lifetimes.is_empty() {
+        parse_type(&path)
+    } else {
+        parse_type(&format!(
+            "{}<{}>",
+            path,
+            lifetimes
                 .into_iter()
-                .map(atom_or_string)
-                .collect::<NifResult<Vec<String>>>()?;
-
-            if lifetimes.is_empty() {
-                parse_type(&path)
-            } else {
-                parse_type(&format!(
-                    "{}<{}>",
-                    path,
-                    lifetimes
-                        .into_iter()
-                        .map(|value| format!("'{}", value))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ))
-            }
-        }
-        ast_modules::TYPE_REF => {
-            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
-            let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
-            let lifetime = optional_atom_key(term, "lifetime")?;
-            let lifetime = lifetime
-                .map(|value| format!("'{} ", value))
-                .unwrap_or_default();
-            let mutability = if mutable { "mut " } else { "" };
-            parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
-        }
-        ast_modules::TYPE_OPTION => {
-            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
-            syn::parse2(quote!(Option<#inner>)).map_err(|_| rustler::Error::BadArg)
-        }
-        ast_modules::TYPE_RESULT => {
-            let ok = decode_type(term.map_get(atom(env, "ok")?)?)?;
-            let error = decode_type(term.map_get(atom(env, "error")?)?)?;
-            syn::parse2(quote!(Result<#ok, #error>)).map_err(|_| rustler::Error::BadArg)
-        }
-        ast_modules::TYPE_NIF_RESULT => {
-            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
-            syn::parse2(quote!(NifResult<#inner>)).map_err(|_| rustler::Error::BadArg)
-        }
-        ast_modules::TYPE_VEC => {
-            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
-            syn::parse2(quote!(Vec<#inner>)).map_err(|_| rustler::Error::BadArg)
-        }
-        _ => Err(rustler::Error::BadArg),
+                .map(|value| format!("'{}", value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
     }
+}
+
+fn decode_type_ref(term: Term) -> NifResult<Type> {
+    let env = term.get_env();
+    let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
+    let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
+    let lifetime = optional_atom_key(term, "lifetime")?;
+    let lifetime = lifetime
+        .map(|value| format!("'{} ", value))
+        .unwrap_or_default();
+    let mutability = if mutable { "mut " } else { "" };
+    parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
+}
+
+fn decode_type_option(term: Term) -> NifResult<Type> {
+    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
+    syn::parse2(quote!(Option<#inner>)).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_type_result(term: Term) -> NifResult<Type> {
+    let env = term.get_env();
+    let ok = decode_type(term.map_get(atom(env, "ok")?)?)?;
+    let error = decode_type(term.map_get(atom(env, "error")?)?)?;
+    syn::parse2(quote!(Result<#ok, #error>)).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_type_nif_result(term: Term) -> NifResult<Type> {
+    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
+    syn::parse2(quote!(NifResult<#inner>)).map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_type_vec(term: Term) -> NifResult<Type> {
+    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
+    syn::parse2(quote!(Vec<#inner>)).map_err(|_| rustler::Error::BadArg)
 }
 
 fn parse_type(source: &str) -> NifResult<Type> {

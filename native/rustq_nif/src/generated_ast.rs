@@ -2,7 +2,7 @@
 
 use rustler::{Atom, Env, NifResult, Term};
 
-use syn::Item;
+use syn::{Item, Type};
 
 pub(crate) mod atoms {
     rustler::atoms! {
@@ -53,6 +53,7 @@ pub(crate) mod ast_modules {
     pub(crate) const ARM: &str = "Elixir.RustQ.Rust.AST.Arm";
     pub(crate) const PAT_VAR: &str = "Elixir.RustQ.Rust.AST.PatVar";
     pub(crate) const PAT_WILDCARD: &str = "Elixir.RustQ.Rust.AST.PatWildcard";
+    pub(crate) const PAT_PATH: &str = "Elixir.RustQ.Rust.AST.PatPath";
     pub(crate) const PAT_LITERAL: &str = "Elixir.RustQ.Rust.AST.PatLiteral";
     pub(crate) const PAT_NONE: &str = "Elixir.RustQ.Rust.AST.PatNone";
     pub(crate) const PAT_SOME: &str = "Elixir.RustQ.Rust.AST.PatSome";
@@ -107,13 +108,26 @@ pub(crate) fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
 
 pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
     match struct_name(term)?.as_str() {
-        "Elixir.RustQ.Rust.AST.Use" => Ok(Item::Use(super::decode_ast_use(term)?)),
-        "Elixir.RustQ.Rust.AST.Module" => Ok(Item::Mod(super::decode_ast_module(term)?)),
-        "Elixir.RustQ.Rust.AST.Const" => Ok(Item::Const(super::decode_ast_const(term)?)),
-        "Elixir.RustQ.Rust.AST.MacroItem" => super::decode_ast_macro_item(term),
-        "Elixir.RustQ.Rust.AST.Function" => Ok(Item::Fn(super::decode_ast_function(term)?)),
-        "Elixir.RustQ.Rust.AST.Struct" => Ok(Item::Struct(super::decode_ast_struct(term)?)),
-        "Elixir.RustQ.Rust.AST.Enum" => Ok(Item::Enum(super::decode_ast_enum(term)?)),
+        ast_modules::USE => Ok(Item::Use(super::decode_ast_use(term)?)),
+        ast_modules::MODULE => Ok(Item::Mod(super::decode_ast_module(term)?)),
+        ast_modules::CONST => Ok(Item::Const(super::decode_ast_const(term)?)),
+        ast_modules::MACRO_ITEM => super::decode_ast_macro_item(term),
+        ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?)),
+        ast_modules::STRUCT => Ok(Item::Struct(super::decode_ast_struct(term)?)),
+        ast_modules::ENUM => Ok(Item::Enum(super::decode_ast_enum(term)?)),
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
+    match struct_name(term)?.as_str() {
+        ast_modules::TYPE_PATH => super::decode_type_path(term),
+        ast_modules::TYPE_REF => super::decode_type_ref(term),
+        ast_modules::TYPE_OPTION => super::decode_type_option(term),
+        ast_modules::TYPE_RESULT => super::decode_type_result(term),
+        ast_modules::TYPE_NIF_RESULT => super::decode_type_nif_result(term),
+        ast_modules::TYPE_VEC => super::decode_type_vec(term),
+        ast_modules::TYPE_UNIT => super::decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
     }
 }

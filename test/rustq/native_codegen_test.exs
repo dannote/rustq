@@ -13,8 +13,8 @@ defmodule RustQ.NativeCodegenTest do
     assert source =~ "pub(crate) fn atom_key(term: Term, key: &str) -> NifResult<String>"
     assert source =~ "pub(crate) fn struct_name(term: Term) -> NifResult<String>"
     assert source =~ "pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item>"
-
-    assert source =~
-             ~s|"Elixir.RustQ.Rust.AST.Function" => Ok(Item::Fn(super::decode_ast_function(term)?))|
+    assert source =~ "ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?))"
+    assert source =~ "pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type>"
+    assert source =~ "ast_modules::TYPE_PATH => super::decode_type_path(term)"
   end
 end

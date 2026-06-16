@@ -131,6 +131,7 @@ defmodule RustQ.Rust.AST.Builder do
 
   def pat(name) when is_atom(name), do: %AST.PatVar{name: name}
   def wildcard, do: %AST.PatWildcard{}
+  def path_pat(path), do: %AST.PatPath{path: expr_path(path)}
   def lit_pat(value), do: %AST.PatLiteral{value: value}
   def none_pat, do: %AST.PatNone{}
   def some_pat(pattern), do: %AST.PatSome{pattern: pat_expr(pattern)}
@@ -190,6 +191,7 @@ defmodule RustQ.Rust.AST.Builder do
       when module in [
              AST.PatVar,
              AST.PatWildcard,
+             AST.PatPath,
              AST.PatLiteral,
              AST.PatNone,
              AST.PatSome,

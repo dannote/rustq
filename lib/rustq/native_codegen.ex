@@ -10,11 +10,12 @@ defmodule RustQ.NativeCodegen do
   def generated_ast_support do
     [
       A.use("rustler::{Atom, Env, NifResult, Term}"),
-      A.use("syn::Item"),
+      A.use("syn::{Item, Type}"),
       atoms_module(),
       ast_modules_module(),
       helper_items(),
-      decode_ast_item_item()
+      decode_ast_item_item(),
+      decode_ast_type_item()
     ]
     |> List.flatten()
     |> AST.render_file_native()
@@ -202,16 +203,16 @@ defmodule RustQ.NativeCodegen do
     ])
   end
 
-  defp decode_ast_item_arm(%Schema.Node{name: :macro_item, rust_module: rust_module}) do
-    A.arm A.lit_pat(rust_module) do
+  defp decode_ast_item_arm(%Schema.Node{name: :macro_item, rust_const: rust_const}) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
       A.return(A.path_call([:super, :decode_ast_macro_item], [:term]))
     end
   end
 
-  defp decode_ast_item_arm(%Schema.Node{name: name, rust_module: rust_module}) do
+  defp decode_ast_item_arm(%Schema.Node{name: name, rust_const: rust_const}) do
     {wrapper, decoder} = item_decoder(name)
 
-    A.arm A.lit_pat(rust_module) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
       A.return(
         A.ok(
           A.path_call([:Item, wrapper], [
@@ -228,6 +229,41 @@ defmodule RustQ.NativeCodegen do
   defp item_decoder(:function), do: {:Fn, :decode_ast_function}
   defp item_decoder(:struct), do: {:Struct, :decode_ast_struct}
   defp item_decoder(:enum), do: {:Enum, :decode_ast_enum}
+
+  defp decode_ast_type_item do
+    %AST.Function{
+      name: :decode_ast_type,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Type>",
+      body:
+        A.block do
+          A.return do
+            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+              decode_ast_type_arms()
+            end
+          end
+        end
+    }
+  end
+
+  defp decode_ast_type_arms do
+    Schema.nodes(:type)
+    |> Enum.map(&decode_ast_type_arm/1)
+    |> Kernel.++([
+      A.arm A.wildcard() do
+        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+      end
+    ])
+  end
+
+  defp decode_ast_type_arm(%Schema.Node{name: name, rust_const: rust_const}) do
+    A.arm A.path_pat([:ast_modules, rust_const]) do
+      A.return(A.path_call([:super, type_decoder(name)], [:term]))
+    end
+  end
+
+  defp type_decoder(name), do: String.to_atom("decode_#{name}")
 
   defp format_rust(source) do
     path =

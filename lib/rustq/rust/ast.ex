@@ -52,6 +52,7 @@ defmodule RustQ.Rust.AST do
   @type pat ::
           PatVar.t()
           | PatWildcard.t()
+          | PatPath.t()
           | PatLiteral.t()
           | PatNone.t()
           | PatSome.t()
@@ -269,6 +270,8 @@ defmodule RustQ.Rust.AST do
 
   defnode(PatWildcard, :pat, [], type: quote(do: %__MODULE__{}))
 
+  defnode(PatPath, :pat, [:path], type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t()}))
+
   defnode(PatLiteral, :pat, [:value], type: quote(do: %__MODULE__{value: String.t() | atom()}))
 
   defnode(PatNone, :pat, [], type: quote(do: %__MODULE__{}))
@@ -340,6 +343,7 @@ defmodule RustQ.Rust.AST do
       Arm,
       PatVar,
       PatWildcard,
+      PatPath,
       PatLiteral,
       PatNone,
       PatSome,
@@ -595,6 +599,7 @@ defmodule RustQ.Rust.AST do
 
   def render_pattern(%PatVar{name: name}), do: Atom.to_string(name)
   def render_pattern(%PatWildcard{}), do: "_"
+  def render_pattern(%PatPath{path: path}), do: render_expr(path)
   def render_pattern(%PatLiteral{value: value}) when is_binary(value), do: inspect(value)
   def render_pattern(%PatLiteral{value: value}) when is_atom(value), do: Atom.to_string(value)
   def render_pattern(%PatNone{}), do: "None"
