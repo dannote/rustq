@@ -44,6 +44,52 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ "canvas.draw_rect(&rect, &mut paint);"
   end
 
+  test "native decoder renders typed let statements" do
+    source =
+      Native.render_ast(%AST.Function{
+        name: :typed_let,
+        args: [],
+        returns: "String",
+        body:
+          A.block do
+            A.let(:tokens, A.call(:read_tokens), type: "String")
+            A.return(:tokens)
+          end
+      })
+
+    assert source =~ "let tokens: String = read_tokens();"
+  end
+
+  test "generated expression decoders render literal, token macro, and binary expressions" do
+    literal_source =
+      Native.render_ast(%AST.Function{
+        name: :literal_expr,
+        args: [],
+        returns: "&'static str",
+        body: A.block(do: A.return(A.lit("hello")))
+      })
+
+    token_macro_source =
+      Native.render_ast(%AST.Function{
+        name: :token_macro_expr,
+        args: [],
+        returns: "TokenStream",
+        body: A.block(do: A.return(A.token_macro(:quote, "None")))
+      })
+
+    binary_source =
+      Native.render_ast(%AST.Function{
+        name: :binary_expr,
+        args: [],
+        returns: "bool",
+        body: A.block(do: A.return(A.and_(A.eq(:left, :right), :ok)))
+      })
+
+    assert literal_source =~ ~s|"hello"|
+    assert token_macro_source =~ "quote!(None)"
+    assert binary_source =~ "left == right && ok"
+  end
+
   test "generated expression decoders render match, if, and raise atom expressions" do
     match_source =
       Native.render_ast(%AST.Function{

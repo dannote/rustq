@@ -1,4 +1,4 @@
-defmodule RustQ.TypeTest do
+defmodule RustQ.Meta.TypeTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.Type

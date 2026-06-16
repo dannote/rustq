@@ -68,10 +68,16 @@ defmodule RustQ.Rust.AST.Builder do
 
   def macro_item(source), do: %AST.MacroItem{source: source}
 
-  def let(name, expression), do: %AST.Let{pattern: pat(name), expr: expr(expression)}
+  def let(name, expression, opts \\ []),
+    do: %AST.Let{pattern: pat(name), expr: expr(expression), type: Keyword.get(opts, :type)}
 
-  def let_mut(name, expression),
-    do: %AST.Let{pattern: pat(name), expr: expr(expression), mutable: true}
+  def let_mut(name, expression, opts \\ []),
+    do: %AST.Let{
+      pattern: pat(name),
+      expr: expr(expression),
+      mutable: true,
+      type: Keyword.get(opts, :type)
+    }
 
   def stmt(expression), do: %AST.ExprStmt{expr: expr(expression)}
   def return_stmt(expression), do: %AST.Return{expr: expr(expression)}

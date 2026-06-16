@@ -348,13 +348,16 @@ defmodule RustQ.NativeCodegen do
               :ref,
               :try,
               :tuple,
+              :literal,
+              :token_macro,
               :atom_value,
               :none,
               :some,
               :err,
               :nif_raise_atom,
               :match,
-              :if
+              :if,
+              :binary_op
             ],
        do: [expr_decoder(name)]
 
@@ -435,260 +438,250 @@ defmodule RustQ.NativeCodegen do
 
   defp decode_expr_helper_items do
     [
-      %AST.Function{
-        name: :decode_expr_var,
+      function :decode_expr_var,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :ident,
-              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
-            )
+        returns: "NifResult<Expr>" do
+        A.let(
+          :ident,
+          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
+        )
 
-            A.return(
-              A.path_call([:super, :parse_expr], [
-                A.ref(A.method(A.token_macro(:quote, "#ident"), :to_string))
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_path,
+        A.return(
+          A.path_call([:super, :parse_expr], [
+            A.ref(A.method(A.token_macro(:quote, "#ident"), :to_string))
+          ])
+        )
+      end,
+      function :decode_expr_path,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.return(
-              A.path_call([:super, :parse_expr], [
-                A.ref(A.try(A.path_call([:super, :path_parts], [map_get(:term, "parts")])))
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_atom_value,
+        returns: "NifResult<Expr>" do
+        A.return(
+          A.path_call([:super, :parse_expr], [
+            A.ref(A.try(A.path_call([:super, :path_parts], [map_get(:term, "parts")])))
+          ])
+        )
+      end,
+      function :decode_expr_literal,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :name,
-              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
-            )
+        returns: "NifResult<Expr>" do
+        A.return(A.path_call([:super, :decode_literal_expr], [map_get(:term, "value")]))
+      end,
+      function :decode_expr_token_macro,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(:path, A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+        A.let(:tokens, A.try(A.method(map_get(:term, "tokens"), :decode)), type: "String")
 
-            A.return(
-              A.path_call([:super, :parse_expr], [
-                A.ref(A.method(A.token_macro(:quote, "atoms::#name()"), :to_string))
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_none,
+        A.return(
+          A.path_call([:super, :parse_expr], [
+            A.ref(A.token_macro(:format, ~s|"{}!({})", path, tokens|))
+          ])
+        )
+      end,
+      function :decode_expr_atom_value,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(
+          :name,
+          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
+        )
+
+        A.return(
+          A.path_call([:super, :parse_expr], [
+            A.ref(A.method(A.token_macro(:quote, "atoms::#name()"), :to_string))
+          ])
+        )
+      end,
+      function :decode_expr_none,
         vis: :crate,
         args: [_term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.return(A.path_call([:super, :parse_expr], ["None"]))
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_field,
+        returns: "NifResult<Expr>" do
+        A.return(A.path_call([:super, :parse_expr], ["None"]))
+      end,
+      function :decode_expr_field,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :receiver,
-              A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")]))
-            )
+        returns: "NifResult<Expr>" do
+        A.let(:receiver, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")])))
 
-            A.let(
-              :field,
-              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "field")?|)
-            )
+        A.let(
+          :field,
+          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "field")?|)
+        )
 
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [
-                A.token_macro(:quote, "#receiver.#field")
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_path_call,
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "#receiver.#field")
+          ])
+        )
+      end,
+      function :decode_expr_path_call,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :path,
-              A.try(
-                A.path_call([:super, :parse_path], [
-                  A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
-                ])
+        returns: "NifResult<Expr>" do
+        A.let(
+          :path,
+          A.try(
+            A.path_call([:super, :parse_path], [
+              A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+            ])
+          )
+        )
+
+        A.let(:args, A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")])))
+
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "#path(#(#args),*)")
+          ])
+        )
+      end,
+      function :decode_expr_method_call,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(:receiver, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")])))
+
+        A.let(
+          :method,
+          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "method")?|)
+        )
+
+        A.let(:args, A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")])))
+
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "#receiver.#method(#(#args),*)")
+          ])
+        )
+      end,
+      function :decode_expr_ref,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+        A.let(:mutable, A.try(A.method(map_get(:term, "mutable"), :decode)))
+
+        A.return(
+          A.if_expr(
+            :mutable,
+            [
+              A.return(
+                A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "&mut #expr")])
               )
-            )
-
-            A.let(
-              :args,
-              A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")]))
-            )
-
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [
-                A.token_macro(:quote, "#path(#(#args),*)")
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_method_call,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :receiver,
-              A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")]))
-            )
-
-            A.let(
-              :method,
-              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "method")?|)
-            )
-
-            A.let(
-              :args,
-              A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")]))
-            )
-
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [
-                A.token_macro(:quote, "#receiver.#method(#(#args),*)")
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_ref,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-            A.let(:mutable, A.try(A.method(map_get(:term, "mutable"), :decode)))
-
-            A.return(
-              A.if_expr(
-                :mutable,
-                [
-                  A.return(
-                    A.path_call([:super, :parse_expr_tokens], [
-                      A.token_macro(:quote, "&mut #expr")
-                    ])
-                  )
-                ],
-                [
-                  A.return(
-                    A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "&#expr")])
-                  )
-                ]
+            ],
+            [
+              A.return(
+                A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "&#expr")])
               )
-            )
-          end
-      },
+            ]
+          )
+        )
+      end,
       unary_expr_decoder(:decode_expr_try, "expr", "#expr?"),
       unary_expr_decoder(:decode_expr_some, "expr", "Some(#expr)"),
       unary_expr_decoder(:decode_expr_err, "expr", "Err(#expr)"),
-      %AST.Function{
-        name: :decode_expr_nif_raise_atom,
+      function :decode_expr_nif_raise_atom,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(:name, A.try(A.path_call([:super, :atom_key], [:term, "name"])))
+        returns: "NifResult<Expr>" do
+        A.let(:name, A.try(A.path_call([:super, :atom_key], [:term, "name"])))
 
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [
-                A.token_macro(:quote, "rustler::Error::RaiseAtom(#name)")
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_match,
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "rustler::Error::RaiseAtom(#name)")
+          ])
+        )
+      end,
+      function :decode_expr_binary_op,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
-            A.let(:arms, A.try(A.path_call([:super, :decode_arm_list], [map_get(:term, "arms")])))
+        returns: "NifResult<Expr>" do
+        A.let(:left, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "left")])))
+        A.let(:right, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "right")])))
+        A.let(:op, A.try(A.path_call([:super, :atom_key], [:term, "op"])))
 
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [
-                A.token_macro(:quote, "match #expr { #(#arms)* }")
-              ])
-            )
+        A.return do
+          A.match A.method(:op, :as_str) do
+            A.arm A.lit_pat("eq") do
+              A.return(
+                A.path_call([:super, :parse_expr_tokens], [
+                  A.token_macro(:quote, "#left == #right")
+                ])
+              )
+            end
+
+            A.arm A.lit_pat("and") do
+              A.return(
+                A.path_call([:super, :parse_expr_tokens], [
+                  A.token_macro(:quote, "#left && #right")
+                ])
+              )
+            end
+
+            A.arm A.lit_pat("or") do
+              A.return(
+                A.path_call([:super, :parse_expr_tokens], [
+                  A.token_macro(:quote, "#left || #right")
+                ])
+              )
+            end
+
+            A.arm A.wildcard() do
+              A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+            end
           end
-      },
-      %AST.Function{
-        name: :decode_expr_if,
+        end
+      end,
+      function :decode_expr_match,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :condition,
-              A.try(A.path_call([:super, :decode_expr], [map_get(:term, "condition")]))
-            )
+        returns: "NifResult<Expr>" do
+        A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+        A.let(:arms, A.try(A.path_call([:super, :decode_arm_list], [map_get(:term, "arms")])))
 
-            A.let(
-              :then_block,
-              A.try(A.path_call([:super, :decode_block], [map_get(:term, "then")]))
-            )
-
-            A.let(
-              :else_block,
-              A.try(A.path_call([:super, :decode_block], [map_get(:term, "else")]))
-            )
-
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [
-                A.token_macro(:quote, "if #condition #then_block else #else_block")
-              ])
-            )
-          end
-      },
-      %AST.Function{
-        name: :decode_expr_tuple,
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "match #expr { #(#arms)* }")
+          ])
+        )
+      end,
+      function :decode_expr_if,
         vis: :crate,
         args: [term: "Term"],
-        returns: "NifResult<Expr>",
-        body:
-          A.block do
-            A.let(
-              :values,
-              A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "values")]))
-            )
+        returns: "NifResult<Expr>" do
+        A.let(
+          :condition,
+          A.try(A.path_call([:super, :decode_expr], [map_get(:term, "condition")]))
+        )
 
-            A.return(
-              A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "(#(#values),*)")])
-            )
-          end
-      }
+        A.let(:then_block, A.try(A.path_call([:super, :decode_block], [map_get(:term, "then")])))
+        A.let(:else_block, A.try(A.path_call([:super, :decode_block], [map_get(:term, "else")])))
+
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [
+            A.token_macro(:quote, "if #condition #then_block else #else_block")
+          ])
+        )
+      end,
+      function :decode_expr_tuple,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>" do
+        A.let(
+          :values,
+          A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "values")]))
+        )
+
+        A.return(
+          A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "(#(#values),*)")])
+        )
+      end
     ]
   end
 

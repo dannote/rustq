@@ -174,8 +174,8 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::REF => decode_expr_ref(term),
         ast_modules::TRY => decode_expr_try(term),
         ast_modules::TUPLE => decode_expr_tuple(term),
-        ast_modules::LITERAL => super::decode_expr_manual(term),
-        ast_modules::TOKEN_MACRO => super::decode_expr_manual(term),
+        ast_modules::LITERAL => decode_expr_literal(term),
+        ast_modules::TOKEN_MACRO => decode_expr_token_macro(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
         ast_modules::NONE => decode_expr_none(term),
         ast_modules::SOME => decode_expr_some(term),
@@ -184,7 +184,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::NIF_RAISE_ATOM => decode_expr_nif_raise_atom(term),
         ast_modules::MATCH => decode_expr_match(term),
         ast_modules::IF => decode_expr_if(term),
-        ast_modules::BINARY_OP => super::decode_expr_manual(term),
+        ast_modules::BINARY_OP => decode_expr_binary_op(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -250,6 +250,21 @@ pub(crate) fn decode_expr_path(term: Term) -> NifResult<Expr> {
     )?)
 }
 
+pub(crate) fn decode_expr_literal(term: Term) -> NifResult<Expr> {
+    super::decode_literal_expr(term.map_get(super::atom(term.get_env(), "value")?)?)
+}
+
+pub(crate) fn decode_expr_token_macro(term: Term) -> NifResult<Expr> {
+    let path = super::path_parts(
+        term.map_get(super::atom(term.get_env(), "path")?)?
+            .map_get(super::atom(term.get_env(), "parts")?)?,
+    )?;
+    let tokens: String = term
+        .map_get(super::atom(term.get_env(), "tokens")?)?
+        .decode()?;
+    super::parse_expr(&format!("{}!({})", path, tokens))
+}
+
 pub(crate) fn decode_expr_atom_value(term: Term) -> NifResult<Expr> {
     let name = quote::format_ident!("{}", super::atom_key(term, "name")?);
     super::parse_expr(&quote!(atoms::# name()).to_string())
@@ -311,6 +326,18 @@ pub(crate) fn decode_expr_err(term: Term) -> NifResult<Expr> {
 pub(crate) fn decode_expr_nif_raise_atom(term: Term) -> NifResult<Expr> {
     let name = super::atom_key(term, "name")?;
     super::parse_expr_tokens(quote!(rustler::Error::RaiseAtom(# name)))
+}
+
+pub(crate) fn decode_expr_binary_op(term: Term) -> NifResult<Expr> {
+    let left = super::decode_expr(term.map_get(super::atom(term.get_env(), "left")?)?)?;
+    let right = super::decode_expr(term.map_get(super::atom(term.get_env(), "right")?)?)?;
+    let op = super::atom_key(term, "op")?;
+    match op.as_str() {
+        "eq" => super::parse_expr_tokens(quote!(# left == # right)),
+        "and" => super::parse_expr_tokens(quote!(# left && # right)),
+        "or" => super::parse_expr_tokens(quote!(# left || # right)),
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 pub(crate) fn decode_expr_match(term: Term) -> NifResult<Expr> {

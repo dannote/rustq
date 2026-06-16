@@ -255,15 +255,26 @@ fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
     let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
     let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
     let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
+    let ty = match optional_map_get(term, "type")? {
+        Some(type_term) if !is_nil(type_term)? => Some(decode_type(type_term)?),
+        _ => None,
+    };
 
-    if mutable {
+    let pat_tokens = if mutable {
         let Pat::Ident(mut pat_ident) = pat else {
             return Err(rustler::Error::BadArg);
         };
         pat_ident.mutability = Some(Default::default());
-        Ok(syn::parse2(quote!(let #pat_ident = #expr;)).map_err(|_| rustler::Error::BadArg)?)
+        quote!(#pat_ident)
     } else {
-        Ok(syn::parse2(quote!(let #pat = #expr;)).map_err(|_| rustler::Error::BadArg)?)
+        quote!(#pat)
+    };
+
+    if let Some(ty) = ty {
+        Ok(syn::parse2(quote!(let #pat_tokens: #ty = #expr;))
+            .map_err(|_| rustler::Error::BadArg)?)
+    } else {
+        Ok(syn::parse2(quote!(let #pat_tokens = #expr;)).map_err(|_| rustler::Error::BadArg)?)
     }
 }
 

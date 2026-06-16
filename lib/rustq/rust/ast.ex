@@ -164,13 +164,14 @@ defmodule RustQ.Rust.AST do
 
   defnode(TypeUnit, :type, [], type: quote(do: %__MODULE__{}))
 
-  defnode(Let, :stmt, [:pattern, :expr, mutable: false],
+  defnode(Let, :stmt, [:pattern, :expr, mutable: false, type: nil],
     type:
       quote(
         do: %__MODULE__{
           pattern: RustQ.Rust.AST.pat(),
           expr: RustQ.Rust.AST.expr(),
-          mutable: boolean()
+          mutable: boolean(),
+          type: RustQ.Rust.AST.type() | String.t() | nil
         }
       )
   )
@@ -520,7 +521,8 @@ defmodule RustQ.Rust.AST do
 
   def render_stmt(%Let{} = stmt) do
     mut = if stmt.mutable, do: "mut ", else: ""
-    ["let ", mut, render_pattern(stmt.pattern), " = ", render_expr(stmt.expr), ";"]
+    type = if stmt.type, do: [": ", render_type(stmt.type)], else: []
+    ["let ", mut, render_pattern(stmt.pattern), type, " = ", render_expr(stmt.expr), ";"]
   end
 
   def render_stmt(%ExprStmt{} = stmt), do: [render_expr(stmt.expr), ";"]
