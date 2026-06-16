@@ -120,6 +120,12 @@ defmodule RustQ.Meta.Lower do
     |> lower_block(return_type, vars)
   end
 
+  defp lower_clause_body(body, :expr, vars) do
+    body
+    |> block_expressions()
+    |> lower_block(nil, vars)
+  end
+
   defp reject_unit_statements(statements) do
     Enum.reject(statements, fn
       %AST.ExprStmt{expr: %AST.Tuple{values: []}} -> true
@@ -137,6 +143,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern(nil, %Type{kind: :option}), do: %AST.PatNone{}
   defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
   defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
+
+  defp lower_match_pattern(value, _case_type) when is_binary(value),
+    do: %AST.PatLiteral{value: value}
 
   defp lower_match_pattern({:ok, pattern}, _case_type),
     do: %AST.PatOk{pattern: lower_match_pattern(pattern, nil)}
@@ -215,6 +224,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:quote_stmt!, _, [tokens]}),
     do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_stmt]}, args: [quote_tokens(tokens)]}
 
+  defp lower_expr({:quote_arm!, _, [tokens]}),
+    do: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_arm]}, args: [quote_tokens(tokens)]}
+
   defp lower_expr({:badarg, _, []}), do: %AST.Path{parts: [:rustler, :Error, :BadArg]}
 
   defp lower_expr({:==, _, [left, right]}),
@@ -227,7 +239,10 @@ defmodule RustQ.Meta.Lower do
     do: %AST.BinaryOp{left: lower_expr(left), op: :or, right: lower_expr(right)}
 
   defp lower_expr({:if, _, [condition, branches]}),
-    do: lower_if(condition, branches, :statement, %{})
+    do: lower_if(condition, branches, :expr, %{})
+
+  defp lower_expr({:case, _, [expression, [do: clauses]]}),
+    do: lower_case(expression, clauses, :expr, %{})
 
   defp lower_expr({{:., _meta, [receiver, field_or_function]}, call_meta, []}) do
     cond do

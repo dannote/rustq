@@ -16,7 +16,7 @@ mod generated_ast;
 use generated_ast::{
     ast_modules, atom, atom_key, atoms, decode_arm, decode_ast_expr, decode_ast_item,
     decode_ast_pat, decode_ast_stmt, decode_ast_type, expect_struct, is_nil, optional_atom_key,
-    optional_map_get, struct_name,
+    optional_map_get,
 };
 
 #[derive(NifMap)]
@@ -328,6 +328,17 @@ fn format_ident_value(name: String) -> proc_macro2::Ident {
 
 fn parse_ast_path(term: Term) -> NifResult<syn::Path> {
     parse_path(&path_parts(term.map_get(atom(term.get_env(), "parts")?)?)?)
+}
+
+fn string_field(term: Term, key: &str) -> NifResult<String> {
+    term.map_get(atom(term.get_env(), key)?)?.decode()
+}
+
+fn decode_optional_type_field(term: Term, key: &str) -> NifResult<Option<Type>> {
+    match optional_map_get(term, key)? {
+        Some(type_term) if !is_nil(type_term)? => Ok(Some(decode_type(type_term)?)),
+        _ => Ok(None),
+    }
 }
 
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {

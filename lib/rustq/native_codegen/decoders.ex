@@ -63,6 +63,30 @@ defmodule RustQ.NativeCodegen.Decoders do
     {:ok, Stmt.expr(expr, none())}
   end
 
+  @spec decode_stmt_let(term()) :: R.nif_result(R.stmt())
+  defrust decode_stmt_let(term) do
+    pattern = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
+    pat_tokens = unwrap!(Super.decode_let_pattern(pattern, mutable))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    ty = unwrap!(Super.decode_optional_type_field(term, "type"))
+    Super.parse_let_stmt(pat_tokens, ty, expr)
+  end
+
+  @spec decode_arm(term()) :: R.nif_result(R.arm())
+  defrust decode_arm(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Arm"))
+    pat_term = unwrap!(required_field(term, "pattern"))
+    block = unwrap!(Super.decode_block(unwrap!(required_field(term, "body"))))
+
+    if unwrap!(struct_name(pat_term)) == "Elixir.RustQ.Rust.AST.PatAtomGuard" do
+      Super.decode_atom_guard_arm(pat_term, block)
+    else
+      pat = unwrap!(Super.decode_pat(pat_term))
+      quote_arm!("#pat => #block,")
+    end
+  end
+
   @spec decode_expr_var(term()) :: R.nif_result(R.expr())
   defrust decode_expr_var(term) do
     ident = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -120,6 +144,85 @@ defmodule RustQ.NativeCodegen.Decoders do
     else
       quote_expr!("&#expr")
     end
+  end
+
+  @spec decode_pat_tuple(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_tuple(term) do
+    patterns = unwrap!(Super.decode_pat_list(unwrap!(required_field(term, "patterns"))))
+    quote_pat!("(#(#patterns),*)")
+  end
+
+  @spec decode_pat_path_tuple(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_path_tuple(term) do
+    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    patterns = unwrap!(Super.decode_pat_list(unwrap!(required_field(term, "patterns"))))
+    quote_pat!("#path(#(#patterns),*)")
+  end
+
+  @spec decode_pat_struct(term()) :: R.nif_result(R.pat())
+  defrust decode_pat_struct(term) do
+    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    fields = unwrap!(Super.decode_pat_struct_fields(unwrap!(required_field(term, "fields"))))
+    quote_pat!("#path { #(#fields),* }")
+  end
+
+  @spec decode_expr_struct_literal(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_struct_literal(term) do
+    path = unwrap!(Super.decode_expr(unwrap!(required_field(term, "path"))))
+    fields = unwrap!(Super.decode_struct_literal_fields(unwrap!(required_field(term, "fields"))))
+    quote_expr!("#path { #(#fields),* }")
+  end
+
+  @spec decode_expr_nif_raise_atom(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_nif_raise_atom(term) do
+    name = unwrap!(atom_key(term, "name"))
+    quote_expr!("rustler::Error::RaiseAtom(#name)")
+  end
+
+  @spec decode_expr_binary_op(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_binary_op(term) do
+    left = unwrap!(Super.decode_expr(unwrap!(required_field(term, "left"))))
+    right = unwrap!(Super.decode_expr(unwrap!(required_field(term, "right"))))
+    op = unwrap!(atom_key(term, "op"))
+
+    case op.as_str() do
+      "eq" -> quote_expr!("#left == #right")
+      "and" -> quote_expr!("#left && #right")
+      "or" -> quote_expr!("#left || #right")
+      _ -> err(badarg())
+    end
+  end
+
+  @spec decode_expr_match(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_match(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    arms = unwrap!(Super.decode_arm_list(unwrap!(required_field(term, "arms"))))
+    quote_expr!("match #expr { #(#arms)* }")
+  end
+
+  @spec decode_expr_if(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_if(term) do
+    condition = unwrap!(Super.decode_expr(unwrap!(required_field(term, "condition"))))
+    then_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "then"))))
+    else_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "else"))))
+    quote_expr!("if #condition #then_block else #else_block")
+  end
+
+  @spec decode_expr_tuple(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_tuple(term) do
+    values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
+    quote_expr!("(#(#values),*)")
+  end
+
+  @spec decode_expr_token_macro(term()) :: R.nif_result(R.expr())
+  defrust decode_expr_token_macro(term) do
+    path =
+      unwrap!(
+        Super.path_parts(unwrap!(required_field(unwrap!(required_field(term, "path")), "parts")))
+      )
+
+    tokens = unwrap!(Super.string_field(term, "tokens"))
+    Super.parse_expr(ref(token_macro(:format, "\"{}!({})\", path, tokens")))
   end
 
   @spec decode_expr_none(term()) :: R.nif_result(R.expr())

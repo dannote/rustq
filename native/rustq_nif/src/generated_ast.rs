@@ -189,18 +189,6 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         _ => Err(rustler::Error::BadArg),
     }
 }
-pub(crate) fn decode_arm(term: Term) -> NifResult<Arm> {
-    super::expect_struct(term, ast_modules::ARM)?;
-    let pat_term = term.map_get(super::atom(term.get_env(), "pattern")?)?;
-    let block = super::decode_block(term.map_get(super::atom(term.get_env(), "body")?)?)?;
-    match super::struct_name(pat_term)?.as_str() {
-        ast_modules::PAT_ATOM_GUARD => super::decode_atom_guard_arm(pat_term, block),
-        _ => {
-            let pat = super::decode_pat(pat_term)?;
-            super::parse_arm(quote!(#pat => #block,))
-        }
-    }
-}
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {
     let ident = super::format_ident_value(atom_key(term, "name")?);
     super::parse_pat(quote!(# ident))
@@ -247,6 +235,27 @@ pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
 pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     Ok(Stmt::Expr(expr, None))
+}
+
+pub(crate) fn decode_stmt_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let pattern = super::decode_pat(required_field(term, "pattern")?)?;
+    let mutable = required_field(term, "mutable")?.decode()?;
+    let pat_tokens = super::decode_let_pattern(pattern, mutable)?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let ty = super::decode_optional_type_field(term, "type")?;
+    super::parse_let_stmt(pat_tokens, ty, expr)
+}
+
+pub(crate) fn decode_arm<'a>(term: Term<'a>) -> NifResult<Arm> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Arm")?;
+    let pat_term = required_field(term, "pattern")?;
+    let block = super::decode_block(required_field(term, "body")?)?;
+    if struct_name(pat_term)? == "Elixir.RustQ.Rust.AST.PatAtomGuard" {
+        super::decode_atom_guard_arm(pat_term, block)
+    } else {
+        let pat = super::decode_pat(pat_term)?;
+        super::parse_arm(quote!(# pat => # block,))
+    }
 }
 
 pub(crate) fn decode_expr_var<'a>(term: Term<'a>) -> NifResult<Expr> {
@@ -299,6 +308,70 @@ pub(crate) fn decode_expr_ref<'a>(term: Term<'a>) -> NifResult<Expr> {
     }
 }
 
+pub(crate) fn decode_pat_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let patterns = super::decode_pat_list(required_field(term, "patterns")?)?;
+    super::parse_pat(quote!((# (# patterns),*)))
+}
+
+pub(crate) fn decode_pat_path_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let patterns = super::decode_pat_list(required_field(term, "patterns")?)?;
+    super::parse_pat(quote!(# path(# (# patterns),*)))
+}
+
+pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let fields = super::decode_pat_struct_fields(required_field(term, "fields")?)?;
+    super::parse_pat(quote!(# path { # (# fields),* }))
+}
+
+pub(crate) fn decode_expr_struct_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let path = super::decode_expr(required_field(term, "path")?)?;
+    let fields = super::decode_struct_literal_fields(required_field(term, "fields")?)?;
+    super::parse_expr_tokens(quote!(# path { # (# fields),* }))
+}
+
+pub(crate) fn decode_expr_nif_raise_atom<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let name = atom_key(term, "name")?;
+    super::parse_expr_tokens(quote!(rustler::Error::RaiseAtom(# name)))
+}
+
+pub(crate) fn decode_expr_binary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let left = super::decode_expr(required_field(term, "left")?)?;
+    let right = super::decode_expr(required_field(term, "right")?)?;
+    let op = atom_key(term, "op")?;
+    match op.as_str() {
+        "eq" => super::parse_expr_tokens(quote!(# left == # right)),
+        "and" => super::parse_expr_tokens(quote!(# left && # right)),
+        "or" => super::parse_expr_tokens(quote!(# left || # right)),
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+pub(crate) fn decode_expr_match<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let arms = super::decode_arm_list(required_field(term, "arms")?)?;
+    super::parse_expr_tokens(quote!(match # expr { # (# arms) * }))
+}
+
+pub(crate) fn decode_expr_if<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let condition = super::decode_expr(required_field(term, "condition")?)?;
+    let then_block = super::decode_block(required_field(term, "then")?)?;
+    let else_block = super::decode_block(required_field(term, "else")?)?;
+    super::parse_expr_tokens(quote!(if # condition # then_block else # else_block))
+}
+
+pub(crate) fn decode_expr_tuple<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let values = super::decode_expr_list(required_field(term, "values")?)?;
+    super::parse_expr_tokens(quote!((# (# values),*)))
+}
+
+pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let path = super::path_parts(required_field(required_field(term, "path")?, "parts")?)?;
+    let tokens = super::string_field(term, "tokens")?;
+    super::parse_expr(&format!("{}!({})", path, tokens))
+}
+
 pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr> {
     super::parse_expr_tokens(quote!(None))
 }
@@ -322,69 +395,6 @@ pub(crate) fn decode_expr_err<'a>(term: Term<'a>) -> NifResult<Expr> {
     super::parse_expr_tokens(quote!(Err(# expr)))
 }
 
-pub(crate) fn decode_pat_tuple(term: Term) -> NifResult<Pat> {
-    let patterns = super::decode_pat_list(term.map_get(super::atom(term.get_env(), "patterns")?)?)?;
-    super::parse_pat(quote!((# (# patterns),*)))
-}
-
-pub(crate) fn decode_pat_path_tuple(term: Term) -> NifResult<Pat> {
-    let path = super::parse_path(&super::path_parts(
-        term.map_get(super::atom(term.get_env(), "path")?)?
-            .map_get(super::atom(term.get_env(), "parts")?)?,
-    )?)?;
-    let patterns = super::decode_pat_list(term.map_get(super::atom(term.get_env(), "patterns")?)?)?;
-    super::parse_pat(quote!(# path(# (# patterns),*)))
-}
-
-pub(crate) fn decode_pat_struct(term: Term) -> NifResult<Pat> {
-    let path = super::parse_path(&super::path_parts(
-        term.map_get(super::atom(term.get_env(), "path")?)?
-            .map_get(super::atom(term.get_env(), "parts")?)?,
-    )?)?;
-    let fields =
-        super::decode_pat_struct_fields(term.map_get(super::atom(term.get_env(), "fields")?)?)?;
-    super::parse_pat(quote!(# path { # (# fields),* }))
-}
-
-pub(crate) fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
-    let pattern = super::decode_pat(term.map_get(super::atom(term.get_env(), "pattern")?)?)?;
-    let mutable = term
-        .map_get(super::atom(term.get_env(), "mutable")?)?
-        .decode()?;
-    let pat_tokens = super::decode_let_pattern(pattern, mutable)?;
-    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
-    let ty = match super::optional_map_get(term, "type")? {
-        Some(type_term) => {
-            if super::is_nil(type_term)? {
-                None
-            } else {
-                let ty = super::decode_type(type_term)?;
-                Some(ty)
-            }
-        }
-        None => None,
-    };
-    super::parse_let_stmt(pat_tokens, ty, expr)
-}
-
-pub(crate) fn decode_expr_token_macro(term: Term) -> NifResult<Expr> {
-    let path = super::path_parts(
-        term.map_get(super::atom(term.get_env(), "path")?)?
-            .map_get(super::atom(term.get_env(), "parts")?)?,
-    )?;
-    let tokens: String = term
-        .map_get(super::atom(term.get_env(), "tokens")?)?
-        .decode()?;
-    super::parse_expr(&format!("{}!({})", path, tokens))
-}
-
-pub(crate) fn decode_expr_struct_literal(term: Term) -> NifResult<Expr> {
-    let path = super::decode_expr(term.map_get(super::atom(term.get_env(), "path")?)?)?;
-    let fields =
-        super::decode_struct_literal_fields(term.map_get(super::atom(term.get_env(), "fields")?)?)?;
-    super::parse_expr_tokens(quote!(# path { # (# fields),* }))
-}
-
 pub(crate) fn decode_expr_ok(term: Term) -> NifResult<Expr> {
     match super::optional_map_get(term, "expr")? {
         Some(expr_term) => {
@@ -397,39 +407,4 @@ pub(crate) fn decode_expr_ok(term: Term) -> NifResult<Expr> {
         }
         None => super::parse_expr_tokens(quote!(Ok(()))),
     }
-}
-
-pub(crate) fn decode_expr_nif_raise_atom(term: Term) -> NifResult<Expr> {
-    let name = super::atom_key(term, "name")?;
-    super::parse_expr_tokens(quote!(rustler::Error::RaiseAtom(# name)))
-}
-
-pub(crate) fn decode_expr_binary_op(term: Term) -> NifResult<Expr> {
-    let left = super::decode_expr(term.map_get(super::atom(term.get_env(), "left")?)?)?;
-    let right = super::decode_expr(term.map_get(super::atom(term.get_env(), "right")?)?)?;
-    let op = super::atom_key(term, "op")?;
-    match op.as_str() {
-        "eq" => super::parse_expr_tokens(quote!(# left == # right)),
-        "and" => super::parse_expr_tokens(quote!(# left && # right)),
-        "or" => super::parse_expr_tokens(quote!(# left || # right)),
-        _ => Err(rustler::Error::BadArg),
-    }
-}
-
-pub(crate) fn decode_expr_match(term: Term) -> NifResult<Expr> {
-    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
-    let arms = super::decode_arm_list(term.map_get(super::atom(term.get_env(), "arms")?)?)?;
-    super::parse_expr_tokens(quote!(match # expr { # (# arms) * }))
-}
-
-pub(crate) fn decode_expr_if(term: Term) -> NifResult<Expr> {
-    let condition = super::decode_expr(term.map_get(super::atom(term.get_env(), "condition")?)?)?;
-    let then_block = super::decode_block(term.map_get(super::atom(term.get_env(), "then")?)?)?;
-    let else_block = super::decode_block(term.map_get(super::atom(term.get_env(), "else")?)?)?;
-    super::parse_expr_tokens(quote!(if # condition # then_block else # else_block))
-}
-
-pub(crate) fn decode_expr_tuple(term: Term) -> NifResult<Expr> {
-    let values = super::decode_expr_list(term.map_get(super::atom(term.get_env(), "values")?)?)?;
-    super::parse_expr_tokens(quote!((# (# values),*)))
 }

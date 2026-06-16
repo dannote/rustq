@@ -180,6 +180,7 @@ defmodule RustQ.Meta.Type do
   defp parse_rust_type(:pat, [], _aliases), do: type(:pat, path(:Pat))
   defp parse_rust_type(:stmt, [], _aliases), do: type(:stmt, path(:Stmt))
   defp parse_rust_type(:path, [], _aliases), do: type(:path, path(:Path))
+  defp parse_rust_type(:arm, [], _aliases), do: type(:arm, path(:Arm))
 
   defp parse_rust_type(:term, [], _aliases),
     do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})
