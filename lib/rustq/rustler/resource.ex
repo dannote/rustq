@@ -4,17 +4,8 @@ defmodule RustQ.Rustler.Resource do
   use RustQ.Sigil
 
   alias RustQ.Rust
-
-  @struct_template ~R"""
-  struct __rq_Resource {
-      __rq_fields: (),
-  }
-  """
-
-  @impl_template ~R"""
-  #[rustler::resource_impl]
-  impl rustler::Resource for __rq_Resource {}
-  """
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
 
   @decode_template ~R"""
   fn __rq_decode_fn<'a>(term: Term<'a>) -> NifResult<ResourceArc<__rq_Resource>> {
@@ -31,20 +22,21 @@ defmodule RustQ.Rustler.Resource do
 
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts \\ []) do
-    fields =
-      opts
-      |> Keyword.get(:fields, [])
-      |> Enum.map(fn {field, type} -> Rust.field(field, type, vis: :pub) end)
+    struct = %AST.Struct{
+      name: String.to_atom(to_string(name)),
+      fields:
+        opts
+        |> Keyword.get(:fields, [])
+        |> Enum.map(fn {field, type} -> %AST.StructField{name: field, type: type, vis: :pub} end)
+    }
 
-    [
-      Rust.item(
-        RustQ.render!(@struct_template, "rustler_resource_struct.rs",
-          bind: [Resource: name],
-          splice: [fields: fields]
-        )
-      ),
-      Rust.item(RustQ.render!(@impl_template, "rustler_resource_impl.rs", bind: [Resource: name]))
-    ]
+    impl = %AST.Impl{
+      target: A.type_path(name),
+      trait: A.path([:rustler, :Resource]),
+      attrs: [A.resource_impl_attr()]
+    }
+
+    [Rust.item(AST.render_item_native(struct)), Rust.item(AST.render_item_native(impl))]
   end
 
   @spec type_alias(atom() | String.t(), keyword()) :: Rust.TypeAlias.t()

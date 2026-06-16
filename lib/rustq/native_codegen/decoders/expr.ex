@@ -26,15 +26,49 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   @spec decode_expr_field(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_field(term) do
     receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
-    field = Super.format_ident_value(unwrap!(atom_key(term, "field")))
-    expr!(field(receiver, field))
+    field = unwrap!(required_field(term, "field"))
+    Super.parse_field_expr(receiver, field)
+  end
+
+  @spec decode_expr_index(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_index(term) do
+    receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
+    index = unwrap!(Super.decode_expr(unwrap!(required_field(term, "index"))))
+    Super.parse_index_expr(receiver, index)
+  end
+
+  @spec decode_expr_range(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_range(term) do
+    start = unwrap!(Super.decode_optional_expr_field(term, "start"))
+    stop = unwrap!(Super.decode_optional_expr_field(term, "stop"))
+    Super.parse_range_expr(start, stop)
+  end
+
+  @spec decode_expr_cast(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_cast(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    Super.parse_cast_expr(expr, ty)
+  end
+
+  @spec decode_expr_unary_op(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_unary_op(term) do
+    op = unwrap!(atom_key(term, "op"))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+
+    case op.as_str() do
+      "not" -> Super.parse_unary_expr(op, expr)
+      "neg" -> Super.parse_unary_expr(op, expr)
+      _ -> err(badarg())
+    end
   end
 
   @spec decode_expr_path_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_path_call(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
     args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
-    expr!(path_call(path, args))
+    generics = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "generics"))))
+    Super.parse_path_call_expr(path, args, generics)
   end
 
   @spec decode_expr_method_call(term()) :: R.nif_result(Expr.t())
@@ -42,7 +76,8 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
     method = Super.format_ident_value(unwrap!(atom_key(term, "method")))
     args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
-    expr!(method_call(receiver, method, args))
+    generics = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "generics"))))
+    Super.parse_method_call_expr(receiver, method, args, generics)
   end
 
   @spec decode_expr_local_call(term()) :: R.nif_result(Expr.t())
@@ -85,6 +120,15 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
     case op.as_str() do
       "eq" -> expr!(binary(left, :eq, right))
+      "ne" -> expr!(binary(left, :ne, right))
+      "lt" -> expr!(binary(left, :lt, right))
+      "lte" -> expr!(binary(left, :lte, right))
+      "gt" -> expr!(binary(left, :gt, right))
+      "gte" -> expr!(binary(left, :gte, right))
+      "add" -> expr!(binary(left, :add, right))
+      "sub" -> expr!(binary(left, :sub, right))
+      "mul" -> expr!(binary(left, :mul, right))
+      "div" -> expr!(binary(left, :div, right))
       "and" -> expr!(binary(left, :and, right))
       "or" -> expr!(binary(left, :or, right))
       _ -> err(badarg())
@@ -130,6 +174,12 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
     args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
     expr!(macro_call(path, args))
+  end
+
+  @spec decode_expr_byte_string(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_byte_string(term) do
+    value = unwrap!(Super.string_field(term, "value"))
+    Super.parse_byte_string_expr(value)
   end
 
   @spec decode_expr_token_macro(term()) :: R.nif_result(Expr.t())

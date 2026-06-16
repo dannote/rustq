@@ -5,8 +5,8 @@ use quote::quote;
 use rustler::{Atom, Env, NifResult, Term};
 
 use syn::{
-    Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStatic, ItemStruct,
-    ItemUse, Pat, Path, Stmt, Type, Variant,
+    Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemImpl, ItemMod, ItemStatic,
+    ItemStruct, ItemUse, Pat, Path, Stmt, Type, Variant,
 };
 
 pub(crate) mod atoms {
@@ -22,6 +22,7 @@ pub(crate) mod ast_modules {
     pub(crate) const STATIC: &str = "Elixir.RustQ.Rust.AST.Static";
     pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
     pub(crate) const MACRO_ITEM_CALL: &str = "Elixir.RustQ.Rust.AST.MacroItemCall";
+    pub(crate) const IMPL: &str = "Elixir.RustQ.Rust.AST.Impl";
     pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";
     pub(crate) const STRUCT: &str = "Elixir.RustQ.Rust.AST.Struct";
     pub(crate) const ENUM: &str = "Elixir.RustQ.Rust.AST.Enum";
@@ -37,9 +38,15 @@ pub(crate) mod ast_modules {
     pub(crate) const EXPR_STMT: &str = "Elixir.RustQ.Rust.AST.ExprStmt";
     pub(crate) const RETURN: &str = "Elixir.RustQ.Rust.AST.Return";
     pub(crate) const EARLY_RETURN: &str = "Elixir.RustQ.Rust.AST.EarlyReturn";
+    pub(crate) const IF_LET: &str = "Elixir.RustQ.Rust.AST.IfLet";
+    pub(crate) const FOR: &str = "Elixir.RustQ.Rust.AST.For";
     pub(crate) const VAR: &str = "Elixir.RustQ.Rust.AST.Var";
     pub(crate) const PATH: &str = "Elixir.RustQ.Rust.AST.Path";
     pub(crate) const FIELD: &str = "Elixir.RustQ.Rust.AST.Field";
+    pub(crate) const INDEX: &str = "Elixir.RustQ.Rust.AST.Index";
+    pub(crate) const RANGE: &str = "Elixir.RustQ.Rust.AST.Range";
+    pub(crate) const CAST: &str = "Elixir.RustQ.Rust.AST.Cast";
+    pub(crate) const UNARY_OP: &str = "Elixir.RustQ.Rust.AST.UnaryOp";
     pub(crate) const PATH_CALL: &str = "Elixir.RustQ.Rust.AST.PathCall";
     pub(crate) const METHOD_CALL: &str = "Elixir.RustQ.Rust.AST.MethodCall";
     pub(crate) const STRUCT_LITERAL: &str = "Elixir.RustQ.Rust.AST.StructLiteral";
@@ -50,6 +57,7 @@ pub(crate) mod ast_modules {
     pub(crate) const VEC_LITERAL: &str = "Elixir.RustQ.Rust.AST.VecLiteral";
     pub(crate) const CLOSURE: &str = "Elixir.RustQ.Rust.AST.Closure";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
+    pub(crate) const BYTE_STRING: &str = "Elixir.RustQ.Rust.AST.ByteString";
     pub(crate) const TOKEN_MACRO: &str = "Elixir.RustQ.Rust.AST.TokenMacro";
     pub(crate) const MACRO_CALL: &str = "Elixir.RustQ.Rust.AST.MacroCall";
     pub(crate) const ATOM_VALUE: &str = "Elixir.RustQ.Rust.AST.AtomValue";
@@ -129,6 +137,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         ast_modules::STATIC => Ok(Item::Static(decode_ast_static(term)?)),
         ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
         ast_modules::MACRO_ITEM_CALL => decode_ast_macro_item_call(term),
+        ast_modules::IMPL => Ok(Item::Impl(decode_ast_impl(term)?)),
         ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
         ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
         ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
@@ -174,6 +183,8 @@ pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
         ast_modules::EXPR_STMT => decode_stmt_expr_stmt(term),
         ast_modules::RETURN => decode_stmt_return(term),
         ast_modules::EARLY_RETURN => decode_stmt_early_return(term),
+        ast_modules::IF_LET => decode_stmt_if_let(term),
+        ast_modules::FOR => decode_stmt_for(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -183,6 +194,10 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::VAR => decode_expr_var(term),
         ast_modules::PATH => decode_expr_path(term),
         ast_modules::FIELD => decode_expr_field(term),
+        ast_modules::INDEX => decode_expr_index(term),
+        ast_modules::RANGE => decode_expr_range(term),
+        ast_modules::CAST => decode_expr_cast(term),
+        ast_modules::UNARY_OP => decode_expr_unary_op(term),
         ast_modules::PATH_CALL => decode_expr_path_call(term),
         ast_modules::METHOD_CALL => decode_expr_method_call(term),
         ast_modules::STRUCT_LITERAL => decode_expr_struct_literal(term),
@@ -193,6 +208,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::VEC_LITERAL => decode_expr_vec_literal(term),
         ast_modules::CLOSURE => decode_expr_closure(term),
         ast_modules::LITERAL => decode_expr_literal(term),
+        ast_modules::BYTE_STRING => decode_expr_byte_string(term),
         ast_modules::TOKEN_MACRO => decode_expr_token_macro(term),
         ast_modules::MACRO_CALL => decode_expr_macro_call(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
@@ -231,6 +247,15 @@ pub(crate) fn decode_ast_module<'a>(term: Term<'a>) -> NifResult<ItemMod> {
     let vis = super::decode_vis(required_field(term, "vis")?)?;
     let items = super::decode_item_list(required_field(term, "items")?)?;
     super::parse_item_module(name, vis, items)
+}
+
+pub(crate) fn decode_ast_impl<'a>(term: Term<'a>) -> NifResult<ItemImpl> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Impl")?;
+    let target = super::decode_type(required_field(term, "target")?)?;
+    let trait_path = super::decode_optional_path_field(term, "trait")?;
+    let impl_items = super::decode_item_list(required_field(term, "items")?)?;
+    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
+    super::parse_item_impl(target, trait_path, impl_items, attrs)
 }
 
 pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {
@@ -449,6 +474,21 @@ pub(crate) fn decode_stmt_early_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
     super::parse_return_stmt(expr)
 }
 
+pub(crate) fn decode_stmt_if_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let pattern = super::decode_pat(required_field(term, "pattern")?)?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let then_block = super::decode_block(required_field(term, "then")?)?;
+    let else_block = super::decode_optional_block_field(term, "else")?;
+    super::parse_if_let_stmt(pattern, expr, then_block, else_block)
+}
+
+pub(crate) fn decode_stmt_for<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let pattern = super::decode_pat(required_field(term, "pattern")?)?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let body = super::decode_block(required_field(term, "body")?)?;
+    super::parse_for_stmt(pattern, expr, body)
+}
+
 pub(crate) fn decode_stmt_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let pattern = super::decode_pat(required_field(term, "pattern")?)?;
     let mutable = required_field(term, "mutable")?.decode()?;
@@ -487,21 +527,51 @@ pub(crate) fn decode_expr_atom_value<'a>(term: Term<'a>) -> NifResult<Expr> {
 
 pub(crate) fn decode_expr_field<'a>(term: Term<'a>) -> NifResult<Expr> {
     let receiver = super::decode_expr(required_field(term, "receiver")?)?;
-    let field = super::format_ident_value(atom_key(term, "field")?);
-    super::parse_syn::<Expr>(quote!(# receiver.# field))
+    let field = required_field(term, "field")?;
+    super::parse_field_expr(receiver, field)
+}
+
+pub(crate) fn decode_expr_index<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let receiver = super::decode_expr(required_field(term, "receiver")?)?;
+    let index = super::decode_expr(required_field(term, "index")?)?;
+    super::parse_index_expr(receiver, index)
+}
+
+pub(crate) fn decode_expr_range<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let start = super::decode_optional_expr_field(term, "start")?;
+    let stop = super::decode_optional_expr_field(term, "stop")?;
+    super::parse_range_expr(start, stop)
+}
+
+pub(crate) fn decode_expr_cast<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    let ty = super::decode_type(required_field(term, "type")?)?;
+    super::parse_cast_expr(expr, ty)
+}
+
+pub(crate) fn decode_expr_unary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let op = atom_key(term, "op")?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    match op.as_str() {
+        "not" => super::parse_unary_expr(op, expr),
+        "neg" => super::parse_unary_expr(op, expr),
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 pub(crate) fn decode_expr_path_call<'a>(term: Term<'a>) -> NifResult<Expr> {
     let path = super::parse_ast_path(required_field(term, "path")?)?;
     let args = super::decode_expr_list(required_field(term, "args")?)?;
-    super::parse_syn::<Expr>(quote!(# path(# (# args),*)))
+    let generics = super::decode_type_list(required_field(term, "generics")?)?;
+    super::parse_path_call_expr(path, args, generics)
 }
 
 pub(crate) fn decode_expr_method_call<'a>(term: Term<'a>) -> NifResult<Expr> {
     let receiver = super::decode_expr(required_field(term, "receiver")?)?;
     let method = super::format_ident_value(atom_key(term, "method")?);
     let args = super::decode_expr_list(required_field(term, "args")?)?;
-    super::parse_syn::<Expr>(quote!(# receiver.# method(# (# args),*)))
+    let generics = super::decode_type_list(required_field(term, "generics")?)?;
+    super::parse_method_call_expr(receiver, method, args, generics)
 }
 
 pub(crate) fn decode_expr_local_call<'a>(term: Term<'a>) -> NifResult<Expr> {
@@ -537,6 +607,15 @@ pub(crate) fn decode_expr_binary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
     let op = atom_key(term, "op")?;
     match op.as_str() {
         "eq" => super::parse_syn::<Expr>(quote!(# left == # right)),
+        "ne" => super::parse_syn::<Expr>(quote!(# left != # right)),
+        "lt" => super::parse_syn::<Expr>(quote!(# left < # right)),
+        "lte" => super::parse_syn::<Expr>(quote!(# left <= # right)),
+        "gt" => super::parse_syn::<Expr>(quote!(# left > # right)),
+        "gte" => super::parse_syn::<Expr>(quote!(# left >= # right)),
+        "add" => super::parse_syn::<Expr>(quote!(# left + # right)),
+        "sub" => super::parse_syn::<Expr>(quote!(# left - # right)),
+        "mul" => super::parse_syn::<Expr>(quote!(# left * # right)),
+        "div" => super::parse_syn::<Expr>(quote!(# left / # right)),
         "and" => super::parse_syn::<Expr>(quote!(# left && # right)),
         "or" => super::parse_syn::<Expr>(quote!(# left || # right)),
         _ => Err(rustler::Error::BadArg),
@@ -576,6 +655,11 @@ pub(crate) fn decode_expr_macro_call<'a>(term: Term<'a>) -> NifResult<Expr> {
     let path = super::parse_ast_path(required_field(term, "path")?)?;
     let args = super::decode_expr_list(required_field(term, "args")?)?;
     super::parse_syn::<Expr>(quote!(# path!(# (# args),*)))
+}
+
+pub(crate) fn decode_expr_byte_string<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let value = super::string_field(term, "value")?;
+    super::parse_byte_string_expr(value)
 }
 
 pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {

@@ -14,16 +14,22 @@ defmodule RustQ.Rust.AST do
           | Static.t()
           | MacroItem.t()
           | MacroItemCall.t()
+          | Impl.t()
           | Function.t()
           | Struct.t()
           | Enum.t()
 
-  @type stmt :: Let.t() | Assign.t() | ExprStmt.t() | Return.t() | EarlyReturn.t()
+  @type stmt ::
+          Let.t() | Assign.t() | ExprStmt.t() | Return.t() | EarlyReturn.t() | IfLet.t() | For.t()
 
   @type expr ::
           Var.t()
           | Path.t()
           | Field.t()
+          | Index.t()
+          | Range.t()
+          | Cast.t()
+          | UnaryOp.t()
           | PathCall.t()
           | MethodCall.t()
           | StructLiteral.t()
@@ -34,6 +40,7 @@ defmodule RustQ.Rust.AST do
           | VecLiteral.t()
           | Closure.t()
           | Literal.t()
+          | ByteString.t()
           | TokenMacro.t()
           | MacroCall.t()
           | AtomValue.t()
@@ -135,6 +142,18 @@ defmodule RustQ.Rust.AST do
         do: %__MODULE__{
           path: RustQ.Rust.AST.Path.t(),
           args: [atom() | String.t() | {atom() | String.t(), String.t()}]
+        }
+      )
+  )
+
+  defnode(Impl, :item, [:target, trait: nil, items: [], attrs: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          target: RustQ.Rust.AST.type() | String.t(),
+          trait: RustQ.Rust.AST.Path.t() | nil,
+          items: [RustQ.Rust.AST.item()],
+          attrs: [RustQ.Rust.AST.Attribute.t()]
         }
       )
   )
@@ -253,25 +272,78 @@ defmodule RustQ.Rust.AST do
 
   defnode(EarlyReturn, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
+  defnode(IfLet, :stmt, [:pattern, :expr, then: [], else: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          pattern: RustQ.Rust.AST.pat(),
+          expr: RustQ.Rust.AST.expr(),
+          then: [RustQ.Rust.AST.stmt()],
+          else: [RustQ.Rust.AST.stmt()]
+        }
+      )
+  )
+
+  defnode(For, :stmt, [:pattern, :expr, body: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          pattern: RustQ.Rust.AST.pat(),
+          expr: RustQ.Rust.AST.expr(),
+          body: [RustQ.Rust.AST.stmt()]
+        }
+      )
+  )
+
   defnode(Var, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
   defnode(Path, :expr, [:parts], type: quote(do: %__MODULE__{parts: [atom() | String.t()]}))
 
   defnode(Field, :expr, [:receiver, :field],
-    type: quote(do: %__MODULE__{receiver: RustQ.Rust.AST.expr(), field: atom()})
+    type: quote(do: %__MODULE__{receiver: RustQ.Rust.AST.expr(), field: atom() | integer()})
   )
 
-  defnode(PathCall, :expr, [:path, args: []],
-    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [RustQ.Rust.AST.expr()]})
+  defnode(Index, :expr, [:receiver, :index],
+    type: quote(do: %__MODULE__{receiver: RustQ.Rust.AST.expr(), index: RustQ.Rust.AST.expr()})
   )
 
-  defnode(MethodCall, :expr, [:receiver, :method, args: []],
+  defnode(Range, :expr, [:start, :stop],
+    type:
+      quote(
+        do: %__MODULE__{
+          start: RustQ.Rust.AST.expr() | nil,
+          stop: RustQ.Rust.AST.expr() | nil
+        }
+      )
+  )
+
+  defnode(Cast, :expr, [:expr, :type],
+    type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr(), type: RustQ.Rust.AST.type()})
+  )
+
+  defnode(UnaryOp, :expr, [:op, :expr],
+    type: quote(do: %__MODULE__{op: atom(), expr: RustQ.Rust.AST.expr()})
+  )
+
+  defnode(PathCall, :expr, [:path, args: [], generics: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          path: RustQ.Rust.AST.Path.t(),
+          args: [RustQ.Rust.AST.expr()],
+          generics: [RustQ.Rust.AST.type()]
+        }
+      )
+  )
+
+  defnode(MethodCall, :expr, [:receiver, :method, args: [], generics: []],
     type:
       quote(
         do: %__MODULE__{
           receiver: RustQ.Rust.AST.expr(),
           method: atom(),
-          args: [RustQ.Rust.AST.expr()]
+          args: [RustQ.Rust.AST.expr()],
+          generics: [RustQ.Rust.AST.type()]
         }
       )
   )
@@ -306,6 +378,8 @@ defmodule RustQ.Rust.AST do
   defnode(Literal, :expr, [:value],
     type: quote(do: %__MODULE__{value: String.t() | integer() | float() | boolean()})
   )
+
+  defnode(ByteString, :expr, [:value], type: quote(do: %__MODULE__{value: String.t()}))
 
   defnode(TokenMacro, :expr, [:path, :tokens],
     type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), tokens: String.t()})
@@ -401,6 +475,7 @@ defmodule RustQ.Rust.AST do
       Static,
       MacroItem,
       MacroItemCall,
+      Impl,
       FunctionArg,
       Function,
       Derive,
@@ -420,9 +495,15 @@ defmodule RustQ.Rust.AST do
       ExprStmt,
       Return,
       EarlyReturn,
+      IfLet,
+      For,
       Var,
       Path,
       Field,
+      Index,
+      Range,
+      Cast,
+      UnaryOp,
       PathCall,
       MethodCall,
       StructLiteral,
@@ -433,6 +514,7 @@ defmodule RustQ.Rust.AST do
       VecLiteral,
       Closure,
       Literal,
+      ByteString,
       TokenMacro,
       MacroCall,
       AtomValue,
@@ -469,6 +551,7 @@ defmodule RustQ.Rust.AST do
   def render_item_native(%MacroItemCall{} = item),
     do: render_native(item, &render_macro_item_call/1)
 
+  def render_item_native(%Impl{} = item), do: render_native(item, &render_impl/1)
   def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
   def render_item_native(%Struct{} = item), do: render_native(item, &render_struct/1)
   def render_item_native(%Enum{} = item), do: render_native(item, &render_enum/1)
@@ -560,6 +643,25 @@ defmodule RustQ.Rust.AST do
 
   defp render_macro_arg({name, value}), do: [to_string(name), " = ", inspect(value)]
   defp render_macro_arg(value), do: to_string(value)
+
+  def render_impl(%Impl{} = impl) do
+    items = impl.items |> Elixir.Enum.map(&render_impl_item/1) |> Elixir.Enum.join("\n")
+    trait = if impl.trait, do: [render_expr(impl.trait), " for "], else: []
+
+    [
+      render_attrs(impl.attrs),
+      "impl ",
+      trait,
+      render_type(impl.target),
+      " {\n",
+      indent(items),
+      "\n}"
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  defp render_impl_item(%Function{} = function), do: render_function(function)
+  defp render_impl_item(item), do: render_item_native(item)
 
   def render_function(%Function{} = function) do
     args =
@@ -656,6 +758,12 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_type(type) when is_binary(type), do: type
+  def render_type(type) when is_atom(type), do: to_string(type)
+  def render_type({:raw, source}), do: source
+  def render_type({:vec, inner}), do: ["Vec<", render_type(inner), ">"]
+  def render_type({:option, inner}), do: ["Option<", render_type(inner), ">"]
+  def render_type({:ref, inner}), do: ["&", render_type(inner)]
+  def render_type({:mut_ref, inner}), do: ["&mut ", render_type(inner)]
   def render_type(%TypeUnit{}), do: "()"
 
   def render_type(%TypePath{parts: parts, lifetimes: lifetimes, generics: generics}) do
@@ -698,18 +806,72 @@ defmodule RustQ.Rust.AST do
   def render_stmt(%Return{} = stmt), do: render_expr(stmt.expr)
   def render_stmt(%EarlyReturn{} = stmt), do: ["return ", render_expr(stmt.expr), ";"]
 
+  def render_stmt(%IfLet{} = stmt) do
+    then_body = stmt.then |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+    else_body = stmt.else |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+    else_part = if stmt.else == [], do: [], else: [" else {\n", indent(else_body), "\n}"]
+
+    [
+      "if let ",
+      render_pattern(stmt.pattern),
+      " = ",
+      render_expr(stmt.expr),
+      " {\n",
+      indent(then_body),
+      "\n}",
+      else_part
+    ]
+  end
+
+  def render_stmt(%For{} = stmt) do
+    body = stmt.body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+
+    [
+      "for ",
+      render_pattern(stmt.pattern),
+      " in ",
+      render_expr(stmt.expr),
+      " {\n",
+      indent(body),
+      "\n}"
+    ]
+  end
+
   def render_expr(%Var{name: name}), do: Atom.to_string(name)
   def render_expr(%Path{parts: parts}), do: Elixir.Enum.map_join(parts, "::", &to_string/1)
 
   def render_expr(%Field{receiver: receiver, field: field}),
     do: [render_expr(receiver), ".", to_string(field)]
 
-  def render_expr(%PathCall{path: path, args: args}) do
-    [render_expr(path), "(", render_args(args), ")"]
+  def render_expr(%Index{receiver: receiver, index: index}),
+    do: [render_expr(receiver), "[", render_expr(index), "]"]
+
+  def render_expr(%Range{start: start, stop: stop}),
+    do: [
+      if(start, do: render_expr(start), else: []),
+      "..",
+      if(stop, do: render_expr(stop), else: [])
+    ]
+
+  def render_expr(%Cast{expr: expr, type: type}),
+    do: [render_expr(expr), " as ", render_type(type)]
+
+  def render_expr(%UnaryOp{op: op, expr: expr}), do: [render_unary_op(op), render_expr(expr)]
+
+  def render_expr(%PathCall{path: path, args: args, generics: generics}) do
+    [render_expr(path), render_generics(generics), "(", render_args(args), ")"]
   end
 
-  def render_expr(%MethodCall{receiver: receiver, method: method, args: args}) do
-    [render_expr(receiver), ".", to_string(method), "(", render_args(args), ")"]
+  def render_expr(%MethodCall{receiver: receiver, method: method, args: args, generics: generics}) do
+    [
+      render_expr(receiver),
+      ".",
+      to_string(method),
+      render_generics(generics),
+      "(",
+      render_args(args),
+      ")"
+    ]
   end
 
   def render_expr(%LocalCall{name: name, args: args}),
@@ -735,6 +897,8 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_expr(%Literal{value: value}) when is_binary(value), do: inspect(value)
+
+  def render_expr(%ByteString{value: value}), do: ["b", inspect(value)]
 
   def render_expr(%Literal{value: value}) when is_integer(value) or is_float(value),
     do: to_string(value)
@@ -834,9 +998,26 @@ defmodule RustQ.Rust.AST do
   defp render_args(args),
     do: args |> Elixir.Enum.map(&render_expr/1) |> Elixir.Enum.intersperse(", ")
 
+  defp render_generics([]), do: []
+
+  defp render_generics(generics),
+    do: ["::<", generics |> Elixir.Enum.map(&render_type/1) |> Elixir.Enum.intersperse(", "), ">"]
+
   defp render_binary_op(:eq), do: "=="
+  defp render_binary_op(:ne), do: "!="
+  defp render_binary_op(:lt), do: "<"
+  defp render_binary_op(:lte), do: "<="
+  defp render_binary_op(:gt), do: ">"
+  defp render_binary_op(:gte), do: ">="
+  defp render_binary_op(:add), do: "+"
+  defp render_binary_op(:sub), do: "-"
+  defp render_binary_op(:mul), do: "*"
+  defp render_binary_op(:div), do: "/"
   defp render_binary_op(:and), do: "&&"
   defp render_binary_op(:or), do: "||"
+
+  defp render_unary_op(:not), do: "!"
+  defp render_unary_op(:neg), do: "-"
 
   defp render_derive([]), do: []
 

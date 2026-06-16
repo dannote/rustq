@@ -484,6 +484,15 @@ defmodule RustQ.Meta.Lower do
     do: "#(##{name})*"
 
   defp semantic_binary_op(:eq), do: "=="
+  defp semantic_binary_op(:ne), do: "!="
+  defp semantic_binary_op(:lt), do: "<"
+  defp semantic_binary_op(:lte), do: "<="
+  defp semantic_binary_op(:gt), do: ">"
+  defp semantic_binary_op(:gte), do: ">="
+  defp semantic_binary_op(:add), do: "+"
+  defp semantic_binary_op(:sub), do: "-"
+  defp semantic_binary_op(:mul), do: "*"
+  defp semantic_binary_op(:div), do: "/"
   defp semantic_binary_op(:and), do: "&&"
   defp semantic_binary_op(:or), do: "||"
 

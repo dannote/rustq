@@ -4,18 +4,7 @@ defmodule RustQ.Rustler.OptsDecoder do
   use RustQ.Sigil
 
   alias RustQ.Rust
-
-  @struct_template ~R"""
-  pub struct __rq_Struct {
-      __rq_fields: (),
-  }
-  """
-
-  @struct_lifetime_template ~R"""
-  pub struct __rq_Struct<'__rq_lifetime> {
-      __rq_fields: (),
-  }
-  """
+  alias RustQ.Rust.AST
 
   @decoder_template ~R"""
   pub fn __rq_decode_fn(__rq_args: ()) -> NifResult<__rq_Struct> {
@@ -40,15 +29,10 @@ defmodule RustQ.Rustler.OptsDecoder do
     function_name = Keyword.get(opts, :fn, default_decoder_name(name))
     opts_arg = Keyword.get(opts, :opts_arg, "opts: &[(Atom, Term#{lifetime_generics(lifetime)})]")
     phantom? = Keyword.get(opts, :phantom, lifetime != nil)
-    {struct_template, function_template} = templates(lifetime)
+    function_template = template(lifetime)
 
     [
-      Rust.item(
-        RustQ.render!(struct_template, "rustler_opts_struct.rs",
-          bind: bindings(name, lifetime),
-          splice: [fields: fields(fields, phantom?, lifetime)]
-        )
-      ),
+      Rust.item(AST.render_item_native(struct_ast(name, fields, phantom?, lifetime))),
       Rust.item(
         RustQ.render!(function_template, "rustler_opts_decoder.rs",
           bind: bindings(name, lifetime) ++ [decode_fn: function_name],
@@ -61,14 +45,28 @@ defmodule RustQ.Rustler.OptsDecoder do
     ]
   end
 
-  defp templates(nil), do: {@struct_template, @decoder_template}
-  defp templates(_lifetime), do: {@struct_lifetime_template, @decoder_lifetime_template}
+  defp template(nil), do: @decoder_template
+  defp template(_lifetime), do: @decoder_lifetime_template
 
   defp bindings(name, nil), do: [Struct: name]
   defp bindings(name, lifetime), do: [Struct: name, lifetime: lifetime]
 
   defp opts_arg_type("opts: " <> type), do: type
   defp opts_arg_type(type), do: type
+
+  defp struct_ast(name, fields, phantom?, lifetime) do
+    %AST.Struct{
+      name: String.to_atom(to_string(name)),
+      vis: :pub,
+      lifetime: lifetime,
+      fields:
+        fields
+        |> fields(phantom?, lifetime)
+        |> Enum.map(fn field ->
+          %AST.StructField{name: field.name, type: field.type, vis: field.vis}
+        end)
+    }
+  end
 
   defp fields(fields, phantom?, lifetime) do
     fields =

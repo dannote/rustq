@@ -176,6 +176,7 @@ its own native AST decoder support.
 Current `defrust` subset:
 
 - idiomatic Rust-facing attributes before `defrust`, including `@nif schedule: "DirtyCpu"` and `@allow :dead_code`
+- Skia-driven Rust AST nodes such as `impl`, `if let`, `for`, turbofish calls, byte strings, casts, indexing/ranges, and richer operators
 - ordinary assignment as Rust `let`, explicit `assign!`, explicit `return!`, final expressions, `if`, and `case`
 - aliases, remote calls, method calls, local calls, expression/item macro calls, fields, refs, tuples, lists as `vec![...]`, and literals
 - `Enum.map/2` with a single-argument anonymous function lowers to an iterator chain

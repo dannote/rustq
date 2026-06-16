@@ -32,6 +32,7 @@ defmodule RustQ.ASTSamples do
 
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
   defp base_fragment(%AST.Static{name: name}), do: "static #{name}"
+  defp base_fragment(%AST.Impl{target: target}), do: "impl #{AST.render_type(target)}"
   defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
   defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"
   defp base_fragment(%AST.Function{name: name}), do: "fn #{name}"
@@ -39,6 +40,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:module), do: "mod sample"
   defp semantic_fragment(:macro_item_call), do: "rustler::atoms!"
   defp semantic_fragment(:attribute), do: ~s|#[allow(dead_code)]|
+  defp semantic_fragment(:impl), do: "impl Sample"
   defp semantic_fragment(:function_arg), do: "value: u32"
   defp semantic_fragment(:derive), do: "#[derive(Clone, serde::Serialize)]"
   defp semantic_fragment(:struct_field), do: "value: u32"
@@ -55,11 +57,17 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:expr_stmt), do: "side_effect();"
   defp semantic_fragment(:return), do: "1i64"
   defp semantic_fragment(:early_return), do: "return 1i64;"
+  defp semantic_fragment(:if_let), do: "if let Some(value) = maybe"
+  defp semantic_fragment(:for), do: "for value in values"
   defp semantic_fragment(:var), do: "value"
   defp semantic_fragment(:path), do: "Sample::VALUE"
   defp semantic_fragment(:field), do: "opts.value"
-  defp semantic_fragment(:path_call), do: "Sample::new()"
-  defp semantic_fragment(:method_call), do: "value.clone()"
+  defp semantic_fragment(:index), do: "values[0i64]"
+  defp semantic_fragment(:range), do: "start..stop"
+  defp semantic_fragment(:cast), do: "value as f32"
+  defp semantic_fragment(:unary_op), do: "!condition"
+  defp semantic_fragment(:path_call), do: "Vec::new::<u8>()"
+  defp semantic_fragment(:method_call), do: "term.decode::<Atom>()"
   defp semantic_fragment(:struct_literal), do: "Point { x: 1i64 }"
   defp semantic_fragment(:local_call), do: "make_value()"
   defp semantic_fragment(:ref), do: "&value"
@@ -68,6 +76,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:vec_literal), do: "vec![1i64, 2i64]"
   defp semantic_fragment(:closure), do: "|value| value"
   defp semantic_fragment(:literal), do: "1i64"
+  defp semantic_fragment(:byte_string), do: ~s|b"ref"|
   defp semantic_fragment(:token_macro), do: "quote!(None)"
   defp semantic_fragment(:macro_call), do: ~s|format!("{}", value)|
   defp semantic_fragment(:atom_value), do: "atoms::ok()"
@@ -107,6 +116,13 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
   def sample_for(:macro_item_call), do: A.macro_item_call([:rustler, :atoms], [:ok, :error])
+
+  def sample_for(:impl),
+    do: %AST.Impl{
+      target: A.type_path(:Sample),
+      items: [function_sample(:new, A.struct([:Sample], []), returns: "Self")]
+    }
+
   def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")
 
   def sample_for(:attribute),
@@ -188,6 +204,26 @@ defmodule RustQ.ASTSamples do
         returns: "i64"
       )
 
+  def sample_for(:if_let),
+    do:
+      function_sample(:if_let_sample, A.ok(),
+        body: [
+          A.if_let(A.some_pat(:value), :maybe, [A.stmt(A.call(:use_value, [:value]))]),
+          A.return(A.ok())
+        ],
+        returns: "NifResult<()>"
+      )
+
+  def sample_for(:for),
+    do:
+      function_sample(:for_sample, A.ok(),
+        body: [
+          A.for_(A.pat(:value), :values, [A.stmt(A.call(:use_value, [:value]))]),
+          A.return(A.ok())
+        ],
+        returns: "NifResult<()>"
+      )
+
   def sample_for(:var), do: function_sample(:var_sample, A.var(:value), returns: "i64")
 
   def sample_for(:path),
@@ -199,11 +235,32 @@ defmodule RustQ.ASTSamples do
         returns: "i64"
       )
 
+  def sample_for(:index),
+    do: function_sample(:index_sample, A.index(:values, A.lit(0)), returns: "i64")
+
+  def sample_for(:range),
+    do: function_sample(:range_sample, A.range(:start, :stop), returns: "std::ops::Range<i64>")
+
+  def sample_for(:cast), do: function_sample(:cast_sample, A.cast(:value, "f32"), returns: "f32")
+
+  def sample_for(:unary_op),
+    do: function_sample(:unary_op_sample, A.not_(:condition), returns: "bool")
+
   def sample_for(:path_call),
-    do: function_sample(:path_call_sample, A.path_call([:Sample, :new], []), returns: "Sample")
+    do:
+      function_sample(
+        :path_call_sample,
+        A.path_call([:Vec, :new], [], generics: [A.type_path(:u8)]),
+        returns: "Vec<u8>"
+      )
 
   def sample_for(:method_call),
-    do: function_sample(:method_call_sample, A.method(:value, :clone, []), returns: "Value")
+    do:
+      function_sample(
+        :method_call_sample,
+        A.method(:term, :decode, [], generics: [A.type_path(:Atom)]),
+        returns: "NifResult<Atom>"
+      )
 
   def sample_for(:struct_literal),
     do: function_sample(:struct_literal_sample, A.struct([:Point], x: A.lit(1)), returns: "Point")
@@ -232,6 +289,9 @@ defmodule RustQ.ASTSamples do
       )
 
   def sample_for(:literal), do: function_sample(:literal_sample, A.lit(1), returns: "i64")
+
+  def sample_for(:byte_string),
+    do: function_sample(:byte_string_sample, A.byte_string("ref"), returns: "&'static [u8; 3]")
 
   def sample_for(:token_macro),
     do:

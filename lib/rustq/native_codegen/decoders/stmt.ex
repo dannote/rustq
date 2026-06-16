@@ -30,6 +30,23 @@ defmodule RustQ.NativeCodegen.Decoders.Stmt do
     Super.parse_return_stmt(expr)
   end
 
+  @spec decode_stmt_if_let(term()) :: R.nif_result(Stmt.t())
+  defrust decode_stmt_if_let(term) do
+    pattern = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    then_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "then"))))
+    else_block = unwrap!(Super.decode_optional_block_field(term, "else"))
+    Super.parse_if_let_stmt(pattern, expr, then_block, else_block)
+  end
+
+  @spec decode_stmt_for(term()) :: R.nif_result(Stmt.t())
+  defrust decode_stmt_for(term) do
+    pattern = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    body = unwrap!(Super.decode_block(unwrap!(required_field(term, "body"))))
+    Super.parse_for_stmt(pattern, expr, body)
+  end
+
   @spec decode_stmt_let(term()) :: R.nif_result(Stmt.t())
   defrust decode_stmt_let(term) do
     pattern = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))

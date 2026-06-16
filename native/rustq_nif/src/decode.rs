@@ -172,6 +172,17 @@ pub(crate) fn decode_block(term: Term) -> NifResult<syn::Block> {
     syn::parse2::<syn::Block>(quote!({ #(#stmts)* })).map_err(|_| rustler::Error::BadArg)
 }
 
+pub(crate) fn decode_optional_block_field(term: Term, field: &str) -> NifResult<Option<syn::Block>> {
+    let value = term.map_get(atom(term.get_env(), field)?)?;
+    let values = value.decode::<Vec<Term>>()?;
+
+    if values.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(decode_block(value)?))
+    }
+}
+
 pub(crate) fn decode_stmt(term: Term) -> NifResult<Stmt> {
     decode_ast_stmt(term)
 }
@@ -208,11 +219,93 @@ pub(crate) fn parse_return_stmt(expr: Expr) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(return #expr;))
 }
 
+pub(crate) fn parse_if_let_stmt(
+    pattern: Pat,
+    expr: Expr,
+    then_block: syn::Block,
+    else_block: Option<syn::Block>,
+) -> NifResult<Stmt> {
+    if let Some(else_block) = else_block {
+        parse_syn::<Stmt>(quote!(if let #pattern = #expr #then_block else #else_block))
+    } else {
+        parse_syn::<Stmt>(quote!(if let #pattern = #expr #then_block))
+    }
+}
+
+pub(crate) fn parse_for_stmt(pattern: Pat, expr: Expr, body: syn::Block) -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(for #pattern in #expr #body))
+}
+
 pub(crate) fn decode_expr(term: Term) -> NifResult<Expr> {
     decode_ast_expr(term)
 }
 
 // syn parser helpers used as explicit Rusty-Elixir primitive boundaries.
+pub(crate) fn parse_path_call_expr(
+    path: syn::Path,
+    args: Vec<Expr>,
+    generics: Vec<Type>,
+) -> NifResult<Expr> {
+    if generics.is_empty() {
+        parse_syn::<Expr>(quote!(#path(#(#args),*)))
+    } else {
+        parse_syn::<Expr>(quote!(#path::<#(#generics),*>(#(#args),*)))
+    }
+}
+
+pub(crate) fn parse_method_call_expr(
+    receiver: Expr,
+    method: proc_macro2::Ident,
+    args: Vec<Expr>,
+    generics: Vec<Type>,
+) -> NifResult<Expr> {
+    if generics.is_empty() {
+        parse_syn::<Expr>(quote!(#receiver.#method(#(#args),*)))
+    } else {
+        parse_syn::<Expr>(quote!(#receiver.#method::<#(#generics),*>(#(#args),*)))
+    }
+}
+
+pub(crate) fn parse_field_expr(receiver: Expr, field: Term) -> NifResult<Expr> {
+    if let Ok(index) = field.decode::<u32>() {
+        let index = syn::Index::from(index as usize);
+        return parse_syn::<Expr>(quote!(#receiver.#index));
+    }
+
+    let field = format_ident!("{}", atom_or_string(field)?);
+    parse_syn::<Expr>(quote!(#receiver.#field))
+}
+
+pub(crate) fn parse_index_expr(receiver: Expr, index: Expr) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(#receiver[#index]))
+}
+
+pub(crate) fn parse_range_expr(start: Option<Expr>, stop: Option<Expr>) -> NifResult<Expr> {
+    match (start, stop) {
+        (Some(start), Some(stop)) => parse_syn::<Expr>(quote!(#start..#stop)),
+        (Some(start), None) => parse_syn::<Expr>(quote!(#start..)),
+        (None, Some(stop)) => parse_syn::<Expr>(quote!(..#stop)),
+        (None, None) => parse_syn::<Expr>(quote!(..)),
+    }
+}
+
+pub(crate) fn parse_cast_expr(expr: Expr, ty: Type) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(#expr as #ty))
+}
+
+pub(crate) fn parse_unary_expr(op: String, expr: Expr) -> NifResult<Expr> {
+    match op.as_str() {
+        "not" => parse_syn::<Expr>(quote!( !#expr )),
+        "neg" => parse_syn::<Expr>(quote!( -#expr )),
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+pub(crate) fn parse_byte_string_expr(value: String) -> NifResult<Expr> {
+    let bytes = proc_macro2::Literal::byte_string(value.as_bytes());
+    parse_syn::<Expr>(quote!(#bytes))
+}
+
 pub(crate) fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
     if name.ends_with('!') {
         return Err(rustler::Error::BadArg);
@@ -355,6 +448,16 @@ pub(crate) fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<NamedField<P
 
 pub(crate) fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
     decode_list(term, decode_expr)
+}
+
+pub(crate) fn decode_optional_path_field(term: Term, field: &str) -> NifResult<Option<syn::Path>> {
+    let value = term.map_get(atom(term.get_env(), field)?)?;
+
+    if is_nil(value)? {
+        Ok(None)
+    } else {
+        Ok(Some(parse_ast_path(value)?))
+    }
 }
 
 pub(crate) fn decode_ident_list(term: Term) -> NifResult<Vec<proc_macro2::Ident>> {

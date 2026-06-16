@@ -123,6 +123,7 @@ defmodule RustQ.Meta do
   end
 
   defp validate_item_ast(%AST.Function{} = item), do: validate_ast_item(item)
+  defp validate_item_ast(%AST.Impl{} = item), do: validate_ast_item(item)
   defp validate_item_ast(%AST.Struct{} = item), do: validate_ast_item(item)
   defp validate_item_ast(%AST.Enum{} = item), do: validate_ast_item(item)
 

@@ -34,6 +34,16 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_module(name, vis, items)
   end
 
+  @spec decode_ast_impl(term()) :: R.nif_result(ItemImpl.t())
+  defrust decode_ast_impl(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Impl"))
+    target = unwrap!(Super.decode_type(unwrap!(required_field(term, "target"))))
+    trait_path = unwrap!(Super.decode_optional_path_field(term, "trait"))
+    impl_items = unwrap!(Super.decode_item_list(unwrap!(required_field(term, "items"))))
+    attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
+    Super.parse_item_impl(target, trait_path, impl_items, attrs)
+  end
+
   @spec decode_ast_const(term()) :: R.nif_result(ItemConst.t())
   defrust decode_ast_const(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Const"))

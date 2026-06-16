@@ -19,6 +19,7 @@ defmodule RustQ.NativeCodegen do
            :ItemConst,
            :ItemEnum,
            :ItemFn,
+           :ItemImpl,
            :ItemMod,
            :ItemStruct,
            :ItemStatic,

@@ -30,6 +30,7 @@ impl_parse_syn_tokens!(
     syn::ItemConst,
     syn::ItemEnum,
     syn::ItemFn,
+    syn::ItemImpl,
     syn::ItemMod,
     syn::ItemStruct,
     syn::ItemStatic,

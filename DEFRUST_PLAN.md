@@ -376,6 +376,12 @@ Recently completed:
 - Rusty-Elixir supports idiomatic Rust-facing attributes on `defrust`, starting
   with `@nif schedule: "DirtyCpu"` and `@allow :dead_code`, lowered through a
   structural `Attribute` AST node.
+- RustQ AST now covers the next Skia-driven Rust shapes: `impl` blocks,
+  generic/turbofish path and method calls, `if let`, `for`, byte strings,
+  indexing/ranges, casts, unary ops, and comparison/arithmetic binary ops.
+- `RustQ.Rustler.NifWrappers`, resource structs/impls, and options structs now
+  use RustQ AST on their compatible/default paths while retaining legacy
+  templates for raw decoder bodies and advanced compatibility cases.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

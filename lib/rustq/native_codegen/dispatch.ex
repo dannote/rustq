@@ -74,6 +74,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp item_decoder(:module), do: {:Mod, :decode_ast_module}
   defp item_decoder(:const), do: {:Const, :decode_ast_const}
   defp item_decoder(:static), do: {:Static, :decode_ast_static}
+  defp item_decoder(:impl), do: {:Impl, :decode_ast_impl}
   defp item_decoder(:function), do: {:Fn, :decode_ast_function}
   defp item_decoder(:struct), do: {:Struct, :decode_ast_struct}
   defp item_decoder(:enum), do: {:Enum, :decode_ast_enum}
@@ -209,6 +210,8 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp stmt_decoder_path(:expr_stmt), do: [:decode_stmt_expr_stmt]
   defp stmt_decoder_path(:return), do: [:decode_stmt_return]
   defp stmt_decoder_path(:early_return), do: [:decode_stmt_early_return]
+  defp stmt_decoder_path(:if_let), do: [:decode_stmt_if_let]
+  defp stmt_decoder_path(:for), do: [:decode_stmt_for]
 
   defp decode_ast_expr_item do
     function :decode_ast_expr,
@@ -244,6 +247,10 @@ defmodule RustQ.NativeCodegen.Dispatch do
               :var,
               :path,
               :field,
+              :index,
+              :range,
+              :cast,
+              :unary_op,
               :path_call,
               :method_call,
               :local_call,
@@ -254,6 +261,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
               :vec_literal,
               :closure,
               :literal,
+              :byte_string,
               :token_macro,
               :macro_call,
               :atom_value,

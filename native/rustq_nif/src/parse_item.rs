@@ -34,6 +34,27 @@ pub(crate) fn parse_item_module(
     parse_syn(quote!(#vis mod #name { #(#items)* }))
 }
 
+pub(crate) fn parse_item_impl(
+    target: Type,
+    trait_path: Option<syn::Path>,
+    items: Vec<Item>,
+    attrs: Vec<syn::Attribute>,
+) -> NifResult<syn::ItemImpl> {
+    let item_tokens = items
+        .into_iter()
+        .map(|item| match item {
+            Item::Fn(function) => quote!(#function),
+            other => quote!(#other),
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(trait_path) = trait_path {
+        parse_syn(quote!(#(#attrs)* impl #trait_path for #target { #(#item_tokens)* }))
+    } else {
+        parse_syn(quote!(#(#attrs)* impl #target { #(#item_tokens)* }))
+    }
+}
+
 pub(crate) fn parse_item_const(
     name: syn::Ident,
     ty: Type,

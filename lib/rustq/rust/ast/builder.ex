@@ -86,6 +86,16 @@ defmodule RustQ.Rust.AST.Builder do
   def attr(path, args \\ []), do: %AST.Attribute{path: List.wrap(path), args: args}
   def nif_attr(opts \\ []), do: attr([:rustler, :nif], opts)
   def allow_attr(value), do: attr([:allow], List.wrap(value))
+  def resource_impl_attr, do: attr([:rustler, :resource_impl])
+
+  def impl(target, opts \\ []) do
+    %AST.Impl{
+      target: target,
+      trait: Keyword.get(opts, :trait) && expr_path(Keyword.fetch!(opts, :trait)),
+      items: flatten(Keyword.get(opts, :items, [])),
+      attrs: Keyword.get(opts, :attrs, [])
+    }
+  end
 
   def macro_item(source), do: %AST.MacroItem{source: source}
   def macro_item_call(path, args \\ []), do: %AST.MacroItemCall{path: expr_path(path), args: args}
@@ -106,6 +116,18 @@ defmodule RustQ.Rust.AST.Builder do
   def return_stmt(expression), do: %AST.Return{expr: expr(expression)}
   def early_return(expression), do: %AST.EarlyReturn{expr: expr(expression)}
 
+  def if_let(pattern, expression, then_body, opts \\ []) do
+    %AST.IfLet{
+      pattern: pat_expr(pattern),
+      expr: expr(expression),
+      then: flatten(then_body),
+      else: flatten(Keyword.get(opts, :else, []))
+    }
+  end
+
+  def for_(pattern, expression, body),
+    do: %AST.For{pattern: pat_expr(pattern), expr: expr(expression), body: flatten(body)}
+
   def var(name) when is_atom(name), do: %AST.Var{name: name}
   def path(parts) when is_list(parts), do: %AST.Path{parts: parts}
   def path(part), do: %AST.Path{parts: [part]}
@@ -122,6 +144,14 @@ defmodule RustQ.Rust.AST.Builder do
     }
 
   def type_path(part, opts) when is_atom(part) or is_binary(part), do: type_path([part], opts)
+
+  def field(receiver, field), do: %AST.Field{receiver: expr(receiver), field: field}
+  def index(receiver, index), do: %AST.Index{receiver: expr(receiver), index: expr(index)}
+  def range(start, stop), do: %AST.Range{start: maybe_expr(start), stop: maybe_expr(stop)}
+  def cast(expression, type), do: %AST.Cast{expr: expr(expression), type: type}
+  def not_(expression), do: %AST.UnaryOp{op: :not, expr: expr(expression)}
+  def neg(expression), do: %AST.UnaryOp{op: :neg, expr: expr(expression)}
+  def byte_string(value), do: %AST.ByteString{value: value}
 
   def ref(expression), do: %AST.Ref{expr: expr(expression)}
   def mut_ref(expression), do: %AST.Ref{expr: expr(expression), mutable: true}
@@ -152,14 +182,19 @@ defmodule RustQ.Rust.AST.Builder do
     end
   end
 
-  def path_call(parts, args \\ []) when is_list(parts),
-    do: %AST.PathCall{path: %AST.Path{parts: parts}, args: Enum.map(List.wrap(args), &expr/1)}
+  def path_call(parts, args \\ [], opts \\ []) when is_list(parts),
+    do: %AST.PathCall{
+      path: %AST.Path{parts: parts},
+      args: Enum.map(List.wrap(args), &expr/1),
+      generics: Keyword.get(opts, :generics, [])
+    }
 
-  def method(receiver, method, args \\ []),
+  def method(receiver, method, args \\ [], opts \\ []),
     do: %AST.MethodCall{
       receiver: expr(receiver),
       method: method,
-      args: Enum.map(List.wrap(args), &expr/1)
+      args: Enum.map(List.wrap(args), &expr/1),
+      generics: Keyword.get(opts, :generics, [])
     }
 
   def struct(path, fields) do
@@ -176,6 +211,15 @@ defmodule RustQ.Rust.AST.Builder do
 
   def binary(left, op, right), do: %AST.BinaryOp{left: expr(left), op: op, right: expr(right)}
   def eq(left, right), do: binary(left, :eq, right)
+  def ne(left, right), do: binary(left, :ne, right)
+  def lt(left, right), do: binary(left, :lt, right)
+  def lte(left, right), do: binary(left, :lte, right)
+  def gt(left, right), do: binary(left, :gt, right)
+  def gte(left, right), do: binary(left, :gte, right)
+  def add(left, right), do: binary(left, :add, right)
+  def sub(left, right), do: binary(left, :sub, right)
+  def mul(left, right), do: binary(left, :mul, right)
+  def div(left, right), do: binary(left, :div, right)
   def and_(left, right), do: binary(left, :and, right)
   def or_(left, right), do: binary(left, :or, right)
 
@@ -207,9 +251,14 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Static,
              AST.MacroItem,
              AST.MacroItemCall,
+             AST.Impl,
              AST.Var,
              AST.Path,
              AST.Field,
+             AST.Index,
+             AST.Range,
+             AST.Cast,
+             AST.UnaryOp,
              AST.PathCall,
              AST.MethodCall,
              AST.LocalCall,
@@ -220,6 +269,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.VecLiteral,
              AST.Closure,
              AST.Literal,
+             AST.ByteString,
              AST.TokenMacro,
              AST.MacroCall,
              AST.AtomValue,
@@ -239,6 +289,9 @@ defmodule RustQ.Rust.AST.Builder do
   def expr(value)
       when is_binary(value) or is_integer(value) or is_float(value) or is_boolean(value),
       do: lit(value)
+
+  defp maybe_expr(nil), do: nil
+  defp maybe_expr(value), do: expr(value)
 
   def expr_path(%AST.Path{} = path), do: path
   def expr_path(parts) when is_list(parts), do: path(parts)
