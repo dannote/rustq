@@ -6,6 +6,12 @@ defmodule RustQ.Rustler.CachedAtoms do
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
+
+  import RustQ.Rust.AST.ItemBuilder, only: [function: 3, static: 3]
+
+  require A
+  require I
 
   @helpers_template ~R"""
   fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom {
@@ -36,22 +42,19 @@ defmodule RustQ.Rustler.CachedAtoms do
 
     [
       rust_item(
-        A.static(String.to_atom(static_name), "OnceLock<Atom>", A.path_call([:OnceLock, :new]))
+        static(String.to_atom(static_name), "OnceLock<Atom>", A.path_call([:OnceLock, :new]))
       ),
-      rust_item(%AST.Function{
-        name: String.to_atom("#{name}_atom"),
-        args: [A.function_arg(:env, "Env")],
-        returns: "Atom",
-        body: [
-          A.return_stmt(
+      rust_item(
+        function String.to_atom("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
+          A.return(
             A.call(:cached_atom, [
               A.var(:env),
               A.ref(A.var(String.to_atom(static_name))),
               A.lit(value)
             ])
           )
-        ]
-      })
+        end
+      )
     ]
   end
 

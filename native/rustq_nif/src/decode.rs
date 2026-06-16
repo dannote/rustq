@@ -90,6 +90,14 @@ impl ToTokens for AttributeArg {
     }
 }
 
+fn decode_attribute_value(term: Term) -> NifResult<String> {
+    if let Ok(value) = term.decode::<String>() {
+        Ok(value)
+    } else {
+        atom_or_string(term)
+    }
+}
+
 pub(crate) fn decode_attribute_list(term: Term) -> NifResult<Vec<syn::Attribute>> {
     term.decode::<Vec<Term>>()?
         .into_iter()
@@ -99,7 +107,16 @@ pub(crate) fn decode_attribute_list(term: Term) -> NifResult<Vec<syn::Attribute>
 
 fn decode_attribute(term: Term) -> NifResult<syn::Attribute> {
     let path = path_from_parts(decode_string_list(term.map_get(atom(term.get_env(), "path")?)?)?)?;
-    let args = decode_attribute_args(term.map_get(atom(term.get_env(), "args")?)?)?;
+    let arg_term = term.map_get(atom(term.get_env(), "args")?)?;
+
+    if let Ok((tag, value)) = arg_term.decode::<(Term, Term)>() {
+        if atom_or_string(tag)? == "value" {
+            let value = decode_attribute_value(value)?;
+            return parse_syn(quote!(#[#path = #value]));
+        }
+    }
+
+    let args = decode_attribute_args(arg_term)?;
 
     if args.is_empty() {
         parse_syn(quote!(#[#path]))
@@ -115,7 +132,7 @@ fn decode_attribute_args(term: Term) -> NifResult<Vec<AttributeArg>> {
             .map(|(key, value)| {
                 Ok(AttributeArg::NameValueString(
                     format_ident!("{}", atom_or_string(key)?),
-                    value.decode::<String>()?,
+                    decode_attribute_value(value)?,
                 ))
             })
             .collect();
@@ -359,6 +376,11 @@ pub(crate) fn parse_ast_path(term: Term) -> NifResult<syn::Path> {
 
 pub(crate) fn parse_path_expr(path: syn::Path) -> NifResult<Expr> {
     parse_syn::<Expr>(quote!(#path))
+}
+
+pub(crate) fn parse_atom_value_expr(module: Vec<String>, name: proc_macro2::Ident) -> NifResult<Expr> {
+    let module = path_from_parts(module)?;
+    parse_syn::<Expr>(quote!(#module::#name()))
 }
 
 pub(crate) fn parse_item_use_group_term(term: Term) -> NifResult<syn::ItemUse> {

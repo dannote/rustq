@@ -20,7 +20,8 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   @spec decode_expr_atom_value(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_atom_value(term) do
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    expr!(atom_value(name))
+    module = unwrap!(Super.decode_string_list(unwrap!(required_field(term, "module"))))
+    Super.parse_atom_value_expr(module, name)
   end
 
   @spec decode_expr_field(term()) :: R.nif_result(Expr.t())

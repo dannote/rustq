@@ -7,6 +7,10 @@ defmodule RustQ.Rust.AST.ItemBuilder do
   def field(name, type, opts \\ []),
     do: %AST.StructField{name: name, type: type, vis: Keyword.get(opts, :vis)}
 
+  def const(name, type, expression, opts \\ []), do: A.const(name, type, expression, opts)
+  def static(name, type, expression, opts \\ []), do: A.static(name, type, expression, opts)
+  def type_alias(name, type, opts \\ []), do: A.type_alias(name, type, opts)
+
   @doc false
   defmacro struct(name, opts \\ [], do: body) do
     quote do

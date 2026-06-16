@@ -87,6 +87,7 @@ defmodule RustQ.Rust.AST.Builder do
 
   def derive(paths), do: %AST.Derive{paths: List.wrap(paths)}
   def attr(path, args \\ []), do: %AST.Attribute{path: List.wrap(path), args: args}
+  def attr_value(path, value), do: %AST.Attribute{path: List.wrap(path), args: {:value, value}}
   def nif_attr(opts \\ []), do: attr([:rustler, :nif], opts)
   def allow_attr(value), do: attr([:allow], List.wrap(value))
   def resource_impl_attr, do: attr([:rustler, :resource_impl])
@@ -171,6 +172,13 @@ defmodule RustQ.Rust.AST.Builder do
   def err(expression), do: %AST.Err{expr: expr(expression)}
   def lit(value), do: %AST.Literal{value: value}
   def token_macro(path, tokens), do: %AST.TokenMacro{path: expr_path(path), tokens: tokens}
+
+  def atom(name, opts \\ []),
+    do: %AST.AtomValue{name: name, module: Keyword.get(opts, :module, [:atoms])}
+
+  def opt_decode(helper, opts_var, atom_name, opts \\ []) do
+    %AST.Try{expr: call(helper, [opts_var, atom(atom_name, Keyword.take(opts, [:module]))])}
+  end
 
   def macro_call(path, args \\ []),
     do: %AST.MacroCall{path: expr_path(path), args: Enum.map(args, &expr/1)}

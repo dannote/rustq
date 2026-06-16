@@ -66,7 +66,7 @@ defmodule RustQ.Rustler.OptsDecoder do
   defp inits(fields, phantom?) do
     field_inits =
       Enum.map(fields, fn {field_name, spec} ->
-        {field_name, A.escape_expr(Keyword.fetch!(spec, :decode))}
+        {field_name, decode_expression(Keyword.fetch!(spec, :decode))}
       end)
 
     if phantom? do
@@ -75,6 +75,9 @@ defmodule RustQ.Rustler.OptsDecoder do
       field_inits
     end
   end
+
+  defp decode_expression(%{__struct__: _} = ast), do: A.expr(ast)
+  defp decode_expression(source) when is_binary(source), do: A.escape_expr(source)
 
   defp phantom_init, do: {:_phantom, A.path_value([:std, :marker, :PhantomData])}
 

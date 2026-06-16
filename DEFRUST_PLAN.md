@@ -386,9 +386,11 @@ Recently completed:
   the AST surface covers type aliases, `let ... else`, array literals, recursive
   grouped-use fallback rendering, and struct/enum general attributes.
 - Item-level generator authoring now has builder macros for `struct`, `impl`,
-  and `function`, plus explicit `A.escape_expr/1` for visible compatibility
-  boundaries. Rustler resources and options decoders use these builder-authored
-  AST paths instead of templates on their default paths.
+  `function`, `const`, `static`, and `type_alias`, plus explicit
+  `A.escape_expr/1` for visible compatibility boundaries. Rustler resources,
+  cached atoms, NifStructs, and options decoders use builder-authored AST paths
+  on their default paths. Options decoders accept typed AST decode expressions
+  while keeping string decodes as explicit escape fallbacks.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

@@ -106,7 +106,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           path: [atom() | String.t()],
-          args: keyword() | [atom() | String.t()],
+          args: keyword() | [atom() | String.t()] | {:value, String.t() | atom()},
           style: :outer | :inner
         }
       )
@@ -429,7 +429,9 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [RustQ.Rust.AST.expr()]})
   )
 
-  defnode(AtomValue, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
+  defnode(AtomValue, :expr, [:name, module: [:atoms]],
+    type: quote(do: %__MODULE__{name: atom(), module: [atom() | String.t()]})
+  )
 
   defnode(None, :expr, [], type: quote(do: %__MODULE__{}))
 
@@ -747,6 +749,9 @@ defmodule RustQ.Rust.AST do
   defp render_attr(%Attribute{style: :outer, path: path, args: []}),
     do: ["#[", render_attr_path(path), "]"]
 
+  defp render_attr(%Attribute{style: :outer, path: path, args: {:value, value}}),
+    do: ["#[", render_attr_path(path), " = ", render_attr_value(value), "]"]
+
   defp render_attr(%Attribute{style: :outer, path: path, args: args}),
     do: ["#[", render_attr_path(path), "(", render_attr_args(args), ")]"]
 
@@ -758,8 +763,10 @@ defmodule RustQ.Rust.AST do
     |> Elixir.Enum.intersperse(", ")
   end
 
-  defp render_attr_arg({key, value}), do: [to_string(key), " = ", inspect(value)]
+  defp render_attr_arg({key, value}), do: [to_string(key), " = ", render_attr_value(value)]
   defp render_attr_arg(value), do: to_string(value)
+  defp render_attr_value(value) when is_binary(value), do: inspect(value)
+  defp render_attr_value(value), do: to_string(value)
 
   def render_function_arg(%FunctionArg{name: name, type: type}) do
     "#{name}: #{render_type(type)}"
@@ -995,7 +1002,10 @@ defmodule RustQ.Rust.AST do
   def render_expr(%MacroCall{path: path, args: args}),
     do: [render_expr(path), "!(", render_args(args), ")"]
 
-  def render_expr(%AtomValue{name: name}), do: ["atoms::", Atom.to_string(name), "()"]
+  def render_expr(%AtomValue{name: name, module: module}) do
+    [Elixir.Enum.map_join(module, "::", &to_string/1), "::", Atom.to_string(name), "()"]
+  end
+
   def render_expr(%None{}), do: "None"
   def render_expr(%Some{expr: expr}), do: ["Some(", render_expr(expr), ")"]
   def render_expr(%Ok{expr: nil}), do: "Ok(())"

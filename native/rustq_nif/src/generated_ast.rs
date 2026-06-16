@@ -547,7 +547,8 @@ pub(crate) fn decode_expr_path<'a>(term: Term<'a>) -> NifResult<Expr> {
 
 pub(crate) fn decode_expr_atom_value<'a>(term: Term<'a>) -> NifResult<Expr> {
     let name = super::format_ident_value(atom_key(term, "name")?);
-    super::parse_syn::<Expr>(quote!(atoms::# name()))
+    let module = super::decode_string_list(required_field(term, "module")?)?;
+    super::parse_atom_value_expr(module, name)
 }
 
 pub(crate) fn decode_expr_field<'a>(term: Term<'a>) -> NifResult<Expr> {
