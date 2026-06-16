@@ -94,9 +94,15 @@ defmodule RustQ.NativeCodegen.Dispatch do
 
   defp decode_ast_type_arm(%Schema.Node{name: name, rust_const: rust_const}) do
     A.arm A.path_pat([:ast_modules, rust_const]) do
-      A.return(A.path_call([:super, type_decoder(name)], [:term]))
+      A.return(A.path_call(type_decoder_path(name), [:term]))
     end
   end
+
+  defp type_decoder_path(name)
+       when name in [:type_unit, :type_option, :type_result, :type_nif_result, :type_vec],
+       do: [type_decoder(name)]
+
+  defp type_decoder_path(name), do: [:super, type_decoder(name)]
 
   defp type_decoder(name), do: String.to_atom("decode_#{name}")
 

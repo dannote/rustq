@@ -15,7 +15,7 @@ mod generated_ast;
 
 use generated_ast::{
     ast_modules, atom, atom_key, atoms, decode_arm, decode_ast_expr, decode_ast_item,
-    decode_ast_pat, decode_ast_stmt, decode_ast_type, expect_struct, is_nil, optional_atom_key,
+    decode_ast_pat, decode_ast_stmt, decode_ast_type, decode_enum_variant, expect_struct, is_nil, optional_atom_key,
     optional_map_get,
 };
 
@@ -186,16 +186,14 @@ fn decode_ast_enum(term: Term) -> NifResult<syn::ItemEnum> {
         .map_err(|_| rustler::Error::BadArg)
 }
 
-fn decode_enum_variant(term: Term) -> NifResult<syn::Variant> {
-    expect_struct(term, ast_modules::ENUM_VARIANT)?;
-    let name = format_ident!("{}", atom_key(term, "name")?);
-    let tuple = term
-        .map_get(atom(term.get_env(), "tuple")?)?
-        .decode::<Vec<Term>>()?
+fn decode_type_list(term: Term) -> NifResult<Vec<Type>> {
+    term.decode::<Vec<Term>>()?
         .into_iter()
         .map(decode_type)
-        .collect::<NifResult<Vec<Type>>>()?;
+        .collect::<NifResult<Vec<Type>>>()
+}
 
+fn parse_enum_variant(name: syn::Ident, tuple: Vec<Type>) -> NifResult<syn::Variant> {
     if tuple.is_empty() {
         syn::parse2(quote!(#name,)).map_err(|_| rustler::Error::BadArg)
     } else {
@@ -458,10 +456,6 @@ fn decode_type(term: Term) -> NifResult<Type> {
     decode_ast_type(term)
 }
 
-fn decode_type_unit(_term: Term) -> NifResult<Type> {
-    parse_type("()")
-}
-
 fn decode_type_path(term: Term) -> NifResult<Type> {
     let env = term.get_env();
     let path = path_parts(term.map_get(atom(env, "parts")?)?)?;
@@ -497,28 +491,6 @@ fn decode_type_ref(term: Term) -> NifResult<Type> {
         .unwrap_or_default();
     let mutability = if mutable { "mut " } else { "" };
     parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
-}
-
-fn decode_type_option(term: Term) -> NifResult<Type> {
-    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
-    syn::parse2(quote!(Option<#inner>)).map_err(|_| rustler::Error::BadArg)
-}
-
-fn decode_type_result(term: Term) -> NifResult<Type> {
-    let env = term.get_env();
-    let ok = decode_type(term.map_get(atom(env, "ok")?)?)?;
-    let error = decode_type(term.map_get(atom(env, "error")?)?)?;
-    syn::parse2(quote!(Result<#ok, #error>)).map_err(|_| rustler::Error::BadArg)
-}
-
-fn decode_type_nif_result(term: Term) -> NifResult<Type> {
-    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
-    syn::parse2(quote!(NifResult<#inner>)).map_err(|_| rustler::Error::BadArg)
-}
-
-fn decode_type_vec(term: Term) -> NifResult<Type> {
-    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
-    syn::parse2(quote!(Vec<#inner>)).map_err(|_| rustler::Error::BadArg)
 }
 
 fn parse_type(source: &str) -> NifResult<Type> {

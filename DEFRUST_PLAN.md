@@ -91,7 +91,9 @@ implementation tiers are:
 
 `RustQ.NativeCodegen` is orchestration only; modules/constants live in
 `RustQ.NativeCodegen.Modules`, dispatch in `RustQ.NativeCodegen.Dispatch`, and
-category decoders under `RustQ.NativeCodegen.Decoders.*`.
+category decoders under `RustQ.NativeCodegen.Decoders.*`. Dogfooded decoder
+coverage currently includes item support for enum variants, selected type
+decoders, and the generated statement/expression/pattern decoders.
 
 ## Later work
 

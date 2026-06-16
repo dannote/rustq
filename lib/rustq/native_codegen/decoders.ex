@@ -3,6 +3,8 @@ defmodule RustQ.NativeCodegen.Decoders do
 
   def asts do
     [
+      RustQ.NativeCodegen.Decoders.Item.asts(),
+      RustQ.NativeCodegen.Decoders.Type.asts(),
       RustQ.NativeCodegen.Decoders.Pat.asts(),
       RustQ.NativeCodegen.Decoders.Stmt.asts(),
       RustQ.NativeCodegen.Decoders.Arm.asts(),

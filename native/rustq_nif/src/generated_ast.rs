@@ -4,7 +4,7 @@ use quote::quote;
 
 use rustler::{Atom, Env, NifResult, Term};
 
-use syn::{Arm, Expr, Item, Pat, Stmt, Type};
+use syn::{Arm, Expr, Item, Pat, Stmt, Type, Variant};
 
 pub(crate) mod atoms {
     rustler::atoms! {
@@ -21,7 +21,6 @@ pub(crate) mod ast_modules {
     pub(crate) const STRUCT: &str = "Elixir.RustQ.Rust.AST.Struct";
     pub(crate) const STRUCT_FIELD: &str = "Elixir.RustQ.Rust.AST.StructField";
     pub(crate) const ENUM: &str = "Elixir.RustQ.Rust.AST.Enum";
-    pub(crate) const ENUM_VARIANT: &str = "Elixir.RustQ.Rust.AST.EnumVariant";
     pub(crate) const TYPE_PATH: &str = "Elixir.RustQ.Rust.AST.TypePath";
     pub(crate) const TYPE_REF: &str = "Elixir.RustQ.Rust.AST.TypeRef";
     pub(crate) const TYPE_OPTION: &str = "Elixir.RustQ.Rust.AST.TypeOption";
@@ -129,11 +128,11 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
     match struct_name(term)?.as_str() {
         ast_modules::TYPE_PATH => super::decode_type_path(term),
         ast_modules::TYPE_REF => super::decode_type_ref(term),
-        ast_modules::TYPE_OPTION => super::decode_type_option(term),
-        ast_modules::TYPE_RESULT => super::decode_type_result(term),
-        ast_modules::TYPE_NIF_RESULT => super::decode_type_nif_result(term),
-        ast_modules::TYPE_VEC => super::decode_type_vec(term),
-        ast_modules::TYPE_UNIT => super::decode_type_unit(term),
+        ast_modules::TYPE_OPTION => decode_type_option(term),
+        ast_modules::TYPE_RESULT => decode_type_result(term),
+        ast_modules::TYPE_NIF_RESULT => decode_type_nif_result(term),
+        ast_modules::TYPE_VEC => decode_type_vec(term),
+        ast_modules::TYPE_UNIT => decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -188,6 +187,38 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+pub(crate) fn decode_enum_variant<'a>(term: Term<'a>) -> NifResult<Variant> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let tuple = super::decode_type_list(required_field(term, "tuple")?)?;
+    super::parse_enum_variant(name, tuple)
+}
+
+pub(crate) fn decode_type_unit<'a>(_term: Term<'a>) -> NifResult<Type> {
+    super::parse_type("()")
+}
+
+pub(crate) fn decode_type_option<'a>(term: Term<'a>) -> NifResult<Type> {
+    let inner = super::decode_type(required_field(term, "inner")?)?;
+    super::parse_type(&format!("Option<{}>", quote!(# inner)))
+}
+
+pub(crate) fn decode_type_result<'a>(term: Term<'a>) -> NifResult<Type> {
+    let ok = super::decode_type(required_field(term, "ok")?)?;
+    let error = super::decode_type(required_field(term, "error")?)?;
+    super::parse_type(&format!("Result<{}, {}>", quote!(# ok), quote!(# error)))
+}
+
+pub(crate) fn decode_type_nif_result<'a>(term: Term<'a>) -> NifResult<Type> {
+    let inner = super::decode_type(required_field(term, "inner")?)?;
+    super::parse_type(&format!("NifResult<{}>", quote!(# inner)))
+}
+
+pub(crate) fn decode_type_vec<'a>(term: Term<'a>) -> NifResult<Type> {
+    let inner = super::decode_type(required_field(term, "inner")?)?;
+    super::parse_type(&format!("Vec<{}>", quote!(# inner)))
+}
+
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {
     let ident = super::format_ident_value(atom_key(term, "name")?);
     super::parse_pat(quote!(# ident))

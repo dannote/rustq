@@ -8,7 +8,7 @@ defmodule RustQ.NativeCodegen do
     [
       A.use("quote::quote"),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
-      A.use("syn::{Arm, Expr, Item, Pat, Stmt, Type}"),
+      A.use("syn::{Arm, Expr, Item, Pat, Stmt, Type, Variant}"),
       RustQ.NativeCodegen.Modules.asts(),
       RustQ.NativeCodegen.Helpers.asts(),
       RustQ.NativeCodegen.Dispatch.asts(),
