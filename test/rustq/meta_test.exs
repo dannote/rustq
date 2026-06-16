@@ -69,6 +69,13 @@ defmodule RustQ.MetaTest do
            )
   end
 
+  test "native AST renderer emits Rust through syn" do
+    [draw_save | _] = Generated.__rustq_asts__()
+
+    assert RustQ.Native.render_ast(draw_save) =~ "fn draw_save(canvas: &Canvas) -> NifResult<()>"
+    assert RustQ.Native.render_ast(draw_save) =~ "canvas.save();"
+  end
+
   test "generated items are validated Rust fragments" do
     assert Enum.all?(Generated.__rustq_items__(), &match?(%RustQ.Rust.Fragment{kind: :item}, &1))
   end

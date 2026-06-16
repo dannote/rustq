@@ -147,6 +147,14 @@ defmodule RustQ.Rust.AST do
     defstruct [:patterns]
   end
 
+  def render_function_native(%Function{} = function) do
+    RustQ.Native.render_ast(function)
+  rescue
+    _error -> render_function(function)
+  catch
+    :exit, _reason -> render_function(function)
+  end
+
   def render_function(%Function{} = function) do
     args = Enum.map_join(function.args, ", ", fn {name, type} -> "#{name}: #{type}" end)
     lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""

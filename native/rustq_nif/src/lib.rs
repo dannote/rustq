@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use rustler::{Encoder, Env, NifMap, NifResult, Term};
+use quote::{format_ident, quote};
+use rustler::{Atom, Encoder, Env, NifMap, NifResult, Term};
+use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::visit_mut::{self, VisitMut};
@@ -43,6 +45,346 @@ fn render<'a>(
     match render_source(&source, bindings, splices) {
         Ok(code) => Ok((atoms::ok(), code).encode(env)),
         Err(errors) => Ok((atoms::error(), errors).encode(env)),
+    }
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn render_ast(ast: Term) -> NifResult<String> {
+    let item = decode_ast_function(ast)?;
+    Ok(prettyplease::unparse(&File {
+        shebang: None,
+        attrs: Vec::new(),
+        items: vec![Item::Fn(item)],
+    }))
+}
+
+fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Function")?;
+    let env = term.get_env();
+    let name = format_ident!("{}", atom_key(term, "name")?);
+    let args = keyword_args(term.map_get(atom(env, "args")?)?)?;
+    let returns = type_value(term, "returns")?;
+    let lifetime = optional_atom_key(term, "lifetime")?;
+    let stmts = decode_stmt_list(term.map_get(atom(env, "body")?)?)?;
+    let inputs = args
+        .into_iter()
+        .map(|(name, ty)| {
+            let ident = format_ident!("{}", name);
+            syn::parse2::<FnArg>(quote!(#ident: #ty))
+        })
+        .collect::<Result<syn::punctuated::Punctuated<FnArg, Comma>, syn::Error>>()
+        .map_err(|_| rustler::Error::BadArg)?;
+    let block =
+        syn::parse2::<syn::Block>(quote!({ #(#stmts)* })).map_err(|_| rustler::Error::BadArg)?;
+
+    if let Some(lifetime) = lifetime {
+        let lifetime =
+            syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
+        syn::parse2(quote!(fn #name <#lifetime> (#inputs) -> #returns #block))
+            .map_err(|_| rustler::Error::BadArg)
+    } else {
+        syn::parse2(quote!(fn #name (#inputs) -> #returns #block))
+            .map_err(|_| rustler::Error::BadArg)
+    }
+}
+
+fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_stmt)
+        .collect()
+}
+
+fn decode_stmt(term: Term) -> NifResult<Stmt> {
+    let module = struct_name(term)?;
+
+    match module.as_str() {
+        "Elixir.RustQ.Rust.AST.Let" => {
+            let env = term.get_env();
+            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
+            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+            let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
+
+            if mutable {
+                let Pat::Ident(mut pat_ident) = pat else {
+                    return Err(rustler::Error::BadArg);
+                };
+                pat_ident.mutability = Some(Default::default());
+                Ok(syn::parse2(quote!(let #pat_ident = #expr;))
+                    .map_err(|_| rustler::Error::BadArg)?)
+            } else {
+                Ok(syn::parse2(quote!(let #pat = #expr;)).map_err(|_| rustler::Error::BadArg)?)
+            }
+        }
+        "Elixir.RustQ.Rust.AST.ExprStmt" => {
+            let expr = decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
+            Ok(syn::parse2(quote!(#expr;)).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Return" => {
+            let expr = decode_expr(term.map_get(atom(term.get_env(), "expr")?)?)?;
+            Ok(Stmt::Expr(expr, None))
+        }
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+fn decode_expr(term: Term) -> NifResult<Expr> {
+    let module = struct_name(term)?;
+    let env = term.get_env();
+
+    match module.as_str() {
+        "Elixir.RustQ.Rust.AST.Var" => {
+            let ident = format_ident!("{}", atom_key(term, "name")?);
+            Ok(syn::parse2(quote!(#ident)).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Path" => {
+            parse_expr(&path_parts(term.map_get(atom(env, "parts")?)?)?)
+        }
+        "Elixir.RustQ.Rust.AST.Field" => {
+            let receiver = decode_expr(term.map_get(atom(env, "receiver")?)?)?;
+            let field = format_ident!("{}", atom_key(term, "field")?);
+            Ok(syn::parse2(quote!(#receiver.#field)).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.PathCall" => {
+            let path = parse_path(&path_parts(
+                term.map_get(atom(env, "path")?)?
+                    .map_get(atom(env, "parts")?)?,
+            )?)?;
+            let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
+            Ok(syn::parse2(quote!(#path(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.MethodCall" => {
+            let receiver = decode_expr(term.map_get(atom(env, "receiver")?)?)?;
+            let method = format_ident!("{}", atom_key(term, "method")?);
+            let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
+            Ok(syn::parse2(quote!(#receiver.#method(#(#args),*)))
+                .map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.LocalCall" => {
+            let name = format_ident!("{}", atom_key(term, "name")?);
+            let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
+            Ok(syn::parse2(quote!(#name(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Ref" => {
+            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+            if term.map_get(atom(env, "mutable")?)?.decode::<bool>()? {
+                Ok(syn::parse2(quote!(&mut #expr)).map_err(|_| rustler::Error::BadArg)?)
+            } else {
+                Ok(syn::parse2(quote!(&#expr)).map_err(|_| rustler::Error::BadArg)?)
+            }
+        }
+        "Elixir.RustQ.Rust.AST.Try" => {
+            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+            Ok(syn::parse2(quote!(#expr?)).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Tuple" => {
+            let values = decode_expr_list(term.map_get(atom(env, "values")?)?)?;
+            Ok(syn::parse2(quote!((#(#values),*))).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Literal" => decode_literal_expr(term.map_get(atom(env, "value")?)?),
+        "Elixir.RustQ.Rust.AST.AtomValue" => {
+            let name = format_ident!("{}", atom_key(term, "name")?);
+            Ok(syn::parse2(quote!(atoms::#name())).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.None" => {
+            Ok(syn::parse2(quote!(None)).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Some" => {
+            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+            Ok(syn::parse2(quote!(Some(#expr))).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Ok" => match optional_map_get(term, "expr")? {
+            Some(expr_term) if !is_nil(expr_term)? => {
+                let expr = decode_expr(expr_term)?;
+                Ok(syn::parse2(quote!(Ok(#expr))).map_err(|_| rustler::Error::BadArg)?)
+            }
+            _ => Ok(syn::parse2(quote!(Ok(()))).map_err(|_| rustler::Error::BadArg)?),
+        },
+        "Elixir.RustQ.Rust.AST.Err" => {
+            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+            Ok(syn::parse2(quote!(Err(#expr))).map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.NifRaiseAtom" => {
+            let name = atom_key(term, "name")?;
+            Ok(syn::parse2(quote!(rustler::Error::RaiseAtom(#name)))
+                .map_err(|_| rustler::Error::BadArg)?)
+        }
+        "Elixir.RustQ.Rust.AST.Match" => {
+            let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
+            let arms = term
+                .map_get(atom(env, "arms")?)?
+                .decode::<Vec<Term>>()?
+                .into_iter()
+                .map(decode_arm)
+                .collect::<NifResult<Vec<Arm>>>()?;
+            Ok(syn::parse2(quote!(match #expr { #(#arms)* }))
+                .map_err(|_| rustler::Error::BadArg)?)
+        }
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+fn decode_arm(term: Term) -> NifResult<Arm> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Arm")?;
+    let env = term.get_env();
+    let pat_term = term.map_get(atom(env, "pattern")?)?;
+    let body = decode_stmt_list(term.map_get(atom(env, "body")?)?)?;
+    let block =
+        syn::parse2::<syn::Block>(quote!({ #(#body)* })).map_err(|_| rustler::Error::BadArg)?;
+
+    match struct_name(pat_term)?.as_str() {
+        "Elixir.RustQ.Rust.AST.PatAtomGuard" => {
+            let name = format_ident!("{}", atom_key(pat_term, "name")?);
+            syn::parse2(quote!(value if value == atoms::#name() => #block,))
+                .map_err(|_| rustler::Error::BadArg)
+        }
+        _ => {
+            let pat = decode_pat(pat_term)?;
+            syn::parse2(quote!(#pat => #block,)).map_err(|_| rustler::Error::BadArg)
+        }
+    }
+}
+
+fn parse_pat(tokens: proc_macro2::TokenStream) -> NifResult<Pat> {
+    Pat::parse_single
+        .parse2(tokens)
+        .map_err(|_| rustler::Error::BadArg)
+}
+
+fn decode_pat(term: Term) -> NifResult<Pat> {
+    let module = struct_name(term)?;
+    let env = term.get_env();
+
+    match module.as_str() {
+        "Elixir.RustQ.Rust.AST.PatVar" => {
+            let ident = format_ident!("{}", atom_key(term, "name")?);
+            parse_pat(quote!(#ident))
+        }
+        "Elixir.RustQ.Rust.AST.PatWildcard" => parse_pat(quote!(_)),
+        "Elixir.RustQ.Rust.AST.PatNone" => parse_pat(quote!(None)),
+        "Elixir.RustQ.Rust.AST.PatSome" => {
+            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
+            parse_pat(quote!(Some(#pat)))
+        }
+        "Elixir.RustQ.Rust.AST.PatTuple" => {
+            let patterns = term
+                .map_get(atom(env, "patterns")?)?
+                .decode::<Vec<Term>>()?
+                .into_iter()
+                .map(decode_pat)
+                .collect::<NifResult<Vec<Pat>>>()?;
+            parse_pat(quote!((#(#patterns),*)))
+        }
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_expr)
+        .collect()
+}
+
+fn decode_literal_expr(term: Term) -> NifResult<Expr> {
+    if let Ok(value) = term.decode::<bool>() {
+        return if value {
+            Ok(syn::parse2(quote!(true)).map_err(|_| rustler::Error::BadArg)?)
+        } else {
+            Ok(syn::parse2(quote!(false)).map_err(|_| rustler::Error::BadArg)?)
+        };
+    }
+    if let Ok(value) = term.decode::<i64>() {
+        return Ok(syn::parse2(quote!(#value)).map_err(|_| rustler::Error::BadArg)?);
+    }
+    if let Ok(value) = term.decode::<f64>() {
+        return Ok(syn::parse2(quote!(#value)).map_err(|_| rustler::Error::BadArg)?);
+    }
+    if let Ok(value) = term.decode::<String>() {
+        return Ok(syn::parse2(quote!(#value)).map_err(|_| rustler::Error::BadArg)?);
+    }
+    Err(rustler::Error::BadArg)
+}
+
+fn keyword_args(term: Term) -> NifResult<Vec<(String, Type)>> {
+    term.decode::<Vec<(Term, String)>>()?
+        .into_iter()
+        .map(|(name, ty)| Ok((atom_or_string(name)?, parse_type(&ty)?)))
+        .collect()
+}
+
+fn path_parts(term: Term) -> NifResult<String> {
+    Ok(term
+        .decode::<Vec<Term>>()?
+        .into_iter()
+        .map(atom_or_string)
+        .collect::<NifResult<Vec<String>>>()?
+        .join("::"))
+}
+
+fn atom_or_string(term: Term) -> NifResult<String> {
+    if term.is_atom() {
+        term.atom_to_string()
+    } else {
+        term.decode::<String>()
+    }
+}
+
+fn type_value(term: Term, key: &str) -> NifResult<Type> {
+    let source: String = term.map_get(atom(term.get_env(), key)?)?.decode()?;
+    parse_type(&source)
+}
+
+fn parse_type(source: &str) -> NifResult<Type> {
+    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
+}
+
+fn parse_path(source: &str) -> NifResult<syn::Path> {
+    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
+}
+
+fn parse_expr(source: &str) -> NifResult<Expr> {
+    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
+}
+
+fn atom(env: Env, name: &str) -> NifResult<Atom> {
+    Atom::from_str(env, name)
+}
+
+fn optional_map_get<'a>(term: Term<'a>, key: &str) -> NifResult<Option<Term<'a>>> {
+    match term.map_get(atom(term.get_env(), key)?) {
+        Ok(value) => Ok(Some(value)),
+        Err(_) => Ok(None),
+    }
+}
+
+fn atom_key(term: Term, key: &str) -> NifResult<String> {
+    term.map_get(atom(term.get_env(), key)?)?.atom_to_string()
+}
+
+fn optional_atom_key(term: Term, key: &str) -> NifResult<Option<String>> {
+    let value = term.map_get(atom(term.get_env(), key)?)?;
+    if is_nil(value)? {
+        Ok(None)
+    } else {
+        Ok(Some(value.atom_to_string()?))
+    }
+}
+
+fn is_nil(term: Term) -> NifResult<bool> {
+    Ok(term.is_atom() && term.atom_to_string()? == "nil")
+}
+
+fn struct_name(term: Term) -> NifResult<String> {
+    term.map_get(atom(term.get_env(), "__struct__")?)?
+        .atom_to_string()
+}
+
+fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
+    if struct_name(term)? == expected {
+        Ok(())
+    } else {
+        Err(rustler::Error::BadArg)
     }
 }
 

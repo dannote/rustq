@@ -38,7 +38,7 @@ defmodule RustQ.Meta do
 
     asts = Enum.map(defs, &build_ast(&1, specs))
     items = Enum.map(asts, &validate_item_ast/1)
-    source = Enum.map_join(asts, "\n\n", &AST.render_function/1)
+    source = Enum.map_join(asts, "\n\n", &AST.render_function_native/1)
 
     quote do
       @doc false
@@ -71,7 +71,7 @@ defmodule RustQ.Meta do
   end
 
   defp validate_item_ast(%AST.Function{} = function) do
-    RustQ.parse_fragment!(:item, AST.render_function(function))
+    RustQ.parse_fragment!(:item, AST.render_function_native(function))
   end
 
   defp arg_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name

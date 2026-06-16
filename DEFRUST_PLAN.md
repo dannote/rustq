@@ -69,13 +69,14 @@ end
 6. Provide `__rustq_asts__/0`, `__rustq_items__/0`, and `__rustq_source__/0` on
    modules using `RustQ.Meta`.
 7. Add `from_module My.Generated` for `rustq.exs`/`mix rustq.gen` integration.
-8. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
+8. Add native `render_ast/1` backend that decodes `RustQ.Rust.AST.Function` into
+   `syn` and renders with `prettyplease`.
+9. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
    small assignment/body example.
 
 ## Later work
 
-- Native NIF backend that decodes `RustQ.Rust.AST` terms into `syn` nodes
-  directly, so string rendering is only a compatibility/debug path.
+- Expand native NIF AST backend coverage beyond the MVP function/statement/expression nodes.
 - Full set-theoretic `@type` parsing for atom unions, tuples, maps, options,
   results, and Rustler decoder generation.
 - Better type-directed wrapping for `Option`, `Result`, and `NifResult` in nested

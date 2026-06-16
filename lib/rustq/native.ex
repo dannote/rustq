@@ -5,4 +5,5 @@ defmodule RustQ.Native do
 
   def parse(_source), do: :erlang.nif_error(:nif_not_loaded)
   def render(_source, _bindings, _splices), do: :erlang.nif_error(:nif_not_loaded)
+  def render_ast(_ast), do: :erlang.nif_error(:nif_not_loaded)
 end
