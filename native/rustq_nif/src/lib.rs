@@ -273,9 +273,36 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
                 .map_err(|_| rustler::Error::BadArg)?)
         }
         "Elixir.RustQ.Rust.AST.LocalCall" => {
-            let name = format_ident!("{}", atom_key(term, "name")?);
+            let name = atom_key(term, "name")?;
             let args = decode_expr_list(term.map_get(atom(env, "args")?)?)?;
-            Ok(syn::parse2(quote!(#name(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
+            if name.ends_with('!') {
+                let source = format!(
+                    "{}({})",
+                    name,
+                    args.iter()
+                        .map(|arg| quote!(#arg).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                parse_expr(&source)
+            } else {
+                let name = format_ident!("{}", name);
+                Ok(syn::parse2(quote!(#name(#(#args),*))).map_err(|_| rustler::Error::BadArg)?)
+            }
+        }
+        "Elixir.RustQ.Rust.AST.StructLiteral" => {
+            let path = decode_expr(term.map_get(atom(env, "path")?)?)?;
+            let fields = term
+                .map_get(atom(env, "fields")?)?
+                .decode::<Vec<(Term, Term)>>()?
+                .into_iter()
+                .map(|(name, expr)| {
+                    let name = format_ident!("{}", atom_or_string(name)?);
+                    let expr = decode_expr(expr)?;
+                    Ok(quote!(#name: #expr))
+                })
+                .collect::<NifResult<Vec<_>>>()?;
+            Ok(syn::parse2(quote!(#path { #(#fields),* })).map_err(|_| rustler::Error::BadArg)?)
         }
         "Elixir.RustQ.Rust.AST.Ref" => {
             let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
@@ -377,6 +404,27 @@ fn decode_pat(term: Term) -> NifResult<Pat> {
         "Elixir.RustQ.Rust.AST.PatSome" => {
             let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
             parse_pat(quote!(Some(#pat)))
+        }
+        "Elixir.RustQ.Rust.AST.PatOk" => {
+            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
+            parse_pat(quote!(Ok(#pat)))
+        }
+        "Elixir.RustQ.Rust.AST.PatErr" => {
+            let pat = decode_pat(term.map_get(atom(env, "pattern")?)?)?;
+            parse_pat(quote!(Err(#pat)))
+        }
+        "Elixir.RustQ.Rust.AST.PatPathTuple" => {
+            let path = parse_path(&path_parts(
+                term.map_get(atom(env, "path")?)?
+                    .map_get(atom(env, "parts")?)?,
+            )?)?;
+            let patterns = term
+                .map_get(atom(env, "patterns")?)?
+                .decode::<Vec<Term>>()?
+                .into_iter()
+                .map(decode_pat)
+                .collect::<NifResult<Vec<Pat>>>()?;
+            parse_pat(quote!(#path(#(#patterns),*)))
         }
         "Elixir.RustQ.Rust.AST.PatTuple" => {
             let patterns = term

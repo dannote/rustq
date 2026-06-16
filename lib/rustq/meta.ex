@@ -154,8 +154,12 @@ defmodule RustQ.Meta do
     [enum, decoder]
   end
 
-  defp type_items(%Type{kind: :tuple_enum, rust: rust_name, meta: %{variants: variants}}) do
-    [
+  defp type_items(%Type{
+         kind: :tuple_enum,
+         rust: rust_name,
+         meta: %{elixir_name: elixir_name, variants: variants}
+       }) do
+    enum =
       validate_item_ast(%AST.Enum{
         name: String.to_atom(rust_name),
         vis: :pub,
@@ -168,7 +172,18 @@ defmodule RustQ.Meta do
             }
           end)
       })
-    ]
+
+    decoder =
+      validate_item_ast(%AST.Function{
+        name: String.to_atom("decode_#{elixir_name}"),
+        vis: :pub,
+        args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}],
+        returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
+        lifetime: :a,
+        body: [%AST.Return{expr: %AST.LocalCall{name: :todo!, args: []}}]
+      })
+
+    [enum, decoder]
   end
 
   defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
@@ -176,7 +191,7 @@ defmodule RustQ.Meta do
       if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
         do: :a
 
-    [
+    struct =
       validate_item_ast(%AST.Struct{
         name: String.to_atom(rust_name),
         vis: :pub,
@@ -184,7 +199,29 @@ defmodule RustQ.Meta do
         lifetime: lifetime,
         fields: Enum.map(fields, &struct_field_ast/1)
       })
-    ]
+
+    decoder =
+      validate_item_ast(%AST.Function{
+        name: String.to_atom("decode_#{Macro.underscore(rust_name)}"),
+        vis: :pub,
+        args: [term: %AST.TypePath{parts: [:Term], lifetimes: [:a]}],
+        returns: %AST.TypeNifResult{
+          inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
+        },
+        lifetime: :a,
+        body: [
+          %AST.Return{
+            expr: %AST.Ok{
+              expr: %AST.StructLiteral{
+                path: %AST.Path{parts: [rust_name]},
+                fields: Enum.map(fields, &struct_decoder_field/1)
+              }
+            }
+          }
+        ]
+      })
+
+    [struct, decoder]
   end
 
   defp type_items(_type), do: []
@@ -196,6 +233,28 @@ defmodule RustQ.Meta do
   defp struct_field_ast({name, %Type{} = type, :optional}) do
     %AST.StructField{name: name, type: %AST.TypeOption{inner: type.ast}, vis: :pub}
   end
+
+  defp struct_decoder_field({name, _type, :required}) do
+    {name,
+     %AST.Try{
+       expr: %AST.LocalCall{
+         name: :decode_required,
+         args: [%AST.Var{name: :term}, atom_call(name)]
+       }
+     }}
+  end
+
+  defp struct_decoder_field({name, _type, :optional}) do
+    {name,
+     %AST.Try{
+       expr: %AST.LocalCall{
+         name: :decode_optional,
+         args: [%AST.Var{name: :term}, atom_call(name)]
+       }
+     }}
+  end
+
+  defp atom_call(name), do: %AST.PathCall{path: %AST.Path{parts: [:atoms, name]}, args: []}
 
   defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
 

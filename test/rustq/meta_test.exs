@@ -51,6 +51,24 @@ defmodule RustQ.MetaTest do
 
       :ok
     end
+
+    @spec unwrap_code(R.result(R.u32(), atom())) :: R.nif_result(R.u32())
+    defrust unwrap_code(result) do
+      case result do
+        {:ok, value} -> {:ok, value}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+
+    @spec handle_event(event()) :: R.nif_result(R.unit())
+    defrust handle_event(event) do
+      case event do
+        {:click, name} -> log_click(name)
+        {:resize, width, height} -> log_resize(width, height)
+      end
+
+      :ok
+    end
   end
 
   test "generates Rust source from defrust functions and specs" do
@@ -72,9 +90,14 @@ defmodule RustQ.MetaTest do
     assert source =~ "pub enum Event"
     assert source =~ "Click(String),"
     assert source =~ "Resize(u32, u32),"
+    assert source =~ "pub fn decode_event<'a>(term: Term<'a>) -> NifResult<Event>"
+    assert source =~ "todo!()"
     assert source =~ "pub struct RectOpts"
     assert source =~ "pub x: f32,"
     assert source =~ "pub fill: Option<Term<'a>>,"
+    assert source =~ "pub fn decode_rect_opts<'a>(term: Term<'a>) -> NifResult<RectOpts<'a>>"
+    assert source =~ "decode_required(term, atoms::x())?"
+    assert source =~ "decode_optional(term, atoms::fill())?"
     assert source =~ "fn draw_rect<'a>("
     assert source =~ "opts: RectOpts<'a>"
     assert source =~ "raw_opts: Term<'a>"
@@ -85,6 +108,12 @@ defmodule RustQ.MetaTest do
     assert source =~ "fn maybe_save(canvas: Option<&Canvas>) -> NifResult<()>"
     assert source =~ "None => {}"
     assert source =~ "Some(canvas) => {"
+    assert source =~ "fn unwrap_code(result: Result<u32, Atom>) -> NifResult<u32>"
+    assert source =~ "Ok(value) =>"
+    assert source =~ "Err(reason) =>"
+    assert source =~ "fn handle_event(event: Event) -> NifResult<()>"
+    assert source =~ "Event::Click(name) =>"
+    assert source =~ "Event::Resize(width, height) =>"
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
@@ -119,7 +148,7 @@ defmodule RustQ.MetaTest do
   end
 
   test "generated ASTs are retained before fragment validation" do
-    [draw_save, decode_mode, draw_rect, maybe_save] = Generated.__rustq_asts__()
+    [draw_save, decode_mode, draw_rect, maybe_save | _] = Generated.__rustq_asts__()
 
     assert %RustQ.Rust.AST.Function{name: :draw_save, args: [canvas: %RustQ.Rust.AST.TypeRef{}]} =
              draw_save

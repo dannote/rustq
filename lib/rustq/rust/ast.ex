@@ -107,6 +107,11 @@ defmodule RustQ.Rust.AST do
     defstruct [:receiver, :method, args: []]
   end
 
+  defmodule StructLiteral do
+    @moduledoc false
+    defstruct [:path, fields: []]
+  end
+
   defmodule LocalCall do
     @moduledoc false
     defstruct [:name, args: []]
@@ -200,6 +205,21 @@ defmodule RustQ.Rust.AST do
   defmodule PatTuple do
     @moduledoc false
     defstruct [:patterns]
+  end
+
+  defmodule PatOk do
+    @moduledoc false
+    defstruct [:pattern]
+  end
+
+  defmodule PatErr do
+    @moduledoc false
+    defstruct [:pattern]
+  end
+
+  defmodule PatPathTuple do
+    @moduledoc false
+    defstruct [:path, patterns: []]
   end
 
   def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
@@ -343,6 +363,15 @@ defmodule RustQ.Rust.AST do
   def render_expr(%LocalCall{name: name, args: args}),
     do: [to_string(name), "(", render_args(args), ")"]
 
+  def render_expr(%StructLiteral{path: path, fields: fields}) do
+    rendered_fields =
+      fields
+      |> Elixir.Enum.map(fn {name, expr} -> [to_string(name), ": ", render_expr(expr)] end)
+      |> Elixir.Enum.intersperse(", ")
+
+    [render_expr(path), " { ", rendered_fields, " }"]
+  end
+
   def render_expr(%Ref{expr: expr, mutable: false}), do: ["&", render_expr(expr)]
   def render_expr(%Ref{expr: expr, mutable: true}), do: ["&mut ", render_expr(expr)]
   def render_expr(%Try{expr: expr}), do: [render_expr(expr), "?"]
@@ -379,6 +408,17 @@ defmodule RustQ.Rust.AST do
   def render_pattern(%PatWildcard{}), do: "_"
   def render_pattern(%PatNone{}), do: "None"
   def render_pattern(%PatSome{pattern: pattern}), do: ["Some(", render_pattern(pattern), ")"]
+  def render_pattern(%PatOk{pattern: pattern}), do: ["Ok(", render_pattern(pattern), ")"]
+  def render_pattern(%PatErr{pattern: pattern}), do: ["Err(", render_pattern(pattern), ")"]
+
+  def render_pattern(%PatPathTuple{path: path, patterns: patterns}) do
+    [
+      render_expr(path),
+      "(",
+      patterns |> Elixir.Enum.map(&render_pattern/1) |> Elixir.Enum.intersperse(", "),
+      ")"
+    ]
+  end
 
   def render_pattern(%PatAtomGuard{name: name}),
     do: ["value if value == atoms::", Atom.to_string(name), "()"]

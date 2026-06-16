@@ -119,6 +119,28 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
   defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
 
+  defp lower_match_pattern({:ok, pattern}, %Type{kind: :result}),
+    do: %AST.PatOk{pattern: lower_match_pattern(pattern, nil)}
+
+  defp lower_match_pattern({:error, pattern}, %Type{kind: :result}),
+    do: %AST.PatErr{pattern: lower_match_pattern(pattern, nil)}
+
+  defp lower_match_pattern({tag, pattern}, %Type{kind: :tuple_enum, rust: rust_name})
+       when is_atom(tag) do
+    %AST.PatPathTuple{
+      path: %AST.Path{parts: [rust_name, rust_variant(tag)]},
+      patterns: [lower_match_pattern(pattern, nil)]
+    }
+  end
+
+  defp lower_match_pattern({:{}, _, [tag | patterns]}, %Type{kind: :tuple_enum, rust: rust_name})
+       when is_atom(tag) do
+    %AST.PatPathTuple{
+      path: %AST.Path{parts: [rust_name, rust_variant(tag)]},
+      patterns: Enum.map(patterns, &lower_match_pattern(&1, nil))
+    }
+  end
+
   defp lower_match_pattern({name, _, context}, %Type{kind: :option})
        when is_atom(name) and is_atom(context),
        do: %AST.PatSome{pattern: %AST.PatVar{name: name}}
@@ -302,4 +324,5 @@ defmodule RustQ.Meta.Lower do
   defp alias_ast?(_other), do: false
 
   defp alias_parts({:__aliases__, _, parts}), do: parts
+  defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
 end
