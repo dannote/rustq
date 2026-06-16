@@ -13,10 +13,10 @@ use syn::{
 
 mod generated_ast;
 
+use generated_ast::{atom, atom_key, atoms, is_nil, optional_map_get};
+use generated_ast::{decode_arm, decode_enum_variant, decode_struct_field};
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, decode_arm, decode_ast_expr, decode_ast_item,
-    decode_ast_pat, decode_ast_stmt, decode_ast_type, decode_enum_variant, decode_struct_field, expect_struct, is_nil, optional_atom_key,
-    optional_map_get,
+    decode_ast_expr, decode_ast_item, decode_ast_pat, decode_ast_stmt, decode_ast_type,
 };
 
 #[derive(NifMap)]
@@ -93,15 +93,14 @@ fn parse_macro_item(source: String) -> NifResult<Item> {
     syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
 
-fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
-    expect_struct(term, ast_modules::FUNCTION)?;
-    let env = term.get_env();
-    let name = format_ident!("{}", atom_key(term, "name")?);
-    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
-    let args = keyword_args(term.map_get(atom(env, "args")?)?)?;
-    let returns = type_value(term, "returns")?;
-    let lifetime = optional_atom_key(term, "lifetime")?;
-    let stmts = decode_stmt_list(term.map_get(atom(env, "body")?)?)?;
+fn parse_item_function(
+    name: syn::Ident,
+    vis: syn::Visibility,
+    args: Vec<(String, Type)>,
+    returns: Type,
+    lifetime: Option<String>,
+    stmts: Vec<Stmt>,
+) -> NifResult<syn::ItemFn> {
     let inputs = args
         .into_iter()
         .map(|(name, ty)| {
@@ -434,10 +433,6 @@ fn atom_or_string(term: Term) -> NifResult<String> {
     }
 }
 
-fn type_value(term: Term, key: &str) -> NifResult<Type> {
-    decode_type(term.map_get(atom(term.get_env(), key)?)?)
-}
-
 // Type decoding primitives retained until all type shapes are dogfooded.
 fn decode_type(term: Term) -> NifResult<Type> {
     if let Ok(source) = term.decode::<String>() {
@@ -447,16 +442,14 @@ fn decode_type(term: Term) -> NifResult<Type> {
     decode_ast_type(term)
 }
 
-fn decode_type_path(term: Term) -> NifResult<Type> {
-    let env = term.get_env();
-    let path = path_parts(term.map_get(atom(env, "parts")?)?)?;
-    let lifetimes = term
-        .map_get(atom(env, "lifetimes")?)?
-        .decode::<Vec<Term>>()?
+fn decode_lifetime_list(term: Term) -> NifResult<Vec<String>> {
+    term.decode::<Vec<Term>>()?
         .into_iter()
         .map(atom_or_string)
-        .collect::<NifResult<Vec<String>>>()?;
+        .collect::<NifResult<Vec<String>>>()
+}
 
+fn parse_type_path(path: String, lifetimes: Vec<String>) -> NifResult<Type> {
     if lifetimes.is_empty() {
         parse_type(&path)
     } else {

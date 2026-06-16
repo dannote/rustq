@@ -8,7 +8,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   @spec decode_expr_var(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_var(term) do
     ident = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    raw_expr!("#ident")
+    expr!(ident(ident))
   end
 
   @spec decode_expr_path(term()) :: R.nif_result(Expr.t())

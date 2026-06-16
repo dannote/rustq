@@ -24,9 +24,9 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
              "pub(crate) fn expect_struct<'a>(term: Term<'a>, expected: &str) -> NifResult<()>"
 
     assert source =~ "pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item>"
-    assert source =~ "ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?))"
+    assert source =~ "ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?))"
     assert source =~ "pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type>"
-    assert source =~ "ast_modules::TYPE_PATH => super::decode_type_path(term)"
+    assert source =~ "ast_modules::TYPE_PATH => decode_type_path(term)"
     assert source =~ "pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat>"
     assert source =~ "pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt>"
     assert source =~ "pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr>"
@@ -65,6 +65,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       |> Enum.map(&String.to_atom("decode_#{&1.name}"))
 
     expected_type_decoders = [
+      :decode_type_path,
       :decode_type_unit,
       :decode_type_option,
       :decode_type_result,
@@ -72,7 +73,17 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       :decode_type_vec
     ]
 
-    expected_item_decoders = [:decode_enum_variant]
+    expected_item_decoders = [
+      :decode_ast_use,
+      :decode_ast_module,
+      :decode_ast_const,
+      :decode_ast_function,
+      :decode_ast_struct,
+      :decode_ast_macro_item,
+      :decode_ast_enum,
+      :decode_struct_field,
+      :decode_enum_variant
+    ]
 
     for decoder <-
           expected_item_decoders ++

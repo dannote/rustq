@@ -5,8 +5,8 @@ use quote::quote;
 use rustler::{Atom, Env, NifResult, Term};
 
 use syn::{
-    Arm, Expr, Field, Item, ItemConst, ItemEnum, ItemMod, ItemStruct, ItemUse, Pat, Stmt, Type,
-    Variant,
+    Arm, Expr, Field, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat, Stmt,
+    Type, Variant,
 };
 
 pub(crate) mod atoms {
@@ -120,7 +120,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
         ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
         ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
-        ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?)),
+        ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
         ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
         ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
         _ => Err(rustler::Error::BadArg),
@@ -128,7 +128,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
 }
 pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
     match struct_name(term)?.as_str() {
-        ast_modules::TYPE_PATH => super::decode_type_path(term),
+        ast_modules::TYPE_PATH => decode_type_path(term),
         ast_modules::TYPE_REF => decode_type_ref(term),
         ast_modules::TYPE_OPTION => decode_type_option(term),
         ast_modules::TYPE_RESULT => decode_type_result(term),
@@ -212,6 +212,17 @@ pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {
     super::parse_item_const(name, ty, expr, vis)
 }
 
+pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Function")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let vis = super::decode_vis(required_field(term, "vis")?)?;
+    let args = super::keyword_args(required_field(term, "args")?)?;
+    let returns = super::decode_type(required_field(term, "returns")?)?;
+    let lifetime = optional_atom_key(term, "lifetime")?;
+    let stmts = super::decode_stmt_list(required_field(term, "body")?)?;
+    super::parse_item_function(name, vis, args, returns, lifetime, stmts)
+}
+
 pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Struct")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
@@ -250,6 +261,12 @@ pub(crate) fn decode_enum_variant<'a>(term: Term<'a>) -> NifResult<Variant> {
     let name = super::format_ident_value(atom_key(term, "name")?);
     let tuple = super::decode_type_list(required_field(term, "tuple")?)?;
     super::parse_enum_variant(name, tuple)
+}
+
+pub(crate) fn decode_type_path<'a>(term: Term<'a>) -> NifResult<Type> {
+    let parts = super::path_parts(required_field(term, "parts")?)?;
+    let lifetimes = super::decode_lifetime_list(required_field(term, "lifetimes")?)?;
+    super::parse_type_path(parts, lifetimes)
 }
 
 pub(crate) fn decode_type_unit<'a>(_term: Term<'a>) -> NifResult<Type> {

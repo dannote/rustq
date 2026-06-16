@@ -5,6 +5,13 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
 
   alias RustQ.Type, as: R
 
+  @spec decode_type_path(term()) :: R.nif_result(Type.t())
+  defrust decode_type_path(term) do
+    parts = unwrap!(Super.path_parts(unwrap!(required_field(term, "parts"))))
+    lifetimes = unwrap!(Super.decode_lifetime_list(unwrap!(required_field(term, "lifetimes"))))
+    Super.parse_type_path(parts, lifetimes)
+  end
+
   @spec decode_type_unit(term()) :: R.nif_result(Type.t())
   defrust decode_type_unit(_term) do
     Super.parse_type("()")

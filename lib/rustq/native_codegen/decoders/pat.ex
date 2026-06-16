@@ -8,7 +8,7 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
   @spec decode_pat_var(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_var(term) do
     ident = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    raw_pat!("#ident")
+    pat!(ident(ident))
   end
 
   @spec decode_pat_wildcard(term()) :: R.nif_result(Pat.t())
@@ -25,7 +25,7 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
   defrust decode_pat_path(term) do
     parts = unwrap!(Super.path_parts(unwrap!(required_field(term, "parts"))))
     path = unwrap!(Super.parse_path(ref(parts)))
-    raw_pat!("#path")
+    pat!(path(path))
   end
 
   @spec decode_pat_literal(term()) :: R.nif_result(Pat.t())
