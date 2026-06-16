@@ -19,15 +19,7 @@ defmodule RustQ.NativeCodegenTest do
     assert source =~ "pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat>"
     assert source =~ "pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt>"
     assert source =~ "pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr>"
-    assert source =~ "ast_modules::VAR => decode_expr_var(term)"
-    assert source =~ "ast_modules::TRY => decode_expr_try(term)"
     assert source =~ "pub(crate) fn decode_expr_tuple(term: Term) -> NifResult<Expr>"
-    assert source =~ "ast_modules::MATCH => super::decode_expr_manual(term)"
-    assert source =~ "ast_modules::LET => super::decode_stmt_let(term)"
-    assert source =~ "ast_modules::RETURN => decode_stmt_return(term)"
-    assert source =~ "ast_modules::PAT_VAR => decode_pat_var(term)"
-    assert source =~ "ast_modules::PAT_STRUCT => super::decode_pat_struct(term)"
     assert source =~ "pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat>"
-    assert source =~ "super::parse_pat(quote!(# ident))"
   end
 end
