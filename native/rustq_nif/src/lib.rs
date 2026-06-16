@@ -71,6 +71,7 @@ fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Function")?;
     let env = term.get_env();
     let name = format_ident!("{}", atom_key(term, "name")?);
+    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
     let args = keyword_args(term.map_get(atom(env, "args")?)?)?;
     let returns = type_value(term, "returns")?;
     let lifetime = optional_atom_key(term, "lifetime")?;
@@ -89,10 +90,10 @@ fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
     if let Some(lifetime) = lifetime {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        syn::parse2(quote!(fn #name <#lifetime> (#inputs) -> #returns #block))
+        syn::parse2(quote!(#vis fn #name <#lifetime> (#inputs) -> #returns #block))
             .map_err(|_| rustler::Error::BadArg)
     } else {
-        syn::parse2(quote!(fn #name (#inputs) -> #returns #block))
+        syn::parse2(quote!(#vis fn #name (#inputs) -> #returns #block))
             .map_err(|_| rustler::Error::BadArg)
     }
 }

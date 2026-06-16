@@ -9,7 +9,7 @@ defmodule RustQ.Rust.AST do
 
   defmodule Function do
     @moduledoc false
-    defstruct [:name, args: [], returns: nil, body: [], lifetime: nil]
+    defstruct [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil]
   end
 
   defmodule Struct do
@@ -186,6 +186,7 @@ defmodule RustQ.Rust.AST do
     lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""
 
     [
+      render_vis(function.vis),
       "fn ",
       Atom.to_string(function.name),
       lifetime,

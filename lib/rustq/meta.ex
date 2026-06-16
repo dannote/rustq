@@ -114,13 +114,42 @@ defmodule RustQ.Meta do
       })
 
     decoder =
-      RustQ.parse_fragment!(
-        :item,
-        RustQ.Rustler.atom_decoder("decode_#{elixir_name}_atom",
-          returns: rust_name,
-          cases: Enum.map(variants, &{&1, "#{rust_name}::#{rust_variant(&1)}"})
-        )
-      )
+      validate_item_ast(%AST.Function{
+        name: String.to_atom("decode_#{elixir_name}_atom"),
+        vis: :pub,
+        args: [value: "Atom"],
+        returns: "NifResult<#{rust_name}>",
+        body: [
+          %AST.Return{
+            expr: %AST.Match{
+              expr: %AST.Var{name: :value},
+              arms:
+                Enum.map(variants, fn variant ->
+                  %AST.Arm{
+                    pattern: %AST.PatAtomGuard{name: variant},
+                    body: [
+                      %AST.Return{
+                        expr: %AST.Ok{
+                          expr: %AST.Path{parts: [rust_name, rust_variant(variant)]}
+                        }
+                      }
+                    ]
+                  }
+                end) ++
+                  [
+                    %AST.Arm{
+                      pattern: %AST.PatWildcard{},
+                      body: [
+                        %AST.Return{
+                          expr: %AST.Err{expr: %AST.Path{parts: [:rustler, :Error, :BadArg]}}
+                        }
+                      ]
+                    }
+                  ]
+            }
+          }
+        ]
+      })
 
     [enum, decoder]
   end
