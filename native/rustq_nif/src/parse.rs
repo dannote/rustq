@@ -1,6 +1,7 @@
 use rustler::NifResult;
 use syn::parse::Parser;
-use syn::{Arm, Block, Expr, Pat, Stmt, Type};
+use syn::punctuated::Punctuated;
+use syn::{Arm, Block, Expr, Pat, PathSegment, Stmt, Token, Type};
 
 pub(crate) trait ParseSynTokens: Sized {
     fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self>;
@@ -45,6 +46,24 @@ pub(crate) fn parse_syn<T: ParseSynTokens>(tokens: proc_macro2::TokenStream) -> 
 
 pub(crate) fn parse_type(source: &str) -> NifResult<Type> {
     syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
+}
+
+pub(crate) fn path_from_parts(parts: Vec<String>) -> NifResult<syn::Path> {
+    if parts.is_empty() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let mut segments = Punctuated::<PathSegment, Token![::]>::new();
+
+    for part in parts {
+        let ident = syn::Ident::new(&part, proc_macro2::Span::call_site());
+        segments.push(PathSegment::from(ident));
+    }
+
+    Ok(syn::Path {
+        leading_colon: None,
+        segments,
+    })
 }
 
 pub(crate) fn parse_path(source: &str) -> NifResult<syn::Path> {

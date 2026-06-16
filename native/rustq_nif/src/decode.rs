@@ -7,7 +7,7 @@ use crate::generated_ast::{
     decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
     optional_map_get, struct_name,
 };
-use crate::{parse_expr, parse_path, parse_syn, parse_type};
+use crate::{parse_expr, parse_path, parse_syn, parse_type, path_from_parts};
 
 // Primitive-boundary inventory:
 // - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
@@ -81,7 +81,8 @@ pub(crate) fn decode_derive_path_terms(term: Term) -> NifResult<Vec<Term>> {
         .into_iter()
         .map(|term| {
             if struct_name(term).ok().as_deref() == Some("Elixir.RustQ.Rust.AST.Derive") {
-                term.map_get(atom(term.get_env(), "paths")?)?.decode::<Vec<Term>>()
+                term.map_get(atom(term.get_env(), "paths")?)?
+                    .decode::<Vec<Term>>()
             } else {
                 Ok(vec![term])
             }
@@ -91,17 +92,16 @@ pub(crate) fn decode_derive_path_terms(term: Term) -> NifResult<Vec<Term>> {
 }
 
 pub(crate) fn decode_path_value(term: Term) -> NifResult<syn::Path> {
-    let source = if let Ok(parts) = term.decode::<Vec<Term>>() {
+    let parts = if let Ok(parts) = term.decode::<Vec<Term>>() {
         parts
             .into_iter()
             .map(atom_or_string)
             .collect::<NifResult<Vec<String>>>()?
-            .join("::")
     } else {
-        atom_or_string(term)?
+        vec![atom_or_string(term)?]
     };
 
-    syn::parse_str::<syn::Path>(&source).map_err(|_| rustler::Error::BadArg)
+    path_from_parts(parts)
 }
 
 // Collection decoders for generated AST nodes.
@@ -318,7 +318,7 @@ pub(crate) fn decode_literal_expr(term: Term) -> NifResult<Expr> {
 }
 
 pub(crate) fn path_parts(term: Term) -> NifResult<String> {
-    Ok(decode_string_list(term)?.join("::"))
+    crate::generated_ast::path_parts(term)
 }
 
 pub(crate) fn atom_or_string(term: Term) -> NifResult<String> {
@@ -337,7 +337,6 @@ pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
 
     decode_ast_type(term)
 }
-
 
 pub(crate) fn decode_string_list(term: Term) -> NifResult<Vec<String>> {
     term.decode::<Vec<Term>>()?

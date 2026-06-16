@@ -2,14 +2,14 @@ use quote::quote;
 use rustler::NifResult;
 use syn::Type;
 
-use crate::parse_syn;
+use crate::{parse_syn, path_from_parts};
 
 pub(crate) fn parse_type_path_with_generics(
-    path: String,
+    path: Vec<String>,
     lifetimes: Vec<String>,
     generics: Vec<Type>,
 ) -> NifResult<Type> {
-    let path: syn::Path = syn::parse_str(&path).map_err(|_| rustler::Error::BadArg)?;
+    let path = path_from_parts(path)?;
     let lifetimes = lifetimes
         .into_iter()
         .map(|value| syn::Lifetime::new(&format!("'{}", value), proc_macro2::Span::call_site()))

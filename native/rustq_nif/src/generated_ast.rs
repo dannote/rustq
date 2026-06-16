@@ -297,7 +297,7 @@ pub(crate) fn decode_lifetime_list<'a>(term: Term<'a>) -> NifResult<Vec<String>>
 }
 
 pub(crate) fn decode_type_path<'a>(term: Term<'a>) -> NifResult<Type> {
-    let parts = path_parts(required_field(term, "parts")?)?;
+    let parts = super::decode_string_list(required_field(term, "parts")?)?;
     let lifetimes = decode_lifetime_list(required_field(term, "lifetimes")?)?;
     let generics = super::decode_type_list(required_field(term, "generics")?)?;
     super::parse_type_path_with_generics(parts, lifetimes, generics)

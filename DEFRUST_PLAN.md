@@ -347,6 +347,8 @@ Recently completed:
 - `path_parts` and `decode_lifetime_list` are now dogfooded defrust helpers, and
   derive path decoding uses the new iterator lowering before native derive
   attribute assembly.
+- Native path decoding for derives and type paths now constructs `syn::Path`
+  structurally from path segments instead of joining and reparsing path strings.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design
