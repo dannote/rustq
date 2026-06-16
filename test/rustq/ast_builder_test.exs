@@ -15,7 +15,9 @@ defmodule RustQ.Rust.ASTBuilderTest do
           [
             A.const(:NAME, "&str", "Elixir.Example", vis: :crate),
             A.macro_item("rustler::atoms! { ok }")
-          ], vis: :crate)
+          ],
+          vis: :crate
+        )
       ])
 
     assert source =~ "use rustler::{Atom, Env};"

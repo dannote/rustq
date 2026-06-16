@@ -7,259 +7,349 @@ defmodule RustQ.Rust.AST do
   AST, then renders them only at the final fragment-validation boundary.
   """
 
-  defmodule Use do
-    @moduledoc false
-    defstruct [:tree]
-  end
+  @type item ::
+          Use.t()
+          | Module.t()
+          | Const.t()
+          | MacroItem.t()
+          | Function.t()
+          | Struct.t()
+          | Enum.t()
 
-  defmodule Module do
-    @moduledoc false
-    defstruct [:name, items: [], vis: nil]
-  end
+  @type stmt :: Let.t() | ExprStmt.t() | Return.t()
 
-  defmodule Const do
-    @moduledoc false
-    defstruct [:name, :type, :expr, vis: nil]
-  end
+  @type expr ::
+          Var.t()
+          | Path.t()
+          | Field.t()
+          | PathCall.t()
+          | MethodCall.t()
+          | StructLiteral.t()
+          | LocalCall.t()
+          | Ref.t()
+          | Try.t()
+          | Tuple.t()
+          | Literal.t()
+          | AtomValue.t()
+          | None.t()
+          | Some.t()
+          | Ok.t()
+          | Err.t()
+          | NifRaiseAtom.t()
+          | Match.t()
+          | If.t()
+          | BinaryOp.t()
 
-  defmodule MacroItem do
-    @moduledoc false
-    defstruct [:source]
-  end
+  @type type ::
+          TypePath.t()
+          | TypeRef.t()
+          | TypeOption.t()
+          | TypeResult.t()
+          | TypeNifResult.t()
+          | TypeVec.t()
+          | TypeUnit.t()
 
-  defmodule Function do
-    @moduledoc false
-    defstruct [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil]
-  end
+  @type pat ::
+          PatVar.t()
+          | PatWildcard.t()
+          | PatLiteral.t()
+          | PatNone.t()
+          | PatSome.t()
+          | PatAtomGuard.t()
+          | PatTuple.t()
+          | PatOk.t()
+          | PatErr.t()
+          | PatPathTuple.t()
+          | PatStruct.t()
 
-  defmodule Struct do
-    @moduledoc false
-    defstruct [:name, fields: [], vis: nil, derive: [], lifetime: nil]
-  end
+  @type vis :: :pub | :crate | nil
 
-  defmodule StructField do
-    @moduledoc false
-    defstruct [:name, :type, vis: nil]
-  end
+  import RustQ.Rust.AST.NodeDSL
 
-  defmodule Enum do
-    @moduledoc false
-    defstruct [:name, variants: [], vis: nil, derive: []]
-  end
+  defnode(Use, :item, [:tree], type: quote(do: %__MODULE__{tree: String.t()}))
 
-  defmodule EnumVariant do
-    @moduledoc false
-    defstruct [:name, tuple: []]
-  end
+  defnode(Module, :item, [:name, items: [], vis: nil],
+    type:
+      quote(
+        do: %__MODULE__{name: atom(), items: [RustQ.Rust.AST.item()], vis: RustQ.Rust.AST.vis()}
+      )
+  )
 
-  defmodule TypePath do
-    @moduledoc false
-    defstruct [:parts, lifetimes: []]
-  end
+  defnode(Const, :item, [:name, :type, :expr, vis: nil],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          type: RustQ.Rust.AST.type() | String.t(),
+          expr: RustQ.Rust.AST.expr(),
+          vis: RustQ.Rust.AST.vis()
+        }
+      )
+  )
 
-  defmodule TypeRef do
-    @moduledoc false
-    defstruct [:inner, mutable: false, lifetime: nil]
-  end
+  defnode(MacroItem, :item, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
-  defmodule TypeOption do
-    @moduledoc false
-    defstruct [:inner]
-  end
+  defnode(Function, :item, [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          args: [{atom(), RustQ.Rust.AST.type() | String.t()}],
+          returns: RustQ.Rust.AST.type() | String.t(),
+          body: [RustQ.Rust.AST.stmt()],
+          lifetime: atom() | nil,
+          vis: RustQ.Rust.AST.vis()
+        }
+      )
+  )
 
-  defmodule TypeResult do
-    @moduledoc false
-    defstruct [:ok, :error]
-  end
+  defnode(Struct, :item, [:name, fields: [], vis: nil, derive: [], lifetime: nil],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          fields: [RustQ.Rust.AST.StructField.t()],
+          vis: RustQ.Rust.AST.vis(),
+          derive: [atom()],
+          lifetime: atom() | nil
+        }
+      )
+  )
 
-  defmodule TypeNifResult do
-    @moduledoc false
-    defstruct [:inner]
-  end
+  defnode(StructField, :field, [:name, :type, vis: nil],
+    type:
+      quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type(), vis: RustQ.Rust.AST.vis()})
+  )
 
-  defmodule TypeVec do
-    @moduledoc false
-    defstruct [:inner]
-  end
+  defnode(Enum, :item, [:name, variants: [], vis: nil, derive: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          variants: [RustQ.Rust.AST.EnumVariant.t()],
+          vis: RustQ.Rust.AST.vis(),
+          derive: [atom()]
+        }
+      )
+  )
 
-  defmodule TypeUnit do
-    @moduledoc false
-    defstruct []
-  end
+  defnode(EnumVariant, :field, [:name, tuple: []],
+    type: quote(do: %__MODULE__{name: atom(), tuple: [RustQ.Rust.AST.type()]})
+  )
 
-  defmodule Let do
-    @moduledoc false
-    defstruct [:pattern, :expr, mutable: false]
-  end
+  defnode(TypePath, :type, [:parts, lifetimes: []],
+    type: quote(do: %__MODULE__{parts: [atom() | String.t()], lifetimes: [atom()]})
+  )
 
-  defmodule ExprStmt do
-    @moduledoc false
-    defstruct [:expr]
-  end
+  defnode(TypeRef, :type, [:inner, mutable: false, lifetime: nil],
+    type:
+      quote(
+        do: %__MODULE__{inner: RustQ.Rust.AST.type(), mutable: boolean(), lifetime: atom() | nil}
+      )
+  )
 
-  defmodule Return do
-    @moduledoc false
-    defstruct [:expr]
-  end
+  defnode(TypeOption, :type, [:inner], type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()}))
 
-  defmodule Var do
-    @moduledoc false
-    defstruct [:name]
-  end
+  defnode(TypeResult, :type, [:ok, :error],
+    type: quote(do: %__MODULE__{ok: RustQ.Rust.AST.type(), error: RustQ.Rust.AST.type()})
+  )
 
-  defmodule Path do
-    @moduledoc false
-    defstruct [:parts]
-  end
+  defnode(TypeNifResult, :type, [:inner],
+    type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()})
+  )
 
-  defmodule Field do
-    @moduledoc false
-    defstruct [:receiver, :field]
-  end
+  defnode(TypeVec, :type, [:inner], type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()}))
 
-  defmodule PathCall do
-    @moduledoc false
-    defstruct [:path, args: []]
-  end
+  defnode(TypeUnit, :type, [], type: quote(do: %__MODULE__{}))
 
-  defmodule MethodCall do
-    @moduledoc false
-    defstruct [:receiver, :method, args: []]
-  end
+  defnode(Let, :stmt, [:pattern, :expr, mutable: false],
+    type:
+      quote(
+        do: %__MODULE__{
+          pattern: RustQ.Rust.AST.pat(),
+          expr: RustQ.Rust.AST.expr(),
+          mutable: boolean()
+        }
+      )
+  )
 
-  defmodule StructLiteral do
-    @moduledoc false
-    defstruct [:path, fields: []]
-  end
+  defnode(ExprStmt, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
-  defmodule LocalCall do
-    @moduledoc false
-    defstruct [:name, args: []]
-  end
+  defnode(Return, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
-  defmodule Ref do
-    @moduledoc false
-    defstruct [:expr, mutable: false]
-  end
+  defnode(Var, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
-  defmodule Try do
-    @moduledoc false
-    defstruct [:expr]
-  end
+  defnode(Path, :expr, [:parts], type: quote(do: %__MODULE__{parts: [atom() | String.t()]}))
 
-  defmodule Tuple do
-    @moduledoc false
-    defstruct [:values]
-  end
+  defnode(Field, :expr, [:receiver, :field],
+    type: quote(do: %__MODULE__{receiver: RustQ.Rust.AST.expr(), field: atom()})
+  )
 
-  defmodule Literal do
-    @moduledoc false
-    defstruct [:value]
-  end
+  defnode(PathCall, :expr, [:path, args: []],
+    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [RustQ.Rust.AST.expr()]})
+  )
 
-  defmodule AtomValue do
-    @moduledoc false
-    defstruct [:name]
-  end
+  defnode(MethodCall, :expr, [:receiver, :method, args: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          receiver: RustQ.Rust.AST.expr(),
+          method: atom(),
+          args: [RustQ.Rust.AST.expr()]
+        }
+      )
+  )
 
-  defmodule None do
-    @moduledoc false
-    defstruct []
-  end
+  defnode(StructLiteral, :expr, [:path, fields: []],
+    type:
+      quote(
+        do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), fields: [{atom(), RustQ.Rust.AST.expr()}]}
+      )
+  )
 
-  defmodule Some do
-    @moduledoc false
-    defstruct [:expr]
-  end
+  defnode(LocalCall, :expr, [:name, args: []],
+    type: quote(do: %__MODULE__{name: atom(), args: [RustQ.Rust.AST.expr()]})
+  )
 
-  defmodule Ok do
-    @moduledoc false
-    defstruct [:expr]
-  end
+  defnode(Ref, :expr, [:expr, mutable: false],
+    type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr(), mutable: boolean()})
+  )
 
-  defmodule Err do
-    @moduledoc false
-    defstruct [:expr]
-  end
+  defnode(Try, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
-  defmodule NifRaiseAtom do
-    @moduledoc false
-    defstruct [:name]
-  end
+  defnode(Tuple, :expr, [:values], type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]}))
 
-  defmodule Match do
-    @moduledoc false
-    defstruct [:expr, arms: []]
-  end
+  defnode(Literal, :expr, [:value],
+    type: quote(do: %__MODULE__{value: String.t() | integer() | float() | boolean()})
+  )
 
-  defmodule If do
-    @moduledoc false
-    defstruct [:condition, then: [], else: []]
-  end
+  defnode(AtomValue, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
-  defmodule BinaryOp do
-    @moduledoc false
-    defstruct [:left, :op, :right]
-  end
+  defnode(None, :expr, [], type: quote(do: %__MODULE__{}))
 
-  defmodule Arm do
-    @moduledoc false
-    defstruct [:pattern, body: []]
-  end
+  defnode(Some, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
-  defmodule PatVar do
-    @moduledoc false
-    defstruct [:name]
-  end
+  defnode(Ok, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr() | nil}))
 
-  defmodule PatWildcard do
-    @moduledoc false
-    defstruct []
-  end
+  defnode(Err, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
-  defmodule PatLiteral do
-    @moduledoc false
-    defstruct [:value]
-  end
+  defnode(NifRaiseAtom, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
-  defmodule PatNone do
-    @moduledoc false
-    defstruct []
-  end
+  defnode(Match, :expr, [:expr, arms: []],
+    type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr(), arms: [RustQ.Rust.AST.Arm.t()]})
+  )
 
-  defmodule PatSome do
-    @moduledoc false
-    defstruct [:pattern]
-  end
+  defnode(If, :expr, [:condition, then: [], else: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          condition: RustQ.Rust.AST.expr(),
+          then: [RustQ.Rust.AST.stmt()],
+          else: [RustQ.Rust.AST.stmt()]
+        }
+      )
+  )
 
-  defmodule PatAtomGuard do
-    @moduledoc false
-    defstruct [:name]
-  end
+  defnode(BinaryOp, :expr, [:left, :op, :right],
+    type:
+      quote(
+        do: %__MODULE__{
+          left: RustQ.Rust.AST.expr(),
+          op: :eq | :and | :or,
+          right: RustQ.Rust.AST.expr()
+        }
+      )
+  )
 
-  defmodule PatTuple do
-    @moduledoc false
-    defstruct [:patterns]
-  end
+  defnode(Arm, :field, [:pattern, body: []],
+    type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat(), body: [RustQ.Rust.AST.stmt()]})
+  )
 
-  defmodule PatOk do
-    @moduledoc false
-    defstruct [:pattern]
-  end
+  defnode(PatVar, :pat, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
-  defmodule PatErr do
-    @moduledoc false
-    defstruct [:pattern]
-  end
+  defnode(PatWildcard, :pat, [], type: quote(do: %__MODULE__{}))
 
-  defmodule PatPathTuple do
-    @moduledoc false
-    defstruct [:path, patterns: []]
-  end
+  defnode(PatLiteral, :pat, [:value], type: quote(do: %__MODULE__{value: String.t() | atom()}))
 
-  defmodule PatStruct do
-    @moduledoc false
-    defstruct [:path, fields: []]
+  defnode(PatNone, :pat, [], type: quote(do: %__MODULE__{}))
+
+  defnode(PatSome, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
+
+  defnode(PatAtomGuard, :pat, [:name], type: quote(do: %__MODULE__{name: atom()}))
+
+  defnode(PatTuple, :pat, [:patterns],
+    type: quote(do: %__MODULE__{patterns: [RustQ.Rust.AST.pat()]})
+  )
+
+  defnode(PatOk, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
+
+  defnode(PatErr, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
+
+  defnode(PatPathTuple, :pat, [:path, patterns: []],
+    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), patterns: [RustQ.Rust.AST.pat()]})
+  )
+
+  defnode(PatStruct, :pat, [:path, fields: []],
+    type:
+      quote(
+        do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), fields: [{atom(), RustQ.Rust.AST.pat()}]}
+      )
+  )
+
+  def __rustq_ast_modules__ do
+    [
+      Use,
+      Module,
+      Const,
+      MacroItem,
+      Function,
+      Struct,
+      StructField,
+      Enum,
+      EnumVariant,
+      TypePath,
+      TypeRef,
+      TypeOption,
+      TypeResult,
+      TypeNifResult,
+      TypeVec,
+      TypeUnit,
+      Let,
+      ExprStmt,
+      Return,
+      Var,
+      Path,
+      Field,
+      PathCall,
+      MethodCall,
+      StructLiteral,
+      LocalCall,
+      Ref,
+      Try,
+      Tuple,
+      Literal,
+      AtomValue,
+      None,
+      Some,
+      Ok,
+      Err,
+      NifRaiseAtom,
+      Match,
+      If,
+      BinaryOp,
+      Arm,
+      PatVar,
+      PatWildcard,
+      PatLiteral,
+      PatNone,
+      PatSome,
+      PatAtomGuard,
+      PatTuple,
+      PatOk,
+      PatErr,
+      PatPathTuple,
+      PatStruct
+    ]
   end
 
   def render_item_native(%Use{} = item), do: render_native(item, &render_use/1)

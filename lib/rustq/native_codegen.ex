@@ -3,62 +3,9 @@ defmodule RustQ.NativeCodegen do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.Schema
 
   require A
-
-  @ast_modules [
-    use: "Elixir.RustQ.Rust.AST.Use",
-    module: "Elixir.RustQ.Rust.AST.Module",
-    const: "Elixir.RustQ.Rust.AST.Const",
-    macro_item: "Elixir.RustQ.Rust.AST.MacroItem",
-    function: "Elixir.RustQ.Rust.AST.Function",
-    struct: "Elixir.RustQ.Rust.AST.Struct",
-    struct_field: "Elixir.RustQ.Rust.AST.StructField",
-    enum: "Elixir.RustQ.Rust.AST.Enum",
-    enum_variant: "Elixir.RustQ.Rust.AST.EnumVariant",
-    let: "Elixir.RustQ.Rust.AST.Let",
-    expr_stmt: "Elixir.RustQ.Rust.AST.ExprStmt",
-    return: "Elixir.RustQ.Rust.AST.Return",
-    var: "Elixir.RustQ.Rust.AST.Var",
-    path: "Elixir.RustQ.Rust.AST.Path",
-    field: "Elixir.RustQ.Rust.AST.Field",
-    path_call: "Elixir.RustQ.Rust.AST.PathCall",
-    method_call: "Elixir.RustQ.Rust.AST.MethodCall",
-    local_call: "Elixir.RustQ.Rust.AST.LocalCall",
-    struct_literal: "Elixir.RustQ.Rust.AST.StructLiteral",
-    ref: "Elixir.RustQ.Rust.AST.Ref",
-    try: "Elixir.RustQ.Rust.AST.Try",
-    tuple: "Elixir.RustQ.Rust.AST.Tuple",
-    literal: "Elixir.RustQ.Rust.AST.Literal",
-    atom_value: "Elixir.RustQ.Rust.AST.AtomValue",
-    none: "Elixir.RustQ.Rust.AST.None",
-    some: "Elixir.RustQ.Rust.AST.Some",
-    ok: "Elixir.RustQ.Rust.AST.Ok",
-    err: "Elixir.RustQ.Rust.AST.Err",
-    nif_raise_atom: "Elixir.RustQ.Rust.AST.NifRaiseAtom",
-    match: "Elixir.RustQ.Rust.AST.Match",
-    if: "Elixir.RustQ.Rust.AST.If",
-    binary_op: "Elixir.RustQ.Rust.AST.BinaryOp",
-    arm: "Elixir.RustQ.Rust.AST.Arm",
-    pat_var: "Elixir.RustQ.Rust.AST.PatVar",
-    pat_wildcard: "Elixir.RustQ.Rust.AST.PatWildcard",
-    pat_literal: "Elixir.RustQ.Rust.AST.PatLiteral",
-    pat_none: "Elixir.RustQ.Rust.AST.PatNone",
-    pat_some: "Elixir.RustQ.Rust.AST.PatSome",
-    pat_ok: "Elixir.RustQ.Rust.AST.PatOk",
-    pat_err: "Elixir.RustQ.Rust.AST.PatErr",
-    pat_path_tuple: "Elixir.RustQ.Rust.AST.PatPathTuple",
-    pat_struct: "Elixir.RustQ.Rust.AST.PatStruct",
-    pat_tuple: "Elixir.RustQ.Rust.AST.PatTuple",
-    pat_atom_guard: "Elixir.RustQ.Rust.AST.PatAtomGuard",
-    type_unit: "Elixir.RustQ.Rust.AST.TypeUnit",
-    type_path: "Elixir.RustQ.Rust.AST.TypePath",
-    type_ref: "Elixir.RustQ.Rust.AST.TypeRef",
-    type_option: "Elixir.RustQ.Rust.AST.TypeOption",
-    type_result: "Elixir.RustQ.Rust.AST.TypeResult",
-    type_nif_result: "Elixir.RustQ.Rust.AST.TypeNifResult",
-    type_vec: "Elixir.RustQ.Rust.AST.TypeVec"
-  ]
 
   def generated_ast_support do
     [
@@ -85,8 +32,8 @@ defmodule RustQ.NativeCodegen do
 
   defp ast_modules_module do
     constants =
-      Enum.map(@ast_modules, fn {name, module} ->
-        A.const(String.to_atom(constant_name(name)), "&str", module, vis: :crate)
+      Enum.map(Schema.nodes(), fn node ->
+        A.const(node.rust_const, "&str", node.rust_module, vis: :crate)
       end)
 
     A.module(:ast_modules, constants, vis: :crate)
@@ -242,11 +189,5 @@ defmodule RustQ.NativeCodegen do
     end
   rescue
     ErlangError -> source
-  end
-
-  defp constant_name(name) do
-    name
-    |> Atom.to_string()
-    |> String.upcase()
   end
 end

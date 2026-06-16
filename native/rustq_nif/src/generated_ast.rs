@@ -18,6 +18,13 @@ pub(crate) mod ast_modules {
     pub(crate) const STRUCT_FIELD: &str = "Elixir.RustQ.Rust.AST.StructField";
     pub(crate) const ENUM: &str = "Elixir.RustQ.Rust.AST.Enum";
     pub(crate) const ENUM_VARIANT: &str = "Elixir.RustQ.Rust.AST.EnumVariant";
+    pub(crate) const TYPE_PATH: &str = "Elixir.RustQ.Rust.AST.TypePath";
+    pub(crate) const TYPE_REF: &str = "Elixir.RustQ.Rust.AST.TypeRef";
+    pub(crate) const TYPE_OPTION: &str = "Elixir.RustQ.Rust.AST.TypeOption";
+    pub(crate) const TYPE_RESULT: &str = "Elixir.RustQ.Rust.AST.TypeResult";
+    pub(crate) const TYPE_NIF_RESULT: &str = "Elixir.RustQ.Rust.AST.TypeNifResult";
+    pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
+    pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
     pub(crate) const EXPR_STMT: &str = "Elixir.RustQ.Rust.AST.ExprStmt";
     pub(crate) const RETURN: &str = "Elixir.RustQ.Rust.AST.Return";
@@ -26,8 +33,8 @@ pub(crate) mod ast_modules {
     pub(crate) const FIELD: &str = "Elixir.RustQ.Rust.AST.Field";
     pub(crate) const PATH_CALL: &str = "Elixir.RustQ.Rust.AST.PathCall";
     pub(crate) const METHOD_CALL: &str = "Elixir.RustQ.Rust.AST.MethodCall";
-    pub(crate) const LOCAL_CALL: &str = "Elixir.RustQ.Rust.AST.LocalCall";
     pub(crate) const STRUCT_LITERAL: &str = "Elixir.RustQ.Rust.AST.StructLiteral";
+    pub(crate) const LOCAL_CALL: &str = "Elixir.RustQ.Rust.AST.LocalCall";
     pub(crate) const REF: &str = "Elixir.RustQ.Rust.AST.Ref";
     pub(crate) const TRY: &str = "Elixir.RustQ.Rust.AST.Try";
     pub(crate) const TUPLE: &str = "Elixir.RustQ.Rust.AST.Tuple";
@@ -47,19 +54,12 @@ pub(crate) mod ast_modules {
     pub(crate) const PAT_LITERAL: &str = "Elixir.RustQ.Rust.AST.PatLiteral";
     pub(crate) const PAT_NONE: &str = "Elixir.RustQ.Rust.AST.PatNone";
     pub(crate) const PAT_SOME: &str = "Elixir.RustQ.Rust.AST.PatSome";
+    pub(crate) const PAT_ATOM_GUARD: &str = "Elixir.RustQ.Rust.AST.PatAtomGuard";
+    pub(crate) const PAT_TUPLE: &str = "Elixir.RustQ.Rust.AST.PatTuple";
     pub(crate) const PAT_OK: &str = "Elixir.RustQ.Rust.AST.PatOk";
     pub(crate) const PAT_ERR: &str = "Elixir.RustQ.Rust.AST.PatErr";
     pub(crate) const PAT_PATH_TUPLE: &str = "Elixir.RustQ.Rust.AST.PatPathTuple";
     pub(crate) const PAT_STRUCT: &str = "Elixir.RustQ.Rust.AST.PatStruct";
-    pub(crate) const PAT_TUPLE: &str = "Elixir.RustQ.Rust.AST.PatTuple";
-    pub(crate) const PAT_ATOM_GUARD: &str = "Elixir.RustQ.Rust.AST.PatAtomGuard";
-    pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
-    pub(crate) const TYPE_PATH: &str = "Elixir.RustQ.Rust.AST.TypePath";
-    pub(crate) const TYPE_REF: &str = "Elixir.RustQ.Rust.AST.TypeRef";
-    pub(crate) const TYPE_OPTION: &str = "Elixir.RustQ.Rust.AST.TypeOption";
-    pub(crate) const TYPE_RESULT: &str = "Elixir.RustQ.Rust.AST.TypeResult";
-    pub(crate) const TYPE_NIF_RESULT: &str = "Elixir.RustQ.Rust.AST.TypeNifResult";
-    pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
 }
 
 pub(crate) fn atom(env: Env, name: &str) -> NifResult<Atom> {
