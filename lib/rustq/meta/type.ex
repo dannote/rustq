@@ -217,7 +217,8 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(function, args, aliases) do
     type(:type, %AST.TypePath{
-      parts: ["#{function}<#{Enum.map_join(args, ", ", &parse(&1, aliases).rust)}>"]
+      parts: [function],
+      generics: Enum.map(args, &parse(&1, aliases).ast)
     })
   end
 
@@ -232,10 +233,8 @@ defmodule RustQ.Meta.Type do
 
         args ->
           %AST.TypePath{
-            parts: [
-              Enum.map_join(parts ++ [function], "::", &to_string/1) <>
-                "<#{Enum.map_join(args, ", ", &parse(&1, aliases).rust)}>"
-            ]
+            parts: parts ++ [function],
+            generics: Enum.map(args, &parse(&1, aliases).ast)
           }
       end
 

@@ -34,6 +34,42 @@ defmodule RustQ.Meta.TypeItemsTest do
 
     assert Enum.any?(fields, &match?({:x, %RustQ.Meta.Type{rust: "f32"}, :required}, &1))
     assert Enum.any?(fields, &match?({:fill, %RustQ.Meta.Type{rust: "Term<'a>"}, :optional}, &1))
+
+    assert %RustQ.Meta.Type{
+             kind: :struct,
+             rust: "NestedOpts<'a>",
+             ast: %RustQ.Rust.AST.TypePath{parts: ["NestedOpts"], lifetimes: [:a]},
+             meta: %{fields: nested_fields}
+           } = Generated.__rustq_types__()[{:nested_opts, 0}]
+
+    assert Enum.any?(
+             nested_fields,
+             &match?(
+               {:rect,
+                %RustQ.Meta.Type{
+                  ast: %RustQ.Rust.AST.TypePath{parts: ["RectOpts"], lifetimes: [:a]}
+                }, :required},
+               &1
+             )
+           )
+
+    assert Enum.any?(
+             nested_fields,
+             &match?({:label, %RustQ.Meta.Type{rust: "String"}, :optional}, &1)
+           )
+  end
+
+  test "generic type paths keep structured generic arguments" do
+    assert %RustQ.Meta.Type{
+             rust: "MyMap::t<String, u32>",
+             ast: %RustQ.Rust.AST.TypePath{
+               parts: [:MyMap, :t],
+               generics: [
+                 %RustQ.Rust.AST.TypePath{parts: [:String]},
+                 %RustQ.Rust.AST.TypePath{parts: [:u32]}
+               ]
+             }
+           } = RustQ.Meta.Type.from_spec_ast(quote(do: MyMap.t(String.t(), R.u32())))
   end
 
   test "type aliases generate Rust items and decoders" do

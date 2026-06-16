@@ -293,16 +293,24 @@ stable template API.
 
 The next practical sequence should be:
 
-1. Refactor `RustQ.Meta.Lower` around an explicit expected-type/context lowering
-   helper.
-2. Add nested branch tests for `Option`, `Result`, and `NifResult`.
-3. Add real generic type AST support so `Option`, `Result`, `Vec`, and path
-   generics no longer format strings in generated Rust.
-4. Move type container decoding away from `format!(...)` + `parse_type` toward
-   typed AST or token construction.
-5. Decide whether `path_parts`/`decode_lifetime_list` should be dogfooded or
+1. Decide whether `path_parts`/`decode_lifetime_list` should be dogfooded or
    consolidated as one generic string-list primitive.
-6. Revisit public docs once the lowering/context refactor is stable.
+2. Continue reducing type parsing boundaries: `TypePath` now has structured
+   generics, and container decoders use generic type construction; references
+   and lifetime-heavy paths still have parse-boundary code.
+3. Expand schema/type behavioral coverage for nested maps, optional fields,
+   struct lifetimes, tuple enum variants, and invalid atom behavior.
+4. Revisit public docs once the lowering/context refactor is stable.
+
+Recently completed:
+
+- `RustQ.Meta.Lower` now carries an explicit lowering context for return type,
+  variable types, and branch position.
+- Nested branch tests cover expected wrapping for `Option`, `Result`, and
+  `NifResult`.
+- `TypePath` now carries structured generic arguments.
+- Type container native decoding now uses generic type construction rather than
+  per-container `format!(...)` strings.
 
 ## Verification gates
 

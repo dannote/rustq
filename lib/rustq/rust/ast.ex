@@ -139,8 +139,15 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{name: atom(), tuple: [RustQ.Rust.AST.type()]})
   )
 
-  defnode(TypePath, :type, [:parts, lifetimes: []],
-    type: quote(do: %__MODULE__{parts: [atom() | String.t()], lifetimes: [atom()]})
+  defnode(TypePath, :type, [:parts, lifetimes: [], generics: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          parts: [atom() | String.t()],
+          lifetimes: [atom()],
+          generics: [RustQ.Rust.AST.type()]
+        }
+      )
   )
 
   defnode(TypeRef, :type, [:inner, mutable: false, lifetime: nil],
@@ -488,20 +495,16 @@ defmodule RustQ.Rust.AST do
   def render_type(type) when is_binary(type), do: type
   def render_type(%TypeUnit{}), do: "()"
 
-  def render_type(%TypePath{parts: parts, lifetimes: lifetimes}) do
+  def render_type(%TypePath{parts: parts, lifetimes: lifetimes, generics: generics}) do
     base = Elixir.Enum.map_join(parts, "::", &to_string/1)
 
-    case lifetimes do
-      [] ->
-        base
+    generic_args =
+      (lifetimes |> Elixir.Enum.map(&["'", to_string(&1)])) ++
+        (generics |> Elixir.Enum.map(&render_type/1))
 
-      lifetimes ->
-        [
-          base,
-          "<",
-          lifetimes |> Elixir.Enum.map(&["'", to_string(&1)]) |> Elixir.Enum.intersperse(", "),
-          ">"
-        ]
+    case generic_args do
+      [] -> base
+      args -> [base, "<", Elixir.Enum.intersperse(args, ", "), ">"]
     end
   end
 

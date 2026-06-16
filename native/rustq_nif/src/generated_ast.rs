@@ -271,7 +271,8 @@ pub(crate) fn decode_enum_variant<'a>(term: Term<'a>) -> NifResult<Variant> {
 pub(crate) fn decode_type_path<'a>(term: Term<'a>) -> NifResult<Type> {
     let parts = super::path_parts(required_field(term, "parts")?)?;
     let lifetimes = super::decode_lifetime_list(required_field(term, "lifetimes")?)?;
-    super::parse_type_path(parts, lifetimes)
+    let generics = super::decode_type_list(required_field(term, "generics")?)?;
+    super::parse_type_path_with_generics(parts, lifetimes, generics)
 }
 
 pub(crate) fn decode_type_unit<'a>(_term: Term<'a>) -> NifResult<Type> {
@@ -287,23 +288,23 @@ pub(crate) fn decode_type_ref<'a>(term: Term<'a>) -> NifResult<Type> {
 
 pub(crate) fn decode_type_option<'a>(term: Term<'a>) -> NifResult<Type> {
     let inner = super::decode_type(required_field(term, "inner")?)?;
-    super::parse_type(&format!("Option<{}>", quote!(# inner)))
+    super::parse_type_generic("Option", vec![inner])
 }
 
 pub(crate) fn decode_type_result<'a>(term: Term<'a>) -> NifResult<Type> {
     let ok = super::decode_type(required_field(term, "ok")?)?;
     let error = super::decode_type(required_field(term, "error")?)?;
-    super::parse_type(&format!("Result<{}, {}>", quote!(# ok), quote!(# error)))
+    super::parse_type_generic("Result", vec![ok, error])
 }
 
 pub(crate) fn decode_type_nif_result<'a>(term: Term<'a>) -> NifResult<Type> {
     let inner = super::decode_type(required_field(term, "inner")?)?;
-    super::parse_type(&format!("NifResult<{}>", quote!(# inner)))
+    super::parse_type_generic("NifResult", vec![inner])
 }
 
 pub(crate) fn decode_type_vec<'a>(term: Term<'a>) -> NifResult<Type> {
     let inner = super::decode_type(required_field(term, "inner")?)?;
-    super::parse_type(&format!("Vec<{}>", quote!(# inner)))
+    super::parse_type_generic("Vec", vec![inner])
 }
 
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {

@@ -25,6 +25,11 @@ defmodule RustQ.Meta.GeneratedCase do
           optional(:fill) => term()
         }
 
+  @type nested_opts :: %{
+          required(:rect) => rect_opts(),
+          optional(:label) => String.t()
+        }
+
   @spec draw_save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
   defrust draw_save(canvas) do
     canvas.save()
@@ -75,5 +80,44 @@ defmodule RustQ.Meta.GeneratedCase do
     end
 
     :ok
+  end
+
+  @spec nested_option(R.option(R.u32())) :: R.option(R.u32())
+  defrust nested_option(value) do
+    case value do
+      nil ->
+        nil
+
+      value ->
+        if value == 0 do
+          nil
+        else
+          value
+        end
+    end
+  end
+
+  @spec nested_result(R.result(R.u32(), atom())) :: R.result(R.u32(), atom())
+  defrust nested_result(result) do
+    if is_ready() do
+      case result do
+        {:ok, value} -> {:ok, value}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :not_ready}
+    end
+  end
+
+  @spec nested_nif_result(R.result(R.u32(), atom())) :: R.nif_result(R.u32())
+  defrust nested_nif_result(result) do
+    if is_ready() do
+      case result do
+        {:ok, value} -> {:ok, value}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :not_ready}
+    end
   end
 end

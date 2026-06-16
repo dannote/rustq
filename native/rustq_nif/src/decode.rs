@@ -277,12 +277,7 @@ pub(crate) fn keyword_args(term: Term) -> NifResult<Vec<(String, Type)>> {
 }
 
 pub(crate) fn path_parts(term: Term) -> NifResult<String> {
-    Ok(term
-        .decode::<Vec<Term>>()?
-        .into_iter()
-        .map(atom_or_string)
-        .collect::<NifResult<Vec<String>>>()?
-        .join("::"))
+    Ok(decode_string_list(term)?.join("::"))
 }
 
 pub(crate) fn atom_or_string(term: Term) -> NifResult<String> {
@@ -303,6 +298,10 @@ pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
 }
 
 pub(crate) fn decode_lifetime_list(term: Term) -> NifResult<Vec<String>> {
+    decode_string_list(term)
+}
+
+fn decode_string_list(term: Term) -> NifResult<Vec<String>> {
     term.decode::<Vec<Term>>()?
         .into_iter()
         .map(atom_or_string)

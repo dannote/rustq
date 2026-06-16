@@ -45,6 +45,23 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     end
   end
 
+  test "type container decoders use generic type construction" do
+    decoders = RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
+
+    for name <- [
+          :decode_type_option,
+          :decode_type_result,
+          :decode_type_nif_result,
+          :decode_type_vec
+        ] do
+      assert %AST.Function{body: body} = Enum.find(decoders, &(&1.name == name))
+
+      assert %AST.Return{
+               expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_type_generic]}}
+             } = List.last(body)
+    end
+  end
+
   test "dogfooded decoder modules cover generated decoder categories" do
     decoder_names =
       RustQ.NativeCodegen.Decoders.asts()

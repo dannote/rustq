@@ -91,7 +91,11 @@ defmodule RustQ.Rust.AST.Builder do
   def type_path(parts_or_part, opts \\ [])
 
   def type_path(parts, opts) when is_list(parts),
-    do: %AST.TypePath{parts: parts, lifetimes: Keyword.get(opts, :lifetimes, [])}
+    do: %AST.TypePath{
+      parts: parts,
+      lifetimes: Keyword.get(opts, :lifetimes, []),
+      generics: Keyword.get(opts, :generics, [])
+    }
 
   def type_path(part, opts) when is_atom(part) or is_binary(part), do: type_path([part], opts)
 

@@ -121,6 +121,70 @@ defmodule RustQ.Meta.LowerTest do
     assert else_path.parts == [:super, "parse_syn::<Expr>"]
   end
 
+  test "nested branches use expected return type wrapping" do
+    asts = Generated.__rustq_asts__()
+
+    assert %RustQ.Rust.AST.Function{
+             name: :nested_option,
+             body: [
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.Match{arms: [nil_arm, value_arm]}
+               }
+             ]
+           } = Enum.find(asts, &(&1.name == :nested_option))
+
+    assert %RustQ.Rust.AST.Arm{body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.None{}}]} =
+             nil_arm
+
+    assert %RustQ.Rust.AST.Arm{
+             body: [
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.If{then: then_body, else: else_body}
+               }
+             ]
+           } = value_arm
+
+    assert [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.None{}}] = then_body
+
+    assert [
+             %RustQ.Rust.AST.Return{
+               expr: %RustQ.Rust.AST.Some{expr: %RustQ.Rust.AST.Var{name: :value}}
+             }
+           ] =
+             else_body
+
+    assert %RustQ.Rust.AST.Function{
+             name: :nested_result,
+             body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{then: result_then}}]
+           } = Enum.find(asts, &(&1.name == :nested_result))
+
+    assert [
+             %RustQ.Rust.AST.Return{
+               expr: %RustQ.Rust.AST.Match{
+                 arms: [
+                   %RustQ.Rust.AST.Arm{
+                     body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Ok{}}]
+                   },
+                   %RustQ.Rust.AST.Arm{
+                     body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Err{}}]
+                   }
+                 ]
+               }
+             }
+           ] = result_then
+
+    assert %RustQ.Rust.AST.Function{
+             name: :nested_nif_result,
+             body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{else: nif_else}}]
+           } = Enum.find(asts, &(&1.name == :nested_nif_result))
+
+    assert [
+             %RustQ.Rust.AST.Return{
+               expr: %RustQ.Rust.AST.Err{expr: %RustQ.Rust.AST.NifRaiseAtom{name: :not_ready}}
+             }
+           ] = nif_else
+  end
+
   test "dogfooded decoder wrappers lower Super calls and Rust constructors" do
     decoders = RustQ.NativeCodegen.Decoders.asts()
 

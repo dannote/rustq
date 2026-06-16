@@ -4,12 +4,19 @@ defmodule RustQ.Meta.Lower do
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
 
+  defmodule Context do
+    @moduledoc false
+    defstruct [:return_type, vars: %{}, position: :return]
+  end
+
   @spec function_ast(Macro.t(), Type.t(), map()) :: [struct()]
   def function_ast(body_ast, return_type, vars \\ %{}) do
+    context = %Context{return_type: return_type, vars: vars}
+
     body =
       body_ast
       |> block_expressions()
-      |> lower_block(return_type, vars)
+      |> lower_block(context)
 
     infer_mutability(body)
   end
@@ -22,9 +29,13 @@ defmodule RustQ.Meta.Lower do
     |> Enum.join("\n")
   end
 
-  defp lower_block(expressions, return_type, vars) do
+  defp lower_block(expressions, %Context{} = context) do
     {statements, final} = split_final(expressions)
-    Enum.map(statements, &lower_statement(&1, vars)) ++ [lower_return(final, return_type, vars)]
+    statement_context = %{context | position: :statement}
+    return_context = %{context | position: :return}
+
+    Enum.map(statements, &lower_statement(&1, statement_context)) ++
+      [lower_return(final, return_context)]
   end
 
   defp split_final([]), do: {[], :ok}
@@ -33,31 +44,31 @@ defmodule RustQ.Meta.Lower do
   defp block_expressions({:__block__, _, expressions}), do: expressions
   defp block_expressions(expression), do: [expression]
 
-  defp lower_statement({:=, _, [pattern, expression]}, _vars) do
+  defp lower_statement({:=, _, [pattern, expression]}, %Context{}) do
     %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression)}
   end
 
-  defp lower_statement({:case, _, [expression, [do: clauses]]}, vars) do
-    %AST.ExprStmt{expr: lower_case(expression, clauses, :statement, vars)}
+  defp lower_statement({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
+    %AST.ExprStmt{expr: lower_case(expression, clauses, context)}
   end
 
-  defp lower_statement({:if, _, [condition, branches]}, vars) do
-    %AST.ExprStmt{expr: lower_if(condition, branches, :statement, vars)}
+  defp lower_statement({:if, _, [condition, branches]}, %Context{} = context) do
+    %AST.ExprStmt{expr: lower_if(condition, branches, context)}
   end
 
-  defp lower_statement(:ok, _vars), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
-  defp lower_statement(nil, _vars), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
-  defp lower_statement(expression, _vars), do: %AST.ExprStmt{expr: lower_expr(expression)}
+  defp lower_statement(:ok, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
+  defp lower_statement(nil, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
+  defp lower_statement(expression, %Context{}), do: %AST.ExprStmt{expr: lower_expr(expression)}
 
-  defp lower_return({:case, _, [expression, [do: clauses]]}, return_type, vars) do
-    %AST.Return{expr: lower_case(expression, clauses, {:return, return_type}, vars)}
+  defp lower_return({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
+    %AST.Return{expr: lower_case(expression, clauses, context)}
   end
 
-  defp lower_return({:if, _, [condition, branches]}, return_type, vars) do
-    %AST.Return{expr: lower_if(condition, branches, {:return, return_type}, vars)}
+  defp lower_return({:if, _, [condition, branches]}, %Context{} = context) do
+    %AST.Return{expr: lower_if(condition, branches, context)}
   end
 
-  defp lower_return(expression, return_type, _vars),
+  defp lower_return(expression, %Context{return_type: return_type}),
     do: %AST.Return{expr: lower_return_expr(expression, return_type)}
 
   defp lower_return_expr(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}), do: %AST.Ok{}
@@ -78,48 +89,49 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
 
-  defp lower_case(expression, clauses, context, vars) do
-    case_type = infer_expr_type(expression, vars) || infer_case_type_from_patterns(clauses)
+  defp lower_case(expression, clauses, %Context{} = context) do
+    case_type =
+      infer_expr_type(expression, context.vars) || infer_case_type_from_patterns(clauses)
 
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
         %AST.Arm{
           pattern: lower_match_pattern(pattern, case_type),
-          body: lower_clause_body(body, context, vars)
+          body: lower_clause_body(body, context)
         }
       end)
 
     %AST.Match{expr: lower_expr(expression), arms: arms}
   end
 
-  defp lower_if(condition, branches, context, vars) do
+  defp lower_if(condition, branches, %Context{} = context) do
     then_body = Keyword.fetch!(branches, :do)
     else_body = Keyword.get(branches, :else, nil)
 
     %AST.If{
       condition: lower_expr(condition),
-      then: lower_clause_body(then_body, context, vars),
-      else: lower_clause_body(else_body, context, vars)
+      then: lower_clause_body(then_body, context),
+      else: lower_clause_body(else_body, context)
     }
   end
 
-  defp lower_clause_body(body, :statement, vars) do
+  defp lower_clause_body(body, %Context{position: :statement} = context) do
     body
     |> block_expressions()
-    |> Enum.map(&lower_statement(&1, vars))
+    |> Enum.map(&lower_statement(&1, context))
     |> reject_unit_statements()
   end
 
-  defp lower_clause_body(body, {:return, return_type}, vars) do
+  defp lower_clause_body(body, %Context{position: :return} = context) do
     body
     |> block_expressions()
-    |> lower_block(return_type, vars)
+    |> lower_block(context)
   end
 
-  defp lower_clause_body(body, :expr, vars) do
+  defp lower_clause_body(body, %Context{position: :expr} = context) do
     body
     |> block_expressions()
-    |> lower_block(nil, vars)
+    |> lower_block(%{context | return_type: nil})
   end
 
   defp infer_case_type_from_patterns(clauses) do
@@ -237,10 +249,10 @@ defmodule RustQ.Meta.Lower do
     do: %AST.BinaryOp{left: lower_expr(left), op: :or, right: lower_expr(right)}
 
   defp lower_expr({:if, _, [condition, branches]}),
-    do: lower_if(condition, branches, :expr, %{})
+    do: lower_if(condition, branches, %Context{position: :expr})
 
   defp lower_expr({:case, _, [expression, [do: clauses]]}),
-    do: lower_case(expression, clauses, :expr, %{})
+    do: lower_case(expression, clauses, %Context{position: :expr})
 
   defp lower_expr({{:., _meta, [receiver, field_or_function]}, call_meta, []}) do
     cond do
@@ -286,6 +298,14 @@ defmodule RustQ.Meta.Lower do
     do: %AST.Var{name: name}
 
   defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
+
+  defp lower_expr(values) when is_list(values) do
+    %AST.TokenMacro{
+      path: %AST.Path{parts: [:vec]},
+      tokens: values |> Enum.map(&AST.render_expr(lower_expr(&1))) |> Enum.join(", ")
+    }
+  end
+
   defp lower_expr(value) when is_binary(value), do: %AST.Literal{value: value}
   defp lower_expr(value) when is_integer(value) or is_float(value), do: %AST.Literal{value: value}
   defp lower_expr(true), do: %AST.Literal{value: true}
