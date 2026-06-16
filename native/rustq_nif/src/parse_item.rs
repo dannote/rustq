@@ -2,10 +2,15 @@ use quote::quote;
 use rustler::NifResult;
 use syn::{Expr, Field, FnArg, Item, Stmt, Type};
 
-use crate::parse_syn;
+use crate::{parse_syn, path_from_parts};
 
 pub(crate) fn parse_item_use(tree: String) -> NifResult<syn::ItemUse> {
     syn::parse_str(&format!("use {tree};")).map_err(|_| rustler::Error::BadArg)
+}
+
+pub(crate) fn parse_item_use_path(parts: Vec<String>) -> NifResult<syn::ItemUse> {
+    let path = path_from_parts(parts)?;
+    parse_syn(quote!(use #path;))
 }
 
 pub(crate) fn parse_item_module(

@@ -23,6 +23,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
   test "renders item-level Rust AST nodes through native AST" do
     source =
       AST.render_file_native([
+        A.use([:quote, :quote]),
         A.use("rustler::{Atom, Env}"),
         A.module(
           :generated,
@@ -34,6 +35,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         )
       ])
 
+    assert source =~ "use quote::quote;"
     assert source =~ "use rustler::{Atom, Env};"
     assert source =~ "pub(crate) mod generated"
     assert source =~ ~s|pub(crate) const NAME: &str = "Elixir.Example";|

@@ -15,6 +15,9 @@ defmodule RustQ.ASTSamples do
     source =~ base_fragment(ast) and source =~ semantic_fragment(name)
   end
 
+  defp base_fragment(%AST.Use{parts: parts}) when is_list(parts),
+    do: "use #{Enum.map_join(parts, "::", &to_string/1)};"
+
   defp base_fragment(%AST.Use{tree: tree}), do: "use #{tree};"
   defp base_fragment(%AST.Module{name: name}), do: "mod #{name}"
   defp base_fragment(%AST.MacroItem{source: source}), do: source
@@ -36,8 +39,10 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:type_vec), do: "Vec<u8>"
   defp semantic_fragment(:type_unit), do: "type_unit_VALUE: ()"
   defp semantic_fragment(:let), do: "let value = 1i64;"
+  defp semantic_fragment(:assign), do: "value = 2i64;"
   defp semantic_fragment(:expr_stmt), do: "side_effect();"
   defp semantic_fragment(:return), do: "1i64"
+  defp semantic_fragment(:early_return), do: "return 1i64;"
   defp semantic_fragment(:var), do: "value"
   defp semantic_fragment(:path), do: "Sample::VALUE"
   defp semantic_fragment(:field), do: "opts.value"
@@ -52,6 +57,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:closure), do: "|value| value"
   defp semantic_fragment(:literal), do: "1i64"
   defp semantic_fragment(:token_macro), do: "quote!(None)"
+  defp semantic_fragment(:macro_call), do: ~s|format!("{}", value)|
   defp semantic_fragment(:atom_value), do: "atoms::ok()"
   defp semantic_fragment(:none), do: "None"
   defp semantic_fragment(:some), do: "Some(1i64)"
@@ -76,7 +82,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:pat_struct), do: "Click { name: name } =>"
   defp semantic_fragment(_), do: ""
 
-  def sample_for(:use), do: %AST.Use{tree: "std::fmt"}
+  def sample_for(:use), do: %AST.Use{parts: [:std, :fmt]}
   def sample_for(:module), do: %AST.Module{name: :sample, items: [sample_for(:const)]}
   def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
@@ -135,10 +141,25 @@ defmodule RustQ.ASTSamples do
         returns: "i64"
       )
 
+  def sample_for(:assign),
+    do:
+      function_sample(:assign_sample, A.var(:value),
+        body: [A.let_mut(:value, A.lit(1)), A.assign(:value, A.lit(2)), A.return(:value)],
+        returns: "i64"
+      )
+
   def sample_for(:expr_stmt),
     do: function_sample(:expr_stmt, A.call(:side_effect), statement?: true)
 
   def sample_for(:return), do: function_sample(:return_sample, A.lit(1), returns: "i64")
+
+  def sample_for(:early_return),
+    do:
+      function_sample(:early_return_sample, A.var(:value),
+        body: [A.early_return(A.lit(1)), A.return(A.lit(2))],
+        returns: "i64"
+      )
+
   def sample_for(:var), do: function_sample(:var_sample, A.var(:value), returns: "i64")
 
   def sample_for(:path),
@@ -187,6 +208,13 @@ defmodule RustQ.ASTSamples do
   def sample_for(:token_macro),
     do:
       function_sample(:token_macro_sample, A.token_macro(:quote, "None"), returns: "TokenStream")
+
+  def sample_for(:macro_call),
+    do:
+      function_sample(:macro_call_sample, A.macro_call(:format, [A.lit("{}"), A.var(:value)]),
+        args: [value: "i64"],
+        returns: "String"
+      )
 
   def sample_for(:atom_value),
     do: function_sample(:atom_value_sample, %AST.AtomValue{name: :ok}, returns: "Atom")

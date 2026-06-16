@@ -6,7 +6,7 @@ defmodule RustQ.NativeCodegen do
 
   def generated_ast_support do
     [
-      A.use("quote::quote"),
+      A.use([:quote, :quote]),
       A.use("rustler::{Atom, Env, NifResult, Term}"),
       A.use(
         "syn::{Arm, Expr, Field, FnArg, Item, ItemConst, ItemEnum, ItemFn, ItemMod, ItemStruct, ItemUse, Pat, Path, Stmt, Type, Variant}"

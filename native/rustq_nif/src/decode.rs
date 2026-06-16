@@ -149,6 +149,14 @@ pub(crate) fn parse_let_stmt(
     }
 }
 
+pub(crate) fn parse_assign_stmt(target: Expr, expr: Expr) -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(#target = #expr;))
+}
+
+pub(crate) fn parse_return_stmt(expr: Expr) -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(return #expr;))
+}
+
 pub(crate) fn decode_expr(term: Term) -> NifResult<Expr> {
     decode_ast_expr(term)
 }
@@ -203,6 +211,10 @@ pub(crate) fn format_ident_value(name: String) -> proc_macro2::Ident {
 
 pub(crate) fn parse_ast_path(term: Term) -> NifResult<syn::Path> {
     parse_path(&path_parts(term.map_get(atom(term.get_env(), "parts")?)?)?)
+}
+
+pub(crate) fn parse_path_expr(path: syn::Path) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(#path))
 }
 
 pub(crate) fn string_field(term: Term, key: &str) -> NifResult<String> {

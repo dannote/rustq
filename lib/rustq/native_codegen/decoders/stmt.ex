@@ -5,6 +5,13 @@ defmodule RustQ.NativeCodegen.Decoders.Stmt do
 
   alias RustQ.Type, as: R
 
+  @spec decode_stmt_assign(term()) :: R.nif_result(Stmt.t())
+  defrust decode_stmt_assign(term) do
+    target = unwrap!(Super.decode_expr(unwrap!(required_field(term, "target"))))
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    Super.parse_assign_stmt(target, expr)
+  end
+
   @spec decode_stmt_expr_stmt(term()) :: R.nif_result(Stmt.t())
   defrust decode_stmt_expr_stmt(term) do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
@@ -15,6 +22,12 @@ defmodule RustQ.NativeCodegen.Decoders.Stmt do
   defrust decode_stmt_return(term) do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
     {:ok, Stmt.expr(expr, none())}
+  end
+
+  @spec decode_stmt_early_return(term()) :: R.nif_result(Stmt.t())
+  defrust decode_stmt_early_return(term) do
+    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    Super.parse_return_stmt(expr)
   end
 
   @spec decode_stmt_let(term()) :: R.nif_result(Stmt.t())

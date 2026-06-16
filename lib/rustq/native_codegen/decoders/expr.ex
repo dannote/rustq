@@ -13,8 +13,8 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_path(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_path(term) do
-    parts = unwrap!(Super.path_parts(unwrap!(required_field(term, "parts"))))
-    Super.parse_expr(ref(parts))
+    path = unwrap!(Super.parse_ast_path(term))
+    Super.parse_path_expr(path)
   end
 
   @spec decode_expr_atom_value(term()) :: R.nif_result(Expr.t())
@@ -123,6 +123,13 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     args = unwrap!(Super.decode_ident_list(unwrap!(required_field(term, "args"))))
     body = unwrap!(Super.decode_expr(unwrap!(required_field(term, "body"))))
     expr!(closure(args, body))
+  end
+
+  @spec decode_expr_macro_call(term()) :: R.nif_result(Expr.t())
+  defrust decode_expr_macro_call(term) do
+    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
+    expr!(macro_call(path, args))
   end
 
   @spec decode_expr_token_macro(term()) :: R.nif_result(Expr.t())

@@ -8,8 +8,15 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   @spec decode_ast_use(term()) :: R.nif_result(ItemUse.t())
   defrust decode_ast_use(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Use"))
-    tree = unwrap!(Super.string_field(term, "tree"))
-    Super.parse_item_use(tree)
+    parts = unwrap!(required_field(term, "parts"))
+
+    if unwrap!(is_nil(parts)) do
+      tree = unwrap!(Super.string_field(term, "tree"))
+      Super.parse_item_use(tree)
+    else
+      parts = unwrap!(Super.decode_string_list(parts))
+      Super.parse_item_use_path(parts)
+    end
   end
 
   @spec decode_ast_module(term()) :: R.nif_result(ItemMod.t())

@@ -347,8 +347,15 @@ Recently completed:
 - `path_parts` and `decode_lifetime_list` are now dogfooded defrust helpers, and
   derive path decoding uses the new iterator lowering before native derive
   attribute assembly.
-- Native path decoding for derives and type paths now constructs `syn::Path`
-  structurally from path segments instead of joining and reparsing path strings.
+- Native path decoding for derives, expression paths, and type paths now constructs
+  `syn::Path` structurally from path segments instead of joining and reparsing
+  path strings.
+- Simple `use` items can now be represented structurally as path segments; complex
+  brace/group imports remain on the `Use.tree` compatibility path.
+- Macro calls now have an AST-backed `MacroCall` node, and local `foo!()` calls
+  lower to it instead of the old local-call string fallback.
+- Assignment and early-return statements are modeled explicitly with `Assign` and
+  `EarlyReturn` AST nodes plus `assign!` / `return!` lowering.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

@@ -44,6 +44,14 @@ defmodule RustQ.Meta.Lower do
   defp block_expressions({:__block__, _, expressions}), do: expressions
   defp block_expressions(expression), do: [expression]
 
+  defp lower_statement({:assign!, _, [target, expression]}, %Context{}) do
+    %AST.Assign{target: lower_expr(target), expr: lower_expr(expression)}
+  end
+
+  defp lower_statement({:return!, _, [expression]}, %Context{return_type: return_type}) do
+    %AST.EarlyReturn{expr: lower_return_expr(expression, return_type)}
+  end
+
   defp lower_statement({:=, _, [pattern, expression]}, %Context{}) do
     %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression)}
   end
@@ -294,7 +302,14 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:__aliases__, _, parts}), do: %AST.Path{parts: parts}
 
   defp lower_expr({name, _, args}) when is_atom(name) and is_list(args) do
-    %AST.LocalCall{name: name, args: Enum.map(args, &lower_expr/1)}
+    if macro_call_name?(name) do
+      %AST.MacroCall{
+        path: %AST.Path{parts: [macro_call_part(name)]},
+        args: Enum.map(args, &lower_expr/1)
+      }
+    else
+      %AST.LocalCall{name: name, args: Enum.map(args, &lower_expr/1)}
+    end
   end
 
   defp lower_expr({name, _, context}) when is_atom(name) and is_atom(context),
@@ -342,6 +357,15 @@ defmodule RustQ.Meta.Lower do
   defp method_chain(receiver, method, args \\ []),
     do: %AST.MethodCall{receiver: receiver, method: method, args: args}
 
+  defp macro_call_name?(name), do: name |> Atom.to_string() |> String.ends_with?("!")
+
+  defp macro_call_part(name) do
+    name
+    |> Atom.to_string()
+    |> String.trim_trailing("!")
+    |> String.to_atom()
+  end
+
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
 
@@ -376,6 +400,9 @@ defmodule RustQ.Meta.Lower do
       raw_expr(
         "#{semantic_interpolation(receiver)}.#{semantic_ident(method)}(#{semantic_splice(args)})"
       )
+
+  defp semantic_expr({:macro_call, _, [path, args]}),
+    do: raw_expr("#{semantic_interpolation(path)}!(#{semantic_splice(args)})")
 
   defp semantic_expr({:struct_literal, _, [path, fields]}),
     do: raw_expr("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
@@ -503,10 +530,20 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
+  defp mark_mutable_lets(%AST.Assign{} = stmt, mutable_vars),
+    do: %{
+      stmt
+      | target: mark_mutable_expr(stmt.target, mutable_vars),
+        expr: mark_mutable_expr(stmt.expr, mutable_vars)
+    }
+
   defp mark_mutable_lets(%AST.ExprStmt{} = stmt, mutable_vars),
     do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
 
   defp mark_mutable_lets(%AST.Return{} = stmt, mutable_vars),
+    do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
+
+  defp mark_mutable_lets(%AST.EarlyReturn{} = stmt, mutable_vars),
     do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
 
   defp mark_mutable_expr(%AST.Match{} = match, mutable_vars) do
@@ -532,6 +569,9 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp mark_mutable_expr_fallback(%AST.LocalCall{} = expr, mutable_vars),
+    do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
+
+  defp mark_mutable_expr_fallback(%AST.MacroCall{} = expr, mutable_vars),
     do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
 
   defp mark_mutable_expr_fallback(%AST.Field{} = expr, mutable_vars),

@@ -58,6 +58,7 @@ defmodule RustQ.Rust.AST.Builder do
 
   def flatten(values), do: values |> List.wrap() |> List.flatten()
 
+  def use(parts) when is_list(parts), do: %AST.Use{parts: parts}
   def use(tree), do: %AST.Use{tree: tree}
 
   def module(name, items, opts \\ []),
@@ -86,8 +87,10 @@ defmodule RustQ.Rust.AST.Builder do
       type: Keyword.get(opts, :type)
     }
 
+  def assign(target, expression), do: %AST.Assign{target: expr(target), expr: expr(expression)}
   def stmt(expression), do: %AST.ExprStmt{expr: expr(expression)}
   def return_stmt(expression), do: %AST.Return{expr: expr(expression)}
+  def early_return(expression), do: %AST.EarlyReturn{expr: expr(expression)}
 
   def var(name) when is_atom(name), do: %AST.Var{name: name}
   def path(parts) when is_list(parts), do: %AST.Path{parts: parts}
@@ -116,6 +119,10 @@ defmodule RustQ.Rust.AST.Builder do
   def err(expression), do: %AST.Err{expr: expr(expression)}
   def lit(value), do: %AST.Literal{value: value}
   def token_macro(path, tokens), do: %AST.TokenMacro{path: expr_path(path), tokens: tokens}
+
+  def macro_call(path, args \\ []),
+    do: %AST.MacroCall{path: expr_path(path), args: Enum.map(args, &expr/1)}
+
   def vec(values), do: %AST.VecLiteral{values: Enum.map(values, &expr/1)}
   def closure(args, body), do: %AST.Closure{args: args, body: expr(body)}
 
@@ -188,6 +195,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Closure,
              AST.Literal,
              AST.TokenMacro,
+             AST.MacroCall,
              AST.AtomValue,
              AST.None,
              AST.Some,

@@ -31,8 +31,10 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
+    pub(crate) const ASSIGN: &str = "Elixir.RustQ.Rust.AST.Assign";
     pub(crate) const EXPR_STMT: &str = "Elixir.RustQ.Rust.AST.ExprStmt";
     pub(crate) const RETURN: &str = "Elixir.RustQ.Rust.AST.Return";
+    pub(crate) const EARLY_RETURN: &str = "Elixir.RustQ.Rust.AST.EarlyReturn";
     pub(crate) const VAR: &str = "Elixir.RustQ.Rust.AST.Var";
     pub(crate) const PATH: &str = "Elixir.RustQ.Rust.AST.Path";
     pub(crate) const FIELD: &str = "Elixir.RustQ.Rust.AST.Field";
@@ -47,6 +49,7 @@ pub(crate) mod ast_modules {
     pub(crate) const CLOSURE: &str = "Elixir.RustQ.Rust.AST.Closure";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
     pub(crate) const TOKEN_MACRO: &str = "Elixir.RustQ.Rust.AST.TokenMacro";
+    pub(crate) const MACRO_CALL: &str = "Elixir.RustQ.Rust.AST.MacroCall";
     pub(crate) const ATOM_VALUE: &str = "Elixir.RustQ.Rust.AST.AtomValue";
     pub(crate) const NONE: &str = "Elixir.RustQ.Rust.AST.None";
     pub(crate) const SOME: &str = "Elixir.RustQ.Rust.AST.Some";
@@ -163,8 +166,10 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
 pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
     match struct_name(term)?.as_str() {
         ast_modules::LET => decode_stmt_let(term),
+        ast_modules::ASSIGN => decode_stmt_assign(term),
         ast_modules::EXPR_STMT => decode_stmt_expr_stmt(term),
         ast_modules::RETURN => decode_stmt_return(term),
+        ast_modules::EARLY_RETURN => decode_stmt_early_return(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -185,6 +190,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::CLOSURE => decode_expr_closure(term),
         ast_modules::LITERAL => decode_expr_literal(term),
         ast_modules::TOKEN_MACRO => decode_expr_token_macro(term),
+        ast_modules::MACRO_CALL => decode_expr_macro_call(term),
         ast_modules::ATOM_VALUE => decode_expr_atom_value(term),
         ast_modules::NONE => decode_expr_none(term),
         ast_modules::SOME => decode_expr_some(term),
@@ -200,8 +206,14 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
 
 pub(crate) fn decode_ast_use<'a>(term: Term<'a>) -> NifResult<ItemUse> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Use")?;
-    let tree = super::string_field(term, "tree")?;
-    super::parse_item_use(tree)
+    let parts = required_field(term, "parts")?;
+    if is_nil(parts)? {
+        let tree = super::string_field(term, "tree")?;
+        super::parse_item_use(tree)
+    } else {
+        let parts = super::decode_string_list(parts)?;
+        super::parse_item_use_path(parts)
+    }
 }
 
 pub(crate) fn decode_ast_module<'a>(term: Term<'a>) -> NifResult<ItemMod> {
@@ -389,6 +401,12 @@ pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
     super::parse_syn::<Pat>(quote!(# path { # (# fields),* }))
 }
 
+pub(crate) fn decode_stmt_assign<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let target = super::decode_expr(required_field(term, "target")?)?;
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    super::parse_assign_stmt(target, expr)
+}
+
 pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     super::parse_syn::<Stmt>(quote!(# expr;))
@@ -397,6 +415,11 @@ pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
 pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     Ok(Stmt::Expr(expr, None))
+}
+
+pub(crate) fn decode_stmt_early_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let expr = super::decode_expr(required_field(term, "expr")?)?;
+    super::parse_return_stmt(expr)
 }
 
 pub(crate) fn decode_stmt_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
@@ -426,8 +449,8 @@ pub(crate) fn decode_expr_var<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_path<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let parts = super::path_parts(required_field(term, "parts")?)?;
-    super::parse_expr(&parts)
+    let path = super::parse_ast_path(term)?;
+    super::parse_path_expr(path)
 }
 
 pub(crate) fn decode_expr_atom_value<'a>(term: Term<'a>) -> NifResult<Expr> {
@@ -520,6 +543,12 @@ pub(crate) fn decode_expr_closure<'a>(term: Term<'a>) -> NifResult<Expr> {
     let args = super::decode_ident_list(required_field(term, "args")?)?;
     let body = super::decode_expr(required_field(term, "body")?)?;
     super::parse_syn::<Expr>(quote!(|# (# args),*| # body))
+}
+
+pub(crate) fn decode_expr_macro_call<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let args = super::decode_expr_list(required_field(term, "args")?)?;
+    super::parse_syn::<Expr>(quote!(# path!(# (# args),*)))
 }
 
 pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {

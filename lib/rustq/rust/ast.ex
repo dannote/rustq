@@ -16,7 +16,7 @@ defmodule RustQ.Rust.AST do
           | Struct.t()
           | Enum.t()
 
-  @type stmt :: Let.t() | ExprStmt.t() | Return.t()
+  @type stmt :: Let.t() | Assign.t() | ExprStmt.t() | Return.t() | EarlyReturn.t()
 
   @type expr ::
           Var.t()
@@ -33,6 +33,7 @@ defmodule RustQ.Rust.AST do
           | Closure.t()
           | Literal.t()
           | TokenMacro.t()
+          | MacroCall.t()
           | AtomValue.t()
           | None.t()
           | Some.t()
@@ -70,7 +71,9 @@ defmodule RustQ.Rust.AST do
 
   import RustQ.Rust.AST.NodeDSL
 
-  defnode(Use, :item, [:tree], type: quote(do: %__MODULE__{tree: String.t()}))
+  defnode(Use, :item, [tree: nil, parts: nil],
+    type: quote(do: %__MODULE__{tree: String.t() | nil, parts: [atom() | String.t()] | nil})
+  )
 
   defnode(Module, :item, [:name, items: [], vis: nil],
     type:
@@ -193,9 +196,15 @@ defmodule RustQ.Rust.AST do
       )
   )
 
+  defnode(Assign, :stmt, [:target, :expr],
+    type: quote(do: %__MODULE__{target: RustQ.Rust.AST.expr(), expr: RustQ.Rust.AST.expr()})
+  )
+
   defnode(ExprStmt, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
   defnode(Return, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+
+  defnode(EarlyReturn, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
 
   defnode(Var, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
@@ -253,6 +262,10 @@ defmodule RustQ.Rust.AST do
 
   defnode(TokenMacro, :expr, [:path, :tokens],
     type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), tokens: String.t()})
+  )
+
+  defnode(MacroCall, :expr, [:path, args: []],
+    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [RustQ.Rust.AST.expr()]})
   )
 
   defnode(AtomValue, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
@@ -351,8 +364,10 @@ defmodule RustQ.Rust.AST do
       TypeVec,
       TypeUnit,
       Let,
+      Assign,
       ExprStmt,
       Return,
+      EarlyReturn,
       Var,
       Path,
       Field,
@@ -367,6 +382,7 @@ defmodule RustQ.Rust.AST do
       Closure,
       Literal,
       TokenMacro,
+      MacroCall,
       AtomValue,
       None,
       Some,
@@ -421,6 +437,9 @@ defmodule RustQ.Rust.AST do
       end
     end
   end
+
+  def render_use(%Use{parts: parts}) when is_list(parts),
+    do: ["use ", Elixir.Enum.map_join(parts, "::", &to_string/1), ";"]
 
   def render_use(%Use{tree: tree}), do: ["use ", tree, ";"]
 
@@ -562,8 +581,12 @@ defmodule RustQ.Rust.AST do
     ["let ", mut, render_pattern(stmt.pattern), type, " = ", render_expr(stmt.expr), ";"]
   end
 
+  def render_stmt(%Assign{} = stmt),
+    do: [render_expr(stmt.target), " = ", render_expr(stmt.expr), ";"]
+
   def render_stmt(%ExprStmt{} = stmt), do: [render_expr(stmt.expr), ";"]
   def render_stmt(%Return{} = stmt), do: render_expr(stmt.expr)
+  def render_stmt(%EarlyReturn{} = stmt), do: ["return ", render_expr(stmt.expr), ";"]
 
   def render_expr(%Var{name: name}), do: Atom.to_string(name)
   def render_expr(%Path{parts: parts}), do: Elixir.Enum.map_join(parts, "::", &to_string/1)
@@ -611,6 +634,9 @@ defmodule RustQ.Rust.AST do
 
   def render_expr(%TokenMacro{path: path, tokens: tokens}),
     do: [render_expr(path), "!(", tokens, ")"]
+
+  def render_expr(%MacroCall{path: path, args: args}),
+    do: [render_expr(path), "!(", render_args(args), ")"]
 
   def render_expr(%AtomValue{name: name}), do: ["atoms::", Atom.to_string(name), "()"]
   def render_expr(%None{}), do: "None"
