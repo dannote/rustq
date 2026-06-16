@@ -12,6 +12,16 @@ defmodule RustQ.Meta.TypeTest do
     assert Type.from_spec_ast(quote(do: binary())).rust == "Vec<u8>"
   end
 
+  test "keeps external t aliases as direct Rust identifiers" do
+    assert Type.from_spec_ast(quote(do: ItemConst.t())).rust == "ItemConst"
+    assert Type.from_spec_ast(quote(do: ItemStruct.t())).rust == "ItemStruct"
+    assert Type.from_spec_ast(quote(do: Field.t())).rust == "Field"
+    assert Type.from_spec_ast(quote(do: RustQ.Some.External.t())).rust == "External"
+
+    assert Type.from_spec_ast(quote(do: RustQ.Type.nif_result(ItemEnum.t()))).rust ==
+             "NifResult<ItemEnum>"
+  end
+
   test "exports non-reserved Rust vocabulary as Elixir types" do
     {:docs_v1, _annotation, _beam_language, _format, _module_doc, _metadata, docs} =
       Code.fetch_docs(RustQ.Type)

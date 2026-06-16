@@ -92,8 +92,22 @@ implementation tiers are:
 `RustQ.NativeCodegen` is orchestration only; modules/constants live in
 `RustQ.NativeCodegen.Modules`, dispatch in `RustQ.NativeCodegen.Dispatch`, and
 category decoders under `RustQ.NativeCodegen.Decoders.*`. Dogfooded decoder
-coverage currently includes item support for enum variants, selected type
-decoders, and the generated statement/expression/pattern decoders.
+coverage currently includes item support for use/module/const/struct/enum,
+struct fields, enum variants, selected type decoders, and the generated
+statement/expression/pattern decoders.
+
+### Dogfooding status map
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Helpers | Dogfooded | Rustler term helpers such as `required_field`, `optional_map_get`, and struct checks. |
+| Item dispatch | Generated AST builder | `decode_ast_item` dispatches to dogfooded or primitive item decoders. |
+| Item decoders | Mostly dogfooded | `Use`, `Module`, `Const`, `Struct`, `StructField`, `Enum`, `EnumVariant`, and `MacroItem` extraction lives in `defrust`; parsing remains primitive. |
+| Type dispatch | Generated AST builder | `decode_ast_type` routes dogfooded and primitive decoders. |
+| Type decoders | Partly dogfooded | `Ref`, `Unit`, `Option`, `Result`, `NifResult`, and `Vec` are dogfooded; `Path` remains handwritten. |
+| Stmt/Expr/Pat/Arm decoders | Dogfooded | Raw token escapes remain only where semantic helpers or direct syn construction are not available yet. |
+| Primitive bridge | Handwritten Rust | Rustler decode details, `syn` parsing, list decoders, and temporary parse helpers. |
+| Function decoder | Handwritten Rust | `decode_ast_function` still handles args, lifetimes, block assembly, and statement lists directly. |
 
 ## Later work
 

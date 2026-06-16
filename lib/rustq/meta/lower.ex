@@ -346,6 +346,27 @@ defmodule RustQ.Meta.Lower do
     do: raw_expr("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
 
   defp semantic_expr({:tuple, _, [values]}), do: raw_expr("(#{semantic_splice(values)})")
+
+  defp semantic_expr({:binary, _, [left, op, right]}),
+    do:
+      raw_expr(
+        "#{semantic_interpolation(left)} #{semantic_binary_op(op)} #{semantic_interpolation(right)}"
+      )
+
+  defp semantic_expr({:match, _, [expr, arms]}),
+    do: raw_expr("match #{semantic_interpolation(expr)} { #{semantic_concat(arms)} }")
+
+  defp semantic_expr({:if_else, _, [condition, then_block, else_block]}),
+    do:
+      raw_expr(
+        "if #{semantic_interpolation(condition)} #{semantic_interpolation(then_block)} else #{semantic_interpolation(else_block)}"
+      )
+
+  defp semantic_expr({:atom_value, _, [name]}), do: raw_expr("atoms::#{semantic_ident(name)}()")
+
+  defp semantic_expr({:raise_atom, _, [name]}),
+    do: raw_expr("rustler::Error::RaiseAtom(#{semantic_interpolation(name)})")
+
   defp semantic_expr(nil), do: raw_expr("None")
 
   defp semantic_expr(other), do: raw_expr(AST.render_expr(lower_expr(other)))
@@ -386,6 +407,13 @@ defmodule RustQ.Meta.Lower do
 
   defp semantic_splice({name, _, context}) when is_atom(name) and is_atom(context),
     do: "#(##{name}),*"
+
+  defp semantic_concat({name, _, context}) when is_atom(name) and is_atom(context),
+    do: "#(##{name})*"
+
+  defp semantic_binary_op(:eq), do: "=="
+  defp semantic_binary_op(:and), do: "&&"
+  defp semantic_binary_op(:or), do: "||"
 
   defp raw_expr(tokens) do
     %AST.PathCall{

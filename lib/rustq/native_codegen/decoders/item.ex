@@ -5,6 +5,22 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
 
   alias RustQ.Type, as: R
 
+  @spec decode_ast_use(term()) :: R.nif_result(ItemUse.t())
+  defrust decode_ast_use(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Use"))
+    tree = unwrap!(Super.string_field(term, "tree"))
+    Super.parse_item_use(tree)
+  end
+
+  @spec decode_ast_module(term()) :: R.nif_result(ItemMod.t())
+  defrust decode_ast_module(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Module"))
+    name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
+    vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
+    items = unwrap!(Super.decode_item_list(unwrap!(required_field(term, "items"))))
+    Super.parse_item_module(name, vis, items)
+  end
+
   @spec decode_ast_const(term()) :: R.nif_result(ItemConst.t())
   defrust decode_ast_const(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Const"))
@@ -26,6 +42,13 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_struct(name, vis, derive, lifetime, fields)
   end
 
+  @spec decode_ast_macro_item(term()) :: R.nif_result(Item.t())
+  defrust decode_ast_macro_item(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItem"))
+    source = unwrap!(Super.string_field(term, "source"))
+    Super.parse_macro_item(source)
+  end
+
   @spec decode_ast_enum(term()) :: R.nif_result(ItemEnum.t())
   defrust decode_ast_enum(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Enum"))
@@ -34,6 +57,15 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     derive = unwrap!(Super.decode_derive(unwrap!(required_field(term, "derive"))))
     variants = unwrap!(Super.decode_enum_variant_list(unwrap!(required_field(term, "variants"))))
     Super.parse_item_enum(name, vis, derive, variants)
+  end
+
+  @spec decode_struct_field(term()) :: R.nif_result(Field.t())
+  defrust decode_struct_field(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.StructField"))
+    name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
+    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
+    Super.parse_struct_field(name, ty, vis)
   end
 
   @spec decode_enum_variant(term()) :: R.nif_result(Variant.t())

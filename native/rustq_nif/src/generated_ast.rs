@@ -4,7 +4,10 @@ use quote::quote;
 
 use rustler::{Atom, Env, NifResult, Term};
 
-use syn::{Arm, Expr, Item, ItemConst, ItemEnum, ItemStruct, Pat, Stmt, Type, Variant};
+use syn::{
+    Arm, Expr, Field, Item, ItemConst, ItemEnum, ItemMod, ItemStruct, ItemUse, Pat, Stmt, Type,
+    Variant,
+};
 
 pub(crate) mod atoms {
     rustler::atoms! {
@@ -19,7 +22,6 @@ pub(crate) mod ast_modules {
     pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
     pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";
     pub(crate) const STRUCT: &str = "Elixir.RustQ.Rust.AST.Struct";
-    pub(crate) const STRUCT_FIELD: &str = "Elixir.RustQ.Rust.AST.StructField";
     pub(crate) const ENUM: &str = "Elixir.RustQ.Rust.AST.Enum";
     pub(crate) const TYPE_PATH: &str = "Elixir.RustQ.Rust.AST.TypePath";
     pub(crate) const TYPE_REF: &str = "Elixir.RustQ.Rust.AST.TypeRef";
@@ -114,10 +116,10 @@ pub(crate) fn expect_struct<'a>(term: Term<'a>, expected: &str) -> NifResult<()>
 
 pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
     match struct_name(term)?.as_str() {
-        ast_modules::USE => Ok(Item::Use(super::decode_ast_use(term)?)),
-        ast_modules::MODULE => Ok(Item::Mod(super::decode_ast_module(term)?)),
+        ast_modules::USE => Ok(Item::Use(decode_ast_use(term)?)),
+        ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
         ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
-        ast_modules::MACRO_ITEM => super::decode_ast_macro_item(term),
+        ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
         ast_modules::FUNCTION => Ok(Item::Fn(super::decode_ast_function(term)?)),
         ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
         ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
@@ -187,6 +189,20 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         _ => Err(rustler::Error::BadArg),
     }
 }
+pub(crate) fn decode_ast_use<'a>(term: Term<'a>) -> NifResult<ItemUse> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Use")?;
+    let tree = super::string_field(term, "tree")?;
+    super::parse_item_use(tree)
+}
+
+pub(crate) fn decode_ast_module<'a>(term: Term<'a>) -> NifResult<ItemMod> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.Module")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let vis = super::decode_vis(required_field(term, "vis")?)?;
+    let items = super::decode_item_list(required_field(term, "items")?)?;
+    super::parse_item_module(name, vis, items)
+}
+
 pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Const")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
@@ -206,6 +222,12 @@ pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
     super::parse_item_struct(name, vis, derive, lifetime, fields)
 }
 
+pub(crate) fn decode_ast_macro_item<'a>(term: Term<'a>) -> NifResult<Item> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItem")?;
+    let source = super::string_field(term, "source")?;
+    super::parse_macro_item(source)
+}
+
 pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Enum")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
@@ -213,6 +235,14 @@ pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {
     let derive = super::decode_derive(required_field(term, "derive")?)?;
     let variants = super::decode_enum_variant_list(required_field(term, "variants")?)?;
     super::parse_item_enum(name, vis, derive, variants)
+}
+
+pub(crate) fn decode_struct_field<'a>(term: Term<'a>) -> NifResult<Field> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.StructField")?;
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    let ty = super::decode_type(required_field(term, "type")?)?;
+    let vis = super::decode_vis(required_field(term, "vis")?)?;
+    super::parse_struct_field(name, ty, vis)
 }
 
 pub(crate) fn decode_enum_variant<'a>(term: Term<'a>) -> NifResult<Variant> {
