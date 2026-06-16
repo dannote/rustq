@@ -340,7 +340,9 @@ defmodule RustQ.Rust.AST do
 
   defnode(PatSome, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
 
-  defnode(PatAtomGuard, :pat, [:name], type: quote(do: %__MODULE__{name: atom()}))
+  defnode(PatAtomGuard, :pat, [:name, module: [:atoms]],
+    type: quote(do: %__MODULE__{name: atom(), module: [atom() | String.t()]})
+  )
 
   defnode(PatTuple, :pat, [:patterns],
     type: quote(do: %__MODULE__{patterns: [RustQ.Rust.AST.pat()]})
@@ -748,8 +750,14 @@ defmodule RustQ.Rust.AST do
     [render_expr(path), " { ", rendered_fields, " }"]
   end
 
-  def render_pattern(%PatAtomGuard{name: name}),
-    do: ["value if value == atoms::", Atom.to_string(name), "()"]
+  def render_pattern(%PatAtomGuard{name: name, module: module}),
+    do: [
+      "value if value == ",
+      Elixir.Enum.map_join(module, "::", &to_string/1),
+      "::",
+      Atom.to_string(name),
+      "()"
+    ]
 
   def render_pattern(%PatTuple{patterns: patterns}) do
     ["(", patterns |> Elixir.Enum.map(&render_pattern/1) |> Elixir.Enum.intersperse(", "), ")"]

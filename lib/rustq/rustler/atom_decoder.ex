@@ -4,6 +4,8 @@ defmodule RustQ.Rustler.AtomDecoder do
   use RustQ.Sigil
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
 
   @template ~R"""
   pub fn __rq_fn_name(value: __rq_input!()) -> __rq_result!() {
@@ -21,6 +23,52 @@ defmodule RustQ.Rustler.AtomDecoder do
     atoms = Keyword.get(opts, :atoms, "atoms")
     unknown = Keyword.get(opts, :unknown, "Err(rustler::Error::BadArg)")
 
+    if unknown == "Err(rustler::Error::BadArg)" do
+      build_ast(name, input, result, atoms, Keyword.fetch!(opts, :cases))
+    else
+      build_template(name, input, result, atoms, unknown, opts)
+    end
+  end
+
+  defp build_ast(name, input, result, atoms, cases) do
+    function = %AST.Function{
+      name: name,
+      vis: :pub,
+      args: [A.function_arg(:value, Rust.type(input))],
+      returns: result,
+      body: [
+        A.return_stmt(%AST.Match{expr: A.var(:value), arms: atom_arms(cases, atoms)})
+      ]
+    }
+
+    Rust.item(AST.render_item_native(function))
+  end
+
+  defp atom_arms(cases, atoms) do
+    module = atoms |> to_string() |> String.split("::") |> Enum.map(&String.to_atom/1)
+
+    Enum.map(cases, fn {atom, value} ->
+      %AST.Arm{
+        pattern: %AST.PatAtomGuard{name: atom, module: module},
+        body: [A.return_stmt(A.ok(rust_value_expr(value)))]
+      }
+    end) ++
+      [
+        %AST.Arm{
+          pattern: A.wildcard(),
+          body: [A.return_stmt(A.err(A.path([:rustler, :Error, :BadArg])))]
+        }
+      ]
+  end
+
+  defp rust_value_expr(value) do
+    value
+    |> Rust.type()
+    |> String.split("::")
+    |> A.path()
+  end
+
+  defp build_template(name, input, result, atoms, unknown, opts) do
     arms =
       opts
       |> Keyword.fetch!(:cases)

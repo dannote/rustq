@@ -368,6 +368,8 @@ Recently completed:
 - `RustQ.Rustler.Atoms` now generates its atom macro through RustQ AST
   (`MacroItemCall`, optionally wrapped in `Module`) before returning a legacy
   splice fragment, proving a narrow migration path for older Rustler helpers.
+- `RustQ.Rustler.AtomDecoder` now uses RustQ AST for the default BadArg decoder
+  path, falling back to its legacy template only for custom unknown-arm source.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design
