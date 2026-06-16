@@ -102,10 +102,12 @@ in `defrust`, such as `expr!(field(receiver, field))`, `pat!(tuple(patterns))`,
 or `arm!(pat, block)`. The `defrust` call itself is the declaration; lowering
 must infer and inline the expansion from that call. Token-based semantic forms
 should funnel through the generic `parse_syn::<T>(quote!(...))` primitive rather
-than accumulating one wrapper per shape. Handwritten Rust should stay limited to
-real primitive boundaries: Rustler term APIs, collection iteration, `syn`
-parsing/assembly that is not yet represented in RustQ AST, and other operations
-that cannot be authored as valid Rusty Elixir.
+than accumulating one wrapper per shape. Collection decoding should likewise use
+generic helpers such as `decode_list/2` instead of one iterator loop per AST
+category. Handwritten Rust should stay limited to real primitive boundaries:
+Rustler term APIs, collection iteration, `syn` parsing/assembly that is not yet
+represented in RustQ AST, and other operations that cannot be authored as valid
+Rusty Elixir.
 
 ### Dogfooding status map
 

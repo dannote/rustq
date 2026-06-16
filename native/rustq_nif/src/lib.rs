@@ -249,9 +249,9 @@ fn parse_let_stmt(
     expr: Expr,
 ) -> NifResult<Stmt> {
     if let Some(ty) = ty {
-        parse_stmt(quote!(let #pat_tokens: #ty = #expr;))
+        parse_syn::<Stmt>(quote!(let #pat_tokens: #ty = #expr;))
     } else {
-        parse_stmt(quote!(let #pat_tokens = #expr;))
+        parse_syn::<Stmt>(quote!(let #pat_tokens = #expr;))
     }
 }
 
@@ -273,7 +273,7 @@ fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
         parse_expr(&source)
     } else {
         let name = format_ident!("{}", name);
-        parse_expr_tokens(quote!(#name(#(#args),*)))
+        parse_syn::<Expr>(quote!(#name(#(#args),*)))
     }
 }
 
@@ -285,13 +285,9 @@ fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
     decode_list(term, decode_arm)
 }
 
-fn parse_arm(tokens: proc_macro2::TokenStream) -> NifResult<Arm> {
-    syn::parse2(tokens).map_err(|_| rustler::Error::BadArg)
-}
-
 fn decode_atom_guard_arm(pat_term: Term, block: syn::Block) -> NifResult<Arm> {
     let name = format_ident!("{}", atom_key(pat_term, "name")?);
-    parse_arm(quote!(value if value == atoms::#name() => #block,))
+    parse_syn::<Arm>(quote!(value if value == atoms::#name() => #block,))
 }
 
 fn format_ident_value(name: String) -> proc_macro2::Ident {
@@ -322,23 +318,13 @@ fn decode_optional_expr_field(term: Term, key: &str) -> NifResult<Option<Expr>> 
 
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     if let Ok(value) = term.decode::<String>() {
-        return parse_pat(quote!(#value));
+        return parse_syn::<Pat>(quote!(#value));
     }
     if term.is_atom() {
         let value = term.atom_to_string()?;
-        return parse_pat(quote!(#value));
+        return parse_syn::<Pat>(quote!(#value));
     }
     Err(rustler::Error::BadArg)
-}
-
-fn parse_pat(tokens: proc_macro2::TokenStream) -> NifResult<Pat> {
-    Pat::parse_single
-        .parse2(tokens)
-        .map_err(|_| rustler::Error::BadArg)
-}
-
-fn parse_stmt(tokens: proc_macro2::TokenStream) -> NifResult<Stmt> {
-    syn::parse2(tokens).map_err(|_| rustler::Error::BadArg)
 }
 
 fn decode_pat(term: Term) -> NifResult<Pat> {
@@ -497,10 +483,6 @@ fn parse_path(source: &str) -> NifResult<syn::Path> {
 
 fn parse_expr(source: &str) -> NifResult<Expr> {
     syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
-}
-
-fn parse_expr_tokens(tokens: proc_macro2::TokenStream) -> NifResult<Expr> {
-    syn::parse2(tokens).map_err(|_| rustler::Error::BadArg)
 }
 
 struct Context {
