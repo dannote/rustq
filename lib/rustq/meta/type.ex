@@ -1,9 +1,11 @@
 defmodule RustQ.Meta.Type do
   @moduledoc false
 
-  defstruct [:kind, :rust, meta: %{}]
+  alias RustQ.Rust.AST
 
-  @type t :: %__MODULE__{kind: atom(), rust: String.t(), meta: map()}
+  defstruct [:kind, :rust, :ast, meta: %{}]
+
+  @type t :: %__MODULE__{kind: atom(), rust: String.t(), ast: term(), meta: map()}
 
   @spec from_spec_ast(Macro.t(), map()) :: t()
   def from_spec_ast(ast, aliases \\ %{}), do: parse(ast, aliases)
@@ -23,19 +25,23 @@ defmodule RustQ.Meta.Type do
   defp parse_type_alias(name, ast, rust_name) do
     cond do
       atom_union?(ast) ->
-        type(:enum, rust_name, %{elixir_name: name, variants: union_members(ast)})
+        type(:enum, path(rust_name), %{elixir_name: name, variants: union_members(ast)})
 
       option_union?(ast) ->
         [_nil, inner] = option_members(ast)
         inner_type = parse(inner, %{})
-        type(:option, "Option<#{inner_type.rust}>", %{elixir_name: name, inner: inner_type})
+
+        type(:option, %AST.TypeOption{inner: inner_type.ast}, %{
+          elixir_name: name,
+          inner: inner_type
+        })
 
       result_union?(ast) ->
         {ok, error} = result_members(ast)
         ok_type = parse(ok, %{})
         error_type = parse(error, %{})
 
-        type(:result, "Result<#{ok_type.rust}, #{error_type.rust}>", %{
+        type(:result, %AST.TypeResult{ok: ok_type.ast, error: error_type.ast}, %{
           elixir_name: name,
           ok: ok_type,
           error: error_type
@@ -44,21 +50,24 @@ defmodule RustQ.Meta.Type do
       map_type?(ast) ->
         fields = map_fields(ast)
 
-        rust =
+        lifetimes =
           if Enum.any?(fields, fn {_name, type, _presence} ->
                String.contains?(type.rust, "'a")
-             end), do: "#{rust_name}<'a>", else: rust_name
+             end), do: [:a], else: []
 
-        type(:struct, rust, %{elixir_name: name, rust_name: rust_name, fields: fields})
+        type(:struct, %AST.TypePath{parts: [rust_name], lifetimes: lifetimes}, %{
+          elixir_name: name,
+          rust_name: rust_name,
+          fields: fields
+        })
 
       true ->
-        type(:alias, rust_name, %{elixir_name: name, ast: ast})
+        type(:alias, path(rust_name), %{elixir_name: name, ast: ast})
     end
   end
 
-  defp parse({{:., _, [module, function]}, _, args}, aliases) do
-    parse_remote(module, function, args, aliases)
-  end
+  defp parse({{:., _, [module, function]}, _, args}, aliases),
+    do: parse_remote(module, function, args, aliases)
 
   defp parse({name, _, args}, aliases) when is_atom(name) and is_list(args) do
     case Map.get(aliases, {name, length(args)}) do
@@ -72,32 +81,29 @@ defmodule RustQ.Meta.Type do
       option_union?(union) ->
         [_nil, inner] = option_members(union)
         inner_type = parse(inner, aliases)
-        type(:option, "Option<#{inner_type.rust}>")
+        type(:option, %AST.TypeOption{inner: inner_type.ast})
 
       result_union?(union) ->
         {ok, error} = result_members(union)
-        type(:result, "Result<#{parse(ok, aliases).rust}, #{parse(error, aliases).rust}>")
+        ok_type = parse(ok, aliases)
+        error_type = parse(error, aliases)
+        type(:result, %AST.TypeResult{ok: ok_type.ast, error: error_type.ast})
 
       atom_union?(union) ->
-        type(:enum, "Atom")
+        type(:enum, path(:Atom))
 
       true ->
-        type(:type, "Term")
+        type(:type, path(:Term))
     end
   end
 
-  defp parse({:__aliases__, _, parts}, _aliases) do
-    type(:type, Enum.map_join(parts, "::", &to_string/1))
-  end
-
-  defp parse(atom, _aliases) when is_atom(atom), do: type(:type, Atom.to_string(atom))
+  defp parse({:__aliases__, _, parts}, _aliases), do: type(:type, %AST.TypePath{parts: parts})
+  defp parse(atom, _aliases) when is_atom(atom), do: type(:type, path(atom))
 
   defp parse_remote(module, function, args, aliases) do
-    if type_module?(module) do
-      parse_rust_type(function, args, aliases)
-    else
-      parse_external_type(module, function, args, aliases)
-    end
+    if type_module?(module),
+      do: parse_rust_type(function, args, aliases),
+      else: parse_external_type(module, function, args, aliases)
   end
 
   defp type_module?({:__aliases__, _, [:R]}), do: true
@@ -105,73 +111,97 @@ defmodule RustQ.Meta.Type do
   defp type_module?({:__aliases__, _, [:RustQ, :Type]}), do: true
   defp type_module?(_module), do: false
 
-  defp parse_local_type(:atom, [], _aliases), do: type(:atom, "Atom")
-  defp parse_local_type(:boolean, [], _aliases), do: type(:bool, "bool")
-  defp parse_local_type(:integer, [], _aliases), do: type(:i64, "i64")
-  defp parse_local_type(:float, [], _aliases), do: type(:f64, "f64")
-  defp parse_local_type(:term, [], _aliases), do: type(:term, "Term<'a>")
-  defp parse_local_type(:binary, [], _aliases), do: type(:type, "Vec<u8>")
+  defp parse_local_type(:atom, [], _aliases), do: type(:atom, path(:Atom))
+  defp parse_local_type(:boolean, [], _aliases), do: type(:bool, path(:bool))
+  defp parse_local_type(:integer, [], _aliases), do: type(:i64, path(:i64))
+  defp parse_local_type(:float, [], _aliases), do: type(:f64, path(:f64))
+
+  defp parse_local_type(:term, [], _aliases),
+    do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})
+
+  defp parse_local_type(:binary, [], _aliases), do: type(:type, %AST.TypeVec{inner: path(:u8)})
   defp parse_local_type(name, args, aliases), do: parse_rust_type(name, args, aliases)
 
-  defp parse_rust_type(:atom, [], _aliases), do: type(:atom, "Atom")
-  defp parse_rust_type(:bool, [], _aliases), do: type(:bool, "bool")
-  defp parse_rust_type(:f32, [], _aliases), do: type(:f32, "f32")
-  defp parse_rust_type(:f64, [], _aliases), do: type(:f64, "f64")
-  defp parse_rust_type(:i64, [], _aliases), do: type(:i64, "i64")
-  defp parse_rust_type(:term, [], _aliases), do: type(:term, "Term<'a>")
-  defp parse_rust_type(:u8, [], _aliases), do: type(:u8, "u8")
-  defp parse_rust_type(:u32, [], _aliases), do: type(:u32, "u32")
-  defp parse_rust_type(:unit, [], _aliases), do: type(:unit, "()")
+  defp parse_rust_type(:atom, [], _aliases), do: type(:atom, path(:Atom))
+  defp parse_rust_type(:bool, [], _aliases), do: type(:bool, path(:bool))
+  defp parse_rust_type(:f32, [], _aliases), do: type(:f32, path(:f32))
+  defp parse_rust_type(:f64, [], _aliases), do: type(:f64, path(:f64))
+  defp parse_rust_type(:i64, [], _aliases), do: type(:i64, path(:i64))
 
-  defp parse_rust_type(:ref, [inner], aliases), do: type(:ref, "&#{parse(inner, aliases).rust}")
+  defp parse_rust_type(:term, [], _aliases),
+    do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})
 
-  defp parse_rust_type(:mut_ref, [inner], aliases),
-    do: type(:mut_ref, "&mut #{parse(inner, aliases).rust}")
+  defp parse_rust_type(:u8, [], _aliases), do: type(:u8, path(:u8))
+  defp parse_rust_type(:u32, [], _aliases), do: type(:u32, path(:u32))
+  defp parse_rust_type(:unit, [], _aliases), do: type(:unit, %AST.TypeUnit{})
 
-  defp parse_rust_type(:option, [inner], aliases),
-    do: type(:option, "Option<#{parse(inner, aliases).rust}>")
+  defp parse_rust_type(:ref, [inner], aliases) do
+    inner = parse(inner, aliases)
+    type(:ref, %AST.TypeRef{inner: inner.ast})
+  end
 
-  defp parse_rust_type(:vec, [inner], aliases),
-    do: type(:vec, "Vec<#{parse(inner, aliases).rust}>")
+  defp parse_rust_type(:mut_ref, [inner], aliases) do
+    inner = parse(inner, aliases)
+    type(:mut_ref, %AST.TypeRef{inner: inner.ast, mutable: true})
+  end
+
+  defp parse_rust_type(:option, [inner], aliases) do
+    inner = parse(inner, aliases)
+    type(:option, %AST.TypeOption{inner: inner.ast})
+  end
+
+  defp parse_rust_type(:vec, [inner], aliases) do
+    inner = parse(inner, aliases)
+    type(:vec, %AST.TypeVec{inner: inner.ast})
+  end
 
   defp parse_rust_type(:result, [ok, error], aliases) do
-    type(:result, "Result<#{parse(ok, aliases).rust}, #{parse(error, aliases).rust}>")
+    ok = parse(ok, aliases)
+    error = parse(error, aliases)
+    type(:result, %AST.TypeResult{ok: ok.ast, error: error.ast})
   end
 
-  defp parse_rust_type(:nif_result, [inner], aliases),
-    do: type(:nif_result, "NifResult<#{parse(inner, aliases).rust}>")
+  defp parse_rust_type(:nif_result, [inner], aliases) do
+    inner = parse(inner, aliases)
+    type(:nif_result, %AST.TypeNifResult{inner: inner.ast})
+  end
 
   defp parse_rust_type(function, args, aliases) do
-    rendered_args = Enum.map_join(args, ", ", &parse(&1, aliases).rust)
-    type(:type, "#{function}<#{rendered_args}>")
+    type(:type, %AST.TypePath{
+      parts: ["#{function}<#{Enum.map_join(args, ", ", &parse(&1, aliases).rust)}>"]
+    })
   end
 
-  defp parse_external_type({:__aliases__, _, parts}, :t, [], _aliases) do
-    type(:type, parts |> List.last() |> to_string())
-  end
+  defp parse_external_type({:__aliases__, _, parts}, :t, [], _aliases),
+    do: type(:type, path(List.last(parts)))
 
   defp parse_external_type({:__aliases__, _, parts}, function, args, aliases) do
-    path = Enum.map_join(parts ++ [function], "::", &to_string/1)
+    type =
+      case args do
+        [] ->
+          %AST.TypePath{parts: parts ++ [function]}
 
-    case args do
-      [] -> type(:type, path)
-      args -> type(:type, "#{path}<#{Enum.map_join(args, ", ", &parse(&1, aliases).rust)}>")
-    end
+        args ->
+          %AST.TypePath{
+            parts: [
+              Enum.map_join(parts ++ [function], "::", &to_string/1) <>
+                "<#{Enum.map_join(args, ", ", &parse(&1, aliases).rust)}>"
+            ]
+          }
+      end
+
+    type(:type, type)
   end
 
-  defp parse_external_type(_module, function, _args, _aliases),
-    do: type(:type, Atom.to_string(function))
+  defp parse_external_type(_module, function, _args, _aliases), do: type(:type, path(function))
 
   defp map_type?({:%{}, _, fields}) when is_list(fields), do: true
   defp map_type?(_ast), do: false
 
   defp map_fields({:%{}, _, fields}) do
     Enum.map(fields, fn
-      {{:required, _, [name]}, ast} ->
-        {name, parse(ast, %{}), :required}
-
-      {{:optional, _, [name]}, ast} ->
-        {name, parse(ast, %{}), :optional}
+      {{:required, _, [name]}, ast} -> {name, parse(ast, %{}), :required}
+      {{:optional, _, [name]}, ast} -> {name, parse(ast, %{}), :optional}
     end)
   end
 
@@ -180,15 +210,19 @@ defmodule RustQ.Meta.Type do
 
   defp atom_union?(ast), do: ast |> union_members() |> Enum.all?(&is_atom/1)
 
-  defp option_union?(ast) do
-    members = union_members(ast)
-    nil in members and length(members) == 2
-  end
+  defp option_union?(ast),
+    do:
+      (
+        members = union_members(ast)
+        nil in members and length(members) == 2
+      )
 
-  defp option_members(ast) do
-    members = union_members(ast)
-    [nil, Enum.find(members, &(&1 != nil))]
-  end
+  defp option_members(ast),
+    do:
+      (
+        members = union_members(ast)
+        [nil, Enum.find(members, &(&1 != nil))]
+      )
 
   defp result_union?(ast) do
     members = union_members(ast)
@@ -204,5 +238,14 @@ defmodule RustQ.Meta.Type do
     {ok, error}
   end
 
-  defp type(kind, rust, meta \\ %{}), do: %__MODULE__{kind: kind, rust: rust, meta: meta}
+  defp path(part), do: %AST.TypePath{parts: [part]}
+
+  defp type(kind, ast, meta \\ %{}) do
+    %__MODULE__{
+      kind: kind,
+      ast: ast,
+      rust: ast |> AST.render_type() |> IO.iodata_to_binary(),
+      meta: meta
+    }
+  end
 end

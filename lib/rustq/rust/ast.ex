@@ -32,6 +32,41 @@ defmodule RustQ.Rust.AST do
     defstruct [:name]
   end
 
+  defmodule TypePath do
+    @moduledoc false
+    defstruct [:parts, lifetimes: []]
+  end
+
+  defmodule TypeRef do
+    @moduledoc false
+    defstruct [:inner, mutable: false, lifetime: nil]
+  end
+
+  defmodule TypeOption do
+    @moduledoc false
+    defstruct [:inner]
+  end
+
+  defmodule TypeResult do
+    @moduledoc false
+    defstruct [:ok, :error]
+  end
+
+  defmodule TypeNifResult do
+    @moduledoc false
+    defstruct [:inner]
+  end
+
+  defmodule TypeVec do
+    @moduledoc false
+    defstruct [:inner]
+  end
+
+  defmodule TypeUnit do
+    @moduledoc false
+    defstruct []
+  end
+
   defmodule Let do
     @moduledoc false
     defstruct [:pattern, :expr, mutable: false]
@@ -182,7 +217,11 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_function(%Function{} = function) do
-    args = Elixir.Enum.map_join(function.args, ", ", fn {name, type} -> "#{name}: #{type}" end)
+    args =
+      Elixir.Enum.map_join(function.args, ", ", fn {name, type} ->
+        "#{name}: #{render_type(type)}"
+      end)
+
     lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""
 
     [
@@ -193,7 +232,7 @@ defmodule RustQ.Rust.AST do
       "(",
       args,
       ") -> ",
-      function.returns,
+      render_type(function.returns),
       " {\n",
       function.body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n") |> indent(),
       "\n}"
@@ -221,7 +260,7 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_struct_field(%StructField{} = field) do
-    [render_vis(field.vis), Atom.to_string(field.name), ": ", field.type, ","]
+    [render_vis(field.vis), Atom.to_string(field.name), ": ", render_type(field.type), ","]
   end
 
   def render_enum(%Enum{} = enum) do
@@ -234,6 +273,40 @@ defmodule RustQ.Rust.AST do
   end
 
   def render_enum_variant(%EnumVariant{} = variant), do: [Atom.to_string(variant.name), ","]
+
+  def render_type(type) when is_binary(type), do: type
+  def render_type(%TypeUnit{}), do: "()"
+
+  def render_type(%TypePath{parts: parts, lifetimes: lifetimes}) do
+    base = Elixir.Enum.map_join(parts, "::", &to_string/1)
+
+    case lifetimes do
+      [] ->
+        base
+
+      lifetimes ->
+        [
+          base,
+          "<",
+          lifetimes |> Elixir.Enum.map(&["'", to_string(&1)]) |> Elixir.Enum.intersperse(", "),
+          ">"
+        ]
+    end
+  end
+
+  def render_type(%TypeRef{inner: inner, mutable: mutable, lifetime: lifetime}) do
+    mut = if mutable, do: "mut ", else: ""
+    lifetime = if lifetime, do: ["'", to_string(lifetime), " "], else: []
+    ["&", lifetime, mut, render_type(inner)]
+  end
+
+  def render_type(%TypeOption{inner: inner}), do: ["Option<", render_type(inner), ">"]
+
+  def render_type(%TypeResult{ok: ok, error: error}),
+    do: ["Result<", render_type(ok), ", ", render_type(error), ">"]
+
+  def render_type(%TypeNifResult{inner: inner}), do: ["NifResult<", render_type(inner), ">"]
+  def render_type(%TypeVec{inner: inner}), do: ["Vec<", render_type(inner), ">"]
 
   def render_stmt(%Let{} = stmt) do
     mut = if stmt.mutable, do: "mut ", else: ""

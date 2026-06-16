@@ -70,14 +70,14 @@ defmodule RustQ.Meta do
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
 
-    args = Enum.zip(arg_names, Enum.map(arg_types, & &1.rust))
+    args = Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
     body = Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)))
     lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
 
     %AST.Function{
       name: name,
       args: args,
-      returns: return_type.rust,
+      returns: return_type.ast,
       body: body,
       lifetime: lifetime
     }
@@ -118,7 +118,7 @@ defmodule RustQ.Meta do
         name: String.to_atom("decode_#{elixir_name}_atom"),
         vis: :pub,
         args: [value: "Atom"],
-        returns: "NifResult<#{rust_name}>",
+        returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
         body: [
           %AST.Return{
             expr: %AST.Match{
@@ -173,11 +173,11 @@ defmodule RustQ.Meta do
   defp type_items(_type), do: []
 
   defp struct_field_ast({name, %Type{} = type, :required}) do
-    %AST.StructField{name: name, type: type.rust, vis: :pub}
+    %AST.StructField{name: name, type: type.ast, vis: :pub}
   end
 
   defp struct_field_ast({name, %Type{} = type, :optional}) do
-    %AST.StructField{name: name, type: "Option<#{type.rust}>", vis: :pub}
+    %AST.StructField{name: name, type: %AST.TypeOption{inner: type.ast}, vis: :pub}
   end
 
   defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()

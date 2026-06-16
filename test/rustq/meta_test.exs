@@ -89,8 +89,12 @@ defmodule RustQ.MetaTest do
 
     assert Generated.__rustq_source__() =~ "pub enum Mode"
 
-    assert %RustQ.Meta.Type{kind: :struct, rust: "RectOpts<'a>", meta: %{fields: fields}} =
-             Generated.__rustq_types__()[{:rect_opts, 0}]
+    assert %RustQ.Meta.Type{
+             kind: :struct,
+             rust: "RectOpts<'a>",
+             ast: %RustQ.Rust.AST.TypePath{parts: ["RectOpts"], lifetimes: [:a]},
+             meta: %{fields: fields}
+           } = Generated.__rustq_types__()[{:rect_opts, 0}]
 
     assert Enum.any?(fields, &match?({:x, %RustQ.Meta.Type{rust: "f32"}, :required}, &1))
     assert Enum.any?(fields, &match?({:fill, %RustQ.Meta.Type{rust: "Term<'a>"}, :optional}, &1))
@@ -104,8 +108,15 @@ defmodule RustQ.MetaTest do
   test "generated ASTs are retained before fragment validation" do
     [draw_save, decode_mode, draw_rect, maybe_save] = Generated.__rustq_asts__()
 
-    assert %RustQ.Rust.AST.Function{name: :draw_save} = draw_save
+    assert %RustQ.Rust.AST.Function{name: :draw_save, args: [canvas: %RustQ.Rust.AST.TypeRef{}]} =
+             draw_save
+
     assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
+
+    assert %RustQ.Rust.AST.Function{
+             args: [_canvas_arg, {:opts, %RustQ.Rust.AST.TypePath{}}, _raw_opts_arg]
+           } = draw_rect
+
     assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} = hd(draw_rect.body)
 
     assert Enum.any?(

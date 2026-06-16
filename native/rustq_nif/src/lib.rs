@@ -128,8 +128,7 @@ fn decode_struct_field(term: Term) -> NifResult<Field> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.StructField")?;
     let env = term.get_env();
     let name = format_ident!("{}", atom_key(term, "name")?);
-    let ty: String = term.map_get(atom(env, "type")?)?.decode()?;
-    let ty = parse_type(&ty)?;
+    let ty = decode_type(term.map_get(atom(env, "type")?)?)?;
     let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
     let item: syn::ItemStruct = syn::parse2(quote!(struct __RustQ { #vis #name: #ty, }))
         .map_err(|_| rustler::Error::BadArg)?;
@@ -409,9 +408,9 @@ fn decode_literal_expr(term: Term) -> NifResult<Expr> {
 }
 
 fn keyword_args(term: Term) -> NifResult<Vec<(String, Type)>> {
-    term.decode::<Vec<(Term, String)>>()?
+    term.decode::<Vec<(Term, Term)>>()?
         .into_iter()
-        .map(|(name, ty)| Ok((atom_or_string(name)?, parse_type(&ty)?)))
+        .map(|(name, ty)| Ok((atom_or_string(name)?, decode_type(ty)?)))
         .collect()
 }
 
@@ -433,8 +432,71 @@ fn atom_or_string(term: Term) -> NifResult<String> {
 }
 
 fn type_value(term: Term, key: &str) -> NifResult<Type> {
-    let source: String = term.map_get(atom(term.get_env(), key)?)?.decode()?;
-    parse_type(&source)
+    decode_type(term.map_get(atom(term.get_env(), key)?)?)
+}
+
+fn decode_type(term: Term) -> NifResult<Type> {
+    if let Ok(source) = term.decode::<String>() {
+        return parse_type(&source);
+    }
+
+    let module = struct_name(term)?;
+    let env = term.get_env();
+
+    match module.as_str() {
+        "Elixir.RustQ.Rust.AST.TypeUnit" => parse_type("()"),
+        "Elixir.RustQ.Rust.AST.TypePath" => {
+            let path = path_parts(term.map_get(atom(env, "parts")?)?)?;
+            let lifetimes = term
+                .map_get(atom(env, "lifetimes")?)?
+                .decode::<Vec<Term>>()?
+                .into_iter()
+                .map(atom_or_string)
+                .collect::<NifResult<Vec<String>>>()?;
+
+            if lifetimes.is_empty() {
+                parse_type(&path)
+            } else {
+                parse_type(&format!(
+                    "{}<{}>",
+                    path,
+                    lifetimes
+                        .into_iter()
+                        .map(|value| format!("'{}", value))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        }
+        "Elixir.RustQ.Rust.AST.TypeRef" => {
+            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
+            let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
+            let lifetime = optional_atom_key(term, "lifetime")?;
+            let lifetime = lifetime
+                .map(|value| format!("'{} ", value))
+                .unwrap_or_default();
+            let mutability = if mutable { "mut " } else { "" };
+            parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
+        }
+        "Elixir.RustQ.Rust.AST.TypeOption" => {
+            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
+            syn::parse2(quote!(Option<#inner>)).map_err(|_| rustler::Error::BadArg)
+        }
+        "Elixir.RustQ.Rust.AST.TypeResult" => {
+            let ok = decode_type(term.map_get(atom(env, "ok")?)?)?;
+            let error = decode_type(term.map_get(atom(env, "error")?)?)?;
+            syn::parse2(quote!(Result<#ok, #error>)).map_err(|_| rustler::Error::BadArg)
+        }
+        "Elixir.RustQ.Rust.AST.TypeNifResult" => {
+            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
+            syn::parse2(quote!(NifResult<#inner>)).map_err(|_| rustler::Error::BadArg)
+        }
+        "Elixir.RustQ.Rust.AST.TypeVec" => {
+            let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
+            syn::parse2(quote!(Vec<#inner>)).map_err(|_| rustler::Error::BadArg)
+        }
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 fn parse_type(source: &str) -> NifResult<Type> {
