@@ -11,6 +11,9 @@ defmodule RustQ.Meta do
   alias RustQ.Meta.Type
   alias RustQ.Rust
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+
+  require A
 
   defmacro __using__(_opts) do
     quote do
@@ -119,36 +122,23 @@ defmodule RustQ.Meta do
         vis: :pub,
         args: [value: "Atom"],
         returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
-        body: [
-          %AST.Return{
-            expr: %AST.Match{
-              expr: %AST.Var{name: :value},
-              arms:
+        body:
+          A.block do
+            A.return do
+              A.match A.var(:value) do
                 Enum.map(variants, fn variant ->
-                  %AST.Arm{
-                    pattern: %AST.PatAtomGuard{name: variant},
-                    body: [
-                      %AST.Return{
-                        expr: %AST.Ok{
-                          expr: %AST.Path{parts: [rust_name, rust_variant(variant)]}
-                        }
-                      }
-                    ]
-                  }
+                  A.arm %AST.PatAtomGuard{name: variant} do
+                    A.return(A.ok(A.path([rust_name, rust_variant(variant)])))
+                  end
                 end) ++
                   [
-                    %AST.Arm{
-                      pattern: %AST.PatWildcard{},
-                      body: [
-                        %AST.Return{
-                          expr: %AST.Err{expr: %AST.Path{parts: [:rustler, :Error, :BadArg]}}
-                        }
-                      ]
-                    }
+                    A.arm A.wildcard() do
+                      A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+                    end
                   ]
-            }
-          }
-        ]
+              end
+            end
+          end
       })
 
     [enum, decoder]
@@ -209,16 +199,10 @@ defmodule RustQ.Meta do
           inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
         },
         lifetime: :a,
-        body: [
-          %AST.Return{
-            expr: %AST.Ok{
-              expr: %AST.StructLiteral{
-                path: %AST.Path{parts: [rust_name]},
-                fields: Enum.map(fields, &struct_decoder_field/1)
-              }
-            }
-          }
-        ]
+        body:
+          A.block do
+            A.return(A.ok(A.struct([rust_name], Enum.map(fields, &struct_decoder_field/1))))
+          end
       })
 
     [struct, decoder]
@@ -235,122 +219,58 @@ defmodule RustQ.Meta do
   end
 
   defp struct_decoder_field({name, _type, :required}) do
-    {name,
-     %AST.Try{
-       expr: %AST.MethodCall{
-         receiver: %AST.Try{
-           expr: %AST.MethodCall{
-             receiver: %AST.Var{name: :term},
-             method: :map_get,
-             args: [atom_call(name)]
-           }
-         },
-         method: :decode,
-         args: []
-       }
-     }}
+    {name, A.try(A.method(A.try(A.method(:term, :map_get, [atom_call(name)])), :decode))}
   end
 
   defp struct_decoder_field({name, _type, :optional}) do
     {name,
-     %AST.Match{
-       expr: %AST.MethodCall{
-         receiver: %AST.Var{name: :term},
-         method: :map_get,
-         args: [atom_call(name)]
-       },
-       arms: [
-         %AST.Arm{
-           pattern: %AST.PatOk{pattern: %AST.PatVar{name: :value}},
-           body: [
-             %AST.Return{
-               expr: %AST.Some{
-                 expr: %AST.Try{
-                   expr: %AST.MethodCall{
-                     receiver: %AST.Var{name: :value},
-                     method: :decode,
-                     args: []
-                   }
-                 }
-               }
-             }
-           ]
-         },
-         %AST.Arm{
-           pattern: %AST.PatErr{pattern: %AST.PatWildcard{}},
-           body: [%AST.Return{expr: %AST.None{}}]
-         }
-       ]
-     }}
+     A.match A.method(:term, :map_get, [atom_call(name)]) do
+       A.arm A.ok_pat(:value) do
+         A.return(A.some(A.try(A.method(:value, :decode))))
+       end
+
+       A.arm A.err_pat(A.wildcard()) do
+         A.return(A.none())
+       end
+     end}
   end
 
   defp tuple_enum_decoder_body(rust_name, variants) do
-    struct_name_expr =
-      %AST.Try{
-        expr: %AST.MethodCall{
-          receiver: %AST.Try{
-            expr: %AST.MethodCall{
-              receiver: %AST.Var{name: :term},
-              method: :map_get,
-              args: [struct_atom_expr()]
-            }
-          },
-          method: :atom_to_string,
-          args: []
-        }
-      }
+    A.block do
+      A.let(:struct_name, struct_name_expr())
 
-    [
-      %AST.Let{pattern: %AST.PatVar{name: :struct_name}, expr: struct_name_expr},
-      %AST.Return{
-        expr: %AST.Match{
-          expr: %AST.MethodCall{receiver: %AST.Var{name: :struct_name}, method: :as_str, args: []},
-          arms:
-            Enum.map(variants, fn {tag, [%Type{meta: %{rust_name: variant_name}}]} ->
-              %AST.Arm{
-                pattern: %AST.PatLiteral{value: "Elixir.#{variant_name}"},
-                body: [
-                  %AST.Return{
-                    expr: %AST.MethodCall{
-                      receiver: %AST.LocalCall{
-                        name: String.to_atom("decode_#{Macro.underscore(variant_name)}"),
-                        args: [%AST.Var{name: :term}]
-                      },
-                      method: :map,
-                      args: [%AST.Path{parts: [rust_name, rust_variant(tag)]}]
-                    }
-                  }
-                ]
-              }
-            end) ++
-              [
-                %AST.Arm{
-                  pattern: %AST.PatWildcard{},
-                  body: [
-                    %AST.Return{
-                      expr: %AST.Err{expr: %AST.Path{parts: [:rustler, :Error, :BadArg]}}
-                    }
-                  ]
-                }
-              ]
-        }
-      }
-    ]
+      A.return do
+        A.match A.method(:struct_name, :as_str) do
+          Enum.map(variants, fn {tag, [%Type{meta: %{rust_name: variant_name}}]} ->
+            A.arm A.lit_pat("Elixir.#{variant_name}") do
+              A.return do
+                A.method(
+                  A.call(String.to_atom("decode_#{Macro.underscore(variant_name)}"), [:term]),
+                  :map,
+                  [A.path([rust_name, rust_variant(tag)])]
+                )
+              end
+            end
+          end) ++
+            [
+              A.arm A.wildcard() do
+                A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+              end
+            ]
+        end
+      end
+    end
+  end
+
+  defp struct_name_expr do
+    A.try(A.method(A.try(A.method(:term, :map_get, [struct_atom_expr()])), :atom_to_string))
   end
 
   defp struct_atom_expr do
-    %AST.Try{
-      expr: %AST.PathCall{
-        path: %AST.Path{parts: [:rustler, :Atom, :from_str]},
-        args: [
-          %AST.MethodCall{receiver: %AST.Var{name: :term}, method: :get_env, args: []},
-          %AST.Literal{value: "__struct__"}
-        ]
-      }
-    }
+    A.try(A.path_call([:rustler, :Atom, :from_str], [A.method(:term, :get_env), "__struct__"]))
   end
 
-  defp atom_call(name), do: %AST.PathCall{path: %AST.Path{parts: [:atoms, name]}, args: []}
+  defp atom_call(name), do: A.path_call([:atoms, name])
 
   defp rust_variant(value), do: value |> Atom.to_string() |> Macro.camelize()
 
