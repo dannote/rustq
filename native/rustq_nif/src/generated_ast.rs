@@ -226,6 +226,23 @@ pub(crate) fn decode_pat_err<'a>(term: Term<'a>) -> NifResult<Pat> {
     super::parse_pat(quote!(Err(# pat)))
 }
 
+pub(crate) fn decode_pat_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let patterns = super::decode_pat_list(required_field(term, "patterns")?)?;
+    super::parse_pat(quote!((# (# patterns),*)))
+}
+
+pub(crate) fn decode_pat_path_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let patterns = super::decode_pat_list(required_field(term, "patterns")?)?;
+    super::parse_pat(quote!(# path(# (# patterns),*)))
+}
+
+pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let fields = super::decode_pat_struct_fields(required_field(term, "fields")?)?;
+    super::parse_pat(quote!(# path { # (# fields),* }))
+}
+
 pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     super::parse_stmt(quote!(# expr;))
@@ -305,23 +322,6 @@ pub(crate) fn decode_expr_ref<'a>(term: Term<'a>) -> NifResult<Expr> {
     } else {
         super::parse_expr_tokens(quote!(&# expr))
     }
-}
-
-pub(crate) fn decode_pat_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let patterns = super::decode_pat_list(required_field(term, "patterns")?)?;
-    super::parse_pat(quote!((# (# patterns),*)))
-}
-
-pub(crate) fn decode_pat_path_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
-    let patterns = super::decode_pat_list(required_field(term, "patterns")?)?;
-    super::parse_pat(quote!(# path(# (# patterns),*)))
-}
-
-pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
-    let fields = super::decode_pat_struct_fields(required_field(term, "fields")?)?;
-    super::parse_pat(quote!(# path { # (# fields),* }))
 }
 
 pub(crate) fn decode_expr_struct_literal<'a>(term: Term<'a>) -> NifResult<Expr> {

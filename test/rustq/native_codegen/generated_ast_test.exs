@@ -47,7 +47,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
 
   test "dogfooded decoder module covers generated stmt, expr, and pat decoders" do
     decoder_names =
-      RustQ.NativeCodegen.Decoders.__rustq_asts__()
+      RustQ.NativeCodegen.Decoders.asts()
       |> Enum.map(& &1.name)
       |> MapSet.new()
 

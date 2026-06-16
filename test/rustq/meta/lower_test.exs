@@ -95,7 +95,7 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "dogfooded decoder wrappers lower Super calls and Rust constructors" do
-    decoders = RustQ.NativeCodegen.Decoders.__rustq_asts__()
+    decoders = RustQ.NativeCodegen.Decoders.asts()
 
     assert %RustQ.Rust.AST.Function{
              name: :decode_expr_try,

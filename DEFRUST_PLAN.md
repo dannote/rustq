@@ -74,6 +74,25 @@ end
 9. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
    small assignment/body example.
 
+## Current dogfooding architecture
+
+RustQ now uses `defrust` to generate its native AST decoder layer. The intended
+implementation tiers are:
+
+1. Semantic Rusty Elixir helpers such as `expr!`, `pat!`, and `stmt!`.
+2. `defrust` functions in `RustQ.NativeCodegen.Helpers` and
+   `RustQ.NativeCodegen.Decoders.*`.
+3. `RustQ.Rust.AST.Builder` for generated modules, dispatch tables, and other
+   structural Rust items.
+4. Explicit `raw_expr!` / `raw_pat!` / `raw_stmt!` / `raw_arm!` token escape
+   hatches when no semantic helper exists yet.
+5. Handwritten Rust primitives in `native/rustq_nif/src/lib.rs` for Rustler and
+   `syn` operations that are not yet cleanly expressible in Rusty Elixir.
+
+`RustQ.NativeCodegen` is orchestration only; modules/constants live in
+`RustQ.NativeCodegen.Modules`, dispatch in `RustQ.NativeCodegen.Dispatch`, and
+category decoders under `RustQ.NativeCodegen.Decoders.*`.
+
 ## Later work
 
 - Expand native NIF AST backend coverage beyond the MVP function/statement/expression nodes.
