@@ -384,7 +384,20 @@ defmodule RustQ.NativeCodegen do
   end
 
   defp expr_decoder_path(name)
-       when name in [:var, :path, :try, :tuple, :some, :err, :atom_value, :none],
+       when name in [
+              :var,
+              :path,
+              :field,
+              :path_call,
+              :method_call,
+              :ref,
+              :try,
+              :tuple,
+              :some,
+              :err,
+              :atom_value,
+              :none
+            ],
        do: [expr_decoder(name)]
 
   defp expr_decoder_path(_name), do: [:super, :decode_expr_manual]
@@ -553,6 +566,116 @@ defmodule RustQ.NativeCodegen do
         body:
           A.block do
             A.return(A.path_call([:super, :parse_expr], ["None"]))
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_field,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :receiver,
+              A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")]))
+            )
+
+            A.let(
+              :field,
+              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "field")?|)
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [
+                A.token_macro(:quote, "#receiver.#field")
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_path_call,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :path,
+              A.try(
+                A.path_call([:super, :parse_path], [
+                  A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
+                ])
+              )
+            )
+
+            A.let(
+              :args,
+              A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")]))
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [
+                A.token_macro(:quote, "#path(#(#args),*)")
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_method_call,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :receiver,
+              A.try(A.path_call([:super, :decode_expr], [map_get(:term, "receiver")]))
+            )
+
+            A.let(
+              :method,
+              A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "method")?|)
+            )
+
+            A.let(
+              :args,
+              A.try(A.path_call([:super, :decode_expr_list], [map_get(:term, "args")]))
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [
+                A.token_macro(:quote, "#receiver.#method(#(#args),*)")
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_ref,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+            A.let(:mutable, A.try(A.method(map_get(:term, "mutable"), :decode)))
+
+            A.return(
+              A.if_expr(
+                :mutable,
+                [
+                  A.return(
+                    A.path_call([:super, :parse_expr_tokens], [
+                      A.token_macro(:quote, "&mut #expr")
+                    ])
+                  )
+                ],
+                [
+                  A.return(
+                    A.path_call([:super, :parse_expr_tokens], [A.token_macro(:quote, "&#expr")])
+                  )
+                ]
+              )
+            )
           end
       },
       unary_expr_decoder(:decode_expr_try, "expr", "#expr?"),

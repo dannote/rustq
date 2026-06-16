@@ -24,6 +24,26 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ "value"
   end
 
+  test "generated expression decoders render field, calls, methods, and refs" do
+    source =
+      Native.render_ast(%AST.Function{
+        name: :exprs,
+        args: [],
+        returns: "NifResult<()> ",
+        body:
+          A.block do
+            A.stmt(%AST.Field{receiver: A.var(:opts), field: :fill})
+            A.stmt(A.path_call([:Rect, :from_xywh], [:x, :y, :width, :height]))
+            A.stmt(A.method(:canvas, :draw_rect, [A.ref(:rect), A.mut_ref(:paint)]))
+            A.return(A.ok())
+          end
+      })
+
+    assert source =~ "opts.fill;"
+    assert source =~ "Rect::from_xywh(x, y, width, height);"
+    assert source =~ "canvas.draw_rect(&rect, &mut paint);"
+  end
+
   test "generated expression decoders render try, tuple, some, and err expressions" do
     try_source =
       Native.render_ast(%AST.Function{
