@@ -217,6 +217,11 @@ pub(crate) fn parse_path_expr(path: syn::Path) -> NifResult<Expr> {
     parse_syn::<Expr>(quote!(#path))
 }
 
+pub(crate) fn parse_item_use_group_term(term: Term) -> NifResult<syn::ItemUse> {
+    let (base, names) = term.decode::<(Term, Term)>()?;
+    crate::parse_item_use_group(decode_string_list(base)?, decode_string_list(names)?)
+}
+
 pub(crate) fn string_field(term: Term, key: &str) -> NifResult<String> {
     term.map_get(atom(term.get_env(), key)?)?.decode()
 }

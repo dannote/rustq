@@ -24,7 +24,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
     source =
       AST.render_file_native([
         A.use([:quote, :quote]),
-        A.use("rustler::{Atom, Env}"),
+        A.use({[:rustler], [:Atom, :Env]}),
         A.module(
           :generated,
           [

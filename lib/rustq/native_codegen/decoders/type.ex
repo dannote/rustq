@@ -25,8 +25,8 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
   end
 
   @spec decode_type_unit(term()) :: R.nif_result(Type.t())
-  defrust decode_type_unit(_term) do
-    Super.parse_type("()")
+  defrust decode_type_unit(term) do
+    Super.parse_type_unit(term)
   end
 
   @spec decode_type_ref(term()) :: R.nif_result(Type.t())

@@ -22,6 +22,10 @@ pub(crate) fn parse_type_path_with_generics(
     }
 }
 
+pub(crate) fn parse_type_unit(_term: rustler::Term) -> NifResult<Type> {
+    parse_syn(quote!(()))
+}
+
 pub(crate) fn parse_type_ref(
     inner: Type,
     mutable: bool,

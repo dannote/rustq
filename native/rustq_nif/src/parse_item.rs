@@ -1,4 +1,4 @@
-use quote::quote;
+use quote::{format_ident, quote};
 use rustler::NifResult;
 use syn::{Expr, Field, FnArg, Item, Stmt, Type};
 
@@ -11,6 +11,19 @@ pub(crate) fn parse_item_use(tree: String) -> NifResult<syn::ItemUse> {
 pub(crate) fn parse_item_use_path(parts: Vec<String>) -> NifResult<syn::ItemUse> {
     let path = path_from_parts(parts)?;
     parse_syn(quote!(use #path;))
+}
+
+pub(crate) fn parse_item_use_group(
+    base: Vec<String>,
+    names: Vec<String>,
+) -> NifResult<syn::ItemUse> {
+    let base = path_from_parts(base)?;
+    let names = names
+        .into_iter()
+        .map(|name| format_ident!("{}", name))
+        .collect::<Vec<_>>();
+
+    parse_syn(quote!(use #base::{#(#names),*};))
 }
 
 pub(crate) fn parse_item_module(

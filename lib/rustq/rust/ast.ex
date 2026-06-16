@@ -71,8 +71,15 @@ defmodule RustQ.Rust.AST do
 
   import RustQ.Rust.AST.NodeDSL
 
-  defnode(Use, :item, [tree: nil, parts: nil],
-    type: quote(do: %__MODULE__{tree: String.t() | nil, parts: [atom() | String.t()] | nil})
+  defnode(Use, :item, [tree: nil, parts: nil, group: nil],
+    type:
+      quote(
+        do: %__MODULE__{
+          tree: String.t() | nil,
+          parts: [atom() | String.t()] | nil,
+          group: {[atom() | String.t()], [atom() | String.t()]} | nil
+        }
+      )
   )
 
   defnode(Module, :item, [:name, items: [], vis: nil],
@@ -440,6 +447,16 @@ defmodule RustQ.Rust.AST do
 
   def render_use(%Use{parts: parts}) when is_list(parts),
     do: ["use ", Elixir.Enum.map_join(parts, "::", &to_string/1), ";"]
+
+  def render_use(%Use{group: {base, names}}) when is_list(base) and is_list(names) do
+    [
+      "use ",
+      Elixir.Enum.map_join(base, "::", &to_string/1),
+      "::{",
+      Elixir.Enum.map_join(names, ", ", &to_string/1),
+      "};"
+    ]
+  end
 
   def render_use(%Use{tree: tree}), do: ["use ", tree, ";"]
 

@@ -11,8 +11,14 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     parts = unwrap!(required_field(term, "parts"))
 
     if unwrap!(is_nil(parts)) do
-      tree = unwrap!(Super.string_field(term, "tree"))
-      Super.parse_item_use(tree)
+      group = unwrap!(required_field(term, "group"))
+
+      if unwrap!(is_nil(group)) do
+        tree = unwrap!(Super.string_field(term, "tree"))
+        Super.parse_item_use(tree)
+      else
+        Super.parse_item_use_group_term(group)
+      end
     else
       parts = unwrap!(Super.decode_string_list(parts))
       Super.parse_item_use_path(parts)

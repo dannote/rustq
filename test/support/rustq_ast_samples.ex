@@ -18,6 +18,10 @@ defmodule RustQ.ASTSamples do
   defp base_fragment(%AST.Use{parts: parts}) when is_list(parts),
     do: "use #{Enum.map_join(parts, "::", &to_string/1)};"
 
+  defp base_fragment(%AST.Use{group: {base, names}}) do
+    "use #{Enum.map_join(base, "::", &to_string/1)}::{#{Enum.map_join(names, ", ", &to_string/1)}};"
+  end
+
   defp base_fragment(%AST.Use{tree: tree}), do: "use #{tree};"
   defp base_fragment(%AST.Module{name: name}), do: "mod #{name}"
   defp base_fragment(%AST.MacroItem{source: source}), do: source
@@ -82,7 +86,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:pat_struct), do: "Click { name: name } =>"
   defp semantic_fragment(_), do: ""
 
-  def sample_for(:use), do: %AST.Use{parts: [:std, :fmt]}
+  def sample_for(:use), do: %AST.Use{group: {[:std], [:fmt, :io]}}
   def sample_for(:module), do: %AST.Module{name: :sample, items: [sample_for(:const)]}
   def sample_for(:const), do: %AST.Const{name: :VALUE, type: A.type_path(:u32), expr: A.lit(1)}
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}

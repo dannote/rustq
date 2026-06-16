@@ -208,8 +208,13 @@ pub(crate) fn decode_ast_use<'a>(term: Term<'a>) -> NifResult<ItemUse> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Use")?;
     let parts = required_field(term, "parts")?;
     if is_nil(parts)? {
-        let tree = super::string_field(term, "tree")?;
-        super::parse_item_use(tree)
+        let group = required_field(term, "group")?;
+        if is_nil(group)? {
+            let tree = super::string_field(term, "tree")?;
+            super::parse_item_use(tree)
+        } else {
+            super::parse_item_use_group_term(group)
+        }
     } else {
         let parts = super::decode_string_list(parts)?;
         super::parse_item_use_path(parts)
@@ -315,8 +320,8 @@ pub(crate) fn decode_type_path<'a>(term: Term<'a>) -> NifResult<Type> {
     super::parse_type_path_with_generics(parts, lifetimes, generics)
 }
 
-pub(crate) fn decode_type_unit<'a>(_term: Term<'a>) -> NifResult<Type> {
-    super::parse_type("()")
+pub(crate) fn decode_type_unit<'a>(term: Term<'a>) -> NifResult<Type> {
+    super::parse_type_unit(term)
 }
 
 pub(crate) fn decode_type_ref<'a>(term: Term<'a>) -> NifResult<Type> {

@@ -58,6 +58,7 @@ defmodule RustQ.Rust.AST.Builder do
 
   def flatten(values), do: values |> List.wrap() |> List.flatten()
 
+  def use({base, names}) when is_list(base) and is_list(names), do: %AST.Use{group: {base, names}}
   def use(parts) when is_list(parts), do: %AST.Use{parts: parts}
   def use(tree), do: %AST.Use{tree: tree}
 
