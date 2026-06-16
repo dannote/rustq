@@ -7,7 +7,7 @@ use crate::generated_ast::{
     decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
     optional_map_get, struct_name,
 };
-use crate::{parse_expr, parse_path, parse_syn, parse_type, path_from_parts};
+use crate::{parse_path, parse_syn, parse_type, path_from_parts};
 
 // Primitive-boundary inventory:
 // - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
@@ -164,19 +164,11 @@ pub(crate) fn decode_expr(term: Term) -> NifResult<Expr> {
 // syn parser helpers used as explicit Rusty-Elixir primitive boundaries.
 pub(crate) fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
     if name.ends_with('!') {
-        let source = format!(
-            "{}({})",
-            name,
-            args.iter()
-                .map(|arg| quote!(#arg).to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        parse_expr(&source)
-    } else {
-        let name = format_ident!("{}", name);
-        parse_syn::<Expr>(quote!(#name(#(#args),*)))
+        return Err(rustler::Error::BadArg);
     }
+
+    let name = format_ident!("{}", name);
+    parse_syn::<Expr>(quote!(#name(#(#args),*)))
 }
 
 pub(crate) struct NamedField<T> {

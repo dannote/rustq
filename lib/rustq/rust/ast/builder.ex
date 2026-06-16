@@ -128,8 +128,17 @@ defmodule RustQ.Rust.AST.Builder do
   def vec(values), do: %AST.VecLiteral{values: Enum.map(values, &expr/1)}
   def closure(args, body), do: %AST.Closure{args: args, body: expr(body)}
 
-  def call(name, args \\ []) when is_atom(name),
-    do: %AST.LocalCall{name: name, args: Enum.map(List.wrap(args), &expr/1)}
+  def call(name, args \\ []) when is_atom(name) do
+    if name |> Atom.to_string() |> String.ends_with?("!") do
+      name
+      |> Atom.to_string()
+      |> String.trim_trailing("!")
+      |> String.to_atom()
+      |> macro_call(args)
+    else
+      %AST.LocalCall{name: name, args: Enum.map(List.wrap(args), &expr/1)}
+    end
+  end
 
   def path_call(parts, args \\ []) when is_list(parts),
     do: %AST.PathCall{path: %AST.Path{parts: parts}, args: Enum.map(List.wrap(args), &expr/1)}

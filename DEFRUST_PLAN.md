@@ -362,6 +362,9 @@ Recently completed:
 - Item-level macro invocations such as `rustler::atoms! { ... }` now use a
   structural `MacroItemCall` node; generated atom support no longer needs a raw
   `MacroItem.source` escape.
+- Builder-level local macro calls like `todo!()` now become structural
+  `MacroCall` nodes, and native `LocalCall` decoding rejects macro-shaped names
+  instead of formatting/parsing them as strings.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design
