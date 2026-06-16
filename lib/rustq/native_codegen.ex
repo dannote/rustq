@@ -10,9 +10,11 @@ defmodule RustQ.NativeCodegen do
   def generated_ast_support do
     [
       A.use("rustler::{Atom, Env, NifResult, Term}"),
+      A.use("syn::Item"),
       atoms_module(),
       ast_modules_module(),
-      helper_items()
+      helper_items(),
+      decode_ast_item_item()
     ]
     |> List.flatten()
     |> AST.render_file_native()
@@ -172,6 +174,60 @@ defmodule RustQ.NativeCodegen do
       }
     ]
   end
+
+  defp decode_ast_item_item do
+    %AST.Function{
+      name: :decode_ast_item,
+      vis: :crate,
+      args: [term: "Term"],
+      returns: "NifResult<Item>",
+      body:
+        A.block do
+          A.return do
+            A.match A.method(A.try(A.call(:struct_name, [:term])), :as_str) do
+              decode_ast_item_arms()
+            end
+          end
+        end
+    }
+  end
+
+  defp decode_ast_item_arms do
+    Schema.nodes(:item)
+    |> Enum.map(&decode_ast_item_arm/1)
+    |> Kernel.++([
+      A.arm A.wildcard() do
+        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
+      end
+    ])
+  end
+
+  defp decode_ast_item_arm(%Schema.Node{name: :macro_item, rust_module: rust_module}) do
+    A.arm A.lit_pat(rust_module) do
+      A.return(A.path_call([:super, :decode_ast_macro_item], [:term]))
+    end
+  end
+
+  defp decode_ast_item_arm(%Schema.Node{name: name, rust_module: rust_module}) do
+    {wrapper, decoder} = item_decoder(name)
+
+    A.arm A.lit_pat(rust_module) do
+      A.return(
+        A.ok(
+          A.path_call([:Item, wrapper], [
+            A.try(A.path_call([:super, decoder], [:term]))
+          ])
+        )
+      )
+    end
+  end
+
+  defp item_decoder(:use), do: {:Use, :decode_ast_use}
+  defp item_decoder(:module), do: {:Mod, :decode_ast_module}
+  defp item_decoder(:const), do: {:Const, :decode_ast_const}
+  defp item_decoder(:function), do: {:Fn, :decode_ast_function}
+  defp item_decoder(:struct), do: {:Struct, :decode_ast_struct}
+  defp item_decoder(:enum), do: {:Enum, :decode_ast_enum}
 
   defp format_rust(source) do
     path =

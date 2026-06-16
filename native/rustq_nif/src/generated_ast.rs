@@ -2,6 +2,8 @@
 
 use rustler::{Atom, Env, NifResult, Term};
 
+use syn::Item;
+
 pub(crate) mod atoms {
     rustler::atoms! {
         ok, error,
@@ -100,5 +102,18 @@ pub(crate) fn expect_struct(term: Term, expected: &str) -> NifResult<()> {
         Ok(())
     } else {
         Err(rustler::Error::BadArg)
+    }
+}
+
+pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
+    match struct_name(term)?.as_str() {
+        "Elixir.RustQ.Rust.AST.Use" => Ok(Item::Use(super::decode_ast_use(term)?)),
+        "Elixir.RustQ.Rust.AST.Module" => Ok(Item::Mod(super::decode_ast_module(term)?)),
+        "Elixir.RustQ.Rust.AST.Const" => Ok(Item::Const(super::decode_ast_const(term)?)),
+        "Elixir.RustQ.Rust.AST.MacroItem" => super::decode_ast_macro_item(term),
+        "Elixir.RustQ.Rust.AST.Function" => Ok(Item::Fn(super::decode_ast_function(term)?)),
+        "Elixir.RustQ.Rust.AST.Struct" => Ok(Item::Struct(super::decode_ast_struct(term)?)),
+        "Elixir.RustQ.Rust.AST.Enum" => Ok(Item::Enum(super::decode_ast_enum(term)?)),
+        _ => Err(rustler::Error::BadArg),
     }
 }

@@ -14,8 +14,8 @@ use syn::{
 mod generated_ast;
 
 use generated_ast::{
-    ast_modules, atom, atom_key, atoms, expect_struct, is_nil, optional_atom_key, optional_map_get,
-    struct_name,
+    ast_modules, atom, atom_key, atoms, decode_ast_item, expect_struct, is_nil, optional_atom_key,
+    optional_map_get, struct_name,
 };
 
 #[derive(NifMap)]
@@ -56,19 +56,6 @@ fn render_ast(ast: Term) -> NifResult<String> {
         attrs: Vec::new(),
         items: vec![item],
     }))
-}
-
-fn decode_ast_item(term: Term) -> NifResult<Item> {
-    match struct_name(term)?.as_str() {
-        ast_modules::USE => Ok(Item::Use(decode_ast_use(term)?)),
-        ast_modules::MODULE => Ok(Item::Mod(decode_ast_module(term)?)),
-        ast_modules::CONST => Ok(Item::Const(decode_ast_const(term)?)),
-        ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
-        ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
-        ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
-        ast_modules::ENUM => Ok(Item::Enum(decode_ast_enum(term)?)),
-        _ => Err(rustler::Error::BadArg),
-    }
 }
 
 fn decode_ast_use(term: Term) -> NifResult<syn::ItemUse> {
