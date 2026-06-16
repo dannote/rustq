@@ -48,7 +48,7 @@ defmodule RustQ.MetaTest do
     assert source =~ "opts: RectOpts"
     assert source =~ "raw_opts: Term<'a>"
     assert source =~ "let rect = Rect::from_xywh(opts.x, opts.y, opts.width, opts.height);"
-    assert source =~ "let paint = decode_paint(opts.fill)?;"
+    assert source =~ "let mut paint = decode_paint(opts.fill)?;"
     assert source =~ "apply_blend_mode(&mut paint, raw_opts)?;"
     assert source =~ "canvas.draw_rect(&rect, &paint);"
   end
@@ -59,6 +59,14 @@ defmodule RustQ.MetaTest do
     assert %RustQ.Rust.AST.Function{name: :draw_save} = draw_save
     assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
     assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} = hd(draw_rect.body)
+
+    assert Enum.any?(
+             draw_rect.body,
+             &match?(
+               %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :paint}, mutable: true},
+               &1
+             )
+           )
   end
 
   test "generated items are validated Rust fragments" do

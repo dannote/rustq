@@ -68,7 +68,8 @@ end
    - `ref/1`, `mut_ref/1`, `unwrap!/1`
 6. Provide `__rustq_asts__/0`, `__rustq_items__/0`, and `__rustq_source__/0` on
    modules using `RustQ.Meta`.
-7. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
+7. Add `from_module My.Generated` for `rustq.exs`/`mix rustq.gen` integration.
+8. Add tests proving generated fragments for `draw_save`, `decode_mode`, and a
    small assignment/body example.
 
 ## Later work
@@ -77,8 +78,7 @@ end
   directly, so string rendering is only a compatibility/debug path.
 - Full set-theoretic `@type` parsing for atom unions, tuples, maps, options,
   results, and Rustler decoder generation.
-- Mutability inference: upgrade `x = expr` to `let mut x = expr` when `mut_ref(x)`
-  is used.
 - Better type-directed wrapping for `Option`, `Result`, and `NifResult` in nested
   `case` branches.
-- Integration with `mix rustq.gen` so `defrust` modules can directly emit files.
+- Broader integration with `mix rustq.gen` so `defrust` modules can directly emit
+  schemas and multi-file output.

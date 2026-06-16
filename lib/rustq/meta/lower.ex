@@ -6,9 +6,12 @@ defmodule RustQ.Meta.Lower do
 
   @spec function_ast(Macro.t(), Type.t()) :: [struct()]
   def function_ast(body_ast, return_type) do
-    body_ast
-    |> block_expressions()
-    |> lower_block(return_type)
+    body =
+      body_ast
+      |> block_expressions()
+      |> lower_block(return_type)
+
+    infer_mutability(body)
   end
 
   @spec function_body(Macro.t(), Type.t()) :: String.t()
@@ -196,6 +199,93 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
+
+  defp infer_mutability(body) do
+    mutable_vars = body |> collect_mut_refs() |> MapSet.new()
+    Enum.map(body, &mark_mutable_lets(&1, mutable_vars))
+  end
+
+  defp mark_mutable_lets(%AST.Let{pattern: %AST.PatVar{name: name}} = let, mutable_vars) do
+    %{
+      let
+      | mutable: MapSet.member?(mutable_vars, name),
+        expr: mark_mutable_expr(let.expr, mutable_vars)
+    }
+  end
+
+  defp mark_mutable_lets(%AST.ExprStmt{} = stmt, mutable_vars),
+    do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
+
+  defp mark_mutable_lets(%AST.Return{} = stmt, mutable_vars),
+    do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
+
+  defp mark_mutable_expr(%AST.Match{} = match, mutable_vars) do
+    arms =
+      Enum.map(match.arms, fn %AST.Arm{} = arm ->
+        %{arm | body: Enum.map(arm.body, &mark_mutable_lets(&1, mutable_vars))}
+      end)
+
+    %{match | expr: mark_mutable_expr(match.expr, mutable_vars), arms: arms}
+  end
+
+  defp mark_mutable_expr(expr, mutable_vars), do: mark_mutable_expr_fallback(expr, mutable_vars)
+
+  defp mark_mutable_expr_fallback(%AST.PathCall{} = expr, mutable_vars),
+    do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
+
+  defp mark_mutable_expr_fallback(%AST.MethodCall{} = expr, mutable_vars) do
+    %{
+      expr
+      | receiver: mark_mutable_expr(expr.receiver, mutable_vars),
+        args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))
+    }
+  end
+
+  defp mark_mutable_expr_fallback(%AST.LocalCall{} = expr, mutable_vars),
+    do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
+
+  defp mark_mutable_expr_fallback(%AST.Field{} = expr, mutable_vars),
+    do: %{expr | receiver: mark_mutable_expr(expr.receiver, mutable_vars)}
+
+  defp mark_mutable_expr_fallback(%AST.Ref{} = expr, mutable_vars),
+    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
+
+  defp mark_mutable_expr_fallback(%AST.Try{} = expr, mutable_vars),
+    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
+
+  defp mark_mutable_expr_fallback(%AST.Tuple{} = expr, mutable_vars),
+    do: %{expr | values: Enum.map(expr.values, &mark_mutable_expr(&1, mutable_vars))}
+
+  defp mark_mutable_expr_fallback(%AST.Some{} = expr, mutable_vars),
+    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
+
+  defp mark_mutable_expr_fallback(%AST.Ok{expr: nil} = expr, _mutable_vars), do: expr
+
+  defp mark_mutable_expr_fallback(%AST.Ok{} = expr, mutable_vars),
+    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
+
+  defp mark_mutable_expr_fallback(%AST.Err{} = expr, mutable_vars),
+    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
+
+  defp mark_mutable_expr_fallback(expr, _mutable_vars), do: expr
+
+  defp collect_mut_refs(term), do: do_collect_mut_refs(term, [])
+
+  defp do_collect_mut_refs(%AST.Ref{mutable: true, expr: %AST.Var{name: name}} = ref, acc) do
+    do_collect_mut_refs(ref.expr, [name | acc])
+  end
+
+  defp do_collect_mut_refs(%{__struct__: _struct} = term, acc) do
+    term
+    |> Map.from_struct()
+    |> Map.values()
+    |> Enum.reduce(acc, &do_collect_mut_refs/2)
+  end
+
+  defp do_collect_mut_refs(list, acc) when is_list(list),
+    do: Enum.reduce(list, acc, &do_collect_mut_refs/2)
+
+  defp do_collect_mut_refs(_other, acc), do: acc
 
   defp alias_ast?({:__aliases__, _, _parts}), do: true
   defp alias_ast?(_other), do: false
