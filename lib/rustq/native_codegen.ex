@@ -326,32 +326,6 @@ defmodule RustQ.NativeCodegen do
 
   defp decode_pat_helper_items do
     [
-      function :decode_pat_var,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Pat>" do
-        A.let(
-          :ident,
-          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
-        )
-
-        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#ident")]))
-      end,
-      function :decode_pat_path,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Pat>" do
-        A.let(
-          :path,
-          A.try(
-            A.path_call([:super, :parse_path], [
-              A.ref(A.try(A.path_call([:super, :path_parts], [path_parts_term(:term)])))
-            ])
-          )
-        )
-
-        A.return(A.path_call([:super, :parse_pat], [A.token_macro(:quote, "#path")]))
-      end,
       function :decode_pat_tuple,
         vis: :crate,
         args: [term: "Term"],
@@ -455,31 +429,6 @@ defmodule RustQ.NativeCodegen do
 
   defp decode_expr_helper_items do
     [
-      function :decode_expr_var,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(
-          :ident,
-          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
-        )
-
-        A.return(
-          A.path_call([:super, :parse_expr], [
-            A.ref(A.method(A.token_macro(:quote, "#ident"), :to_string))
-          ])
-        )
-      end,
-      function :decode_expr_path,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.return(
-          A.path_call([:super, :parse_expr], [
-            A.ref(A.try(A.path_call([:super, :path_parts], [map_get(:term, "parts")])))
-          ])
-        )
-      end,
       function :decode_expr_token_macro,
         vis: :crate,
         args: [term: "Term"],
@@ -490,21 +439,6 @@ defmodule RustQ.NativeCodegen do
         A.return(
           A.path_call([:super, :parse_expr], [
             A.ref(A.token_macro(:format, ~s|"{}!({})", path, tokens|))
-          ])
-        )
-      end,
-      function :decode_expr_atom_value,
-        vis: :crate,
-        args: [term: "Term"],
-        returns: "NifResult<Expr>" do
-        A.let(
-          :name,
-          A.token_macro([:quote, :format_ident], ~s|"{}", super::atom_key(term, "name")?|)
-        )
-
-        A.return(
-          A.path_call([:super, :parse_expr], [
-            A.ref(A.method(A.token_macro(:quote, "atoms::#name()"), :to_string))
           ])
         )
       end,

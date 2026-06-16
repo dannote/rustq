@@ -126,7 +126,6 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         _ => Err(rustler::Error::BadArg),
     }
 }
-
 pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
     match struct_name(term)?.as_str() {
         ast_modules::TYPE_PATH => super::decode_type_path(term),
@@ -139,7 +138,6 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         _ => Err(rustler::Error::BadArg),
     }
 }
-
 pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
     match struct_name(term)?.as_str() {
         ast_modules::PAT_VAR => decode_pat_var(term),
@@ -157,7 +155,6 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
         _ => Err(rustler::Error::BadArg),
     }
 }
-
 pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
     match struct_name(term)?.as_str() {
         ast_modules::LET => decode_stmt_let(term),
@@ -166,7 +163,6 @@ pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
         _ => Err(rustler::Error::BadArg),
     }
 }
-
 pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
     match struct_name(term)?.as_str() {
         ast_modules::VAR => decode_expr_var(term),
@@ -193,7 +189,6 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         _ => Err(rustler::Error::BadArg),
     }
 }
-
 pub(crate) fn decode_arm(term: Term) -> NifResult<Arm> {
     super::expect_struct(term, ast_modules::ARM)?;
     let pat_term = term.map_get(super::atom(term.get_env(), "pattern")?)?;
@@ -202,9 +197,13 @@ pub(crate) fn decode_arm(term: Term) -> NifResult<Arm> {
         ast_modules::PAT_ATOM_GUARD => super::decode_atom_guard_arm(pat_term, block),
         _ => {
             let pat = super::decode_pat(pat_term)?;
-            super::parse_arm(quote!(# pat => # block,))
+            super::parse_arm(quote!(#pat => #block,))
         }
     }
+}
+pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let ident = super::format_ident_value(atom_key(term, "name")?);
+    super::parse_pat(quote!(# ident))
 }
 
 pub(crate) fn decode_pat_wildcard<'a>(_term: Term<'a>) -> NifResult<Pat> {
@@ -213,6 +212,12 @@ pub(crate) fn decode_pat_wildcard<'a>(_term: Term<'a>) -> NifResult<Pat> {
 
 pub(crate) fn decode_pat_none<'a>(_term: Term<'a>) -> NifResult<Pat> {
     super::parse_pat(quote!(None))
+}
+
+pub(crate) fn decode_pat_path<'a>(term: Term<'a>) -> NifResult<Pat> {
+    let parts = super::path_parts(required_field(term, "parts")?)?;
+    let path = super::parse_path(&parts)?;
+    super::parse_pat(quote!(# path))
 }
 
 pub(crate) fn decode_pat_literal<'a>(term: Term<'a>) -> NifResult<Pat> {
@@ -244,6 +249,21 @@ pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
     Ok(Stmt::Expr(expr, None))
 }
 
+pub(crate) fn decode_expr_var<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let ident = super::format_ident_value(atom_key(term, "name")?);
+    super::parse_expr_tokens(quote!(# ident))
+}
+
+pub(crate) fn decode_expr_path<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let parts = super::path_parts(required_field(term, "parts")?)?;
+    super::parse_expr(&parts)
+}
+
+pub(crate) fn decode_expr_atom_value<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let name = super::format_ident_value(atom_key(term, "name")?);
+    super::parse_expr_tokens(quote!(atoms::# name()))
+}
+
 pub(crate) fn decode_expr_none<'a>(_term: Term<'a>) -> NifResult<Expr> {
     super::parse_expr_tokens(quote!(None))
 }
@@ -265,19 +285,6 @@ pub(crate) fn decode_expr_some<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_err<'a>(term: Term<'a>) -> NifResult<Expr> {
     let expr = super::decode_expr(required_field(term, "expr")?)?;
     super::parse_expr_tokens(quote!(Err(# expr)))
-}
-
-pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat> {
-    let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
-    super::parse_pat(quote!(# ident))
-}
-
-pub(crate) fn decode_pat_path(term: Term) -> NifResult<Pat> {
-    let path = super::parse_path(&super::path_parts(
-        term.map_get(super::atom(term.get_env(), "path")?)?
-            .map_get(super::atom(term.get_env(), "parts")?)?,
-    )?)?;
-    super::parse_pat(quote!(# path))
 }
 
 pub(crate) fn decode_pat_tuple(term: Term) -> NifResult<Pat> {
@@ -325,17 +332,6 @@ pub(crate) fn decode_stmt_let(term: Term) -> NifResult<Stmt> {
     super::parse_let_stmt(pat_tokens, ty, expr)
 }
 
-pub(crate) fn decode_expr_var(term: Term) -> NifResult<Expr> {
-    let ident = quote::format_ident!("{}", super::atom_key(term, "name")?);
-    super::parse_expr(&quote!(# ident).to_string())
-}
-
-pub(crate) fn decode_expr_path(term: Term) -> NifResult<Expr> {
-    super::parse_expr(&super::path_parts(
-        term.map_get(super::atom(term.get_env(), "parts")?)?,
-    )?)
-}
-
 pub(crate) fn decode_expr_token_macro(term: Term) -> NifResult<Expr> {
     let path = super::path_parts(
         term.map_get(super::atom(term.get_env(), "path")?)?
@@ -345,11 +341,6 @@ pub(crate) fn decode_expr_token_macro(term: Term) -> NifResult<Expr> {
         .map_get(super::atom(term.get_env(), "tokens")?)?
         .decode()?;
     super::parse_expr(&format!("{}!({})", path, tokens))
-}
-
-pub(crate) fn decode_expr_atom_value(term: Term) -> NifResult<Expr> {
-    let name = quote::format_ident!("{}", super::atom_key(term, "name")?);
-    super::parse_expr(&quote!(atoms::# name()).to_string())
 }
 
 pub(crate) fn decode_expr_field(term: Term) -> NifResult<Expr> {

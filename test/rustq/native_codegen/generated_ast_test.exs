@@ -40,6 +40,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert source =~ "pub(crate) fn decode_expr_tuple(term: Term) -> NifResult<Expr>"
     assert source =~ "pub(crate) fn decode_pat_wildcard<'a>(_term: Term<'a>) -> NifResult<Pat>"
     assert source =~ "super::parse_pat(quote!(_))"
-    assert source =~ "pub(crate) fn decode_pat_var(term: Term) -> NifResult<Pat>"
+    assert source =~ "pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat>"
+    assert source =~ "super::format_ident_value(atom_key(term, \"name\")?)"
   end
 end

@@ -322,6 +322,10 @@ fn decode_atom_guard_arm(pat_term: Term, block: syn::Block) -> NifResult<Arm> {
     parse_arm(quote!(value if value == atoms::#name() => #block,))
 }
 
+fn format_ident_value(name: String) -> proc_macro2::Ident {
+    format_ident!("{}", name)
+}
+
 fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     if let Ok(value) = term.decode::<String>() {
         return parse_pat(quote!(#value));
