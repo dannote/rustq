@@ -59,6 +59,7 @@ fn render_ast(ast: Term) -> NifResult<String> {
     }))
 }
 
+// Handwritten item decoders that still need direct syn/Rustler glue.
 fn decode_ast_use(term: Term) -> NifResult<syn::ItemUse> {
     expect_struct(term, ast_modules::USE)?;
     let tree = term
@@ -82,14 +83,13 @@ fn decode_ast_module(term: Term) -> NifResult<syn::ItemMod> {
     syn::parse2(quote!(#vis mod #name { #(#items)* })).map_err(|_| rustler::Error::BadArg)
 }
 
-fn decode_ast_const(term: Term) -> NifResult<syn::ItemConst> {
-    expect_struct(term, ast_modules::CONST)?;
-    let env = term.get_env();
-    let name = format_ident!("{}", atom_key(term, "name")?);
-    let ty = decode_type(term.map_get(atom(env, "type")?)?)?;
-    let expr = decode_expr(term.map_get(atom(env, "expr")?)?)?;
-    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
-
+// Temporary dogfood bridge helpers called by generated defrust decoders.
+fn parse_item_const(
+    name: syn::Ident,
+    ty: Type,
+    expr: Expr,
+    vis: syn::Visibility,
+) -> NifResult<syn::ItemConst> {
     syn::parse2(quote!(#vis const #name: #ty = #expr;)).map_err(|_| rustler::Error::BadArg)
 }
 
@@ -132,20 +132,13 @@ fn decode_ast_function(term: Term) -> NifResult<syn::ItemFn> {
     }
 }
 
-fn decode_ast_struct(term: Term) -> NifResult<syn::ItemStruct> {
-    expect_struct(term, ast_modules::STRUCT)?;
-    let env = term.get_env();
-    let name = format_ident!("{}", atom_key(term, "name")?);
-    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
-    let derive = decode_derive(term.map_get(atom(env, "derive")?)?)?;
-    let lifetime = optional_atom_key(term, "lifetime")?;
-    let fields = term
-        .map_get(atom(env, "fields")?)?
-        .decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_struct_field)
-        .collect::<NifResult<Vec<Field>>>()?;
-
+fn parse_item_struct(
+    name: syn::Ident,
+    vis: syn::Visibility,
+    derive: Vec<syn::Attribute>,
+    lifetime: Option<String>,
+    fields: Vec<Field>,
+) -> NifResult<syn::ItemStruct> {
     let generics = if let Some(lifetime) = lifetime {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
@@ -169,20 +162,27 @@ fn decode_struct_field(term: Term) -> NifResult<Field> {
     item.fields.into_iter().next().ok_or(rustler::Error::BadArg)
 }
 
-fn decode_ast_enum(term: Term) -> NifResult<syn::ItemEnum> {
-    expect_struct(term, ast_modules::ENUM)?;
-    let env = term.get_env();
-    let name = format_ident!("{}", atom_key(term, "name")?);
-    let vis = decode_vis(term.map_get(atom(env, "vis")?)?)?;
-    let derive = decode_derive(term.map_get(atom(env, "derive")?)?)?;
-    let variants = term
-        .map_get(atom(env, "variants")?)?
-        .decode::<Vec<Term>>()?
+fn decode_struct_field_list(term: Term) -> NifResult<Vec<Field>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_struct_field)
+        .collect::<NifResult<Vec<Field>>>()
+}
+
+fn decode_enum_variant_list(term: Term) -> NifResult<Vec<syn::Variant>> {
+    term.decode::<Vec<Term>>()?
         .into_iter()
         .map(decode_enum_variant)
-        .collect::<NifResult<Vec<syn::Variant>>>()?;
+        .collect::<NifResult<Vec<syn::Variant>>>()
+}
 
-    syn::parse2(quote!(#(#derive)* #vis enum #name { #(#variants)* }))
+fn parse_item_enum(
+    name: syn::Ident,
+    vis: syn::Visibility,
+    derive: Vec<syn::Attribute>,
+    variants: Vec<syn::Variant>,
+) -> NifResult<syn::ItemEnum> {
+    syn::parse2(quote!(#(#derive)* #vis enum #name { #(#variants),* }))
         .map_err(|_| rustler::Error::BadArg)
 }
 
@@ -195,12 +195,13 @@ fn decode_type_list(term: Term) -> NifResult<Vec<Type>> {
 
 fn parse_enum_variant(name: syn::Ident, tuple: Vec<Type>) -> NifResult<syn::Variant> {
     if tuple.is_empty() {
-        syn::parse2(quote!(#name,)).map_err(|_| rustler::Error::BadArg)
+        syn::parse2(quote!(#name)).map_err(|_| rustler::Error::BadArg)
     } else {
-        syn::parse2(quote!(#name(#(#tuple),*),)).map_err(|_| rustler::Error::BadArg)
+        syn::parse2(quote!(#name(#(#tuple),*))).map_err(|_| rustler::Error::BadArg)
     }
 }
 
+// Rust syntax attribute/visibility decoders shared by handwritten and generated code.
 fn decode_vis(term: Term) -> NifResult<syn::Visibility> {
     if is_nil(term)? {
         syn::parse2(quote!()).map_err(|_| rustler::Error::BadArg)
@@ -232,6 +233,7 @@ fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
     }
 }
 
+// Collection decoders for generated AST nodes.
 fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
     term.decode::<Vec<Term>>()?
         .into_iter()
@@ -276,6 +278,7 @@ fn decode_expr(term: Term) -> NifResult<Expr> {
     decode_ast_expr(term)
 }
 
+// syn parser helpers used as explicit Rusty-Elixir primitive boundaries.
 fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
     if name.ends_with('!') {
         let source = format!(
@@ -448,6 +451,7 @@ fn type_value(term: Term, key: &str) -> NifResult<Type> {
     decode_type(term.map_get(atom(term.get_env(), key)?)?)
 }
 
+// Type decoding primitives retained until all type shapes are dogfooded.
 fn decode_type(term: Term) -> NifResult<Type> {
     if let Ok(source) = term.decode::<String>() {
         return parse_type(&source);
@@ -481,11 +485,7 @@ fn decode_type_path(term: Term) -> NifResult<Type> {
     }
 }
 
-fn decode_type_ref(term: Term) -> NifResult<Type> {
-    let env = term.get_env();
-    let inner = decode_type(term.map_get(atom(env, "inner")?)?)?;
-    let mutable = term.map_get(atom(env, "mutable")?)?.decode::<bool>()?;
-    let lifetime = optional_atom_key(term, "lifetime")?;
+fn parse_type_ref(inner: Type, mutable: bool, lifetime: Option<String>) -> NifResult<Type> {
     let lifetime = lifetime
         .map(|value| format!("'{} ", value))
         .unwrap_or_default();

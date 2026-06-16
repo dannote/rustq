@@ -55,12 +55,15 @@ defmodule RustQ.NativeCodegen.Dispatch do
       A.return(
         A.ok(
           A.path_call([:Item, wrapper], [
-            A.try(A.path_call([:super, decoder], [:term]))
+            A.try(A.path_call(item_decoder_path(name, decoder), [:term]))
           ])
         )
       )
     end
   end
+
+  defp item_decoder_path(name, decoder) when name in [:const, :struct, :enum], do: [decoder]
+  defp item_decoder_path(_name, decoder), do: [:super, decoder]
 
   defp item_decoder(:use), do: {:Use, :decode_ast_use}
   defp item_decoder(:module), do: {:Mod, :decode_ast_module}
@@ -99,7 +102,14 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp type_decoder_path(name)
-       when name in [:type_unit, :type_option, :type_result, :type_nif_result, :type_vec],
+       when name in [
+              :type_ref,
+              :type_unit,
+              :type_option,
+              :type_result,
+              :type_nif_result,
+              :type_vec
+            ],
        do: [type_decoder(name)]
 
   defp type_decoder_path(name), do: [:super, type_decoder(name)]

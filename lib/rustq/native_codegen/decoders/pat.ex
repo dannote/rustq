@@ -54,21 +54,21 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
   @spec decode_pat_tuple(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_tuple(term) do
     patterns = unwrap!(Super.decode_pat_list(unwrap!(required_field(term, "patterns"))))
-    raw_pat!("(#(#patterns),*)")
+    pat!(tuple(patterns))
   end
 
   @spec decode_pat_path_tuple(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_path_tuple(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
     patterns = unwrap!(Super.decode_pat_list(unwrap!(required_field(term, "patterns"))))
-    raw_pat!("#path(#(#patterns),*)")
+    pat!(path_tuple(path, patterns))
   end
 
   @spec decode_pat_struct(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_struct(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
     fields = unwrap!(Super.decode_pat_struct_fields(unwrap!(required_field(term, "fields"))))
-    raw_pat!("#path { #(#fields),* }")
+    pat!(struct(path, fields))
   end
 
   def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})

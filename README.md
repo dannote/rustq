@@ -141,6 +141,38 @@ Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
 For larger wrapper bodies, prefer real Rust templates with placeholders over
 assembling statement lists in Elixir.
 
+## `defrust` macro frontend
+
+RustQ also has an experimental valid-Elixir frontend for Rusty-Elixir codegen.
+`defrust` reads normal `@spec` types and lowers ordinary Elixir syntax into the
+Rust AST used by the native renderer:
+
+```elixir
+defmodule MyApp.Native.Generated do
+  use RustQ.Meta
+  alias RustQ.Type, as: R
+
+  @spec decode_optional(term()) :: R.nif_result(Expr.t())
+  defrust decode_optional(term) do
+    optional_expr = unwrap!(Super.decode_optional_expr_field(term, "expr"))
+
+    case optional_expr do
+      nil -> expr!(:ok)
+      expr -> expr!({:ok, expr})
+    end
+  end
+end
+```
+
+Use semantic helpers such as `expr!`, `pat!`, and `stmt!` for Rust-shaped values
+that are still authored as valid Elixir. `Super.*` calls mark the boundary to
+handwritten Rust primitives. Raw token escapes (`raw_expr!`, `raw_pat!`,
+`raw_stmt!`, `raw_arm!`) are explicit low-level escape hatches for cases not yet
+covered by semantic helpers.
+
+RustQ dogfoods this layer in `RustQ.NativeCodegen.Decoders.*` to generate much of
+its own native AST decoder support.
+
 ## Optional rustfmt
 
 Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:

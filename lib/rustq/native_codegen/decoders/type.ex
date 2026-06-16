@@ -10,6 +10,14 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
     Super.parse_type("()")
   end
 
+  @spec decode_type_ref(term()) :: R.nif_result(Type.t())
+  defrust decode_type_ref(term) do
+    inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))
+    mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
+    lifetime = unwrap!(optional_atom_key(term, "lifetime"))
+    Super.parse_type_ref(inner, mutable, lifetime)
+  end
+
   @spec decode_type_option(term()) :: R.nif_result(Type.t())
   defrust decode_type_option(term) do
     inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))

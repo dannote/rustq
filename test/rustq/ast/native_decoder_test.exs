@@ -7,6 +7,46 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   require A
 
+  test "dogfooded item and type decoders render constants, structs, and enums" do
+    const_source =
+      Native.render_ast(%AST.Const{
+        name: :LIMIT,
+        type: %AST.TypeOption{inner: %AST.TypeRef{inner: A.type_path(:str), lifetime: :a}},
+        expr: A.none(),
+        vis: :crate
+      })
+
+    struct_source =
+      Native.render_ast(%AST.Struct{
+        name: :Holder,
+        lifetime: :a,
+        vis: :pub,
+        fields: [
+          %AST.StructField{
+            name: :value,
+            type: %AST.TypeRef{inner: A.type_path(:str), lifetime: :a},
+            vis: :pub
+          }
+        ]
+      })
+
+    enum_source =
+      Native.render_ast(%AST.Enum{
+        name: :Maybe,
+        vis: :pub,
+        variants: [
+          %AST.EnumVariant{name: :None},
+          %AST.EnumVariant{name: :Some, tuple: [%AST.TypeVec{inner: A.type_path(:u8)}]}
+        ]
+      })
+
+    assert const_source =~ "pub(crate) const LIMIT: Option<&'a str> = None;"
+    assert struct_source =~ "pub struct Holder<'a>"
+    assert struct_source =~ "pub value: &'a str"
+    assert enum_source =~ "pub enum Maybe"
+    assert enum_source =~ "Some(Vec<u8>)"
+  end
+
   test "generated statement decoders render expression and return statements" do
     source =
       Native.render_ast(%AST.Function{

@@ -329,6 +329,23 @@ defmodule RustQ.Meta.Lower do
     do: raw_expr("&mut #{semantic_interpolation(value)}")
 
   defp semantic_expr({:unwrap!, _, [value]}), do: raw_expr("#{semantic_interpolation(value)}?")
+
+  defp semantic_expr({:field, _, [receiver, field]}),
+    do: raw_expr("#{semantic_interpolation(receiver)}.#{semantic_ident(field)}")
+
+  defp semantic_expr({:path_call, _, [path, args]}),
+    do: raw_expr("#{semantic_interpolation(path)}(#{semantic_splice(args)})")
+
+  defp semantic_expr({:method_call, _, [receiver, method, args]}),
+    do:
+      raw_expr(
+        "#{semantic_interpolation(receiver)}.#{semantic_ident(method)}(#{semantic_splice(args)})"
+      )
+
+  defp semantic_expr({:struct_literal, _, [path, fields]}),
+    do: raw_expr("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
+
+  defp semantic_expr({:tuple, _, [values]}), do: raw_expr("(#{semantic_splice(values)})")
   defp semantic_expr(nil), do: raw_expr("None")
 
   defp semantic_expr(other), do: raw_expr(AST.render_expr(lower_expr(other)))
@@ -345,6 +362,14 @@ defmodule RustQ.Meta.Lower do
   defp semantic_pat({:{}, _, [:error, pattern]}),
     do: raw_pat("Err(#{semantic_interpolation(pattern)})")
 
+  defp semantic_pat({:tuple, _, [patterns]}), do: raw_pat("(#{semantic_splice(patterns)})")
+
+  defp semantic_pat({:path_tuple, _, [path, patterns]}),
+    do: raw_pat("#{semantic_interpolation(path)}(#{semantic_splice(patterns)})")
+
+  defp semantic_pat({:struct, _, [path, fields]}),
+    do: raw_pat("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
+
   defp semantic_pat(nil), do: raw_pat("None")
   defp semantic_pat(:_), do: raw_pat("_")
   defp semantic_pat(other), do: raw_pat(semantic_interpolation(other))
@@ -355,6 +380,12 @@ defmodule RustQ.Meta.Lower do
     do: "##{name}"
 
   defp semantic_interpolation(other), do: AST.render_expr(lower_expr(other))
+
+  defp semantic_ident({name, _, context}) when is_atom(name) and is_atom(context), do: "##{name}"
+  defp semantic_ident(name) when is_atom(name), do: Atom.to_string(name)
+
+  defp semantic_splice({name, _, context}) when is_atom(name) and is_atom(context),
+    do: "#(##{name}),*"
 
   defp raw_expr(tokens) do
     %AST.PathCall{

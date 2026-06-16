@@ -27,14 +27,14 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   defrust decode_expr_field(term) do
     receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
     field = Super.format_ident_value(unwrap!(atom_key(term, "field")))
-    raw_expr!("#receiver.#field")
+    expr!(field(receiver, field))
   end
 
   @spec decode_expr_path_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_path_call(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
     args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
-    raw_expr!("#path(#(#args),*)")
+    expr!(path_call(path, args))
   end
 
   @spec decode_expr_method_call(term()) :: R.nif_result(Expr.t())
@@ -42,7 +42,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
     method = Super.format_ident_value(unwrap!(atom_key(term, "method")))
     args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
-    raw_expr!("#receiver.#method(#(#args),*)")
+    expr!(method_call(receiver, method, args))
   end
 
   @spec decode_expr_local_call(term()) :: R.nif_result(Expr.t())
@@ -68,7 +68,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   defrust decode_expr_struct_literal(term) do
     path = unwrap!(Super.decode_expr(unwrap!(required_field(term, "path"))))
     fields = unwrap!(Super.decode_struct_literal_fields(unwrap!(required_field(term, "fields"))))
-    raw_expr!("#path { #(#fields),* }")
+    expr!(struct_literal(path, fields))
   end
 
   @spec decode_expr_nif_raise_atom(term()) :: R.nif_result(Expr.t())
@@ -109,7 +109,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   @spec decode_expr_tuple(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_tuple(term) do
     values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
-    raw_expr!("(#(#values),*)")
+    expr!(tuple(values))
   end
 
   @spec decode_expr_token_macro(term()) :: R.nif_result(Expr.t())
