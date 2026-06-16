@@ -105,7 +105,13 @@ defmodule RustQ.Rust.AST do
   defnode(MacroItem, :item, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
   defnode(MacroItemCall, :item, [:path, args: []],
-    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [atom() | String.t()]})
+    type:
+      quote(
+        do: %__MODULE__{
+          path: RustQ.Rust.AST.Path.t(),
+          args: [atom() | String.t() | {atom() | String.t(), String.t()}]
+        }
+      )
   )
 
   defnode(FunctionArg, :field, [:name, :type],
@@ -499,8 +505,11 @@ defmodule RustQ.Rust.AST do
   def render_macro_item(%MacroItem{source: source}), do: source
 
   def render_macro_item_call(%MacroItemCall{path: path, args: args}) do
-    [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &to_string/1), " }"]
+    [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &render_macro_arg/1), " }"]
   end
+
+  defp render_macro_arg({name, value}), do: [to_string(name), " = ", inspect(value)]
+  defp render_macro_arg(value), do: to_string(value)
 
   def render_function(%Function{} = function) do
     args =

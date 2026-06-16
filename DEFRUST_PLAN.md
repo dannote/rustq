@@ -365,6 +365,9 @@ Recently completed:
 - Builder-level local macro calls like `todo!()` now become structural
   `MacroCall` nodes, and native `LocalCall` decoding rejects macro-shaped names
   instead of formatting/parsing them as strings.
+- `RustQ.Rustler.Atoms` now generates its atom macro through RustQ AST
+  (`MacroItemCall`, optionally wrapped in `Module`) before returning a legacy
+  splice fragment, proving a narrow migration path for older Rustler helpers.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

@@ -1,5 +1,5 @@
-use quote::{format_ident, quote};
-use rustler::NifResult;
+use quote::{format_ident, quote, ToTokens};
+use rustler::{NifResult, Term};
 use syn::{Expr, Field, FnArg, Item, Stmt, Type};
 
 use crate::{parse_syn, path_from_parts};
@@ -47,12 +47,45 @@ pub(crate) fn parse_macro_item(source: String) -> NifResult<Item> {
     syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
 
-pub(crate) fn parse_macro_item_call(path: syn::Path, args: Vec<String>) -> NifResult<Item> {
-    let args = args
-        .into_iter()
-        .map(|arg| format_ident!("{}", arg))
-        .collect::<Vec<_>>();
+pub(crate) struct MacroItemArg {
+    name: proc_macro2::Ident,
+    value: Option<String>,
+}
 
+impl ToTokens for MacroItemArg {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = &self.name;
+
+        if let Some(value) = &self.value {
+            tokens.extend(quote!(#name = #value));
+        } else {
+            tokens.extend(quote!(#name));
+        }
+    }
+}
+
+pub(crate) fn decode_macro_item_arg_list(term: Term) -> NifResult<Vec<MacroItemArg>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_macro_item_arg)
+        .collect()
+}
+
+fn decode_macro_item_arg(term: Term) -> NifResult<MacroItemArg> {
+    if let Ok((name, value)) = term.decode::<(Term, String)>() {
+        return Ok(MacroItemArg {
+            name: format_ident!("{}", crate::atom_or_string(name)?),
+            value: Some(value),
+        });
+    }
+
+    Ok(MacroItemArg {
+        name: format_ident!("{}", crate::atom_or_string(term)?),
+        value: None,
+    })
+}
+
+pub(crate) fn parse_macro_item_call(path: syn::Path, args: Vec<MacroItemArg>) -> NifResult<Item> {
     parse_syn(quote!(#path! { #(#args),* }))
 }
 
