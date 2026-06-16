@@ -2,7 +2,7 @@ use quote::quote;
 use rustler::NifResult;
 use syn::Type;
 
-use crate::{parse_syn, parse_type};
+use crate::parse_syn;
 
 pub(crate) fn parse_type_path_with_generics(
     path: String,
@@ -27,11 +27,20 @@ pub(crate) fn parse_type_ref(
     mutable: bool,
     lifetime: Option<String>,
 ) -> NifResult<Type> {
-    let lifetime = lifetime
-        .map(|value| format!("'{} ", value))
-        .unwrap_or_default();
-    let mutability = if mutable { "mut " } else { "" };
-    parse_type(&format!("&{}{}{}", lifetime, mutability, quote!(#inner)))
+    match (mutable, lifetime) {
+        (true, Some(lifetime)) => {
+            let lifetime =
+                syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
+            parse_syn(quote!(& #lifetime mut #inner))
+        }
+        (true, None) => parse_syn(quote!(& mut #inner)),
+        (false, Some(lifetime)) => {
+            let lifetime =
+                syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
+            parse_syn(quote!(& #lifetime #inner))
+        }
+        (false, None) => parse_syn(quote!(& #inner)),
+    }
 }
 
 pub(crate) fn parse_type_generic(path: &str, args: Vec<Type>) -> NifResult<Type> {

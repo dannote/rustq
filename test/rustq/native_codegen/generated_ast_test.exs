@@ -45,6 +45,16 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     end
   end
 
+  test "type ref decoder delegates only the syn ref construction boundary" do
+    assert %AST.Function{body: body} =
+             RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
+             |> Enum.find(&(&1.name == :decode_type_ref))
+
+    assert %AST.Return{
+             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_type_ref]}}
+           } = List.last(body)
+  end
+
   test "type container decoders use generic type construction" do
     decoders = RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
 

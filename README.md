@@ -173,6 +173,20 @@ covered by semantic helpers.
 RustQ dogfoods this layer in `RustQ.NativeCodegen.Decoders.*` to generate much of
 its own native AST decoder support.
 
+Current `defrust` subset:
+
+- ordinary assignment, final expressions, `if`, and `case`
+- aliases, remote calls, method calls, local calls, fields, refs, tuples, and literals
+- `Option`, `Result`, and `NifResult` return/branch wrapping from `@spec`
+- selected `@type` forms: atom unions, `nil | t`, `{:ok, t} | {:error, e}`, maps, structs, and tagged tuple unions
+- semantic helpers: `expr!`, `pat!`, `stmt!`, `arm!`
+- explicit raw escapes: `raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`
+
+`Super.*` calls are intentional primitive-boundary calls into nearby handwritten
+Rust for Rustler term APIs, generic `syn` parsing/assembly, or collection glue.
+Prefer extending `RustQ.Rust.AST` and `RustQ.Meta.Lower` before adding new
+primitive helpers.
+
 ## Optional rustfmt
 
 Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:

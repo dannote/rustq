@@ -293,11 +293,12 @@ stable template API.
 
 The next practical sequence should be:
 
-1. Decide whether `path_parts`/`decode_lifetime_list` should be dogfooded or
-   consolidated as one generic string-list primitive.
+1. Keep `path_parts`/`decode_lifetime_list` consolidated through the generic
+   string-list primitive unless Rusty-Elixir gains iterator/list lowering that
+   makes a dogfooded version clearer.
 2. Continue reducing type parsing boundaries: `TypePath` now has structured
-   generics, and container decoders use generic type construction; references
-   and lifetime-heavy paths still have parse-boundary code.
+   generics, container decoders use generic type construction, and `TypeRef`
+   uses token construction; lifetime-heavy path assembly still has parse-boundary code.
 3. Expand schema/type behavioral coverage for nested maps, optional fields,
    struct lifetimes, tuple enum variants, and invalid atom behavior.
 4. Revisit public docs once the lowering/context refactor is stable.
@@ -311,6 +312,10 @@ Recently completed:
 - `TypePath` now carries structured generic arguments.
 - Type container native decoding now uses generic type construction rather than
   per-container `format!(...)` strings.
+- Reference type native assembly now uses token construction instead of formatted
+  Rust type strings.
+- `path_parts` and `decode_lifetime_list` share one generic string-list native
+  primitive.
 
 ## Verification gates
 
