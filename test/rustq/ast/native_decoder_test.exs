@@ -44,6 +44,60 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ "canvas.draw_rect(&rect, &mut paint);"
   end
 
+  test "generated expression decoders render match, if, and raise atom expressions" do
+    match_source =
+      Native.render_ast(%AST.Function{
+        name: :match_expr,
+        args: [],
+        returns: "NifResult<()> ",
+        body:
+          A.block do
+            A.return do
+              A.match A.var(:value) do
+                A.arm A.ok_pat(:inner) do
+                  A.return(A.ok(:inner))
+                end
+
+                A.arm A.err_pat(:reason) do
+                  A.return(A.err(:reason))
+                end
+              end
+            end
+          end
+      })
+
+    if_source =
+      Native.render_ast(%AST.Function{
+        name: :if_expr,
+        args: [],
+        returns: "NifResult<()> ",
+        body:
+          A.block do
+            A.return(
+              A.if_expr(
+                :condition,
+                [A.return(A.ok())],
+                [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
+              )
+            )
+          end
+      })
+
+    raise_source =
+      Native.render_ast(%AST.Function{
+        name: :raise_expr,
+        args: [],
+        returns: "NifResult<()> ",
+        body: A.block(do: A.return(%AST.NifRaiseAtom{name: :invalid}))
+      })
+
+    assert match_source =~ "match value"
+    assert match_source =~ "Ok(inner)"
+    assert if_source =~ "if condition"
+    assert if_source =~ "Err(rustler::Error::BadArg)"
+    assert raise_source =~ ~s|rustler::Error::RaiseAtom("invalid")|
+  end
+
   test "generated expression decoders render try, tuple, some, and err expressions" do
     try_source =
       Native.render_ast(%AST.Function{

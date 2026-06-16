@@ -393,10 +393,13 @@ defmodule RustQ.NativeCodegen do
               :ref,
               :try,
               :tuple,
+              :atom_value,
+              :none,
               :some,
               :err,
-              :atom_value,
-              :none
+              :nif_raise_atom,
+              :match,
+              :if
             ],
        do: [expr_decoder(name)]
 
@@ -681,6 +684,68 @@ defmodule RustQ.NativeCodegen do
       unary_expr_decoder(:decode_expr_try, "expr", "#expr?"),
       unary_expr_decoder(:decode_expr_some, "expr", "Some(#expr)"),
       unary_expr_decoder(:decode_expr_err, "expr", "Err(#expr)"),
+      %AST.Function{
+        name: :decode_expr_nif_raise_atom,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(:name, A.try(A.path_call([:super, :atom_key], [:term, "name"])))
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [
+                A.token_macro(:quote, "rustler::Error::RaiseAtom(#name)")
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_match,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(:expr, A.try(A.path_call([:super, :decode_expr], [map_get(:term, "expr")])))
+            A.let(:arms, A.try(A.path_call([:super, :decode_arm_list], [map_get(:term, "arms")])))
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [
+                A.token_macro(:quote, "match #expr { #(#arms)* }")
+              ])
+            )
+          end
+      },
+      %AST.Function{
+        name: :decode_expr_if,
+        vis: :crate,
+        args: [term: "Term"],
+        returns: "NifResult<Expr>",
+        body:
+          A.block do
+            A.let(
+              :condition,
+              A.try(A.path_call([:super, :decode_expr], [map_get(:term, "condition")]))
+            )
+
+            A.let(
+              :then_block,
+              A.try(A.path_call([:super, :decode_block], [map_get(:term, "then")]))
+            )
+
+            A.let(
+              :else_block,
+              A.try(A.path_call([:super, :decode_block], [map_get(:term, "else")]))
+            )
+
+            A.return(
+              A.path_call([:super, :parse_expr_tokens], [
+                A.token_macro(:quote, "if #condition #then_block else #else_block")
+              ])
+            )
+          end
+      },
       %AST.Function{
         name: :decode_expr_tuple,
         vis: :crate,

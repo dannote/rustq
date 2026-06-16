@@ -181,9 +181,9 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::SOME => decode_expr_some(term),
         ast_modules::OK => super::decode_expr_manual(term),
         ast_modules::ERR => decode_expr_err(term),
-        ast_modules::NIF_RAISE_ATOM => super::decode_expr_manual(term),
-        ast_modules::MATCH => super::decode_expr_manual(term),
-        ast_modules::IF => super::decode_expr_manual(term),
+        ast_modules::NIF_RAISE_ATOM => decode_expr_nif_raise_atom(term),
+        ast_modules::MATCH => decode_expr_match(term),
+        ast_modules::IF => decode_expr_if(term),
         ast_modules::BINARY_OP => super::decode_expr_manual(term),
         _ => Err(rustler::Error::BadArg),
     }
@@ -306,6 +306,24 @@ pub(crate) fn decode_expr_some(term: Term) -> NifResult<Expr> {
 pub(crate) fn decode_expr_err(term: Term) -> NifResult<Expr> {
     let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
     super::parse_expr_tokens(quote!(Err(# expr)))
+}
+
+pub(crate) fn decode_expr_nif_raise_atom(term: Term) -> NifResult<Expr> {
+    let name = super::atom_key(term, "name")?;
+    super::parse_expr_tokens(quote!(rustler::Error::RaiseAtom(# name)))
+}
+
+pub(crate) fn decode_expr_match(term: Term) -> NifResult<Expr> {
+    let expr = super::decode_expr(term.map_get(super::atom(term.get_env(), "expr")?)?)?;
+    let arms = super::decode_arm_list(term.map_get(super::atom(term.get_env(), "arms")?)?)?;
+    super::parse_expr_tokens(quote!(match # expr { # (# arms) * }))
+}
+
+pub(crate) fn decode_expr_if(term: Term) -> NifResult<Expr> {
+    let condition = super::decode_expr(term.map_get(super::atom(term.get_env(), "condition")?)?)?;
+    let then_block = super::decode_block(term.map_get(super::atom(term.get_env(), "then")?)?)?;
+    let else_block = super::decode_block(term.map_get(super::atom(term.get_env(), "else")?)?)?;
+    super::parse_expr_tokens(quote!(if # condition # then_block else # else_block))
 }
 
 pub(crate) fn decode_expr_tuple(term: Term) -> NifResult<Expr> {

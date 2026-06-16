@@ -241,6 +241,11 @@ fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
         .collect()
 }
 
+fn decode_block(term: Term) -> NifResult<syn::Block> {
+    let stmts = decode_stmt_list(term)?;
+    syn::parse2::<syn::Block>(quote!({ #(#stmts)* })).map_err(|_| rustler::Error::BadArg)
+}
+
 fn decode_stmt(term: Term) -> NifResult<Stmt> {
     decode_ast_stmt(term)
 }
@@ -421,6 +426,13 @@ fn decode_expr_manual(term: Term) -> NifResult<Expr> {
         }
         _ => Err(rustler::Error::BadArg),
     }
+}
+
+fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
+    term.decode::<Vec<Term>>()?
+        .into_iter()
+        .map(decode_arm)
+        .collect()
 }
 
 fn decode_arm(term: Term) -> NifResult<Arm> {
