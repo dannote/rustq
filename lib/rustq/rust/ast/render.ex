@@ -79,27 +79,27 @@ defmodule RustQ.Rust.AST.Render do
     ArrayLiteral
   }
 
-  def render_item_native(%Use{} = item), do: render_native(item, &render_use/1)
-  def render_item_native(%Module{} = item), do: render_native(item, &render_module/1)
-  def render_item_native(%Const{} = item), do: render_native(item, &render_const/1)
-  def render_item_native(%Static{} = item), do: render_native(item, &render_static/1)
-  def render_item_native(%TypeAlias{} = item), do: render_native(item, &render_type_alias/1)
-  def render_item_native(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
+  def render_item(%Use{} = item), do: render_native(item, &render_use/1)
+  def render_item(%Module{} = item), do: render_native(item, &render_module/1)
+  def render_item(%Const{} = item), do: render_native(item, &render_const/1)
+  def render_item(%Static{} = item), do: render_native(item, &render_static/1)
+  def render_item(%TypeAlias{} = item), do: render_native(item, &render_type_alias/1)
+  def render_item(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
 
-  def render_item_native(%MacroItemCall{} = item), do: render_macro_item_call(item)
+  def render_item(%MacroItemCall{} = item), do: render_macro_item_call(item)
 
-  def render_item_native(%Impl{} = item), do: render_native(item, &render_impl/1)
-  def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
-  def render_item_native(%Struct{} = item), do: render_native(item, &render_struct/1)
-  def render_item_native(%Enum{} = item), do: render_native(item, &render_enum/1)
+  def render_item(%Impl{} = item), do: render_native(item, &render_impl/1)
+  def render_item(%Function{} = item), do: render_native(item, &do_render_function/1)
+  def render_item(%Struct{} = item), do: render_native(item, &render_struct/1)
+  def render_item(%Enum{} = item), do: render_native(item, &render_enum/1)
 
-  def render_file_native(items) do
+  def render_file(items) do
     items
     |> List.wrap()
-    |> Elixir.Enum.map_join("\n", &render_item_native/1)
+    |> Elixir.Enum.map_join("\n", &render_item/1)
   end
 
-  def render_function_native(%Function{} = function), do: render_item_native(function)
+  def render_function(%Function{} = function), do: render_item(function)
 
   defp render_native(item, fallback) do
     if Application.get_env(:rustq, :strict_native_ast, false) do
@@ -131,7 +131,7 @@ defmodule RustQ.Rust.AST.Render do
   def render_use(%Use{tree: tree}), do: ["use ", tree, ";"]
 
   def render_module(%Module{} = module) do
-    items = module.items |> Elixir.Enum.map(&render_item_native/1) |> Elixir.Enum.join("\n")
+    items = module.items |> Elixir.Enum.map(&render_item/1) |> Elixir.Enum.join("\n")
 
     [
       render_vis(module.vis),
@@ -208,10 +208,10 @@ defmodule RustQ.Rust.AST.Render do
     |> IO.iodata_to_binary()
   end
 
-  defp render_impl_item(%Function{} = function), do: render_function(function)
-  defp render_impl_item(item), do: render_item_native(item)
+  defp render_impl_item(%Function{} = function), do: do_render_function(function)
+  defp render_impl_item(item), do: render_item(item)
 
-  def render_function(%Function{} = function) do
+  defp do_render_function(%Function{} = function) do
     args =
       Elixir.Enum.map_join(function.args, ", ", &render_function_arg/1)
 

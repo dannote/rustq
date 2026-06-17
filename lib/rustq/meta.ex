@@ -78,7 +78,7 @@ defmodule RustQ.Meta do
     type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
 
     function_source =
-      Enum.map_join(function_asts, "\n\n", &RustQ.Rust.AST.Render.render_item_native/1)
+      Enum.map_join(function_asts, "\n\n", &RustQ.Rust.AST.Render.render_item/1)
 
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
@@ -126,15 +126,11 @@ defmodule RustQ.Meta do
 
   defp rust_module_map(values), do: values |> List.wrap() |> Map.new()
 
-  @spec function_ast(
-          atom(),
-          [{atom(), Type.t() | Macro.t()}],
-          Type.t() | Macro.t(),
-          Macro.t(),
-          keyword()
-        ) ::
-          AST.Function.t()
-  def function_ast(name, args, return_type, body_ast, opts \\ []) do
+  @spec quoted(atom(), keyword()) :: AST.Function.t()
+  def quoted(name, opts) do
+    args = Keyword.fetch!(opts, :args)
+    return_type = Keyword.fetch!(opts, :returns)
+    body_ast = Keyword.fetch!(opts, :do)
     type_aliases = Keyword.get(opts, :type_aliases, %{})
     arg_names = Enum.map(args, &elem(&1, 0))
     arg_types = Enum.map(args, fn {_name, type} -> normalize_type(type, type_aliases) end)
@@ -145,7 +141,7 @@ defmodule RustQ.Meta do
       |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
 
     body =
-      Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
+      Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
         rust_modules: Keyword.get(opts, :rust_modules, %{})
       )
 
@@ -204,7 +200,7 @@ defmodule RustQ.Meta do
       |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
 
     body =
-      Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
+      Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
         rust_modules: rust_modules
       )
 
@@ -242,7 +238,7 @@ defmodule RustQ.Meta do
   defp validate_item_ast(%AST.Enum{} = item), do: validate_ast_item(item)
 
   defp validate_ast_item(item) do
-    RustQ.parse_fragment!(:item, RustQ.Rust.AST.Render.render_item_native(item))
+    RustQ.parse_fragment!(:item, RustQ.Rust.AST.Render.render_item(item))
   end
 
   defp build_type_asts(type_aliases) do

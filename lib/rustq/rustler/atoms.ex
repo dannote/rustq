@@ -15,5 +15,5 @@ defmodule RustQ.Rustler.Atoms do
     end
   end
 
-  defp rust_item(ast), do: Rust.item(RustQ.Rust.AST.Render.render_item_native(ast))
+  defp rust_item(ast), do: Rust.item(RustQ.Rust.AST.Render.render_item(ast))
 end

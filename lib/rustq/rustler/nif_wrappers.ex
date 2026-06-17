@@ -35,7 +35,7 @@ defmodule RustQ.Rustler.NifWrappers do
           A.return(A.call(String.to_atom(to_string(impl)), Keyword.keys(args)))
         end
 
-      Rust.item(RustQ.Rust.AST.Render.render_item_native(ast))
+      Rust.item(RustQ.Rust.AST.Render.render_item(ast))
     else
       name
       |> Rust.fn(

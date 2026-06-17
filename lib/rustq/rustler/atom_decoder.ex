@@ -41,7 +41,7 @@ defmodule RustQ.Rustler.AtomDecoder do
       ]
     }
 
-    Rust.item(RustQ.Rust.AST.Render.render_item_native(function))
+    Rust.item(RustQ.Rust.AST.Render.render_item(function))
   end
 
   defp atom_arms(cases, atoms) do

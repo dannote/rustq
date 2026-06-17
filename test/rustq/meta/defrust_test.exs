@@ -44,19 +44,19 @@ defmodule RustQ.Meta.DefrustTest do
 
   test "builds a function AST from quoted valid Elixir" do
     function =
-      RustQ.Meta.function_ast(
-        :generated_save,
-        [canvas: quote(do: RustQ.Type.ref(Canvas.t()))],
-        quote(do: RustQ.Type.nif_result(RustQ.Type.unit())),
-        quote do
-          canvas.save()
-          :ok
-        end
+      RustQ.Meta.quoted(:generated_save,
+        args: [canvas: quote(do: RustQ.Type.ref(Canvas.t()))],
+        returns: quote(do: RustQ.Type.nif_result(RustQ.Type.unit())),
+        do:
+          quote do
+            canvas.save()
+            :ok
+          end
       )
 
     assert %AST.Function{name: :generated_save, body: [%AST.ExprStmt{}, %AST.Return{}]} = function
 
-    source = RustQ.Rust.AST.Render.render_function_native(function)
+    source = RustQ.Rust.AST.Render.render_function(function)
     assert source =~ "fn generated_save(canvas: &Canvas) -> NifResult<()>"
     assert source =~ "canvas.save();"
     assert source =~ "Ok(())"
@@ -101,31 +101,31 @@ defmodule RustQ.Meta.DefrustTest do
 
   test "lowers zero-arity alias calls as Rust calls" do
     function =
-      RustQ.Meta.function_ast(
-        :atom_call,
-        [],
-        quote(do: RustQ.Type.nif_result(atom())),
-        quote do
-          Atoms.args()
-        end
+      RustQ.Meta.quoted(:atom_call,
+        args: [],
+        returns: quote(do: RustQ.Type.nif_result(atom())),
+        do:
+          quote do
+            Atoms.args()
+          end
       )
 
-    source = RustQ.Rust.AST.Render.render_function_native(function)
+    source = RustQ.Rust.AST.Render.render_function(function)
     assert source =~ "Atoms::args()"
   end
 
   test "builds typed Rustler decode expressions from valid Elixir" do
     function =
-      RustQ.Meta.function_ast(
-        :decode_terms,
-        [term: quote(do: term())],
-        quote(do: RustQ.Type.nif_result(RustQ.Type.vec(term()))),
-        quote do
-          decode_as!(term, RustQ.Type.vec(term()))
-        end
+      RustQ.Meta.quoted(:decode_terms,
+        args: [term: quote(do: term())],
+        returns: quote(do: RustQ.Type.nif_result(RustQ.Type.vec(term()))),
+        do:
+          quote do
+            decode_as!(term, RustQ.Type.vec(term()))
+          end
       )
 
-    source = RustQ.Rust.AST.Render.render_function_native(function)
+    source = RustQ.Rust.AST.Render.render_function(function)
     assert source =~ "fn decode_terms<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>>"
     assert source =~ "term.decode::<Vec<Term<'a>>>()?"
   end

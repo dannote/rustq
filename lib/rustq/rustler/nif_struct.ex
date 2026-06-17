@@ -24,7 +24,7 @@ defmodule RustQ.Rustler.NifStruct do
       end
 
     ast
-    |> RustQ.Rust.AST.Render.render_item_native()
+    |> RustQ.Rust.AST.Render.render_item()
     |> Rust.item()
   end
 

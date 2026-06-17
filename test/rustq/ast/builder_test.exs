@@ -17,12 +17,12 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    assert RustQ.Rust.AST.Render.render_function_native(function) =~ "parse_pat(quote!(None))"
+    assert RustQ.Rust.AST.Render.render_function(function) =~ "parse_pat(quote!(None))"
   end
 
   test "renders item-level Rust AST nodes through native AST" do
     source =
-      RustQ.Rust.AST.Render.render_file_native([
+      RustQ.Rust.AST.Render.render_file([
         A.use([:quote, :quote]),
         A.use({[:rustler], [:Atom, :Env]}),
         A.module(
@@ -59,7 +59,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    source = RustQ.Rust.AST.Render.render_function_native(function)
+    source = RustQ.Rust.AST.Render.render_function(function)
 
     assert source =~ "if left && right == true"
     assert source =~ "Ok(())"

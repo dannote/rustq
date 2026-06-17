@@ -416,7 +416,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds option struct decoders" do
     alias RustQ.Rust.AST.Builder, as: A
-    alias RustQ.Rustler.ASTBuilder, as: R
+    alias RustQ.Rustler.Decode, as: R
 
     code =
       "__rq_items!();"

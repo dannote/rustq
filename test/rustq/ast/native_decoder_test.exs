@@ -14,7 +14,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
     Application.put_env(:rustq, :strict_native_ast, true)
 
-    assert_raise ArgumentError, fn -> RustQ.Rust.AST.Render.render_function_native(invalid) end
+    assert_raise ArgumentError, fn -> RustQ.Rust.AST.Render.render_function(invalid) end
   after
     Application.delete_env(:rustq, :strict_native_ast)
   end

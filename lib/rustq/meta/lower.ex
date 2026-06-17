@@ -9,8 +9,8 @@ defmodule RustQ.Meta.Lower do
     defstruct [:return_type, vars: %{}, position: :return, rust_modules: %{}]
   end
 
-  @spec function_ast(Macro.t(), Type.t(), map(), keyword()) :: [struct()]
-  def function_ast(body_ast, return_type, vars \\ %{}, opts \\ []) do
+  @spec quoted_body(Macro.t(), Type.t(), map(), keyword()) :: [struct()]
+  def quoted_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     context = %Context{
       return_type: return_type,
       vars: vars,
@@ -28,7 +28,7 @@ defmodule RustQ.Meta.Lower do
   @spec function_body(Macro.t(), Type.t(), map(), keyword()) :: String.t()
   def function_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     body_ast
-    |> function_ast(return_type, vars, opts)
+    |> quoted_body(return_type, vars, opts)
     |> Enum.map(&RustQ.Rust.AST.Render.render_stmt/1)
     |> Enum.join("\n")
   end

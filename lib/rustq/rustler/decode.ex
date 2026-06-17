@@ -1,4 +1,4 @@
-defmodule RustQ.Rustler.ASTBuilder do
+defmodule RustQ.Rustler.Decode do
   @moduledoc false
 
   alias RustQ.Rust.AST

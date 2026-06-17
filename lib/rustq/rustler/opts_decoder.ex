@@ -21,10 +21,10 @@ defmodule RustQ.Rustler.OptsDecoder do
 
     [
       Rust.item(
-        RustQ.Rust.AST.Render.render_item_native(struct_ast(name, fields, phantom?, lifetime))
+        RustQ.Rust.AST.Render.render_item(struct_ast(name, fields, phantom?, lifetime))
       ),
       Rust.item(
-        RustQ.Rust.AST.Render.render_item_native(
+        RustQ.Rust.AST.Render.render_item(
           decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg)
         )
       )
