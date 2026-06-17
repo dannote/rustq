@@ -62,6 +62,43 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Ok(())"
   end
 
+  test "defrustmod maps alias calls to Rust module paths" do
+    defmodule ModuleMappedCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod(GeneratedOpts, as: :generated_opts)
+
+      @spec decode(term()) :: R.nif_result(R.unit())
+      defrust decode(opts) do
+        GeneratedOpts.decode_path_opts(ref(opts))
+      end
+    end
+
+    source = ModuleMappedCase.__rustq_source__()
+    assert source =~ "generated_opts::decode_path_opts(&opts)"
+  end
+
+  test "defrustmod groups nested defrust declarations" do
+    defmodule NestedModuleCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod GeneratedHelpers, as: :generated_helpers do
+        @spec save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+        defrust save(canvas) do
+          canvas.save()
+          :ok
+        end
+      end
+    end
+
+    source = NestedModuleCase.__rustq_source__()
+    assert source =~ "mod generated_helpers"
+    assert source =~ "fn save(canvas: &Canvas) -> NifResult<()>"
+    assert source =~ "canvas.save();"
+  end
+
   test "lowers zero-arity alias calls as Rust calls" do
     function =
       RustQ.Meta.function_ast(

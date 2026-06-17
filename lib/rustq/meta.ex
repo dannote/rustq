@@ -19,9 +19,30 @@ defmodule RustQ.Meta do
     quote do
       import RustQ.Meta
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_current_rust_mod, accumulate: false)
       Module.register_attribute(__MODULE__, :nif, accumulate: false)
       Module.register_attribute(__MODULE__, :allow, accumulate: true)
       @before_compile RustQ.Meta
+    end
+  end
+
+  defmacro defrustmod(alias_ast, opts \\ []) do
+    mapping = rust_module_mapping!(alias_ast, opts)
+
+    quote do
+      @rustq_mod_aliases unquote(Macro.escape(mapping))
+    end
+  end
+
+  defmacro defrustmod(alias_ast, opts, do: block) do
+    {alias_parts, rust_parts} = rust_module_mapping!(alias_ast, opts)
+
+    quote do
+      @rustq_mod_aliases unquote(Macro.escape({alias_parts, rust_parts}))
+      Module.put_attribute(__MODULE__, :rustq_current_rust_mod, unquote(Macro.escape(rust_parts)))
+      unquote(block)
+      Module.delete_attribute(__MODULE__, :rustq_current_rust_mod)
     end
   end
 
@@ -34,7 +55,8 @@ defmodule RustQ.Meta do
 
     quote do
       @rustq_defs {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast)),
-                   RustQ.Meta.__take_pending_attrs__(__MODULE__)}
+                   RustQ.Meta.__take_pending_attrs__(__MODULE__),
+                   RustQ.Meta.__current_rust_mod__(__MODULE__)}
       def unquote(name)(unquote_splicing(stub_args)), do: :erlang.nif_error(:rustq_defrust_stub)
     end
   end
@@ -43,15 +65,21 @@ defmodule RustQ.Meta do
     defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
     specs = Module.get_attribute(env.module, :spec) |> List.wrap()
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
+    rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
 
-    asts = Enum.map(defs, &build_ast(&1, specs, type_aliases))
+    built_asts = Enum.map(defs, &build_ast(&1, specs, type_aliases, rust_modules))
+    asts = Enum.map(built_asts, & &1.ast)
     type_asts = build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &validate_item_ast/1)
-    function_items = Enum.map(asts, &validate_item_ast/1)
+    function_asts = group_module_asts(built_asts)
+    function_items = Enum.map(function_asts, &validate_item_ast/1)
     items = type_items ++ function_items
 
     type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
-    function_source = Enum.map_join(asts, "\n\n", &RustQ.Rust.AST.Render.render_function_native/1)
+
+    function_source =
+      Enum.map_join(function_asts, "\n\n", &RustQ.Rust.AST.Render.render_item_native/1)
+
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
     quote do
@@ -76,6 +104,27 @@ defmodule RustQ.Meta do
   end
 
   def __take_pending_attrs__(module), do: pending_attrs(module)
+  def __current_rust_mod__(module), do: Module.get_attribute(module, :rustq_current_rust_mod)
+
+  defp rust_module_mapping!(alias_ast, opts) do
+    alias_parts = alias_parts!(alias_ast)
+    rust_parts = opts |> Keyword.fetch!(:as) |> List.wrap()
+    {alias_parts, rust_parts}
+  end
+
+  defp alias_parts!({:__aliases__, _, parts}), do: parts
+
+  defp alias_parts!(atom) when is_atom(atom) do
+    atom
+    |> Module.split()
+    |> Enum.map(&String.to_atom/1)
+  end
+
+  defp alias_parts!(other) do
+    raise ArgumentError, "expected alias in defrustmod, got: #{Macro.to_string(other)}"
+  end
+
+  defp rust_module_map(values), do: values |> List.wrap() |> Map.new()
 
   @spec function_ast(
           atom(),
@@ -95,7 +144,10 @@ defmodule RustQ.Meta do
       Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
       |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
 
-    body = Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)))
+    body =
+      Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
+        rust_modules: Keyword.get(opts, :rust_modules, %{})
+      )
 
     lifetime =
       Keyword.get_lazy(opts, :lifetime, fn ->
@@ -136,10 +188,13 @@ defmodule RustQ.Meta do
 
   defp allow_attr(values), do: %AST.Attribute{path: [:allow], args: List.wrap(values)}
 
-  defp build_ast({call_ast, body_ast}, specs, type_aliases),
-    do: build_ast({call_ast, body_ast, []}, specs, type_aliases)
+  defp build_ast({call_ast, body_ast}, specs, type_aliases, rust_modules),
+    do: build_ast({call_ast, body_ast, [], nil}, specs, type_aliases, rust_modules)
 
-  defp build_ast({call_ast, body_ast, attrs}, specs, type_aliases) do
+  defp build_ast({call_ast, body_ast, attrs}, specs, type_aliases, rust_modules),
+    do: build_ast({call_ast, body_ast, attrs, nil}, specs, type_aliases, rust_modules)
+
+  defp build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
@@ -148,10 +203,14 @@ defmodule RustQ.Meta do
       Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
       |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
 
-    body = Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)))
+    body =
+      Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
+        rust_modules: rust_modules
+      )
+
     lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
 
-    %AST.Function{
+    ast = %AST.Function{
       name: name,
       args: args,
       returns: return_type.ast,
@@ -159,9 +218,25 @@ defmodule RustQ.Meta do
       lifetime: lifetime,
       attrs: attrs
     }
+
+    %{ast: ast, rust_module: rust_module}
+  end
+
+  defp group_module_asts(built_asts) do
+    {plain, nested} = Enum.split_with(built_asts, &is_nil(&1.rust_module))
+
+    plain_items = Enum.map(plain, & &1.ast)
+
+    nested_items =
+      nested
+      |> Enum.group_by(& &1.rust_module, & &1.ast)
+      |> Enum.map(fn {module, items} -> %AST.Module{name: List.last(module), items: items} end)
+
+    plain_items ++ nested_items
   end
 
   defp validate_item_ast(%AST.Function{} = item), do: validate_ast_item(item)
+  defp validate_item_ast(%AST.Module{} = item), do: validate_ast_item(item)
   defp validate_item_ast(%AST.Impl{} = item), do: validate_ast_item(item)
   defp validate_item_ast(%AST.Struct{} = item), do: validate_ast_item(item)
   defp validate_item_ast(%AST.Enum{} = item), do: validate_ast_item(item)

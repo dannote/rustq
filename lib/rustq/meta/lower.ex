@@ -6,25 +6,29 @@ defmodule RustQ.Meta.Lower do
 
   defmodule Context do
     @moduledoc false
-    defstruct [:return_type, vars: %{}, position: :return]
+    defstruct [:return_type, vars: %{}, position: :return, rust_modules: %{}]
   end
 
-  @spec function_ast(Macro.t(), Type.t(), map()) :: [struct()]
-  def function_ast(body_ast, return_type, vars \\ %{}) do
-    context = %Context{return_type: return_type, vars: vars}
+  @spec function_ast(Macro.t(), Type.t(), map(), keyword()) :: [struct()]
+  def function_ast(body_ast, return_type, vars \\ %{}, opts \\ []) do
+    context = %Context{
+      return_type: return_type,
+      vars: vars,
+      rust_modules: Keyword.get(opts, :rust_modules, %{})
+    }
 
-    body =
+    with_rust_modules(context.rust_modules, fn ->
       body_ast
       |> block_expressions()
       |> lower_block(context)
-
-    infer_mutability(body)
+      |> infer_mutability()
+    end)
   end
 
-  @spec function_body(Macro.t(), Type.t(), map()) :: String.t()
-  def function_body(body_ast, return_type, vars \\ %{}) do
+  @spec function_body(Macro.t(), Type.t(), map(), keyword()) :: String.t()
+  def function_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     body_ast
-    |> function_ast(return_type, vars)
+    |> function_ast(return_type, vars, opts)
     |> Enum.map(&RustQ.Rust.AST.Render.render_stmt/1)
     |> Enum.join("\n")
   end
@@ -662,5 +666,23 @@ defmodule RustQ.Meta.Lower do
 
   defp rust_variant(name), do: name |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
 
-  defp alias_parts({:__aliases__, _, parts}), do: parts
+  defp alias_parts({:__aliases__, _, parts}), do: Map.get(current_rust_modules(), parts, parts)
+
+  defp with_rust_modules(rust_modules, fun) do
+    key = {__MODULE__, :rust_modules}
+    previous = Process.get(key)
+    Process.put(key, rust_modules)
+
+    try do
+      fun.()
+    after
+      if previous do
+        Process.put(key, previous)
+      else
+        Process.delete(key)
+      end
+    end
+  end
+
+  defp current_rust_modules, do: Process.get({__MODULE__, :rust_modules}, %{})
 end
