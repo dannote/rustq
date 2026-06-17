@@ -248,7 +248,11 @@ defmodule RustQ.Meta.Lower do
       }
     }
 
+  defp lower_expr({:borrow, _, [expression]}), do: %AST.Ref{expr: lower_expr(expression)}
   defp lower_expr({:ref, _, [expression]}), do: %AST.Ref{expr: lower_expr(expression)}
+
+  defp lower_expr({:borrow_mut, _, [expression]}),
+    do: %AST.Ref{expr: lower_expr(expression), mutable: true}
 
   defp lower_expr({:mut_ref, _, [expression]}),
     do: %AST.Ref{expr: lower_expr(expression), mutable: true}
@@ -417,7 +421,11 @@ defmodule RustQ.Meta.Lower do
   defp semantic_expr({:some, _, [value]}), do: raw_expr("Some(#{semantic_interpolation(value)})")
   defp semantic_expr({:none, _, []}), do: raw_expr("None")
   defp semantic_expr({:err, _, [value]}), do: raw_expr("Err(#{semantic_interpolation(value)})")
+  defp semantic_expr({:borrow, _, [value]}), do: raw_expr("&#{semantic_interpolation(value)}")
   defp semantic_expr({:ref, _, [value]}), do: raw_expr("&#{semantic_interpolation(value)}")
+
+  defp semantic_expr({:borrow_mut, _, [value]}),
+    do: raw_expr("&mut #{semantic_interpolation(value)}")
 
   defp semantic_expr({:mut_ref, _, [value]}),
     do: raw_expr("&mut #{semantic_interpolation(value)}")

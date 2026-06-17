@@ -73,6 +73,25 @@ defmodule RustQ.Meta.LowerTest do
            } = hd(maybe_save.body)
   end
 
+  test "borrow aliases lower to Rust references" do
+    function =
+      RustQ.Meta.quoted(:draw_with_paint,
+        args: [canvas: A.ref_type(:Canvas), paint: A.type_path(:Paint)],
+        returns: A.nif_result_type(A.unit_type()),
+        do:
+          quote do
+            canvas.draw(borrow(paint))
+            update(borrow_mut(paint))
+            :ok
+          end
+      )
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+
+    assert source =~ "canvas.draw(&paint);"
+    assert source =~ "update(&mut paint);"
+  end
+
   test "option cases use Elixir tuple and atom patterns" do
     function =
       RustQ.Meta.quoted(:save_if_present,
