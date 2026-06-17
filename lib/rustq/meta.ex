@@ -71,14 +71,14 @@ defmodule RustQ.Meta do
     asts = Enum.map(built_asts, & &1.ast)
     type_asts = build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &validate_item_ast/1)
-    function_asts = group_module_asts(built_asts)
-    function_items = Enum.map(function_asts, &validate_item_ast/1)
-    items = type_items ++ function_items
+    rust_items = group_module_asts(built_asts)
+    rendered_items = Enum.map(rust_items, &validate_item_ast/1)
+    items = type_items ++ rendered_items
 
     type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
 
     function_source =
-      Enum.map_join(function_asts, "\n\n", &RustQ.Rust.AST.Render.render_item/1)
+      Enum.map_join(rust_items, "\n\n", &RustQ.Rust.AST.Render.render_item/1)
 
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
