@@ -324,6 +324,9 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:__aliases__, _, parts}), do: %AST.Path{parts: parts}
 
+  defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
+  defp lower_expr({left, right}), do: %AST.Tuple{values: [lower_expr(left), lower_expr(right)]}
+
   defp lower_expr({name, _, args}) when is_atom(name) and is_list(args) do
     if macro_call_name?(name) do
       %AST.MacroCall{
@@ -337,9 +340,6 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({name, _, context}) when is_atom(name) and is_atom(context),
     do: %AST.Var{name: name}
-
-  defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
-  defp lower_expr({left, right}), do: %AST.Tuple{values: [lower_expr(left), lower_expr(right)]}
 
   defp lower_expr(values) when is_list(values),
     do: %AST.VecLiteral{values: Enum.map(values, &lower_expr/1)}

@@ -86,6 +86,7 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "opts: generated_opts::TranslateOpts<'a>"
     assert source =~ "_raw_opts: &[(Atom, Term<'a>)]"
     assert source =~ "canvas.translate((opts.x, opts.y));"
+    assert source =~ "Ok(())"
   end
 
   test "defrustmod maps alias calls to Rust module paths" do

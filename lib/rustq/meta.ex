@@ -187,11 +187,17 @@ defmodule RustQ.Meta do
 
   defp rust_ast_type(type_ast) do
     %Type{
-      kind: :type,
+      kind: rust_ast_type_kind(type_ast),
       rust: type_ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary(),
       ast: type_ast
     }
   end
+
+  defp rust_ast_type_kind(%AST.TypeNifResult{}), do: :nif_result
+  defp rust_ast_type_kind(%AST.TypeResult{}), do: :result
+  defp rust_ast_type_kind(%AST.TypeOption{}), do: :option
+  defp rust_ast_type_kind(%AST.TypeUnit{}), do: :unit
+  defp rust_ast_type_kind(_type_ast), do: :type
 
   defp pending_attrs(module) do
     nif = Module.get_attribute(module, :nif)
