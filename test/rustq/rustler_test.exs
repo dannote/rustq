@@ -416,6 +416,7 @@ defmodule RustQ.RustlerTest do
 
   test "builds option struct decoders" do
     alias RustQ.Rust.AST.Builder, as: A
+    alias RustQ.Rustler.ASTBuilder, as: R
 
     code =
       "__rq_items!();"
@@ -425,11 +426,11 @@ defmodule RustQ.RustlerTest do
             RustQ.Rustler.opts_decoder(:RectOpts,
               lifetime: :a,
               fields: [
-                x: [type: :f32, decode: A.opt_decode(:opt_f32, :opts, :x)],
-                mode: [type: :Atom, decode: A.required_opt_decode(:opt_atom_option, :opts, :mode)],
+                x: [type: :f32, decode: R.opt_decode(:opt_f32, :opts, :x)],
+                mode: [type: :Atom, decode: R.required_opt_decode(:opt_atom_option, :opts, :mode)],
                 count: [
                   type: {:option, :i64},
-                  decode: A.optional_term_decode(:opts, :count, :i64)
+                  decode: R.optional_term_decode(:opts, :count, :i64)
                 ],
                 fill: [
                   type: {:option, "Term<'a>"},
