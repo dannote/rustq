@@ -2,7 +2,6 @@ defmodule RustQ.Rust.AST.BuilderTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   require A
@@ -18,12 +17,12 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    assert Render.render_function_native(function) =~ "parse_pat(quote!(None))"
+    assert RustQ.Rust.AST.Render.render_function_native(function) =~ "parse_pat(quote!(None))"
   end
 
   test "renders item-level Rust AST nodes through native AST" do
     source =
-      Render.render_file_native([
+      RustQ.Rust.AST.Render.render_file_native([
         A.use([:quote, :quote]),
         A.use({[:rustler], [:Atom, :Env]}),
         A.module(
@@ -60,7 +59,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    source = Render.render_function_native(function)
+    source = RustQ.Rust.AST.Render.render_function_native(function)
 
     assert source =~ "if left && right == true"
     assert source =~ "Ok(())"

@@ -3,7 +3,6 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
 
   defmodule Context do
     @moduledoc false
@@ -26,7 +25,7 @@ defmodule RustQ.Meta.Lower do
   def function_body(body_ast, return_type, vars \\ %{}) do
     body_ast
     |> function_ast(return_type, vars)
-    |> Enum.map(&Render.render_stmt/1)
+    |> Enum.map(&RustQ.Rust.AST.Render.render_stmt/1)
     |> Enum.join("\n")
   end
 
@@ -436,7 +435,7 @@ defmodule RustQ.Meta.Lower do
 
   defp semantic_expr(nil), do: raw_expr("None")
 
-  defp semantic_expr(other), do: raw_expr(Render.render_expr(lower_expr(other)))
+  defp semantic_expr(other), do: raw_expr(RustQ.Rust.AST.Render.render_expr(lower_expr(other)))
 
   defp semantic_pat({:ident, _, [name]}), do: raw_pat(semantic_interpolation(name))
   defp semantic_pat({:path, _, [path]}), do: raw_pat(semantic_interpolation(path))
@@ -473,7 +472,7 @@ defmodule RustQ.Meta.Lower do
   defp semantic_interpolation({name, _, context}) when is_atom(name) and is_atom(context),
     do: "##{name}"
 
-  defp semantic_interpolation(other), do: Render.render_expr(lower_expr(other))
+  defp semantic_interpolation(other), do: RustQ.Rust.AST.Render.render_expr(lower_expr(other))
 
   defp semantic_ident({name, _, context}) when is_atom(name) and is_atom(context), do: "##{name}"
   defp semantic_ident(name) when is_atom(name), do: Atom.to_string(name)

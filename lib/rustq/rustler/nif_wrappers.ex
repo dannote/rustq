@@ -2,7 +2,6 @@ defmodule RustQ.Rustler.NifWrappers do
   @moduledoc false
 
   alias RustQ.Rust
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   import RustQ.Rust.AST.ItemBuilder
@@ -36,7 +35,7 @@ defmodule RustQ.Rustler.NifWrappers do
           A.return(A.call(String.to_atom(to_string(impl)), Keyword.keys(args)))
         end
 
-      Rust.item(Render.render_item_native(ast))
+      Rust.item(RustQ.Rust.AST.Render.render_item_native(ast))
     else
       name
       |> Rust.fn(

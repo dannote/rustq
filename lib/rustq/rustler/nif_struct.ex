@@ -3,7 +3,6 @@ defmodule RustQ.Rustler.NifStruct do
 
   alias RustQ.Rust
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
 
@@ -25,7 +24,7 @@ defmodule RustQ.Rustler.NifStruct do
       end
 
     ast
-    |> Render.render_item_native()
+    |> RustQ.Rust.AST.Render.render_item_native()
     |> Rust.item()
   end
 

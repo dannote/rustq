@@ -5,7 +5,6 @@ defmodule RustQ.Rustler.AtomDecoder do
 
   alias RustQ.Rust
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   @template ~R"""
@@ -42,7 +41,7 @@ defmodule RustQ.Rustler.AtomDecoder do
       ]
     }
 
-    Rust.item(Render.render_item_native(function))
+    Rust.item(RustQ.Rust.AST.Render.render_item_native(function))
   end
 
   defp atom_arms(cases, atoms) do

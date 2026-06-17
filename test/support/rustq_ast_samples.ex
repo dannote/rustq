@@ -2,7 +2,6 @@ defmodule RustQ.ASTSamples do
   @moduledoc false
 
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   require A
@@ -34,7 +33,10 @@ defmodule RustQ.ASTSamples do
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
   defp base_fragment(%AST.Static{name: name}), do: "static #{name}"
   defp base_fragment(%AST.TypeAlias{name: name}), do: "type #{name}"
-  defp base_fragment(%AST.Impl{target: target}), do: "impl #{Render.render_type(target)}"
+
+  defp base_fragment(%AST.Impl{target: target}),
+    do: "impl #{RustQ.Rust.AST.Render.render_type(target)}"
+
   defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
   defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"
   defp base_fragment(%AST.Function{name: name}), do: "fn #{name}"

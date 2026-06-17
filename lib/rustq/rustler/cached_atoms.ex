@@ -4,7 +4,6 @@ defmodule RustQ.Rustler.CachedAtoms do
   use RustQ.Sigil
 
   alias RustQ.Rust
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
 
@@ -64,7 +63,7 @@ defmodule RustQ.Rustler.CachedAtoms do
   defp atom_spec({name, value}) when (is_atom(name) or is_binary(name)) and is_binary(value),
     do: {name, value}
 
-  defp rust_item(ast), do: Rust.item(Render.render_item_native(ast))
+  defp rust_item(ast), do: Rust.item(RustQ.Rust.AST.Render.render_item_native(ast))
 
   defp static_name(name) do
     name
