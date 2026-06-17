@@ -3,6 +3,7 @@ defmodule RustQ.Rustler.Resource do
 
   alias RustQ.Rust
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
 
@@ -16,7 +17,10 @@ defmodule RustQ.Rustler.Resource do
     struct_item = resource_struct_ast(name, Keyword.get(opts, :fields, []))
     impl_item = resource_impl_ast(name)
 
-    [Rust.item(AST.render_item_native(struct_item)), Rust.item(AST.render_item_native(impl_item))]
+    [
+      Rust.item(Render.render_item_native(struct_item)),
+      Rust.item(Render.render_item_native(impl_item))
+    ]
   end
 
   defp resource_struct_ast(name, fields) do
@@ -52,7 +56,7 @@ defmodule RustQ.Rustler.Resource do
   def decode(name, opts \\ []) do
     function_name = Keyword.get(opts, :fn, "decode_#{Macro.underscore(to_string(name))}_resource")
 
-    Rust.item(AST.render_item_native(resource_decode_ast(name, function_name)))
+    Rust.item(Render.render_item_native(resource_decode_ast(name, function_name)))
   end
 
   @spec handle_decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
@@ -62,7 +66,7 @@ defmodule RustQ.Rustler.Resource do
 
     field = Keyword.get(opts, :handle_field, "ref")
 
-    Rust.item(AST.render_item_native(resource_handle_decode_ast(name, function_name, field)))
+    Rust.item(Render.render_item_native(resource_handle_decode_ast(name, function_name, field)))
   end
 
   defp resource_decode_ast(name, function_name) do

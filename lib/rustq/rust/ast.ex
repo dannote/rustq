@@ -587,27 +587,4 @@ defmodule RustQ.Rust.AST do
       PatStruct
     ]
   end
-
-  defdelegate render_item_native(item), to: RustQ.Rust.AST.Render
-  defdelegate render_file_native(items), to: RustQ.Rust.AST.Render
-  defdelegate render_function_native(function), to: RustQ.Rust.AST.Render
-  defdelegate render_use(item), to: RustQ.Rust.AST.Render
-  defdelegate render_module(item), to: RustQ.Rust.AST.Render
-  defdelegate render_const(item), to: RustQ.Rust.AST.Render
-  defdelegate render_static(item), to: RustQ.Rust.AST.Render
-  defdelegate render_type_alias(item), to: RustQ.Rust.AST.Render
-  defdelegate render_macro_item(item), to: RustQ.Rust.AST.Render
-  defdelegate render_macro_item_call(item), to: RustQ.Rust.AST.Render
-  defdelegate render_impl(item), to: RustQ.Rust.AST.Render
-  defdelegate render_function(item), to: RustQ.Rust.AST.Render
-  defdelegate render_function_arg(arg), to: RustQ.Rust.AST.Render
-  defdelegate render_struct(item), to: RustQ.Rust.AST.Render
-  defdelegate render_struct_field(field), to: RustQ.Rust.AST.Render
-  defdelegate render_enum(item), to: RustQ.Rust.AST.Render
-  defdelegate render_enum_variant(variant), to: RustQ.Rust.AST.Render
-  defdelegate render_type(type), to: RustQ.Rust.AST.Render
-  defdelegate render_stmt(stmt), to: RustQ.Rust.AST.Render
-  defdelegate render_expr(expr), to: RustQ.Rust.AST.Render
-  defdelegate render_arm(arm), to: RustQ.Rust.AST.Render
-  defdelegate render_pattern(pattern), to: RustQ.Rust.AST.Render
 end

@@ -2,6 +2,7 @@ defmodule RustQ.Meta.Type do
   @moduledoc false
 
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
 
   defstruct [:kind, :rust, :ast, meta: %{}]
 
@@ -338,7 +339,7 @@ defmodule RustQ.Meta.Type do
     %__MODULE__{
       kind: kind,
       ast: ast,
-      rust: ast |> AST.render_type() |> IO.iodata_to_binary(),
+      rust: ast |> Render.render_type() |> IO.iodata_to_binary(),
       meta: meta
     }
   end

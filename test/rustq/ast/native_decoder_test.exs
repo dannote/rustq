@@ -5,6 +5,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   alias RustQ.Native
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   require A
@@ -14,7 +15,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
     Application.put_env(:rustq, :strict_native_ast, true)
 
-    assert_raise ArgumentError, fn -> AST.render_function_native(invalid) end
+    assert_raise ArgumentError, fn -> Render.render_function_native(invalid) end
   after
     Application.delete_env(:rustq, :strict_native_ast)
   end

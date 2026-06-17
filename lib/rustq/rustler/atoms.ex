@@ -2,7 +2,7 @@ defmodule RustQ.Rustler.Atoms do
   @moduledoc false
 
   alias RustQ.Rust
-  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   @spec build([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) ::
@@ -16,5 +16,5 @@ defmodule RustQ.Rustler.Atoms do
     end
   end
 
-  defp rust_item(ast), do: Rust.item(AST.render_item_native(ast))
+  defp rust_item(ast), do: Rust.item(Render.render_item_native(ast))
 end

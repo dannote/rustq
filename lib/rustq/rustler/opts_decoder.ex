@@ -3,6 +3,7 @@ defmodule RustQ.Rustler.OptsDecoder do
 
   alias RustQ.Rust
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
 
@@ -20,9 +21,9 @@ defmodule RustQ.Rustler.OptsDecoder do
     phantom? = Keyword.get(opts, :phantom, lifetime != nil)
 
     [
-      Rust.item(AST.render_item_native(struct_ast(name, fields, phantom?, lifetime))),
+      Rust.item(Render.render_item_native(struct_ast(name, fields, phantom?, lifetime))),
       Rust.item(
-        AST.render_item_native(
+        Render.render_item_native(
           decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg)
         )
       )

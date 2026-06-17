@@ -11,6 +11,7 @@ defmodule RustQ.Meta do
   alias RustQ.Meta.Type
   alias RustQ.Rust
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Builder, as: A
 
   require A
@@ -51,7 +52,7 @@ defmodule RustQ.Meta do
     items = type_items ++ function_items
 
     type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
-    function_source = Enum.map_join(asts, "\n\n", &AST.render_function_native/1)
+    function_source = Enum.map_join(asts, "\n\n", &Render.render_function_native/1)
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
     quote do
@@ -128,7 +129,7 @@ defmodule RustQ.Meta do
   defp validate_item_ast(%AST.Enum{} = item), do: validate_ast_item(item)
 
   defp validate_ast_item(item) do
-    RustQ.parse_fragment!(:item, AST.render_item_native(item))
+    RustQ.parse_fragment!(:item, Render.render_item_native(item))
   end
 
   defp build_type_asts(type_aliases) do
