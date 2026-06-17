@@ -7,7 +7,7 @@ use crate::generated_ast::{
     decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
     optional_map_get, struct_name,
 };
-use crate::{parse_path, parse_syn, parse_type, path_from_parts};
+use crate::{parse_expr, parse_path, parse_syn, parse_type, path_from_parts};
 
 // Primitive-boundary inventory:
 // - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
@@ -504,9 +504,19 @@ pub(crate) fn decode_literal_expr(term: Term) -> NifResult<Expr> {
         LiteralTerm::Bool(true) => parse_syn::<Expr>(quote!(true)),
         LiteralTerm::Bool(false) => parse_syn::<Expr>(quote!(false)),
         LiteralTerm::I64(value) => parse_syn::<Expr>(quote!(#value)),
-        LiteralTerm::F64(value) => parse_syn::<Expr>(quote!(#value)),
+        LiteralTerm::F64(value) => parse_expr(format_float_literal(value)),
         LiteralTerm::String(value) => parse_syn::<Expr>(quote!(#value)),
         LiteralTerm::Atom(_) => Err(rustler::Error::BadArg),
+    }
+}
+
+fn format_float_literal(value: f64) -> String {
+    let formatted = value.to_string();
+
+    if formatted.contains('.') || formatted.contains('e') || formatted.contains('E') {
+        formatted
+    } else {
+        format!("{formatted}.0")
     }
 }
 

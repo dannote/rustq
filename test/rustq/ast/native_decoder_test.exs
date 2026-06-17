@@ -190,6 +190,14 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
         body: A.block(do: A.return(A.lit("hello")))
       })
 
+    float_source =
+      Native.render_ast(%AST.Function{
+        name: :float_expr,
+        args: [],
+        returns: "f32",
+        body: A.block(do: A.return(A.lit(1.0)))
+      })
+
     token_macro_source =
       Native.render_ast(%AST.Function{
         name: :token_macro_expr,
@@ -207,6 +215,8 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     assert literal_source =~ ~s|"hello"|
+    assert float_source =~ "1.0"
+    refute float_source =~ "1f64"
     assert token_macro_source =~ "quote!(None)"
     assert binary_source =~ "left == right && ok"
   end
