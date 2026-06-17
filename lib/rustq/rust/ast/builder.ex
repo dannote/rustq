@@ -191,12 +191,30 @@ defmodule RustQ.Rust.AST.Builder do
     |> require_some()
   end
 
-  def required_term_decode(opts_var, atom_name, type, opts \\ []) do
+  def required_term(opts_var, atom_name, opts \\ []) do
     opts_var
     |> call_opt_term(atom_name, opts)
     |> require_some()
+  end
+
+  def required_term_decode(opts_var, atom_name, type, opts \\ []) do
+    opts_var
+    |> required_term(atom_name, opts)
     |> method(:decode, [], generics: [type])
     |> then(&%AST.Try{expr: &1})
+  end
+
+  def optional_term_decode(opts_var, atom_name, type, opts \\ []) do
+    %AST.Match{
+      expr: call_opt_term(opts_var, atom_name, opts),
+      arms: [
+        %AST.Arm{
+          pattern: some_pat(:term),
+          body: [return_stmt(some(%AST.Try{expr: method(:term, :decode, [], generics: [type])}))]
+        },
+        %AST.Arm{pattern: none_pat(), body: [return_stmt(none())]}
+      ]
+    }
   end
 
   defp call_opt_term(opts_var, atom_name, opts),

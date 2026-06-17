@@ -427,6 +427,10 @@ defmodule RustQ.RustlerTest do
               fields: [
                 x: [type: :f32, decode: A.opt_decode(:opt_f32, :opts, :x)],
                 mode: [type: :Atom, decode: A.required_opt_decode(:opt_atom_option, :opts, :mode)],
+                count: [
+                  type: {:option, :i64},
+                  decode: A.optional_term_decode(:opts, :count, :i64)
+                ],
                 fill: [
                   type: {:option, "Term<'a>"},
                   decode: A.call(:opt_term, [:opts, A.atom(:fill)])
@@ -439,6 +443,7 @@ defmodule RustQ.RustlerTest do
     assert code =~ "pub struct RectOpts<'a>"
     assert code =~ "pub x: f32"
     assert code =~ "pub mode: Atom"
+    assert code =~ "pub count: Option<i64>"
     assert code =~ "pub fill: Option<Term<'a>>"
 
     assert code =~
@@ -446,6 +451,9 @@ defmodule RustQ.RustlerTest do
 
     assert code =~ "x: opt_f32(opts, atoms::x())?"
     assert code =~ "mode: opt_atom_option(opts, atoms::mode())?.ok_or(rustler::Error::BadArg)?"
+    assert code =~ "match opt_term(opts, atoms::count())"
+    assert code =~ "Some(term) => Some(term.decode::<i64>()?)"
+    assert code =~ "None => None"
     assert code =~ "fill: opt_term(opts, atoms::fill())"
     assert code =~ "_phantom: std::marker::PhantomData"
   end
