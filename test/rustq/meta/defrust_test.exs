@@ -5,6 +5,7 @@ defmodule RustQ.Meta.DefrustTest do
 
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
 
   test "generates Rust source from defrust functions and specs" do
     source = Generated.__rustq_source__()
@@ -60,6 +61,31 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "fn generated_save(canvas: &Canvas) -> NifResult<()>"
     assert source =~ "canvas.save();"
     assert source =~ "Ok(())"
+  end
+
+  test "quoted accepts explicit Rust AST types" do
+    function =
+      RustQ.Meta.quoted(:draw_translate_impl,
+        args: [
+          canvas: A.ref_type([:skia_safe, :Canvas]),
+          opts: A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a]),
+          _raw_opts: "&[(Atom, Term<'a>)]"
+        ],
+        returns: A.nif_result_type(A.unit_type()),
+        do:
+          quote do
+            canvas.translate({opts.x, opts.y})
+            :ok
+          end
+      )
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+
+    assert source =~ "fn draw_translate_impl<'a>("
+    assert source =~ "canvas: &skia_safe::Canvas"
+    assert source =~ "opts: generated_opts::TranslateOpts<'a>"
+    assert source =~ "_raw_opts: &[(Atom, Term<'a>)]"
+    assert source =~ "canvas.translate((opts.x, opts.y));"
   end
 
   test "defrustmod maps alias calls to Rust module paths" do

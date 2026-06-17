@@ -339,6 +339,7 @@ defmodule RustQ.Meta.Lower do
     do: %AST.Var{name: name}
 
   defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
+  defp lower_expr({left, right}), do: %AST.Tuple{values: [lower_expr(left), lower_expr(right)]}
 
   defp lower_expr(values) when is_list(values),
     do: %AST.VecLiteral{values: Enum.map(values, &lower_expr/1)}

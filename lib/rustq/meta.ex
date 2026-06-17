@@ -169,7 +169,29 @@ defmodule RustQ.Meta do
   end
 
   defp normalize_type(%Type{} = type, _aliases), do: type
+  defp normalize_type(type_ast, _aliases) when is_binary(type_ast), do: rust_ast_type(type_ast)
+
+  defp normalize_type(%{__struct__: module} = type_ast, _aliases)
+       when module in [
+              AST.TypePath,
+              AST.TypeRef,
+              AST.TypeOption,
+              AST.TypeResult,
+              AST.TypeNifResult,
+              AST.TypeVec,
+              AST.TypeUnit
+            ],
+       do: rust_ast_type(type_ast)
+
   defp normalize_type(type_ast, aliases), do: Type.from_spec_ast(type_ast, aliases)
+
+  defp rust_ast_type(type_ast) do
+    %Type{
+      kind: :type,
+      rust: type_ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary(),
+      ast: type_ast
+    }
+  end
 
   defp pending_attrs(module) do
     nif = Module.get_attribute(module, :nif)
