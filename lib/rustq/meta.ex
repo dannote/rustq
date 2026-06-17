@@ -5,6 +5,13 @@ defmodule RustQ.Meta do
   `defrust` captures a normal Elixir function-shaped body plus its preceding
   `@spec`, lowers that quoted Elixir AST to Rust, and exposes generated Rust
   items through `__rustq_items__/0` and `__rustq_source__/0`.
+
+  `defrustmod` is for RustQ-owned Rust module structure. Prefer its block form
+  when RustQ is generating the Rust module and the nested functions. Do not use
+  it as a hand-written alias for Rust modules/types that are owned by another
+  generator or crate; those callers should derive/render their Rust paths at
+  their own codegen boundary instead of pretending external Rust modules are
+  Elixir modules.
   """
 
   alias RustQ.Meta.Lower

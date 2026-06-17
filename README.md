@@ -190,6 +190,53 @@ Rust for Rustler term APIs, generic `syn` parsing/assembly, or collection glue.
 Prefer extending `RustQ.Rust.AST` and `RustQ.Meta.Lower` before adding new
 primitive helpers.
 
+### `defrustmod`
+
+`defrustmod` is for RustQ-owned Rust module structure. Use the block form when
+RustQ itself is responsible for generating the Rust module and the functions
+inside it:
+
+```elixir
+defmodule MyApp.Native.Generated do
+  use RustQ.Meta
+  alias RustQ.Type, as: R
+
+  defmodule Canvas do
+    @type t :: term()
+  end
+
+  defrustmod GeneratedHelpers, as: :generated_helpers do
+    @spec save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+    defrust save(canvas) do
+      canvas.save()
+      :ok
+    end
+  end
+end
+```
+
+This renders a Rust module such as:
+
+```rust
+mod generated_helpers {
+    fn save(canvas: &Canvas) -> NifResult<()> {
+        canvas.save();
+        Ok(())
+    }
+}
+```
+
+The non-block form is a low-level RustQ path mapping for generated code that is
+still owned by the same RustQ generation boundary. Do not use `defrustmod` as a
+hand-written declaration for Rust modules that are defined elsewhere by another
+generator or crate. If a downstream project already generates or owns Rust like
+`mod generated_opts;`, its own codegen layer should infer/render
+`generated_opts::...` paths from that project metadata instead of pretending that
+`GeneratedOpts` is an Elixir module or manually declaring it with `defrustmod`.
+
+In short: use `defrustmod` to generate or map RustQ-owned module structure; do
+not use it to paper over externally-owned Rust modules/types.
+
 `RustQ.Meta.Type` is the typespec-driven path for `defrust`. `RustQ.Rustler.Schema`
 remains the explicit public schema DSL for Rustler struct/tagged-enum generation;
 the two may share internals later, but their authoring surfaces are currently
