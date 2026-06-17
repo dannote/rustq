@@ -277,12 +277,20 @@ defmodule RustQ.Meta.Lower do
     do: lower_case(expression, clauses, %Context{position: :expr})
 
   defp lower_expr({{:., _meta, [receiver, field_or_function]}, call_meta, []}) do
+    no_parens? = Keyword.get(call_meta, :no_parens, false)
+
     cond do
-      Keyword.get(call_meta, :no_parens) ->
+      no_parens? and alias_ast?(receiver) ->
+        %AST.Path{parts: alias_parts(receiver) ++ [field_or_function]}
+
+      no_parens? ->
         %AST.Field{receiver: lower_expr(receiver), field: field_or_function}
 
       alias_ast?(receiver) ->
-        %AST.Path{parts: alias_parts(receiver) ++ [field_or_function]}
+        %AST.PathCall{
+          path: %AST.Path{parts: alias_parts(receiver) ++ [field_or_function]},
+          args: []
+        }
 
       true ->
         %AST.MethodCall{receiver: lower_expr(receiver), method: field_or_function}

@@ -62,6 +62,21 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Ok(())"
   end
 
+  test "lowers zero-arity alias calls as Rust calls" do
+    function =
+      RustQ.Meta.function_ast(
+        :atom_call,
+        [],
+        quote(do: RustQ.Type.nif_result(atom())),
+        quote do
+          Atoms.args()
+        end
+      )
+
+    source = RustQ.Rust.AST.Render.render_function_native(function)
+    assert source =~ "Atoms::args()"
+  end
+
   test "builds typed Rustler decode expressions from valid Elixir" do
     function =
       RustQ.Meta.function_ast(
