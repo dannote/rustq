@@ -57,7 +57,7 @@ defmodule RustQ.Rustler.OptsDecoder do
       end)
 
     if phantom? do
-      fields ++ [field(:_phantom, {:raw, phantom_type(lifetime)}, vis: :pub)]
+      fields ++ [field(:_phantom, {:raw, phantom_type(lifetime)}, [])]
     else
       fields
     end
