@@ -4,6 +4,7 @@ defmodule RustQ.Meta.DefrustTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Rust.AST
 
   test "generates Rust source from defrust functions and specs" do
     source = Generated.__rustq_source__()
@@ -39,6 +40,42 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Event::Resize(Resize { width: width, height: height }) =>"
 
     assert RustQ.valid?(source, "generated_defrust.rs")
+  end
+
+  test "builds a function AST from quoted valid Elixir" do
+    function =
+      RustQ.Meta.function_ast(
+        :generated_save,
+        [canvas: quote(do: RustQ.Type.ref(Canvas.t()))],
+        quote(do: RustQ.Type.nif_result(RustQ.Type.unit())),
+        quote do
+          canvas.save()
+          :ok
+        end
+      )
+
+    assert %AST.Function{name: :generated_save, body: [%AST.ExprStmt{}, %AST.Return{}]} = function
+
+    source = RustQ.Rust.AST.Render.render_function_native(function)
+    assert source =~ "fn generated_save(canvas: &Canvas) -> NifResult<()>"
+    assert source =~ "canvas.save();"
+    assert source =~ "Ok(())"
+  end
+
+  test "builds typed Rustler decode expressions from valid Elixir" do
+    function =
+      RustQ.Meta.function_ast(
+        :decode_terms,
+        [term: quote(do: term())],
+        quote(do: RustQ.Type.nif_result(RustQ.Type.vec(term()))),
+        quote do
+          decode_as!(term, RustQ.Type.vec(term()))
+        end
+      )
+
+    source = RustQ.Rust.AST.Render.render_function_native(function)
+    assert source =~ "fn decode_terms<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>>"
+    assert source =~ "term.decode::<Vec<Term<'a>>>()?"
   end
 
   test "native AST renderer emits Rust through syn" do

@@ -220,6 +220,17 @@ defmodule RustQ.Meta.Lower do
   defp lower_tuple_pattern(atom) when is_atom(atom), do: %AST.PatAtomGuard{name: atom}
 
   defp lower_expr({:unwrap!, _, [expression]}), do: %AST.Try{expr: lower_expr(expression)}
+
+  defp lower_expr({:decode_as!, _, [expression, type_ast]}),
+    do: %AST.Try{
+      expr: %AST.MethodCall{
+        receiver: lower_expr(expression),
+        method: :decode,
+        args: [],
+        generics: [Type.from_spec_ast(type_ast).ast]
+      }
+    }
+
   defp lower_expr({:ref, _, [expression]}), do: %AST.Ref{expr: lower_expr(expression)}
 
   defp lower_expr({:mut_ref, _, [expression]}),

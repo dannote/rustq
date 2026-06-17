@@ -77,6 +77,45 @@ defmodule RustQ.Meta do
 
   def __take_pending_attrs__(module), do: pending_attrs(module)
 
+  @spec function_ast(
+          atom(),
+          [{atom(), Type.t() | Macro.t()}],
+          Type.t() | Macro.t(),
+          Macro.t(),
+          keyword()
+        ) ::
+          AST.Function.t()
+  def function_ast(name, args, return_type, body_ast, opts \\ []) do
+    type_aliases = Keyword.get(opts, :type_aliases, %{})
+    arg_names = Enum.map(args, &elem(&1, 0))
+    arg_types = Enum.map(args, fn {_name, type} -> normalize_type(type, type_aliases) end)
+    return_type = normalize_type(return_type, type_aliases)
+
+    function_args =
+      Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
+      |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
+
+    body = Lower.function_ast(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)))
+
+    lifetime =
+      Keyword.get_lazy(opts, :lifetime, fn ->
+        if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
+      end)
+
+    %AST.Function{
+      name: name,
+      args: function_args,
+      returns: return_type.ast,
+      body: body,
+      lifetime: lifetime,
+      vis: Keyword.get(opts, :vis),
+      attrs: Keyword.get(opts, :attrs, [])
+    }
+  end
+
+  defp normalize_type(%Type{} = type, _aliases), do: type
+  defp normalize_type(type_ast, aliases), do: Type.from_spec_ast(type_ast, aliases)
+
   defp pending_attrs(module) do
     nif = Module.get_attribute(module, :nif)
     allow = Module.get_attribute(module, :allow) |> List.wrap() |> Enum.reverse()
