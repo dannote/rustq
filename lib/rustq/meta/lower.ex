@@ -147,10 +147,16 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp infer_case_type_from_patterns(clauses) do
-    if Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> pattern == nil end) do
+    if Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> option_pattern?(pattern) end) do
       %Type{kind: :option}
     end
   end
+
+  defp option_pattern?(nil), do: true
+  defp option_pattern?(:none), do: true
+  defp option_pattern?({:some, _pattern}), do: true
+  defp option_pattern?({:{}, _, [:some, _pattern]}), do: true
+  defp option_pattern?(_pattern), do: false
 
   defp reject_unit_statements(statements) do
     Enum.reject(statements, fn
@@ -167,6 +173,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_match_pattern(nil, %Type{kind: :option}), do: %AST.PatNone{}
+  defp lower_match_pattern(:none, %Type{kind: :option}), do: %AST.PatNone{}
   defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
   defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
 
@@ -178,6 +185,12 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_match_pattern({:error, pattern}, _case_type),
     do: %AST.PatErr{pattern: lower_match_pattern(pattern, nil)}
+
+  defp lower_match_pattern({:some, pattern}, %Type{kind: :option}),
+    do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
+
+  defp lower_match_pattern({:{}, _, [:some, pattern]}, %Type{kind: :option}),
+    do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
 
   defp lower_match_pattern({:%, _, [{:__aliases__, _, [module]}, {:%{}, _, fields}]}, %Type{
          kind: :tuple_enum,

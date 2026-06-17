@@ -21,6 +21,21 @@ defmodule RustQ.Meta do
   method calls, tuples, `:ok`, and friends). Prefer this over fake Elixir
   modules or full hand-built function bodies when only the signature has
   generator-owned Rust paths.
+
+  Preferred Rusty-Elixir body forms are ordinary Elixir where possible:
+
+    * final `:ok` under `NifResult<()>` returns `Ok(())`
+    * `name = expression` lowers to Rust `let name = expression`
+    * method calls, field access, aliases, and Elixir tuples lower to their Rust
+      equivalents
+    * `unwrap!(expression)` is the explicit spelling for Rust `expression?`
+    * `ref(expression)` / `mut_ref(expression)` spell Rust borrows
+    * Option branching should use Elixir `case`, for example
+      `case maybe do {:some, value} -> ...; :none -> ... end`; do not introduce
+      Rust-shaped `if_let` syntax at the authoring layer
+
+  Escape hatches such as `raw_expr!` remain low-level last resorts, not the
+  normal way to reference project-owned Rust modules or types.
   """
 
   alias RustQ.Meta.Lower

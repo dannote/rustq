@@ -17,6 +17,8 @@ defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
 
   test "defrust consumes idiomatic Rust-facing attributes" do
     assert %RustQ.Rust.AST.Function{attrs: attrs} =
@@ -69,6 +71,44 @@ defmodule RustQ.Meta.LowerTest do
                ]
              }
            } = hd(maybe_save.body)
+  end
+
+  test "option cases use Elixir tuple and atom patterns" do
+    function =
+      RustQ.Meta.quoted(:save_if_present,
+        args: [
+          canvas: A.ref_type(:Canvas),
+          maybe_alpha: quote(do: RustQ.Type.option(RustQ.Type.f32()))
+        ],
+        returns: A.nif_result_type(A.unit_type()),
+        do:
+          quote do
+            case maybe_alpha do
+              {:some, alpha} -> canvas.save_layer_alpha(alpha)
+              :none -> :ok
+            end
+
+            :ok
+          end
+      )
+
+    assert %AST.Function{
+             body: [
+               %AST.ExprStmt{
+                 expr: %AST.Match{
+                   arms: [
+                     %AST.Arm{pattern: %AST.PatSome{pattern: %AST.PatVar{name: :alpha}}},
+                     %AST.Arm{pattern: %AST.PatNone{}}
+                   ]
+                 }
+               },
+               %AST.Return{expr: %AST.Ok{}}
+             ]
+           } = function
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+    assert source =~ "Some(alpha) =>"
+    assert source =~ "None =>"
   end
 
   test "dogfooded native helpers lower binary operators and Rust string types" do
