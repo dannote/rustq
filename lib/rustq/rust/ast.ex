@@ -595,8 +595,7 @@ defmodule RustQ.Rust.AST do
   def render_item_native(%TypeAlias{} = item), do: render_native(item, &render_type_alias/1)
   def render_item_native(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
 
-  def render_item_native(%MacroItemCall{} = item),
-    do: render_native(item, &render_macro_item_call/1)
+  def render_item_native(%MacroItemCall{} = item), do: render_macro_item_call(item)
 
   def render_item_native(%Impl{} = item), do: render_native(item, &render_impl/1)
   def render_item_native(%Function{} = item), do: render_native(item, &render_function/1)
@@ -696,7 +695,7 @@ defmodule RustQ.Rust.AST do
   def render_macro_item(%MacroItem{source: source}), do: source
 
   def render_macro_item_call(%MacroItemCall{path: path, args: args}) do
-    [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &render_macro_arg/1), " }"]
+    [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &render_macro_arg/1), ", }"]
   end
 
   defp render_macro_arg({name, value}), do: [to_string(name), " = ", inspect(value)]
