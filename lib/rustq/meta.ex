@@ -12,6 +12,15 @@ defmodule RustQ.Meta do
   generator or crate; those callers should derive/render their Rust paths at
   their own codegen boundary instead of pretending external Rust modules are
   Elixir modules.
+
+  `quoted/2` is the bridge API for generators that already know exact Rust
+  signature types but still want the function body lowered from valid Elixir.
+  This keeps ownership boundaries explicit: the caller may provide direct Rust
+  AST type nodes such as `A.type_path([:generated_opts, :LineOpts], lifetimes:
+  [:a])`, while RustQ still owns lowering the body syntax (`unwrap!`, `ref`,
+  method calls, tuples, `:ok`, and friends). Prefer this over fake Elixir
+  modules or full hand-built function bodies when only the signature has
+  generator-owned Rust paths.
   """
 
   alias RustQ.Meta.Lower
