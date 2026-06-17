@@ -32,7 +32,7 @@ defmodule RustQ.Rustler.AtomDecoder do
 
   defp build_ast(name, input, result, atoms, cases) do
     function = %AST.Function{
-      name: name,
+      name: ident_atom(name),
       vis: :pub,
       args: [A.function_arg(:value, Rust.type(input))],
       returns: result,
@@ -49,7 +49,7 @@ defmodule RustQ.Rustler.AtomDecoder do
 
     Enum.map(cases, fn {atom, value} ->
       %AST.Arm{
-        pattern: %AST.PatAtomGuard{name: atom, module: module},
+        pattern: %AST.PatAtomGuard{name: ident_atom(atom), module: module},
         body: [A.return_stmt(A.ok(rust_value_expr(value)))]
       }
     end) ++
@@ -60,6 +60,9 @@ defmodule RustQ.Rustler.AtomDecoder do
         }
       ]
   end
+
+  defp ident_atom(value) when is_atom(value), do: value
+  defp ident_atom(value) when is_binary(value), do: String.to_atom(value)
 
   defp rust_value_expr(value) do
     value

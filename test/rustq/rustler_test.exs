@@ -73,6 +73,24 @@ defmodule RustQ.RustlerTest do
     assert code =~ "_ => Err(rustler::Error::BadArg)"
   end
 
+  test "builds atom decoders with string function and case names" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_decoder_strings.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_decoder("decode_fill_rule",
+              returns: :FillRule,
+              cases: [{"even_odd", "FillRule::EvenOdd"}]
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "pub fn decode_fill_rule(value: Atom) -> NifResult<FillRule>"
+    assert code =~ "value if value == atoms::even_odd() => Ok(FillRule::EvenOdd)"
+  end
+
   test "builds atom dispatch functions" do
     code =
       "__rq_items!();"
