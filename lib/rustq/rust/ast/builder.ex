@@ -135,6 +135,35 @@ defmodule RustQ.Rust.AST.Builder do
   def for_(pattern, expression, body),
     do: %AST.For{pattern: pat_expr(pattern), expr: expr(expression), body: flatten(body)}
 
+  def arg(name, type), do: %AST.FunctionArg{name: name, type: type(type)}
+
+  def type(%{__struct__: module} = value)
+      when module in [
+             AST.TypePath,
+             AST.TypeRef,
+             AST.TypeOption,
+             AST.TypeResult,
+             AST.TypeNifResult,
+             AST.TypeVec,
+             AST.TypeUnit
+           ],
+      do: value
+
+  def type(parts) when is_list(parts), do: type_path(parts)
+  def type(part) when is_atom(part) or is_binary(part), do: type_path(part)
+  def type({:raw, _source} = raw), do: raw
+
+  def unit_type, do: %AST.TypeUnit{}
+  def nif_result_type(inner), do: %AST.TypeNifResult{inner: type(inner)}
+
+  def ref_type(inner, opts \\ []),
+    do: %AST.TypeRef{inner: type(inner), lifetime: Keyword.get(opts, :lifetime)}
+
+  def mut_ref_type(inner, opts \\ []),
+    do: %AST.TypeRef{inner: type(inner), mutable: true, lifetime: Keyword.get(opts, :lifetime)}
+
+  def term_type(lifetime \\ :a), do: %AST.TypePath{parts: [:Term], lifetimes: List.wrap(lifetime)}
+
   def var(name) when is_atom(name), do: %AST.Var{name: name}
   def path(parts) when is_list(parts), do: %AST.Path{parts: parts}
   def path(part), do: %AST.Path{parts: [part]}

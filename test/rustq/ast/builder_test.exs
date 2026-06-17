@@ -6,6 +6,28 @@ defmodule RustQ.Rust.AST.BuilderTest do
 
   require A
 
+  test "builds ergonomic function argument and Rustler type nodes" do
+    function = %AST.Function{
+      name: :typed,
+      lifetime: :a,
+      args: [
+        A.arg(:canvas, A.ref_type([:skia_safe, :Canvas])),
+        A.arg(:term, A.term_type()),
+        A.arg(:opts, A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a]))
+      ],
+      returns: A.nif_result_type(A.unit_type()),
+      body: [A.return(A.ok())]
+    }
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+
+    assert source =~ "fn typed<'a>("
+    assert source =~ "canvas: &skia_safe::Canvas"
+    assert source =~ "term: Term<'a>"
+    assert source =~ "opts: generated_opts::TranslateOpts<'a>"
+    assert source =~ "-> NifResult<()>"
+  end
+
   test "renders token macro expressions through native AST" do
     function = %AST.Function{
       name: :pat_none,
