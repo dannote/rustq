@@ -13,7 +13,8 @@ defmodule RustQ.Rust.AST.BuilderTest do
       args: [
         A.arg(:canvas, A.ref_type([:skia_safe, :Canvas])),
         A.arg(:term, A.term_type()),
-        A.arg(:opts, A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a]))
+        A.arg(:opts, A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a])),
+        A.arg(:raw_opts, "&[(Atom, Term<'a>)]")
       ],
       returns: A.nif_result_type(A.unit_type()),
       body: [A.return(A.ok())]
@@ -25,6 +26,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert source =~ "canvas: &skia_safe::Canvas"
     assert source =~ "term: Term<'a>"
     assert source =~ "opts: generated_opts::TranslateOpts<'a>"
+    assert source =~ "raw_opts: &[(Atom, Term<'a>)]"
     assert source =~ "-> NifResult<()>"
   end
 

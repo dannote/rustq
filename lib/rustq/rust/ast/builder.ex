@@ -135,6 +135,7 @@ defmodule RustQ.Rust.AST.Builder do
   def for_(pattern, expression, body),
     do: %AST.For{pattern: pat_expr(pattern), expr: expr(expression), body: flatten(body)}
 
+  def arg(name, type) when is_binary(type), do: %AST.FunctionArg{name: name, type: type}
   def arg(name, type), do: %AST.FunctionArg{name: name, type: type(type)}
 
   def type(%{__struct__: module} = value)
