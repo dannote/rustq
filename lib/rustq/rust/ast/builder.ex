@@ -209,6 +209,7 @@ defmodule RustQ.Rust.AST.Builder do
   def macro_call(path, args \\ []),
     do: %AST.MacroCall{path: expr_path(path), args: Enum.map(args, &expr/1)}
 
+  def tuple(values), do: %AST.Tuple{values: Enum.map(values, &expr/1)}
   def vec(values), do: %AST.VecLiteral{values: Enum.map(values, &expr/1)}
   def array(values), do: %AST.ArrayLiteral{values: Enum.map(values, &expr/1)}
   def slice(values), do: ref(array(values))

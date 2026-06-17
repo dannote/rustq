@@ -66,6 +66,17 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert source =~ "rustler::atoms!"
   end
 
+  test "builds tuple expressions" do
+    function = %AST.Function{
+      name: :pair,
+      args: [],
+      returns: "(i32, i32)",
+      body: [A.return(A.tuple([1, 2]))]
+    }
+
+    assert RustQ.Rust.AST.Render.render_function(function) =~ "(1i64, 2i64)"
+  end
+
   test "renders if and binary operators through native AST" do
     function = %AST.Function{
       name: :expect,
