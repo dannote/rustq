@@ -50,7 +50,7 @@ defmodule RustQ.Cargo do
       manifest_path
     ]
 
-    case System.cmd("cargo", args, stderr_to_stdout: true) do
+    case System.cmd("cargo", args) do
       {json, 0} ->
         Metadata.decode!(json)
 
