@@ -121,16 +121,16 @@ defmodule RustQ.Meta.Type do
   defp parse({{:., _, [module, function]}, _, args}, aliases),
     do: parse_remote(module, function, args, aliases)
 
+  defp parse({:{}, _, elements}, aliases) do
+    tuple_types = Enum.map(elements, &parse(&1, aliases))
+    tuple_type(tuple_types)
+  end
+
   defp parse({name, _, args}, aliases) when is_atom(name) and is_list(args) do
     case Map.get(aliases, {name, length(args)}) do
       nil -> parse_local_type(name, args, aliases)
       alias_type -> alias_type
     end
-  end
-
-  defp parse({:{}, _, elements}, aliases) do
-    tuple_types = Enum.map(elements, &parse(&1, aliases))
-    tuple_type(tuple_types)
   end
 
   defp parse({:|, _, _args} = union, aliases) do
