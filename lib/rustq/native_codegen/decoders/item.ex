@@ -28,16 +28,16 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Module"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
-    items = unwrap!(Super.decode_item_list(unwrap!(required_field(term, "items"))))
+    items = unwrap!(required_item_list(term, "items"))
     Super.parse_item_module(name, vis, items)
   end
 
   @spec decode_ast_impl(term()) :: R.nif_result(ItemImpl.t())
   defrust decode_ast_impl(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Impl"))
-    target = unwrap!(Super.decode_type(unwrap!(required_field(term, "target"))))
+    target = unwrap!(required_type(term, "target"))
     trait_path = unwrap!(Super.decode_optional_path_field(term, "trait"))
-    impl_items = unwrap!(Super.decode_item_list(unwrap!(required_field(term, "items"))))
+    impl_items = unwrap!(required_item_list(term, "items"))
     attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
     Super.parse_item_impl(target, trait_path, impl_items, attrs)
   end
@@ -46,8 +46,8 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   defrust decode_ast_const(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Const"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    ty = unwrap!(required_type(term, "type"))
+    expr = unwrap!(required_expr(term, "expr"))
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
     Super.parse_item_const(name, ty, expr, vis)
   end
@@ -56,7 +56,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   defrust decode_ast_type_alias(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.TypeAlias"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    ty = unwrap!(required_type(term, "type"))
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
     Super.parse_item_type(name, ty, vis)
   end
@@ -65,8 +65,8 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   defrust decode_ast_static(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Static"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    ty = unwrap!(required_type(term, "type"))
+    expr = unwrap!(required_expr(term, "expr"))
     mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
     Super.parse_item_static(name, ty, expr, mutable, vis)
@@ -77,10 +77,10 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Function"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
-    args = unwrap!(Super.decode_function_arg_list(unwrap!(required_field(term, "args"))))
-    returns = unwrap!(Super.decode_type(unwrap!(required_field(term, "returns"))))
+    args = unwrap!(required_function_arg_list(term, "args"))
+    returns = unwrap!(required_type(term, "returns"))
     lifetime = unwrap!(optional_atom_key(term, "lifetime"))
-    stmts = unwrap!(Super.decode_stmt_list(unwrap!(required_field(term, "body"))))
+    stmts = unwrap!(required_stmt_list(term, "body"))
     attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
     Super.parse_item_function_args(name, vis, args, returns, lifetime, stmts, attrs)
   end
@@ -101,7 +101,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
     derive = unwrap!(Super.decode_derive(unwrap!(required_field(term, "derive"))))
     lifetime = unwrap!(optional_atom_key(term, "lifetime"))
-    fields = unwrap!(Super.decode_struct_field_list(unwrap!(required_field(term, "fields"))))
+    fields = unwrap!(required_struct_field_list(term, "fields"))
     attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
     Super.parse_item_struct(name, vis, derive, lifetime, fields, attrs)
   end
@@ -127,7 +127,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
     derive = unwrap!(Super.decode_derive(unwrap!(required_field(term, "derive"))))
-    variants = unwrap!(Super.decode_enum_variant_list(unwrap!(required_field(term, "variants"))))
+    variants = unwrap!(required_enum_variant_list(term, "variants"))
     attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
     Super.parse_item_enum(name, vis, derive, variants, attrs)
   end
@@ -136,7 +136,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   defrust decode_function_arg(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.FunctionArg"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    ty = unwrap!(required_type(term, "type"))
     Super.parse_function_arg(name, ty)
   end
 
@@ -144,7 +144,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   defrust decode_struct_field(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.StructField"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    ty = unwrap!(required_type(term, "type"))
     vis = unwrap!(Super.decode_vis(unwrap!(required_field(term, "vis"))))
     Super.parse_struct_field(name, ty, vis)
   end
@@ -153,7 +153,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   defrust decode_enum_variant(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    tuple = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "tuple"))))
+    tuple = unwrap!(required_type_list(term, "tuple"))
     Super.parse_enum_variant(name, tuple)
   end
 end

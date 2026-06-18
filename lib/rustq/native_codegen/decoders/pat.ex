@@ -32,32 +32,32 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
 
   @spec decode_pat_some(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_some(term) do
-    pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    pat = unwrap!(required_pat(term, "pattern"))
     pat!(some(pat))
   end
 
   @spec decode_pat_ok(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_ok(term) do
-    pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    pat = unwrap!(required_pat(term, "pattern"))
     pat!({:ok, pat})
   end
 
   @spec decode_pat_err(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_err(term) do
-    pat = unwrap!(Super.decode_pat(unwrap!(required_field(term, "pattern"))))
+    pat = unwrap!(required_pat(term, "pattern"))
     pat!({:error, pat})
   end
 
   @spec decode_pat_tuple(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_tuple(term) do
-    patterns = unwrap!(Super.decode_pat_list(unwrap!(required_field(term, "patterns"))))
+    patterns = unwrap!(required_pat_list(term, "patterns"))
     pat!(tuple(patterns))
   end
 
   @spec decode_pat_path_tuple(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_path_tuple(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
-    patterns = unwrap!(Super.decode_pat_list(unwrap!(required_field(term, "patterns"))))
+    patterns = unwrap!(required_pat_list(term, "patterns"))
     pat!(path_tuple(path, patterns))
   end
 

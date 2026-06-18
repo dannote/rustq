@@ -33,6 +33,7 @@ defmodule RustQ.NativeCodegen do
       ),
       RustQ.NativeCodegen.Modules.asts(),
       RustQ.NativeCodegen.Helpers.asts(),
+      RustQ.NativeCodegen.DecoderHelpers.asts(),
       RustQ.NativeCodegen.Dispatch.asts(),
       RustQ.NativeCodegen.Decoders.asts()
     ]

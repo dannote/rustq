@@ -508,6 +508,17 @@ defmodule RustQ.Rust.AST do
       )
   )
 
+  def type_node?(term), do: category_node?(term, :type)
+  def expr_node?(term), do: category_node?(term, :expr)
+  def pat_node?(term), do: category_node?(term, :pat)
+
+  defp category_node?(%{__struct__: module}, category) do
+    Code.ensure_loaded?(module) and function_exported?(module, :__rustq_ast_category__, 0) and
+      module.__rustq_ast_category__() == category
+  end
+
+  defp category_node?(_term, _category), do: false
+
   def __rustq_ast_modules__ do
     [
       Use,

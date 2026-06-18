@@ -24,15 +24,15 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_field(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_field(term) do
-    receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
+    receiver = unwrap!(required_expr(term, "receiver"))
     field = unwrap!(required_field(term, "field"))
     Super.parse_field_expr(receiver, field)
   end
 
   @spec decode_expr_index(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_index(term) do
-    receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
-    index = unwrap!(Super.decode_expr(unwrap!(required_field(term, "index"))))
+    receiver = unwrap!(required_expr(term, "receiver"))
+    index = unwrap!(required_expr(term, "index"))
     Super.parse_index_expr(receiver, index)
   end
 
@@ -45,15 +45,15 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_cast(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_cast(term) do
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
-    ty = unwrap!(Super.decode_type(unwrap!(required_field(term, "type"))))
+    expr = unwrap!(required_expr(term, "expr"))
+    ty = unwrap!(required_type(term, "type"))
     Super.parse_cast_expr(expr, ty)
   end
 
   @spec decode_expr_unary_op(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_unary_op(term) do
     op = unwrap!(atom_key(term, "op"))
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    expr = unwrap!(required_expr(term, "expr"))
 
     case op.as_str() do
       "not" -> Super.parse_unary_expr(op, expr)
@@ -66,30 +66,30 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   @spec decode_expr_path_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_path_call(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
-    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
-    generics = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "generics"))))
+    args = unwrap!(required_expr_list(term, "args"))
+    generics = unwrap!(required_type_list(term, "generics"))
     Super.parse_path_call_expr(path, args, generics)
   end
 
   @spec decode_expr_method_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_method_call(term) do
-    receiver = unwrap!(Super.decode_expr(unwrap!(required_field(term, "receiver"))))
+    receiver = unwrap!(required_expr(term, "receiver"))
     method = Super.format_ident_value(unwrap!(atom_key(term, "method")))
-    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
-    generics = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "generics"))))
+    args = unwrap!(required_expr_list(term, "args"))
+    generics = unwrap!(required_type_list(term, "generics"))
     Super.parse_method_call_expr(receiver, method, args, generics)
   end
 
   @spec decode_expr_local_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_local_call(term) do
     name = unwrap!(atom_key(term, "name"))
-    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
+    args = unwrap!(required_expr_list(term, "args"))
     Super.parse_local_call(name, args)
   end
 
   @spec decode_expr_ref(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_ref(term) do
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    expr = unwrap!(required_expr(term, "expr"))
     mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
 
     if mutable do
@@ -101,7 +101,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_struct_literal(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_struct_literal(term) do
-    path = unwrap!(Super.decode_expr(unwrap!(required_field(term, "path"))))
+    path = unwrap!(required_expr(term, "path"))
     fields = unwrap!(Super.decode_struct_literal_fields(unwrap!(required_field(term, "fields"))))
     expr!(struct_literal(path, fields))
   end
@@ -114,8 +114,8 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_binary_op(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_binary_op(term) do
-    left = unwrap!(Super.decode_expr(unwrap!(required_field(term, "left"))))
-    right = unwrap!(Super.decode_expr(unwrap!(required_field(term, "right"))))
+    left = unwrap!(required_expr(term, "left"))
+    right = unwrap!(required_expr(term, "right"))
     op = unwrap!(atom_key(term, "op"))
 
     case op.as_str() do
@@ -137,14 +137,14 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_match(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_match(term) do
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
-    arms = unwrap!(Super.decode_arm_list(unwrap!(required_field(term, "arms"))))
+    expr = unwrap!(required_expr(term, "expr"))
+    arms = unwrap!(required_arm_list(term, "arms"))
     expr!(match(expr, arms))
   end
 
   @spec decode_expr_if(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_if(term) do
-    condition = unwrap!(Super.decode_expr(unwrap!(required_field(term, "condition"))))
+    condition = unwrap!(required_expr(term, "condition"))
     then_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "then"))))
     else_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "else"))))
     expr!(if_else(condition, then_block, else_block))
@@ -152,33 +152,33 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_tuple(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_tuple(term) do
-    values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
+    values = unwrap!(required_expr_list(term, "values"))
     expr!(tuple(values))
   end
 
   @spec decode_expr_vec_literal(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_vec_literal(term) do
-    values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
+    values = unwrap!(required_expr_list(term, "values"))
     expr!(vec(values))
   end
 
   @spec decode_expr_array_literal(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_array_literal(term) do
-    values = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "values"))))
+    values = unwrap!(required_expr_list(term, "values"))
     Super.parse_array_expr(values)
   end
 
   @spec decode_expr_closure(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_closure(term) do
     args = unwrap!(Super.decode_ident_list(unwrap!(required_field(term, "args"))))
-    body = unwrap!(Super.decode_expr(unwrap!(required_field(term, "body"))))
+    body = unwrap!(required_expr(term, "body"))
     expr!(closure(args, body))
   end
 
   @spec decode_expr_macro_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_macro_call(term) do
     path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
-    args = unwrap!(Super.decode_expr_list(unwrap!(required_field(term, "args"))))
+    args = unwrap!(required_expr_list(term, "args"))
     expr!(macro_call(path, args))
   end
 
@@ -227,19 +227,19 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_try(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_try(term) do
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    expr = unwrap!(required_expr(term, "expr"))
     expr!(unwrap!(expr))
   end
 
   @spec decode_expr_some(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_some(term) do
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    expr = unwrap!(required_expr(term, "expr"))
     expr!(some(expr))
   end
 
   @spec decode_expr_err(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_err(term) do
-    expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
+    expr = unwrap!(required_expr(term, "expr"))
     expr!(err(expr))
   end
 end

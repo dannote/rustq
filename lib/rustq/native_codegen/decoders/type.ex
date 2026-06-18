@@ -18,7 +18,7 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
   defrust decode_type_path(term) do
     parts = unwrap!(Super.decode_string_list(unwrap!(required_field(term, "parts"))))
     lifetimes = unwrap!(decode_lifetime_list(unwrap!(required_field(term, "lifetimes"))))
-    generics = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "generics"))))
+    generics = unwrap!(required_type_list(term, "generics"))
     Super.parse_type_path_with_generics(parts, lifetimes, generics)
   end
 
@@ -29,7 +29,7 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
 
   @spec decode_type_ref(term()) :: R.nif_result(Type.t())
   defrust decode_type_ref(term) do
-    inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))
+    inner = unwrap!(required_type(term, "inner"))
     mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
     lifetime = unwrap!(optional_atom_key(term, "lifetime"))
     Super.parse_type_ref(inner, mutable, lifetime)
@@ -37,26 +37,26 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
 
   @spec decode_type_option(term()) :: R.nif_result(Type.t())
   defrust decode_type_option(term) do
-    inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))
+    inner = unwrap!(required_type(term, "inner"))
     Super.parse_type_generic("Option", [inner])
   end
 
   @spec decode_type_result(term()) :: R.nif_result(Type.t())
   defrust decode_type_result(term) do
-    ok = unwrap!(Super.decode_type(unwrap!(required_field(term, "ok"))))
-    error = unwrap!(Super.decode_type(unwrap!(required_field(term, "error"))))
+    ok = unwrap!(required_type(term, "ok"))
+    error = unwrap!(required_type(term, "error"))
     Super.parse_type_generic("Result", [ok, error])
   end
 
   @spec decode_type_nif_result(term()) :: R.nif_result(Type.t())
   defrust decode_type_nif_result(term) do
-    inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))
+    inner = unwrap!(required_type(term, "inner"))
     Super.parse_type_generic("NifResult", [inner])
   end
 
   @spec decode_type_vec(term()) :: R.nif_result(Type.t())
   defrust decode_type_vec(term) do
-    inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))
+    inner = unwrap!(required_type(term, "inner"))
     Super.parse_type_generic("Vec", [inner])
   end
 end

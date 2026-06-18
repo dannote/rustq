@@ -228,7 +228,7 @@ defmodule RustQ.Rust.AST.Render do
       ") -> ",
       render_type(function.returns),
       " {\n",
-      function.body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n") |> indent(),
+      render_stmt_block(function.body),
       "\n}"
     ]
     |> IO.iodata_to_binary()
@@ -363,15 +363,13 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   def render_stmt(%LetElse{} = stmt) do
-    else_body = stmt.else |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-
     [
       "let ",
       render_pattern(stmt.pattern),
       " = ",
       render_expr(stmt.expr),
       " else {\n",
-      indent(else_body),
+      render_stmt_block(stmt.else),
       "\n};"
     ]
   end
@@ -384,9 +382,8 @@ defmodule RustQ.Rust.AST.Render do
   def render_stmt(%EarlyReturn{} = stmt), do: ["return ", render_expr(stmt.expr), ";"]
 
   def render_stmt(%IfLet{} = stmt) do
-    then_body = stmt.then |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-    else_body = stmt.else |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-    else_part = if stmt.else == [], do: [], else: [" else {\n", indent(else_body), "\n}"]
+    else_part =
+      if stmt.else == [], do: [], else: [" else {\n", render_stmt_block(stmt.else), "\n}"]
 
     [
       "if let ",
@@ -394,22 +391,20 @@ defmodule RustQ.Rust.AST.Render do
       " = ",
       render_expr(stmt.expr),
       " {\n",
-      indent(then_body),
+      render_stmt_block(stmt.then),
       "\n}",
       else_part
     ]
   end
 
   def render_stmt(%For{} = stmt) do
-    body = stmt.body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-
     [
       "for ",
       render_pattern(stmt.pattern),
       " in ",
       render_expr(stmt.expr),
       " {\n",
-      indent(body),
+      render_stmt_block(stmt.body),
       "\n}"
     ]
   end
@@ -512,16 +507,13 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   def render_expr(%If{} = if_expr) do
-    then_body = if_expr.then |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-    else_body = if_expr.else |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-
     [
       "if ",
       render_expr(if_expr.condition),
       " {\n",
-      indent(then_body),
+      render_stmt_block(if_expr.then),
       "\n} else {\n",
-      indent(else_body),
+      render_stmt_block(if_expr.else),
       "\n}"
     ]
   end
@@ -531,8 +523,7 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   def render_arm(%Arm{pattern: pattern, body: body}) do
-    rendered_body = body |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
-    [render_pattern(pattern), " => {\n", indent(rendered_body), "\n},"]
+    [render_pattern(pattern), " => {\n", render_stmt_block(body), "\n},"]
   end
 
   def render_pattern(%PatVar{name: name}), do: Atom.to_string(name)
@@ -635,6 +626,11 @@ defmodule RustQ.Rust.AST.Render do
   defp render_vis(:pub), do: "pub "
   defp render_vis(:crate), do: "pub(crate) "
   defp render_vis(nil), do: []
+
+  defp render_stmt_lines(statements),
+    do: statements |> Elixir.Enum.map(&render_stmt/1) |> Elixir.Enum.join("\n")
+
+  defp render_stmt_block(statements), do: statements |> render_stmt_lines() |> indent()
 
   defp indent(iodata) do
     iodata

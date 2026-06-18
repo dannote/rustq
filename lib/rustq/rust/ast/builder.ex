@@ -138,17 +138,13 @@ defmodule RustQ.Rust.AST.Builder do
   def arg(name, type) when is_binary(type), do: %AST.FunctionArg{name: name, type: type}
   def arg(name, type), do: %AST.FunctionArg{name: name, type: type(type)}
 
-  def type(%{__struct__: module} = value)
-      when module in [
-             AST.TypePath,
-             AST.TypeRef,
-             AST.TypeOption,
-             AST.TypeResult,
-             AST.TypeNifResult,
-             AST.TypeVec,
-             AST.TypeUnit
-           ],
-      do: value
+  def type(%{__struct__: _module} = value) do
+    if AST.type_node?(value) do
+      value
+    else
+      raise ArgumentError, "expected RustQ type AST node, got: #{inspect(value)}"
+    end
+  end
 
   def type(parts) when is_list(parts), do: type_path(parts)
   def type(part) when is_atom(part) or is_binary(part), do: type_path(part)
@@ -349,21 +345,13 @@ defmodule RustQ.Rust.AST.Builder do
   def expr_path(parts) when is_list(parts), do: path(parts)
   def expr_path(part), do: path(part)
 
-  def pat_expr(%{__struct__: module} = value)
-      when module in [
-             AST.PatVar,
-             AST.PatWildcard,
-             AST.PatPath,
-             AST.PatLiteral,
-             AST.PatNone,
-             AST.PatSome,
-             AST.PatOk,
-             AST.PatErr,
-             AST.PatPathTuple,
-             AST.PatStruct,
-             AST.PatTuple
-           ],
-      do: value
+  def pat_expr(%{__struct__: _module} = value) do
+    if AST.pat_node?(value) do
+      value
+    else
+      raise ArgumentError, "expected RustQ pattern AST node, got: #{inspect(value)}"
+    end
+  end
 
   def pat_expr(name) when is_atom(name), do: pat(name)
 

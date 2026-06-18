@@ -195,17 +195,13 @@ defmodule RustQ.Meta do
   defp normalize_type(%Type{} = type, _aliases), do: type
   defp normalize_type(type_ast, _aliases) when is_binary(type_ast), do: rust_ast_type(type_ast)
 
-  defp normalize_type(%{__struct__: module} = type_ast, _aliases)
-       when module in [
-              AST.TypePath,
-              AST.TypeRef,
-              AST.TypeOption,
-              AST.TypeResult,
-              AST.TypeNifResult,
-              AST.TypeVec,
-              AST.TypeUnit
-            ],
-       do: rust_ast_type(type_ast)
+  defp normalize_type(%{__struct__: _module} = type_ast, _aliases) do
+    if AST.type_node?(type_ast) do
+      rust_ast_type(type_ast)
+    else
+      raise ArgumentError, "expected RustQ type AST node, got: #{inspect(type_ast)}"
+    end
+  end
 
   defp normalize_type(type_ast, aliases), do: Type.from_spec_ast(type_ast, aliases)
 

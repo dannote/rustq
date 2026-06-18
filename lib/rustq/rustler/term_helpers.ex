@@ -4,6 +4,7 @@ defmodule RustQ.Rustler.TermHelpers do
   use RustQ.Sigil
 
   alias RustQ.Rust
+  alias RustQ.Rustler.HelperSelection
 
   @names [
     :get,
@@ -103,15 +104,7 @@ defmodule RustQ.Rustler.TermHelpers do
     end)
   end
 
-  defp names(opts) do
-    opts
-    |> Keyword.get(:include, @names)
-    |> include_names()
-    |> Kernel.--(List.wrap(Keyword.get(opts, :exclude, [])))
-  end
-
-  defp include_names(:all), do: @names
-  defp include_names(names), do: List.wrap(names)
+  defp names(opts), do: HelperSelection.names(opts, @names)
 
   defp template!(name), do: Map.fetch!(@templates, name)
 end

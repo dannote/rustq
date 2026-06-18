@@ -4,6 +4,7 @@ defmodule RustQ.Rustler.OptsHelpers do
   use RustQ.Sigil
 
   alias RustQ.Rust
+  alias RustQ.Rustler.HelperSelection
 
   @names [
     :decode_opts,
@@ -86,14 +87,5 @@ defmodule RustQ.Rustler.OptsHelpers do
     end)
   end
 
-  defp names(opts) do
-    included =
-      case Keyword.get(opts, :include, @names) do
-        :all -> @names
-        names -> List.wrap(names)
-      end
-
-    excluded = opts |> Keyword.get(:exclude, []) |> List.wrap() |> MapSet.new()
-    Enum.reject(included, &MapSet.member?(excluded, &1))
-  end
+  defp names(opts), do: HelperSelection.names(opts, @names)
 end
