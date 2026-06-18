@@ -126,6 +126,22 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "canvas.save();"
   end
 
+  test "quoted maps configured Rust module alias calls" do
+    function =
+      RustQ.Meta.quoted(:atom_call,
+        args: [],
+        returns: quote(do: RustQ.Type.nif_result(atom())),
+        rust_modules: %{[:Atoms] => [:atoms]},
+        do:
+          quote do
+            Atoms.fill()
+          end
+      )
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+    assert source =~ "atoms::fill()"
+  end
+
   test "lowers zero-arity alias calls as Rust calls" do
     function =
       RustQ.Meta.quoted(:atom_call,
