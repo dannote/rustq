@@ -13,9 +13,11 @@ defmodule RustQ.Meta do
   their own codegen boundary instead of pretending external Rust modules are
   Elixir modules.
 
-  Prefer `@spec` plus `defrust` for user-facing Rusty Elixir, including
-  generated or external Rust paths expressed through `RustQ.Type` markers such
-  as `R.path/1`, `R.path/2`, `R.lifetime/1`, and `R.slice/1`. `quoted/2` is a
+  Prefer `@spec` plus `defrust` for user-facing Rusty Elixir. Generated or
+  external Rust paths should normally be expressed as ordinary remote types such
+  as `GeneratedOpts.OvalOpts.t(R.lifetime(:a))`; use `RustQ.Type` markers such
+  as `R.ref/1`, `R.nif_result/1`, `R.unit/0`, `R.slice/1`, and `R.lifetime/1`
+  only where Elixir typespecs need Rust-specific precision. `quoted/2` is a
   low-level bridge for internal generators that already hold RustQ AST signature
   metadata; it is not the intended authoring surface.
 
@@ -25,6 +27,10 @@ defmodule RustQ.Meta do
     * `name = expression` lowers to Rust `let name = expression`
     * method calls, field access, aliases, and Elixir tuples lower to their Rust
       equivalents
+    * plural alias calls such as `Atoms.fill()` lower to snake-case Rust module
+      calls such as `atoms::fill()`
+    * ordinary Elixir macros are expanded before lowering, so reusable body
+      fragments can use `defmacro`, `quote`, and `unquote`
     * `unwrap!(expression)` is the explicit spelling for Rust `expression?`
     * `ref(expression)` / `mut_ref(expression)` spell Rust borrows; `deref(expression)` spells Rust dereference
     * Option branching should use Elixir `case`, for example

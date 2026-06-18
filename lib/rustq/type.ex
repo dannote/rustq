@@ -4,13 +4,16 @@ defmodule RustQ.Type do
 
   Prefer ordinary Elixir types when they fit. `RustQ.Meta` maps built-ins such
   as `atom()`, `term()`, `boolean()`, `integer()`, `float()`, and `binary()` to
-  Rust/Rustler types. Use this module where Rust needs extra precision or
-  syntax that Elixir types cannot express: fixed-width numbers, references,
-  external Rust paths, slices, `NifResult`, `Vec`, and unit.
+  Rust/Rustler types. Use ordinary remote types for external Rust paths where
+  possible: `SkiaSafe.Canvas.t()` renders as `skia_safe::Canvas`, and
+  `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` renders as
+  `generated_opts::OvalOpts<'a>`. Use this module where Rust needs extra
+  precision or syntax that Elixir types cannot express cleanly: fixed-width
+  numbers, references, lifetimes, slices, `NifResult`, `Vec`, and unit.
 
       alias RustQ.Type, as: R
 
-      @spec draw(R.ref(Canvas.t()), R.f32(), R.f32()) :: R.nif_result(R.unit())
+      @spec draw(R.ref(SkiaSafe.Canvas.t()), R.f32(), R.f32()) :: R.nif_result(R.unit())
       defrust draw(canvas, x, y) do
         canvas.translate({x, y})
         :ok
@@ -71,13 +74,13 @@ defmodule RustQ.Type do
   @typedoc "Rustler NIF error marker."
   @type nif_error :: atom()
 
-  @typedoc "Explicit Rust path marker for generated or external Rust types."
+  @typedoc "Low-level explicit Rust path marker. Prefer ordinary remote types such as `GeneratedOpts.OvalOpts.t(...)` when possible."
   @type path(parts) :: {parts, term()}
 
-  @typedoc "Explicit Rust path marker with options such as `R.lifetime(:a)`."
+  @typedoc "Low-level explicit Rust path marker with options such as `R.lifetime(:a)`. Prefer ordinary remote types when possible."
   @type path(parts, opts) :: {parts, opts, term()}
 
-  @typedoc "Rust lifetime marker for `R.path/2`."
+  @typedoc "Rust lifetime marker for external remote types and low-level `R.path/2`."
   @type lifetime(name) :: {name, term()}
 
   @typedoc "Rust slice reference `&[T]`."

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Reframe Rusty Elixir as the high-level `defrust` authoring surface.
+- Add external Rust type specs through ordinary remote types such as
+  `GeneratedOpts.OvalOpts.t(RustQ.Type.lifetime(:a))`.
+- Add ordinary Elixir macro expansion before `defrust` lowering so reusable
+  Rusty-Elixir body fragments can use `defmacro`, `quote`, and `unquote`.
+- Lower plural alias calls such as `Atoms.fill()` to snake-case Rust module calls
+  such as `atoms::fill()`.
+- Demote `RustQ.Meta.quoted/2` and `RustQ.Type.path/1,2` to low-level escape
+  hatches instead of the normal authoring style.
+
 ## v0.5.1 - 2026-06-15
 
 - Add generic Rust expression builders:
