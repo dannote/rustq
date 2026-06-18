@@ -1,6 +1,14 @@
 defmodule RustQ.Syn.IndexTest do
   use ExUnit.Case, async: true
 
+  test "builds package-aware indexes from Cargo metadata" do
+    index =
+      RustQ.Syn.Index.from_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
+
+    assert %RustQ.Cargo.Package{name: "rustq_nif"} = index.package
+    assert map_size(index.files) > 0
+  end
+
   test "indexes impl methods by target" do
     path =
       Path.join(

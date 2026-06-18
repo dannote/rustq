@@ -7,13 +7,16 @@ defmodule RustQ.Syn.Index do
   lookup helpers for impl blocks and methods by target type.
   """
 
-  defstruct files: %{}
+  defstruct files: %{}, package: nil
 
-  @type t :: %__MODULE__{files: %{Path.t() => RustQ.Syn.File.t()}}
+  @type t :: %__MODULE__{
+          files: %{Path.t() => RustQ.Syn.File.t()},
+          package: RustQ.Cargo.Package.t() | nil
+        }
 
   @doc "Builds an index from Rust source file paths."
-  @spec from_paths([Path.t()]) :: t()
-  def from_paths(paths) when is_list(paths) do
+  @spec from_paths([Path.t()], keyword()) :: t()
+  def from_paths(paths, opts \\ []) when is_list(paths) do
     files =
       paths
       |> Enum.uniq()
@@ -21,7 +24,20 @@ defmodule RustQ.Syn.Index do
         {path, path |> RustQ.Syn.parse_file!() |> attach_source_path(path)}
       end)
 
-    %__MODULE__{files: files}
+    %__MODULE__{files: files, package: Keyword.get(opts, :package)}
+  end
+
+  @doc "Builds an index for all Rust sources in a Cargo package."
+  @spec from_package(String.t(), keyword()) :: t()
+  def from_package(package_name, opts \\ []) when is_binary(package_name) do
+    package = RustQ.Cargo.package!(package_name, opts)
+
+    package.manifest_path
+    |> Path.dirname()
+    |> Path.join("**/*.rs")
+    |> Path.wildcard()
+    |> Enum.sort()
+    |> from_paths(package: package)
   end
 
   @doc "Returns all indexed top-level impl blocks."
