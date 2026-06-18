@@ -12,7 +12,7 @@ defmodule RustQ.SpecTest do
              rust: "paint::Cap",
              meta: %{native_name: "SkPaint_Cap", rust_type: "paint::Cap"}
            } =
-             RustQ.Spec.type(quote(do: RustQ.Type.native_enum("paint::Cap", skia: "SkPaint_Cap")))
+             RustQ.Spec.type(quote(do: RustQ.Type.native_enum(:"paint::Cap", skia: :SkPaint_Cap)))
   end
 
   test "lowers quoted tuple types structurally" do

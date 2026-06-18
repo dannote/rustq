@@ -382,15 +382,23 @@ defmodule RustQ.Meta.Type do
     raise ArgumentError, "expected R.raw atom marker, got: #{Macro.to_string(other)}"
   end
 
-  defp native_enum_type!(type) when is_atom(type), do: path(type)
-  defp native_enum_type!(type) when is_binary(type), do: {:raw, type}
+  defp native_enum_type!(type) when is_atom(type) do
+    type
+    |> Atom.to_string()
+    |> native_enum_type!()
+  end
+
+  defp native_enum_type!(type) when is_binary(type) do
+    if String.contains?(type, "::"), do: {:raw, type}, else: path(String.to_atom(type))
+  end
 
   defp native_enum_type!(other) do
     raise ArgumentError,
           "expected R.native_enum Rust type to be an atom or string, got: #{Macro.to_string(other)}"
   end
 
-  defp rust_type_value!(type) when is_atom(type) or is_binary(type), do: type
+  defp rust_type_value!(type) when is_atom(type), do: Atom.to_string(type)
+  defp rust_type_value!(type) when is_binary(type), do: type
 
   defp rust_type_value!(other) do
     raise ArgumentError,
