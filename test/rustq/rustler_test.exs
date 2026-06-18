@@ -125,6 +125,8 @@ defmodule RustQ.RustlerTest do
 
     assert code =~ "fn decode_opts<'a>(term: Term<'a>) -> NifResult<Vec<(Atom, Term<'a>)>>"
     assert code =~ "term.map_get(atoms::opts())?"
+    assert code =~ "fn decode_args<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>>"
+    assert code =~ "term.map_get(atoms::args())?"
     assert code =~ "fn opt_term<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> Option<Term<'a>>"
     assert code =~ "fn opt_f32<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<f32>"
     assert code =~ "fn opt_atom_option<'a>"

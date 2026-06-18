@@ -122,14 +122,15 @@ defmodule RustQ.Rustler do
   @doc """
   Builds keyword/options helper functions over `&[(Atom, Term<'a>)]`.
 
-  By default this includes `decode_opts`, `opt_term`, `opt_f32`,
-  `opt_f32_option`, `opt_f32_default`, `opt_bool_option`, and
+  By default this includes `decode_opts`, `decode_args`, `opt_term`,
+  `opt_f32`, `opt_f32_option`, `opt_f32_default`, `opt_bool_option`, and
   `opt_atom_option`. Pass `:include` or `:exclude` to select helpers.
 
-      RustQ.Rustler.opts_helpers(include: [:decode_opts, :opt_term])
+      RustQ.Rustler.opts_helpers(include: [:decode_opts, :decode_args, :opt_term])
 
   `decode_opts` extracts from `atoms::opts()` by default. Pass `:key` to use a
-  different map key expression.
+  different map key expression. `decode_args` extracts from `atoms::args()` by
+  default; pass `:args_key` to use a different map key expression.
   """
   @spec opts_helpers(keyword()) :: [Rust.Fragment.t()]
   def opts_helpers(opts \\ []), do: OptsHelpers.build(opts)

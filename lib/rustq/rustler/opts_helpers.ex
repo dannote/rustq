@@ -8,6 +8,7 @@ defmodule RustQ.Rustler.OptsHelpers do
 
   @names [
     :decode_opts,
+    :decode_args,
     :opt_term,
     :opt_f32,
     :opt_f32_option,
@@ -20,6 +21,11 @@ defmodule RustQ.Rustler.OptsHelpers do
     decode_opts: ~R"""
     fn decode_opts<'a>(term: Term<'a>) -> NifResult<Vec<(Atom, Term<'a>)>> {
         term.map_get(__rq_key!())?.decode::<Vec<(Atom, Term<'a>)>>()
+    }
+    """,
+    decode_args: ~R"""
+    fn decode_args<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>> {
+        term.map_get(__rq_args_key!())?.decode::<Vec<Term<'a>>>()
     }
     """,
     opt_term: ~R"""
@@ -81,7 +87,10 @@ defmodule RustQ.Rustler.OptsHelpers do
       @templates
       |> Map.fetch!(name)
       |> RustQ.render!("rustler_opts_helper.rs",
-        bind: [key: Rust.expr(Keyword.get(opts, :key, "atoms::opts()"))]
+        bind: [
+          key: Rust.expr(Keyword.get(opts, :key, "atoms::opts()")),
+          args_key: Rust.expr(Keyword.get(opts, :args_key, "atoms::args()"))
+        ]
       )
       |> Rust.item()
     end)
