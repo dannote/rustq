@@ -128,6 +128,11 @@ defmodule RustQ.Meta.Type do
     end
   end
 
+  defp parse({:{}, _, elements}, aliases) do
+    tuple_types = Enum.map(elements, &parse(&1, aliases))
+    tuple_type(tuple_types)
+  end
+
   defp parse({:|, _, _args} = union, aliases) do
     cond do
       option_union?(union) ->
@@ -154,8 +159,7 @@ defmodule RustQ.Meta.Type do
   defp parse(tuple, aliases)
        when is_tuple(tuple) and tuple_size(tuple) > 0 and not is_ast_tuple(tuple) do
     tuple_types = tuple |> Tuple.to_list() |> Enum.map(&parse(&1, aliases))
-    rendered = tuple_types |> Enum.map(& &1.rust) |> Enum.join(", ")
-    type(:tuple, {:raw, "#{rendered_tuple_prefix(tuple_size(tuple))}#{rendered})"})
+    tuple_type(tuple_types)
   end
 
   defp parse(atom, _aliases) when is_atom(atom), do: type(:type, path(atom))
@@ -351,8 +355,10 @@ defmodule RustQ.Meta.Type do
 
   defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
 
-  defp rendered_tuple_prefix(1), do: "("
-  defp rendered_tuple_prefix(_size), do: "("
+  defp tuple_type(tuple_types) do
+    rendered = tuple_types |> Enum.map(& &1.rust) |> Enum.join(", ")
+    type(:tuple, {:raw, "(#{rendered})"}, %{elements: tuple_types})
+  end
 
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),
     do: true

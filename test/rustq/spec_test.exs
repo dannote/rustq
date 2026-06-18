@@ -6,6 +6,13 @@ defmodule RustQ.SpecTest do
              "&skia_safe::Canvas"
   end
 
+  test "lowers quoted tuple types structurally" do
+    assert %RustQ.Meta.Type{kind: :tuple, rust: "(f64, f64)", meta: %{elements: elements}} =
+             RustQ.Spec.type(quote(do: {number(), number()}))
+
+    assert [%RustQ.Meta.Type{kind: :f64}, %RustQ.Meta.Type{kind: :f64}] = elements
+  end
+
   test "lowers BEAM abstract remote types" do
     canvas = {:remote_type, 1, [{:atom, 1, SkiaSafe.Canvas}, {:atom, 1, :t}, []]}
 
