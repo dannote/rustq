@@ -286,6 +286,21 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:==, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
 
+  defp lower_expr({:!=, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :ne, right: lower_expr(right)}
+
+  defp lower_expr({:<, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :lt, right: lower_expr(right)}
+
+  defp lower_expr({:<=, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :lte, right: lower_expr(right)}
+
+  defp lower_expr({:>, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :gt, right: lower_expr(right)}
+
+  defp lower_expr({:>=, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :gte, right: lower_expr(right)}
+
   defp lower_expr({:and, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :and, right: lower_expr(right)}
 

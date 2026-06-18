@@ -87,6 +87,27 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "raw_opts: &[(Atom, Term<'a>)]"
   end
 
+  test "defrust lowers comparison operators" do
+    defmodule ComparisonCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec positive(R.f32()) :: R.nif_result(R.unit())
+      defrust positive(radius) do
+        if radius > 0.0 do
+          use_positive(radius)
+        else
+          use_zero()
+        end
+
+        :ok
+      end
+    end
+
+    source = ComparisonCase.__rustq_source__()
+    assert source =~ "if radius > 0.0"
+  end
+
   test "defrust expands ordinary Elixir helper macros before lowering" do
     defmodule MacroBodyCase do
       use RustQ.Meta
