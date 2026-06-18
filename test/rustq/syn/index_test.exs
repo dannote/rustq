@@ -9,6 +9,25 @@ defmodule RustQ.Syn.IndexTest do
     assert map_size(index.files) > 0
   end
 
+  test "caches package indexes" do
+    RustQ.Syn.Index.clear_cached_package("rustq_nif",
+      manifest_path: "native/rustq_nif/Cargo.toml"
+    )
+
+    first =
+      RustQ.Syn.Index.cached_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
+
+    second =
+      RustQ.Syn.Index.cached_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
+
+    assert first == second
+    assert %RustQ.Cargo.Package{name: "rustq_nif"} = first.package
+  after
+    RustQ.Syn.Index.clear_cached_package("rustq_nif",
+      manifest_path: "native/rustq_nif/Cargo.toml"
+    )
+  end
+
   test "indexes enums by name" do
     path =
       write_source!("""

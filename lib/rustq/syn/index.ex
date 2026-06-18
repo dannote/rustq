@@ -40,6 +40,29 @@ defmodule RustQ.Syn.Index do
     |> from_paths(package: package)
   end
 
+  @doc "Returns a cached index for all Rust sources in a Cargo package."
+  @spec cached_package(String.t(), keyword()) :: t()
+  def cached_package(package_name, opts \\ []) when is_binary(package_name) do
+    key = {__MODULE__, :package, package_name, Enum.sort(opts)}
+
+    :persistent_term.get(key, nil) ||
+      tap(from_package(package_name, opts), &:persistent_term.put(key, &1))
+  end
+
+  @doc "Clears a cached package index."
+  @spec clear_cached_package(String.t(), keyword()) :: :ok
+  def clear_cached_package(package_name, opts \\ []) when is_binary(package_name) do
+    key = {__MODULE__, :package, package_name, Enum.sort(opts)}
+
+    try do
+      :persistent_term.erase(key)
+    rescue
+      ArgumentError -> :ok
+    end
+
+    :ok
+  end
+
   @doc "Returns all indexed top-level enums."
   @spec enums(t()) :: [RustQ.Syn.Enum.t()]
   def enums(%__MODULE__{files: files}) do
