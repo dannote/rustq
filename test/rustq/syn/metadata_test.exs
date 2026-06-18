@@ -52,7 +52,15 @@ defmodule RustQ.Syn.MetadataTest do
              %RustQ.Syn.Field{name: "y", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}}
            ] = fields
 
-    assert [%RustQ.Syn.Function{name: "lerp", source_line: 14, args: args, returns: "f32"}] =
+    assert [
+             %RustQ.Syn.Function{
+               name: "lerp",
+               source_line: 14,
+               signature: "fn lerp (a : f32 , b : f32) -> f32",
+               args: args,
+               returns: "f32"
+             }
+           ] =
              RustQ.Syn.functions(file)
 
     assert [
@@ -70,6 +78,7 @@ defmodule RustQ.Syn.MetadataTest do
                    name: "offset",
                    visibility: :public,
                    source_line: 20,
+                   signature: "fn offset (& mut self , dx : f32 , dy : f32) -> Self",
                    docs: ["Offset docs."],
                    args: method_args,
                    returns: "Self",

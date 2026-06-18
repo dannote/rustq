@@ -212,6 +212,7 @@ defmodule RustQ.Syn do
       :visibility,
       :source_line,
       :source_path,
+      :signature,
       docs: [],
       args: [],
       returns: nil,
@@ -223,6 +224,7 @@ defmodule RustQ.Syn do
             visibility: :public | :private,
             source_line: pos_integer() | nil,
             source_path: Path.t() | nil,
+            signature: String.t() | nil,
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -259,6 +261,7 @@ defmodule RustQ.Syn do
       :visibility,
       :source_line,
       :source_path,
+      :signature,
       docs: [],
       args: [],
       returns: nil,
@@ -270,6 +273,7 @@ defmodule RustQ.Syn do
             visibility: :public | :private,
             source_line: pos_integer() | nil,
             source_path: Path.t() | nil,
+            signature: String.t() | nil,
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -440,13 +444,14 @@ defmodule RustQ.Syn do
     }
   end
 
-  defp decode_item!({"function", name, visibility, source_line, docs, args, returns}) do
+  defp decode_item!({"function", name, visibility, {source_line, signature}, docs, args, returns}) do
     {returns, returns_ast} = decode_return(returns)
 
     %RustQ.Syn.Function{
       name: name,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
+      signature: signature,
       docs: docs,
       args: decode_args(args),
       returns: returns,
@@ -469,13 +474,14 @@ defmodule RustQ.Syn do
     %RustQ.Syn.Field{name: name, type: type, type_ast: decode_type!(type_ast)}
   end
 
-  defp decode_method!({"method", name, visibility, source_line, docs, args, returns}) do
+  defp decode_method!({"method", name, visibility, {source_line, signature}, docs, args, returns}) do
     {returns, returns_ast} = decode_return(returns)
 
     %RustQ.Syn.Method{
       name: name,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
+      signature: signature,
       docs: docs,
       args: decode_args(args),
       returns: returns,

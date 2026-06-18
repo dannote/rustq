@@ -14,4 +14,19 @@ defmodule RustQ.CargoTest do
     assert RustQ.Cargo.package_source!("rustq_nif", manifest_path: @manifest_path) ==
              Path.expand("native/rustq_nif")
   end
+
+  test "builds source links for registry packages" do
+    package = %RustQ.Cargo.Package{
+      name: "skia-safe",
+      version: "0.88.0",
+      source: "registry+https://github.com/rust-lang/crates.io-index",
+      manifest_path: "/cargo/registry/skia-safe-0.88.0/Cargo.toml"
+    }
+
+    assert RustQ.Cargo.source_link(
+             package,
+             "/cargo/registry/skia-safe-0.88.0/src/core/canvas.rs",
+             1351
+           ) == "https://docs.rs/crate/skia-safe/0.88.0/source/src/core/canvas.rs#L1351"
+  end
 end

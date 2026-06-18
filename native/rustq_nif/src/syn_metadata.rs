@@ -112,7 +112,7 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "function",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
-                line(item.sig.ident.span()),
+                (line(item.sig.ident.span()), item.sig.to_token_stream().to_string()),
                 docs(&item.attrs),
                 item.sig
                     .inputs
@@ -150,7 +150,7 @@ fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
                 "method",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
-                line(item.sig.ident.span()),
+                (line(item.sig.ident.span()), item.sig.to_token_stream().to_string()),
                 docs(&item.attrs),
                 item.sig
                     .inputs
