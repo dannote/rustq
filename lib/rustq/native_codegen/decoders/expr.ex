@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Decoders.Expr do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec decode_expr_var(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_var(term) do
@@ -244,6 +242,4 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     expr = unwrap!(Super.decode_expr(unwrap!(required_field(term, "expr"))))
     expr!(err(expr))
   end
-
-  def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

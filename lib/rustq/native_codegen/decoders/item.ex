@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Decoders.Item do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec decode_ast_use(term()) :: R.nif_result(ItemUse.t())
   defrust decode_ast_use(term) do
@@ -158,6 +156,4 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     tuple = unwrap!(Super.decode_type_list(unwrap!(required_field(term, "tuple"))))
     Super.parse_enum_variant(name, tuple)
   end
-
-  def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

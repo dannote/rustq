@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Decoders.Pat do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec decode_pat_var(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_var(term) do
@@ -69,6 +67,4 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
     fields = unwrap!(Super.decode_pat_struct_fields(unwrap!(required_field(term, "fields"))))
     pat!(struct(path, fields))
   end
-
-  def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

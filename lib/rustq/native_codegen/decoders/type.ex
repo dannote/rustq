@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Decoders.Type do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec path_parts(term()) :: R.nif_result(String.t())
   defrust path_parts(term) do
@@ -61,6 +59,4 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
     inner = unwrap!(Super.decode_type(unwrap!(required_field(term, "inner"))))
     Super.parse_type_generic("Vec", [inner])
   end
-
-  def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

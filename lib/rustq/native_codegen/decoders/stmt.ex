@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Decoders.Stmt do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec decode_stmt_assign(term()) :: R.nif_result(Stmt.t())
   defrust decode_stmt_assign(term) do
@@ -64,6 +62,4 @@ defmodule RustQ.NativeCodegen.Decoders.Stmt do
     else_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "else"))))
     Super.parse_let_else_stmt(pattern, expr, else_block)
   end
-
-  def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

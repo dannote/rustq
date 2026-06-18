@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Decoders.Arm do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec decode_arm(term()) :: R.nif_result(Arm.t())
   defrust decode_arm(term) do
@@ -18,6 +16,4 @@ defmodule RustQ.NativeCodegen.Decoders.Arm do
       arm!(pat, block)
     end
   end
-
-  def asts, do: Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
 end

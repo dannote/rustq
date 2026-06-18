@@ -1,9 +1,7 @@
 defmodule RustQ.NativeCodegen.Helpers do
   @moduledoc false
 
-  use RustQ.Meta
-
-  alias RustQ.Type, as: R
+  use RustQ.NativeCodegen.DefrustModule
 
   @spec required_field(term(), R.str()) :: R.nif_result(term())
   defrust required_field(term, key) do
@@ -53,9 +51,5 @@ defmodule RustQ.NativeCodegen.Helpers do
     else
       {:error, badarg()}
     end
-  end
-
-  def asts do
-    Enum.map(__rustq_asts__(), &%{&1 | vis: :crate})
   end
 end
