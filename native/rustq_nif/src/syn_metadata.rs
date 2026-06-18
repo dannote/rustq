@@ -1,6 +1,9 @@
 use quote::ToTokens;
 use rustler::{Encoder, Env, NifResult, Term};
-use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
+use syn::{
+    Attribute, Expr, ExprLit, Fields, FnArg, GenericArgument, ImplItem, Item, Lit, PathArguments,
+    ReturnType, Type, TypeParamBound, Visibility,
+};
 
 use crate::{atoms, template_error};
 
@@ -51,6 +54,7 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "enum",
                 item.ident.to_string(),
                 visibility(&item.vis),
+                docs(&item.attrs),
                 item.variants
                     .into_iter()
                     .map(|variant| variant.ident.to_string())
@@ -63,7 +67,8 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "struct",
                 item.ident.to_string(),
                 visibility(&item.vis),
-                fields(item.fields),
+                docs(&item.attrs),
+                fields(env, item.fields),
             )
                 .encode(env),
         ),
@@ -72,21 +77,24 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "function",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
+                docs(&item.attrs),
                 item.sig
                     .inputs
                     .into_iter()
-                    .map(function_arg)
+                    .map(|arg| function_arg(env, arg))
                     .collect::<Vec<_>>(),
-                return_type(item.sig.output),
+                return_type(env, item.sig.output),
             )
                 .encode(env),
         ),
         Item::Impl(item) => Some(
             (
                 "impl",
-                type_string(*item.self_ty),
+                type_string(&item.self_ty),
+                type_metadata(env, &item.self_ty),
                 item.trait_
                     .map(|(_bang, path, _for)| path.to_token_stream().to_string()),
+                docs(&item.attrs),
                 item.items
                     .into_iter()
                     .filter_map(|item| impl_method_term(env, item))
@@ -105,12 +113,13 @@ fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
                 "method",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
+                docs(&item.attrs),
                 item.sig
                     .inputs
                     .into_iter()
-                    .map(function_arg)
+                    .map(|arg| function_arg(env, arg))
                     .collect::<Vec<_>>(),
-                return_type(item.sig.output),
+                return_type(env, item.sig.output),
             )
                 .encode(env),
         ),
@@ -118,25 +127,35 @@ fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
     }
 }
 
-fn fields(fields: Fields) -> Vec<(Option<String>, String)> {
+fn fields<'a>(env: Env<'a>, fields: Fields) -> Vec<(Option<String>, String, Term<'a>)> {
     fields
         .into_iter()
         .map(|field| {
+            let ty = field.ty;
             (
                 field.ident.map(|ident| ident.to_string()),
-                type_string(field.ty),
+                type_string(&ty),
+                type_metadata(env, &ty),
             )
         })
         .collect()
 }
 
-fn function_arg(arg: FnArg) -> (Option<String>, String) {
+fn function_arg<'a>(env: Env<'a>, arg: FnArg) -> (Option<String>, String, Term<'a>) {
     match arg {
         FnArg::Receiver(receiver) => (
             Some("self".to_string()),
             receiver.to_token_stream().to_string(),
+            receiver_type_metadata(env, &receiver),
         ),
-        FnArg::Typed(arg) => (pat_name(*arg.pat), type_string(*arg.ty)),
+        FnArg::Typed(arg) => {
+            let ty = *arg.ty;
+            (
+                pat_name(*arg.pat),
+                type_string(&ty),
+                type_metadata(env, &ty),
+            )
+        }
     }
 }
 
@@ -147,15 +166,141 @@ fn pat_name(pat: syn::Pat) -> Option<String> {
     }
 }
 
-fn return_type(output: ReturnType) -> Option<String> {
+fn return_type<'a>(env: Env<'a>, output: ReturnType) -> Option<(String, Term<'a>)> {
     match output {
         ReturnType::Default => None,
-        ReturnType::Type(_, ty) => Some(type_string(*ty)),
+        ReturnType::Type(_, ty) => Some((type_string(&ty), type_metadata(env, &ty))),
     }
 }
 
-fn type_string(ty: Type) -> String {
+fn type_string(ty: &Type) -> String {
     ty.to_token_stream().to_string()
+}
+
+fn receiver_type_metadata<'a>(env: Env<'a>, receiver: &syn::Receiver) -> Term<'a> {
+    let self_term = ("self", "Self").encode(env);
+
+    if let Some((_and, _lifetime)) = &receiver.reference {
+        (
+            "ref",
+            receiver.to_token_stream().to_string(),
+            receiver.mutability.is_some(),
+            self_term,
+        )
+            .encode(env)
+    } else {
+        self_term
+    }
+}
+
+fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
+    let code = type_string(ty);
+
+    match ty {
+        Type::Path(path) if path.qself.is_none() && path.path.is_ident("Self") => {
+            ("self", code).encode(env)
+        }
+        Type::Path(path) if path.qself.is_none() => path_type_metadata(env, code, &path.path),
+        Type::Reference(reference) => (
+            "ref",
+            code,
+            reference.mutability.is_some(),
+            type_metadata(env, &reference.elem),
+        )
+            .encode(env),
+        Type::Tuple(tuple) => (
+            "tuple",
+            code,
+            tuple
+                .elems
+                .iter()
+                .map(|elem| type_metadata(env, elem))
+                .collect::<Vec<_>>(),
+        )
+            .encode(env),
+        Type::ImplTrait(impl_trait) => (
+            "impl_trait",
+            code,
+            impl_trait
+                .bounds
+                .iter()
+                .filter_map(|bound| trait_bound_metadata(env, bound))
+                .collect::<Vec<_>>(),
+        )
+            .encode(env),
+        Type::Slice(slice) => ("slice", code, type_metadata(env, &slice.elem)).encode(env),
+        Type::Array(array) => ("array", code, type_metadata(env, &array.elem)).encode(env),
+        _ => ("raw", code).encode(env),
+    }
+}
+
+fn path_type_metadata<'a>(env: Env<'a>, code: String, path: &syn::Path) -> Term<'a> {
+    let segments = path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>();
+
+    let args = path
+        .segments
+        .last()
+        .map(|segment| generic_args(env, &segment.arguments))
+        .unwrap_or_default();
+
+    let name = segments.last().cloned().unwrap_or_else(|| code.clone());
+
+    match name.as_str() {
+        "Option" if args.len() == 1 => ("option", code, args[0]).encode(env),
+        "Result" if args.len() == 2 => ("result", code, args[0], args[1]).encode(env),
+        _ => ("path", code, segments, args).encode(env),
+    }
+}
+
+fn trait_bound_metadata<'a>(env: Env<'a>, bound: &TypeParamBound) -> Option<Term<'a>> {
+    match bound {
+        TypeParamBound::Trait(trait_bound) => Some(path_type_metadata(
+            env,
+            trait_bound.path.to_token_stream().to_string(),
+            &trait_bound.path,
+        )),
+        _ => None,
+    }
+}
+
+fn generic_args<'a>(env: Env<'a>, arguments: &PathArguments) -> Vec<Term<'a>> {
+    match arguments {
+        PathArguments::AngleBracketed(args) => args
+            .args
+            .iter()
+            .filter_map(|arg| match arg {
+                GenericArgument::Type(ty) => Some(type_metadata(env, ty)),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn docs(attrs: &[Attribute]) -> Vec<String> {
+    attrs
+        .iter()
+        .filter_map(|attr| {
+            if !attr.path().is_ident("doc") {
+                return None;
+            }
+
+            match &attr.meta {
+                syn::Meta::NameValue(name_value) => match &name_value.value {
+                    Expr::Lit(ExprLit {
+                        lit: Lit::Str(value),
+                        ..
+                    }) => Some(value.value().trim().to_string()),
+                    _ => None,
+                },
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 fn visibility(vis: &Visibility) -> &'static str {

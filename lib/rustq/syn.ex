@@ -17,76 +17,175 @@ defmodule RustQ.Syn do
     @type t :: %__MODULE__{items: [RustQ.Syn.item()]}
   end
 
+  defmodule Type do
+    @moduledoc "Structured Rust type metadata."
+
+    defmodule Path do
+      @moduledoc "Rust path type metadata."
+      defstruct [:code, :name, segments: [], args: []]
+
+      @type t :: %__MODULE__{
+              code: String.t(),
+              name: String.t(),
+              segments: [String.t()],
+              args: [RustQ.Syn.type()]
+            }
+    end
+
+    defmodule Ref do
+      @moduledoc "Rust reference type metadata."
+      defstruct [:code, :inner, mutable: false]
+
+      @type t :: %__MODULE__{code: String.t(), mutable: boolean(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Tuple do
+      @moduledoc "Rust tuple type metadata."
+      defstruct [:code, elems: []]
+
+      @type t :: %__MODULE__{code: String.t(), elems: [RustQ.Syn.type()]}
+    end
+
+    defmodule Option do
+      @moduledoc "Rust Option<T> type metadata."
+      defstruct [:code, :inner]
+
+      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Result do
+      @moduledoc "Rust Result<T, E> type metadata."
+      defstruct [:code, :ok, :error]
+
+      @type t :: %__MODULE__{code: String.t(), ok: RustQ.Syn.type(), error: RustQ.Syn.type()}
+    end
+
+    defmodule ImplTrait do
+      @moduledoc "Rust impl Trait type metadata."
+      defstruct [:code, traits: []]
+
+      @type t :: %__MODULE__{code: String.t(), traits: [RustQ.Syn.type()]}
+    end
+
+    defmodule Slice do
+      @moduledoc "Rust slice type metadata."
+      defstruct [:code, :inner]
+
+      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Array do
+      @moduledoc "Rust array type metadata."
+      defstruct [:code, :inner]
+
+      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Self do
+      @moduledoc "Rust Self type metadata."
+      defstruct [:code]
+
+      @type t :: %__MODULE__{code: String.t()}
+    end
+
+    defmodule Raw do
+      @moduledoc "Fallback Rust type metadata."
+      defstruct [:code]
+
+      @type t :: %__MODULE__{code: String.t()}
+    end
+  end
+
   defmodule Enum do
     @moduledoc "Rust enum metadata."
-    defstruct [:name, :visibility, variants: []]
+    defstruct [:name, :visibility, docs: [], variants: []]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            docs: [String.t()],
             variants: [String.t()]
           }
   end
 
   defmodule Struct do
     @moduledoc "Rust struct metadata."
-    defstruct [:name, :visibility, fields: []]
+    defstruct [:name, :visibility, docs: [], fields: []]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            docs: [String.t()],
             fields: [RustQ.Syn.Field.t()]
           }
   end
 
   defmodule Field do
     @moduledoc "Rust struct field metadata."
-    defstruct [:name, :type]
+    defstruct [:name, :type, :type_ast]
 
-    @type t :: %__MODULE__{name: String.t() | nil, type: String.t()}
+    @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
   end
 
   defmodule Function do
     @moduledoc "Rust free function metadata."
-    defstruct [:name, :visibility, args: [], returns: nil]
+    defstruct [:name, :visibility, docs: [], args: [], returns: nil, returns_ast: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
-            returns: String.t() | nil
+            returns: String.t() | nil,
+            returns_ast: RustQ.Syn.type() | nil
           }
   end
 
   defmodule Arg do
     @moduledoc "Rust function argument metadata."
-    defstruct [:name, :type]
+    defstruct [:name, :type, :type_ast]
 
-    @type t :: %__MODULE__{name: String.t() | nil, type: String.t()}
+    @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
   end
 
   defmodule Impl do
     @moduledoc "Rust impl block metadata."
-    defstruct [:target, :trait, methods: []]
+    defstruct [:target, :target_ast, :trait, docs: [], methods: []]
 
     @type t :: %__MODULE__{
             target: String.t(),
+            target_ast: RustQ.Syn.type(),
             trait: String.t() | nil,
+            docs: [String.t()],
             methods: [RustQ.Syn.Method.t()]
           }
   end
 
   defmodule Method do
     @moduledoc "Rust impl method metadata."
-    defstruct [:name, :visibility, args: [], returns: nil]
+    defstruct [:name, :visibility, docs: [], args: [], returns: nil, returns_ast: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
-            returns: String.t() | nil
+            returns: String.t() | nil,
+            returns_ast: RustQ.Syn.type() | nil
           }
   end
+
+  @type type ::
+          RustQ.Syn.Type.Path.t()
+          | RustQ.Syn.Type.Ref.t()
+          | RustQ.Syn.Type.Tuple.t()
+          | RustQ.Syn.Type.Option.t()
+          | RustQ.Syn.Type.Result.t()
+          | RustQ.Syn.Type.ImplTrait.t()
+          | RustQ.Syn.Type.Slice.t()
+          | RustQ.Syn.Type.Array.t()
+          | RustQ.Syn.Type.Self.t()
+          | RustQ.Syn.Type.Raw.t()
 
   @type item ::
           RustQ.Syn.Enum.t()
@@ -172,47 +271,112 @@ defmodule RustQ.Syn do
     end
   end
 
-  defp decode_item!({"enum", name, visibility, variants}) do
-    %RustQ.Syn.Enum{name: name, visibility: decode_visibility!(visibility), variants: variants}
+  defp decode_item!({"enum", name, visibility, docs, variants}) do
+    %RustQ.Syn.Enum{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      docs: docs,
+      variants: variants
+    }
   end
 
-  defp decode_item!({"struct", name, visibility, fields}) do
+  defp decode_item!({"struct", name, visibility, docs, fields}) do
     %RustQ.Syn.Struct{
       name: name,
       visibility: decode_visibility!(visibility),
-      fields:
-        Elixir.Enum.map(fields, fn {name, type} -> %RustQ.Syn.Field{name: name, type: type} end)
+      docs: docs,
+      fields: Elixir.Enum.map(fields, &decode_field!/1)
     }
   end
 
-  defp decode_item!({"function", name, visibility, args, returns}) do
+  defp decode_item!({"function", name, visibility, docs, args, returns}) do
+    {returns, returns_ast} = decode_return(returns)
+
     %RustQ.Syn.Function{
       name: name,
       visibility: decode_visibility!(visibility),
+      docs: docs,
       args: decode_args(args),
-      returns: returns
+      returns: returns,
+      returns_ast: returns_ast
     }
   end
 
-  defp decode_item!({"impl", target, trait, methods}) do
+  defp decode_item!({"impl", target, target_ast, trait, docs, methods}) do
     %RustQ.Syn.Impl{
       target: target,
+      target_ast: decode_type!(target_ast),
       trait: trait,
+      docs: docs,
       methods: Elixir.Enum.map(methods, &decode_method!/1)
     }
   end
 
-  defp decode_method!({"method", name, visibility, args, returns}) do
+  defp decode_field!({name, type, type_ast}) do
+    %RustQ.Syn.Field{name: name, type: type, type_ast: decode_type!(type_ast)}
+  end
+
+  defp decode_method!({"method", name, visibility, docs, args, returns}) do
+    {returns, returns_ast} = decode_return(returns)
+
     %RustQ.Syn.Method{
       name: name,
       visibility: decode_visibility!(visibility),
+      docs: docs,
       args: decode_args(args),
-      returns: returns
+      returns: returns,
+      returns_ast: returns_ast
     }
   end
 
-  defp decode_args(args),
-    do: Elixir.Enum.map(args, fn {name, type} -> %RustQ.Syn.Arg{name: name, type: type} end)
+  defp decode_args(args), do: Elixir.Enum.map(args, &decode_arg!/1)
+
+  defp decode_arg!({name, type, type_ast}) do
+    %RustQ.Syn.Arg{name: name, type: type, type_ast: decode_type!(type_ast)}
+  end
+
+  defp decode_return(nil), do: {nil, nil}
+  defp decode_return({type, type_ast}), do: {type, decode_type!(type_ast)}
+
+  defp decode_type!({"path", code, segments, args}) do
+    %RustQ.Syn.Type.Path{
+      code: code,
+      name: List.last(segments),
+      segments: segments,
+      args: Elixir.Enum.map(args, &decode_type!/1)
+    }
+  end
+
+  defp decode_type!({"ref", code, mutable, inner}) do
+    %RustQ.Syn.Type.Ref{code: code, mutable: mutable, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"tuple", code, elems}) do
+    %RustQ.Syn.Type.Tuple{code: code, elems: Elixir.Enum.map(elems, &decode_type!/1)}
+  end
+
+  defp decode_type!({"option", code, inner}) do
+    %RustQ.Syn.Type.Option{code: code, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"result", code, ok, error}) do
+    %RustQ.Syn.Type.Result{code: code, ok: decode_type!(ok), error: decode_type!(error)}
+  end
+
+  defp decode_type!({"impl_trait", code, traits}) do
+    %RustQ.Syn.Type.ImplTrait{code: code, traits: Elixir.Enum.map(traits, &decode_type!/1)}
+  end
+
+  defp decode_type!({"slice", code, inner}) do
+    %RustQ.Syn.Type.Slice{code: code, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"array", code, inner}) do
+    %RustQ.Syn.Type.Array{code: code, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"self", code}), do: %RustQ.Syn.Type.Self{code: code}
+  defp decode_type!({"raw", code}), do: %RustQ.Syn.Type.Raw{code: code}
 
   defp decode_visibility!("public"), do: :public
   defp decode_visibility!("private"), do: :private
