@@ -5,7 +5,7 @@ defmodule RustQ.NativeRefTest do
     ref = RustQ.NativeRef.new("Canvas", "draw_rect", package: "skia-safe")
 
     assert ref == %RustQ.NativeRef{package: "skia-safe", target: "Canvas", member: "draw_rect"}
-    assert RustQ.NativeRef.format(ref) == "skia-safe::Canvas::draw_rect"
+    assert RustQ.NativeRef.format(ref) == "skia_safe::Canvas::draw_rect"
   end
 
   test "formats local native refs" do

@@ -27,6 +27,8 @@ defmodule RustQ.NativeRef do
     do: "#{target}::#{member}"
 
   def format(%__MODULE__{package: package, target: target, member: member}) do
-    "#{package}::#{target}::#{member}"
+    "#{crate_name(package)}::#{target}::#{member}"
   end
+
+  defp crate_name(package), do: String.replace(package, "-", "_")
 end
