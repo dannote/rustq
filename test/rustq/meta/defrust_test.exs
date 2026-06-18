@@ -112,6 +112,26 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "apply_blend_mode(&mut paint"
   end
 
+  test "defrust infers mutable let bindings from statement method calls" do
+    defmodule MutableMethodReceiverCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec build() :: R.nif_result(R.unit())
+      defrust build() do
+        builder = PathBuilder.new()
+        builder.add_circle(Point.new(0.0, 0.0), 1.0, none())
+        use_path(builder.detach())
+
+        :ok
+      end
+    end
+
+    source = MutableMethodReceiverCase.__rustq_source__()
+    assert source =~ "let mut builder = PathBuilder::new();"
+    assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
+  end
+
   test "defrust lowers arithmetic operators" do
     defmodule ArithmeticCase do
       use RustQ.Meta

@@ -669,7 +669,7 @@ defmodule RustQ.Meta.Lower do
   defp infer_expr_type(_expression, _vars), do: nil
 
   defp infer_mutability(body) do
-    mutable_vars = body |> collect_mut_refs() |> MapSet.new()
+    mutable_vars = body |> collect_mutable_let_refs() |> MapSet.new()
     Enum.map(body, &mark_mutable_lets(&1, mutable_vars))
   end
 
@@ -757,6 +757,31 @@ defmodule RustQ.Meta.Lower do
   defp mark_mutable_expr_fallback(expr, _mutable_vars), do: expr
 
   defp collect_mut_refs(term), do: do_collect_mut_refs(term, [])
+
+  defp collect_mutable_let_refs(term), do: do_collect_mutable_let_refs(term, [])
+
+  defp do_collect_mutable_let_refs(
+         %AST.ExprStmt{expr: %AST.MethodCall{receiver: %AST.Var{name: name}}} = stmt,
+         acc
+       ) do
+    do_collect_mutable_let_refs(stmt.expr, [name | acc])
+  end
+
+  defp do_collect_mutable_let_refs(%AST.Ref{mutable: true, expr: %AST.Var{name: name}} = ref, acc) do
+    do_collect_mutable_let_refs(ref.expr, [name | acc])
+  end
+
+  defp do_collect_mutable_let_refs(%{__struct__: _struct} = term, acc) do
+    term
+    |> Map.from_struct()
+    |> Map.values()
+    |> Enum.reduce(acc, &do_collect_mutable_let_refs/2)
+  end
+
+  defp do_collect_mutable_let_refs(list, acc) when is_list(list),
+    do: Enum.reduce(list, acc, &do_collect_mutable_let_refs/2)
+
+  defp do_collect_mutable_let_refs(_other, acc), do: acc
 
   defp do_collect_mut_refs(%AST.Ref{mutable: true, expr: %AST.Var{name: name}} = ref, acc) do
     do_collect_mut_refs(ref.expr, [name | acc])
