@@ -259,6 +259,12 @@ defmodule RustQ.Syn do
       "fn #{name}(#{rendered_args})#{rendered_returns}"
     end
 
+    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: %RustQ.Syn.Type.Ref{mutable: false}}),
+      do: "&self"
+
+    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: %RustQ.Syn.Type.Ref{mutable: true}}),
+      do: "&mut self"
+
     defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: type}), do: render_type(type)
     defp render_arg(%RustQ.Syn.Arg{name: nil, type_ast: type}), do: render_type(type)
 
@@ -273,10 +279,10 @@ defmodule RustQ.Syn do
     end
 
     defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: false}),
-      do: "&self"
+      do: "&Self"
 
     defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: true}),
-      do: "&mut self"
+      do: "&mut Self"
 
     defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: false}),
       do: "&#{render_type(inner)}"
