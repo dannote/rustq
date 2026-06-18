@@ -162,4 +162,15 @@ defmodule RustQ.Syn.MetadataTest do
 
     assert RustQ.Syn.atom_references!(source) == ["error", "ok"]
   end
+
+  test "returns receiver method references from parsed Rust source" do
+    source = """
+    fn draw(canvas: &Canvas, paint: &Paint) {
+        canvas.save();
+        canvas.draw_rect(Rect::default(), paint);
+    }
+    """
+
+    assert RustQ.Syn.method_references!(source) == ["draw_rect", "save"]
+  end
 end

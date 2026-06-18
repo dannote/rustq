@@ -2,8 +2,8 @@ use quote::ToTokens;
 use rustler::{Encoder, Env, NifResult, Term};
 use syn::visit::{self, Visit};
 use syn::{
-    Attribute, Expr, ExprCall, ExprLit, ExprPath, Fields, FnArg, GenericArgument, ImplItem, Item,
-    Lit, PathArguments, ReturnType, Type, TypeParamBound, Visibility,
+    Attribute, Expr, ExprCall, ExprLit, ExprMethodCall, ExprPath, Fields, FnArg, GenericArgument,
+    ImplItem, Item, Lit, PathArguments, ReturnType, Type, TypeParamBound, Visibility,
 };
 
 use crate::{atoms, template_error};
@@ -23,6 +23,19 @@ pub(crate) fn atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Ter
             visitor.atoms.sort();
             visitor.atoms.dedup();
             Ok((atoms::ok(), visitor.atoms).encode(env))
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn method_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let mut visitor = MethodReferenceVisitor { methods: Vec::new() };
+            visitor.visit_file(&file);
+            visitor.methods.sort();
+            visitor.methods.dedup();
+            Ok((atoms::ok(), visitor.methods).encode(env))
         }
         Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
     }
@@ -56,6 +69,17 @@ pub(crate) fn enum_variants<'a>(
 
 struct AtomReferenceVisitor {
     atoms: Vec<String>,
+}
+
+struct MethodReferenceVisitor {
+    methods: Vec<String>,
+}
+
+impl<'ast> Visit<'ast> for MethodReferenceVisitor {
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        self.methods.push(node.method.to_string());
+        visit::visit_expr_method_call(self, node);
+    }
 }
 
 impl<'ast> Visit<'ast> for AtomReferenceVisitor {

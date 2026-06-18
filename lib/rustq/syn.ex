@@ -482,6 +482,29 @@ defmodule RustQ.Syn do
     end
   end
 
+  @doc """
+  Returns method names referenced as receiver method calls in Rust source.
+
+  For example, `canvas.draw_rect(...)` contributes `"draw_rect"`.
+  """
+  @spec method_references(String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def method_references(source) when is_binary(source),
+    do: RustQ.Native.syn_method_references(source)
+
+  @doc "Returns method names referenced as receiver method calls in Rust source, raising on failure."
+  @spec method_references!(String.t()) :: [String.t()]
+  def method_references!(source) do
+    case method_references(source) do
+      {:ok, methods} ->
+        methods
+
+      {:error, errors} ->
+        raise Error,
+          message: "RustQ method reference introspection error: #{inspect(errors)}",
+          errors: errors
+    end
+  end
+
   @doc "Returns variants for a named top-level enum from Rust source, raising on failure."
   @spec enum_variants!(String.t(), String.t()) :: [String.t()]
   def enum_variants!(source, enum_name) do
