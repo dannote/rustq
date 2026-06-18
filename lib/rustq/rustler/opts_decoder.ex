@@ -11,6 +11,17 @@ defmodule RustQ.Rustler.OptsDecoder do
   require A
   require I
 
+  @spec field_spec(atom(), RustQ.Meta.Type.t(), keyword()) :: keyword()
+  def field_spec(name, %RustQ.Meta.Type{} = type, opts \\ []) do
+    required? = Keyword.get(opts, :required, false)
+    category = opts_category(type)
+
+    [
+      type: opts_field_type(category, type, required?),
+      decode: opts_decode(category, name, required?)
+    ]
+  end
+
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts) do
     lifetime = Keyword.get(opts, :lifetime)
@@ -20,9 +31,7 @@ defmodule RustQ.Rustler.OptsDecoder do
     phantom? = Keyword.get(opts, :phantom, lifetime != nil)
 
     [
-      Rust.item(
-        RustQ.Rust.AST.Render.render_item(struct_ast(name, fields, phantom?, lifetime))
-      ),
+      Rust.item(RustQ.Rust.AST.Render.render_item(struct_ast(name, fields, phantom?, lifetime))),
       Rust.item(
         RustQ.Rust.AST.Render.render_item(
           decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg)
@@ -47,6 +56,69 @@ defmodule RustQ.Rustler.OptsDecoder do
       returns: %AST.TypeNifResult{inner: struct_type} do
       A.return(A.ok(A.struct([name], inits(fields, phantom?))))
     end
+  end
+
+  defp opts_field_type(:enum, _type, true), do: "Atom"
+  defp opts_field_type(:term, _type, true), do: "Term<'a>"
+  defp opts_field_type(_category, type, true), do: rust_type(type)
+  defp opts_field_type(:enum, _type, false), do: "Option<Atom>"
+  defp opts_field_type(:term, _type, false), do: "Option<Term<'a>>"
+  defp opts_field_type(_category, type, false), do: "Option<#{rust_type(type)}>"
+
+  defp opts_decode(:number, name, true),
+    do: RustQ.Rustler.Decode.opt_decode(:opt_f32, :opts, name)
+
+  defp opts_decode(:boolean, name, true),
+    do: RustQ.Rustler.Decode.required_opt_decode(:opt_bool_option, :opts, name)
+
+  defp opts_decode(:atom, name, true),
+    do: RustQ.Rustler.Decode.required_opt_decode(:opt_atom_option, :opts, name)
+
+  defp opts_decode(:enum, name, true),
+    do: RustQ.Rustler.Decode.required_opt_decode(:opt_atom_option, :opts, name)
+
+  defp opts_decode(:integer, name, true),
+    do: RustQ.Rustler.Decode.required_term_decode(:opts, name, :i64)
+
+  defp opts_decode(:string, name, true),
+    do: RustQ.Rustler.Decode.required_term_decode(:opts, name, :String)
+
+  defp opts_decode(:term, name, true), do: RustQ.Rustler.Decode.required_term(:opts, name)
+
+  defp opts_decode(:number, name, false),
+    do: RustQ.Rustler.Decode.opt_decode(:opt_f32_option, :opts, name)
+
+  defp opts_decode(:boolean, name, false),
+    do: RustQ.Rustler.Decode.opt_decode(:opt_bool_option, :opts, name)
+
+  defp opts_decode(:atom, name, false),
+    do: RustQ.Rustler.Decode.opt_decode(:opt_atom_option, :opts, name)
+
+  defp opts_decode(:enum, name, false),
+    do: RustQ.Rustler.Decode.opt_decode(:opt_atom_option, :opts, name)
+
+  defp opts_decode(:integer, name, false),
+    do: RustQ.Rustler.Decode.optional_term_decode(:opts, name, :i64)
+
+  defp opts_decode(:string, name, false),
+    do: RustQ.Rustler.Decode.optional_term_decode(:opts, name, :String)
+
+  defp opts_decode(:term, name, false), do: A.call(:opt_term, [:opts, A.atom(name)])
+
+  defp opts_category(%RustQ.Meta.Type{} = type) do
+    case RustQ.Meta.Type.category(type) do
+      category when category in [:number, :integer, :boolean, :atom, :string, :term, :enum] ->
+        category
+
+      _category ->
+        :term
+    end
+  end
+
+  defp rust_type(%RustQ.Meta.Type{ast: ast}) do
+    ast
+    |> RustQ.Rust.AST.Render.render_type()
+    |> IO.iodata_to_binary()
   end
 
   defp opts_arg_type("opts: " <> type), do: type

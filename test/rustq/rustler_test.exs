@@ -485,6 +485,34 @@ defmodule RustQ.RustlerTest do
     assert code =~ "_phantom: std::marker::PhantomData"
   end
 
+  test "builds option struct decoders from typed field specs" do
+    fields = [
+      x:
+        RustQ.Rustler.OptsDecoder.field_spec(:x, RustQ.Spec.type(quote(do: RustQ.Type.f32())),
+          required: true
+        ),
+      mode:
+        RustQ.Rustler.OptsDecoder.field_spec(
+          :mode,
+          RustQ.Spec.type(quote(do: RustQ.Type.enum(:mode))), required: true),
+      label: RustQ.Rustler.OptsDecoder.field_spec(:label, RustQ.Spec.type(quote(do: String.t())))
+    ]
+
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("typed_opts.rs",
+        splice: [items: RustQ.Rustler.opts_decoder(:TypedOpts, lifetime: :a, fields: fields)]
+      )
+
+    assert code =~ "pub x: f32"
+    assert code =~ "pub mode: Atom"
+    assert code =~ "pub label: Option<String>"
+    assert code =~ "x: opt_f32(opts, atoms::x())?"
+    assert code =~ "mode: opt_atom_option(opts, atoms::mode())?.ok_or(rustler::Error::BadArg)?"
+    assert code =~ "match opt_term(opts, atoms::label())"
+    assert code =~ "Some(term) => Some(term.decode::<String>()?)"
+  end
+
   test "builds bare atoms blocks" do
     code =
       RustQ.render!("__rq_items!();", "atoms.rs",
