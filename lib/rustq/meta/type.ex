@@ -1,5 +1,22 @@
 defmodule RustQ.Meta.Type do
-  @moduledoc false
+  @moduledoc """
+  Structural metadata for an Elixir typespec lowered by RustQ.
+
+  `RustQ.Spec.type/2` and `RustQ.Spec.aliases/1` return this struct. The
+  `:kind` field is the primary semantic classification (`:f64`, `:bool`,
+  `:tuple`, `:struct`, `:enum`, `:type`, and so on). The `:ast` field carries
+  the RustQ Rust type AST used for rendering, `:rust` is its rendered Rust type,
+  and `:meta` carries shape-specific metadata such as:
+
+    * `:elements` for tuple element types
+    * `:fields` for map/struct field types
+    * `:elixir_name` for local aliases and enum aliases
+    * `:elixir_module`, `:elixir_type`, and `:elixir_args` for external
+      Elixir remote types such as `Skia.Path.t()`
+
+  Prefer consuming this structure directly at codegen boundaries instead of
+  parsing rendered Rust type strings.
+  """
 
   alias RustQ.Rust.AST
 
