@@ -87,6 +87,7 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "enum",
                 item.ident.to_string(),
                 visibility(&item.vis),
+                line(item.ident.span()),
                 docs(&item.attrs),
                 item.variants
                     .into_iter()
@@ -100,6 +101,7 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "struct",
                 item.ident.to_string(),
                 visibility(&item.vis),
+                line(item.ident.span()),
                 docs(&item.attrs),
                 fields(env, item.fields),
             )
@@ -110,6 +112,7 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "function",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
+                line(item.sig.ident.span()),
                 docs(&item.attrs),
                 item.sig
                     .inputs
@@ -127,6 +130,7 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 type_metadata(env, &item.self_ty),
                 item.trait_
                     .map(|(_bang, path, _for)| path.to_token_stream().to_string()),
+                line(item.impl_token.span),
                 docs(&item.attrs),
                 item.items
                     .into_iter()
@@ -146,6 +150,7 @@ fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
                 "method",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
+                line(item.sig.ident.span()),
                 docs(&item.attrs),
                 item.sig
                     .inputs
@@ -158,6 +163,10 @@ fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
         ),
         _ => None,
     }
+}
+
+fn line(span: proc_macro2::Span) -> usize {
+    span.start().line
 }
 
 fn fields<'a>(env: Env<'a>, fields: Fields) -> Vec<(Option<String>, String, Term<'a>)> {

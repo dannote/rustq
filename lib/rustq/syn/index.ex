@@ -17,7 +17,9 @@ defmodule RustQ.Syn.Index do
     files =
       paths
       |> Enum.uniq()
-      |> Map.new(fn path -> {path, RustQ.Syn.parse_file!(path)} end)
+      |> Map.new(fn path ->
+        {path, path |> RustQ.Syn.parse_file!() |> attach_source_path(path)}
+      end)
 
     %__MODULE__{files: files}
   end
@@ -63,6 +65,16 @@ defmodule RustQ.Syn.Index do
       :error -> raise "cannot find Rust method #{target}::#{name}"
     end
   end
+
+  defp attach_source_path(%RustQ.Syn.File{items: items} = file, path) do
+    %{file | items: Enum.map(items, &attach_item_source_path(&1, path))}
+  end
+
+  defp attach_item_source_path(%RustQ.Syn.Impl{methods: methods} = item, path) do
+    %{item | source_path: path, methods: Enum.map(methods, &%{&1 | source_path: path})}
+  end
+
+  defp attach_item_source_path(item, path), do: %{item | source_path: path}
 
   defp target_matches?(%RustQ.Syn.Type.Path{name: name}, target), do: name == target
 

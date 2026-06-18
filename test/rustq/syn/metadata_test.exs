@@ -34,6 +34,7 @@ defmodule RustQ.Syn.MetadataTest do
              %RustQ.Syn.Enum{
                name: "SkPathOp",
                visibility: :public,
+               source_line: 2,
                docs: ["Path operation docs."],
                variants: ["Difference", "Intersect", "Union"]
              }
@@ -51,7 +52,7 @@ defmodule RustQ.Syn.MetadataTest do
              %RustQ.Syn.Field{name: "y", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}}
            ] = fields
 
-    assert [%RustQ.Syn.Function{name: "lerp", args: args, returns: "f32"}] =
+    assert [%RustQ.Syn.Function{name: "lerp", source_line: 14, args: args, returns: "f32"}] =
              RustQ.Syn.functions(file)
 
     assert [
@@ -68,6 +69,7 @@ defmodule RustQ.Syn.MetadataTest do
                  %RustQ.Syn.Method{
                    name: "offset",
                    visibility: :public,
+                   source_line: 20,
                    docs: ["Offset docs."],
                    args: method_args,
                    returns: "Self",

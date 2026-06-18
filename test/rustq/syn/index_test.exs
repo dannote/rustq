@@ -22,7 +22,7 @@ defmodule RustQ.Syn.IndexTest do
 
     index = RustQ.Syn.Index.from_paths([path])
 
-    assert %RustQ.Syn.Method{name: "draw_rect"} =
+    assert %RustQ.Syn.Method{name: "draw_rect", source_path: ^path, source_line: 2} =
              RustQ.Syn.Index.method!(index, "Canvas", "draw_rect")
 
     assert {:ok, %RustQ.Syn.Method{name: "op"}} = RustQ.Syn.Index.method(index, "Path", "op")

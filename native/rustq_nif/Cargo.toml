@@ -13,5 +13,5 @@ crate-type = ["cdylib"]
 rustler = "0.37"
 syn = { version = "2", features = ["full", "visit", "visit-mut"] }
 prettyplease = "0.2"
-proc-macro2 = "1"
+proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"

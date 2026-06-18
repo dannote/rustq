@@ -172,11 +172,13 @@ defmodule RustQ.Syn do
 
   defmodule Enum do
     @moduledoc "Rust enum metadata, including doc comments and variant names."
-    defstruct [:name, :visibility, docs: [], variants: []]
+    defstruct [:name, :visibility, :source_line, :source_path, docs: [], variants: []]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
             docs: [String.t()],
             variants: [String.t()]
           }
@@ -184,11 +186,13 @@ defmodule RustQ.Syn do
 
   defmodule Struct do
     @moduledoc "Rust struct metadata."
-    defstruct [:name, :visibility, docs: [], fields: []]
+    defstruct [:name, :visibility, :source_line, :source_path, docs: [], fields: []]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
             docs: [String.t()],
             fields: [RustQ.Syn.Field.t()]
           }
@@ -203,11 +207,22 @@ defmodule RustQ.Syn do
 
   defmodule Function do
     @moduledoc "Rust free function metadata, including doc comments, arguments, and return type."
-    defstruct [:name, :visibility, docs: [], args: [], returns: nil, returns_ast: nil]
+    defstruct [
+      :name,
+      :visibility,
+      :source_line,
+      :source_path,
+      docs: [],
+      args: [],
+      returns: nil,
+      returns_ast: nil
+    ]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -224,12 +239,14 @@ defmodule RustQ.Syn do
 
   defmodule Impl do
     @moduledoc "Rust impl block metadata, including target type, optional trait, doc comments, and methods."
-    defstruct [:target, :target_ast, :trait, docs: [], methods: []]
+    defstruct [:target, :target_ast, :trait, :source_line, :source_path, docs: [], methods: []]
 
     @type t :: %__MODULE__{
             target: String.t(),
             target_ast: RustQ.Syn.type(),
             trait: String.t() | nil,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
             docs: [String.t()],
             methods: [RustQ.Syn.Method.t()]
           }
@@ -237,11 +254,22 @@ defmodule RustQ.Syn do
 
   defmodule Method do
     @moduledoc "Rust impl method metadata, including doc comments, arguments, and return type."
-    defstruct [:name, :visibility, docs: [], args: [], returns: nil, returns_ast: nil]
+    defstruct [
+      :name,
+      :visibility,
+      :source_line,
+      :source_path,
+      docs: [],
+      args: [],
+      returns: nil,
+      returns_ast: nil
+    ]
 
     @type t :: %__MODULE__{
             name: String.t(),
             visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -392,30 +420,33 @@ defmodule RustQ.Syn do
     end
   end
 
-  defp decode_item!({"enum", name, visibility, docs, variants}) do
+  defp decode_item!({"enum", name, visibility, source_line, docs, variants}) do
     %RustQ.Syn.Enum{
       name: name,
       visibility: decode_visibility!(visibility),
+      source_line: source_line,
       docs: docs,
       variants: variants
     }
   end
 
-  defp decode_item!({"struct", name, visibility, docs, fields}) do
+  defp decode_item!({"struct", name, visibility, source_line, docs, fields}) do
     %RustQ.Syn.Struct{
       name: name,
       visibility: decode_visibility!(visibility),
+      source_line: source_line,
       docs: docs,
       fields: Elixir.Enum.map(fields, &decode_field!/1)
     }
   end
 
-  defp decode_item!({"function", name, visibility, docs, args, returns}) do
+  defp decode_item!({"function", name, visibility, source_line, docs, args, returns}) do
     {returns, returns_ast} = decode_return(returns)
 
     %RustQ.Syn.Function{
       name: name,
       visibility: decode_visibility!(visibility),
+      source_line: source_line,
       docs: docs,
       args: decode_args(args),
       returns: returns,
@@ -423,11 +454,12 @@ defmodule RustQ.Syn do
     }
   end
 
-  defp decode_item!({"impl", target, target_ast, trait, docs, methods}) do
+  defp decode_item!({"impl", target, target_ast, trait, source_line, docs, methods}) do
     %RustQ.Syn.Impl{
       target: target,
       target_ast: decode_type!(target_ast),
       trait: trait,
+      source_line: source_line,
       docs: docs,
       methods: Elixir.Enum.map(methods, &decode_method!/1)
     }
@@ -437,12 +469,13 @@ defmodule RustQ.Syn do
     %RustQ.Syn.Field{name: name, type: type, type_ast: decode_type!(type_ast)}
   end
 
-  defp decode_method!({"method", name, visibility, docs, args, returns}) do
+  defp decode_method!({"method", name, visibility, source_line, docs, args, returns}) do
     {returns, returns_ast} = decode_return(returns)
 
     %RustQ.Syn.Method{
       name: name,
       visibility: decode_visibility!(visibility),
+      source_line: source_line,
       docs: docs,
       args: decode_args(args),
       returns: returns,
