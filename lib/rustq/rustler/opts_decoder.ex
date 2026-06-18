@@ -69,8 +69,8 @@ defmodule RustQ.Rustler.OptsDecoder do
   defp boundary_inner_type(%RustQ.Meta.Type{} = type) do
     case RustQ.Meta.Type.category(type) do
       category when category in [:atom, :enum] -> A.type_path(:Atom)
-      :term -> A.type_path(:Term, lifetimes: [:a])
-      _category -> type.ast
+      category when category in [:number, :integer, :boolean, :string] -> type.ast
+      _category -> A.type_path(:Term, lifetimes: [:a])
     end
   end
 
@@ -82,11 +82,26 @@ defmodule RustQ.Rustler.OptsDecoder do
 
   defp boundary_decode(%RustQ.Meta.Type{} = type, name, required?) do
     case RustQ.Meta.Type.category(type) do
-      :boolean -> helper_decode(:opt_bool_option, name, required?)
-      category when category in [:atom, :enum] -> helper_decode(:opt_atom_option, name, required?)
-      :term when required? -> RustQ.Rustler.Decode.required_term(:opts, name)
-      :term -> A.call(:opt_term, [:opts, A.atom(name)])
-      _category -> term_decode(type.ast, name, required?)
+      :boolean ->
+        helper_decode(:opt_bool_option, name, required?)
+
+      category when category in [:atom, :enum] ->
+        helper_decode(:opt_atom_option, name, required?)
+
+      :term when required? ->
+        RustQ.Rustler.Decode.required_term(:opts, name)
+
+      :term ->
+        A.call(:opt_term, [:opts, A.atom(name)])
+
+      category when category in [:number, :integer, :string] ->
+        term_decode(type.ast, name, required?)
+
+      _category when required? ->
+        RustQ.Rustler.Decode.required_term(:opts, name)
+
+      _category ->
+        A.call(:opt_term, [:opts, A.atom(name)])
     end
   end
 

@@ -496,7 +496,8 @@ defmodule RustQ.RustlerTest do
               fields: [
                 x: [type: RustQ.Spec.type(quote(do: RustQ.Type.f32())), required: true],
                 mode: [type: RustQ.Spec.type(quote(do: RustQ.Type.enum(:mode))), required: true],
-                label: [type: RustQ.Spec.type(quote(do: String.t()))]
+                label: [type: RustQ.Spec.type(quote(do: String.t()))],
+                paint: [type: RustQ.Spec.type(quote(do: Skia.Paint.t()))]
               ]
             )
         ]
@@ -505,10 +506,12 @@ defmodule RustQ.RustlerTest do
     assert code =~ "pub x: f32"
     assert code =~ "pub mode: Atom"
     assert code =~ "pub label: Option<String>"
+    assert code =~ "pub paint: Option<Term<'a>>"
     assert code =~ "x: opt_f32(opts, atoms::x())?"
     assert code =~ "mode: opt_atom_option(opts, atoms::mode())?.ok_or(rustler::Error::BadArg)?"
     assert code =~ "match opt_term(opts, atoms::label())"
     assert code =~ "Some(term) => Some(term.decode::<String>()?)"
+    assert code =~ "paint: opt_term(opts, atoms::paint())"
   end
 
   test "builds bare atoms blocks" do
