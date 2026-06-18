@@ -4,16 +4,11 @@ defmodule RustQ.NativeCodegen.Modules do
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.Schema
 
-  import RustQ.Rust.AST.ItemBuilder
-
-  require A
-  require RustQ.Rust.AST.ItemBuilder
-
   def asts do
     [
       atoms_module(),
       ast_modules_module(),
-      helper_items()
+      RustQ.NativeCodegen.ModuleHelpers.asts()
     ]
   end
 
@@ -38,16 +33,5 @@ defmodule RustQ.NativeCodegen.Modules do
       end)
 
     A.module(:ast_modules, constants, vis: :crate)
-  end
-
-  defp helper_items do
-    [
-      function :atom,
-        vis: :crate,
-        args: [env: "Env", name: "&str"],
-        returns: "NifResult<Atom>" do
-        A.return(A.path_call([:Atom, :from_str], [:env, :name]))
-      end
-    ]
   end
 end

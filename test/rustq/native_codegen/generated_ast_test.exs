@@ -26,6 +26,19 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     refute MapSet.member?(constant_names, :FUNCTION_ARG)
     refute MapSet.member?(constant_names, :STRUCT_FIELD)
     refute MapSet.member?(constant_names, :ENUM_VARIANT)
+
+    assert %AST.Function{
+             name: :atom,
+             vis: :crate,
+             args: [
+               %AST.FunctionArg{name: :env, type: %AST.TypePath{parts: [:Env]}},
+               %AST.FunctionArg{
+                 name: :name,
+                 type: %AST.TypeRef{inner: %AST.TypePath{parts: [:str]}}
+               }
+             ],
+             returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [:Atom]}}
+           } = Enum.find(List.flatten(modules), &match?(%AST.Function{name: :atom}, &1))
   end
 
   test "dispatch functions are AST-backed" do
