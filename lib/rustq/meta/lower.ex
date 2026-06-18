@@ -272,6 +272,11 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:unwrap!, _, [expression]}), do: %AST.Try{expr: lower_expr(expression)}
 
+  defp lower_expr({:|>, _, [left, right]}), do: lower_pipe(left, right)
+
+  defp lower_expr({:cast, _, [expression, type]}),
+    do: %AST.Cast{expr: lower_expr(expression), type: lower_cast_type(type)}
+
   defp lower_expr({:decode_as!, _, [expression, type_ast]}),
     do: %AST.Try{
       expr: %AST.MethodCall{
@@ -334,6 +339,18 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:>=, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :gte, right: lower_expr(right)}
+
+  defp lower_expr({:+, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :add, right: lower_expr(right)}
+
+  defp lower_expr({:-, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :sub, right: lower_expr(right)}
+
+  defp lower_expr({:*, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :mul, right: lower_expr(right)}
+
+  defp lower_expr({:/, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :div, right: lower_expr(right)}
 
   defp lower_expr({:and, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :and, right: lower_expr(right)}
@@ -421,6 +438,37 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr(other) do
     raise ArgumentError, "unsupported defrust expression: #{Macro.to_string(other)}"
   end
+
+  defp lower_pipe(left, right) do
+    lower_pipe_call(lower_expr(left), right)
+  end
+
+  defp lower_pipe_call(receiver, {:cast, _, [type]}),
+    do: %AST.Cast{expr: receiver, type: lower_cast_type(type)}
+
+  defp lower_pipe_call(receiver, {{:., _, [{:__aliases__, _, [:Kernel]}, operator]}, _, [right]})
+       when operator in [:+, :-, :*, :/] do
+    %AST.BinaryOp{left: receiver, op: operator_op(operator), right: lower_expr(right)}
+  end
+
+  defp lower_pipe_call(receiver, {name, _, args}) when is_atom(name) and is_list(args) do
+    %AST.MethodCall{receiver: receiver, method: name, args: Enum.map(args, &lower_expr/1)}
+  end
+
+  defp lower_pipe_call(_receiver, other) do
+    raise ArgumentError, "unsupported defrust pipeline step: #{Macro.to_string(other)}"
+  end
+
+  defp operator_op(:+), do: :add
+  defp operator_op(:-), do: :sub
+  defp operator_op(:*), do: :mul
+  defp operator_op(:/), do: :div
+
+  defp lower_cast_type(type)
+       when type in [:u8, :u16, :u32, :u64, :usize, :i8, :i16, :i32, :i64, :isize, :f32, :f64],
+       do: %AST.TypePath{parts: [type]}
+
+  defp lower_cast_type(type_ast), do: Type.from_spec_ast(type_ast).ast
 
   defp lower_enum_map(collection, {:fn, _, [{:->, _, [[arg], body]}]}) do
     collection

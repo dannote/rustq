@@ -186,14 +186,21 @@ defmodule RustQ.Meta.Type do
   defp parse_rust_type(:bool, [], _aliases), do: type(:bool, path(:bool))
   defp parse_rust_type(:f32, [], _aliases), do: type(:f32, path(:f32))
   defp parse_rust_type(:f64, [], _aliases), do: type(:f64, path(:f64))
+  defp parse_rust_type(:i8, [], _aliases), do: type(:i8, path(:i8))
+  defp parse_rust_type(:i16, [], _aliases), do: type(:i16, path(:i16))
+  defp parse_rust_type(:i32, [], _aliases), do: type(:i32, path(:i32))
   defp parse_rust_type(:i64, [], _aliases), do: type(:i64, path(:i64))
+  defp parse_rust_type(:isize, [], _aliases), do: type(:isize, path(:isize))
   defp parse_rust_type(:str, [], _aliases), do: type(:str, %AST.TypeRef{inner: path(:str)})
 
   defp parse_rust_type(:term, [], _aliases),
     do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})
 
   defp parse_rust_type(:u8, [], _aliases), do: type(:u8, path(:u8))
+  defp parse_rust_type(:u16, [], _aliases), do: type(:u16, path(:u16))
   defp parse_rust_type(:u32, [], _aliases), do: type(:u32, path(:u32))
+  defp parse_rust_type(:u64, [], _aliases), do: type(:u64, path(:u64))
+  defp parse_rust_type(:usize, [], _aliases), do: type(:usize, path(:usize))
   defp parse_rust_type(:unit, [], _aliases), do: type(:unit, %AST.TypeUnit{})
 
   defp parse_rust_type(:path, [parts], _aliases), do: type(:type, spec_path!(parts, nil))

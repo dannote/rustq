@@ -426,7 +426,7 @@ defmodule RustQ.Rust.AST.Render do
     ]
 
   def render_expr(%Cast{expr: expr, type: type}),
-    do: [render_expr(expr), " as ", render_type(type)]
+    do: [render_cast_operand(expr), " as ", render_type(type)]
 
   def render_expr(%UnaryOp{op: op, expr: expr}), do: [render_unary_op(op), render_expr(expr)]
 
@@ -436,7 +436,7 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_expr(%MethodCall{receiver: receiver, method: method, args: args, generics: generics}) do
     [
-      render_expr(receiver),
+      render_method_receiver(receiver),
       ".",
       to_string(method),
       render_generics(generics),
@@ -590,6 +590,17 @@ defmodule RustQ.Rust.AST.Render do
   defp render_binary_op(:div), do: "/"
   defp render_binary_op(:and), do: "&&"
   defp render_binary_op(:or), do: "||"
+
+  defp render_method_receiver(%BinaryOp{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_method_receiver(%Cast{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_method_receiver(%Match{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_method_receiver(%If{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_method_receiver(expr), do: render_expr(expr)
+
+  defp render_cast_operand(%BinaryOp{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_cast_operand(%If{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_cast_operand(%Match{} = expr), do: ["(", render_expr(expr), ")"]
+  defp render_cast_operand(expr), do: render_expr(expr)
 
   defp render_use_group_member({base, names}) when is_list(names) do
     [

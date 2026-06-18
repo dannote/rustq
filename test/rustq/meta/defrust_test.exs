@@ -112,6 +112,57 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "apply_blend_mode(&mut paint"
   end
 
+  test "defrust lowers arithmetic operators" do
+    defmodule ArithmeticCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec scale(R.f32(), R.f32()) :: R.f32()
+      defrust scale(x, y) do
+        x + y * 2.0 - x / 4.0
+      end
+    end
+
+    source = ArithmeticCase.__rustq_source__()
+    assert source =~ "x + y * 2.0 - x / 4.0"
+  end
+
+  test "defrust lowers Elixir pipelines to Rust method, operator, and cast chains" do
+    defmodule PipelineCastCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec alpha(OpacityOpts.t()) :: R.u8()
+      defrust alpha(opts) do
+        opts.opacity.unwrap_or(1.0)
+        |> clamp(0.0, 1.0)
+        |> Kernel.*(255.0)
+        |> round()
+        |> cast(:u8)
+      end
+    end
+
+    source = PipelineCastCase.__rustq_source__()
+    assert source =~ "opts.opacity.unwrap_or(1.0).clamp(0.0, 1.0)"
+    assert source =~ "* 255.0"
+    assert source =~ ".round() as u8"
+  end
+
+  test "defrust cast accepts RustQ type markers" do
+    defmodule TypeMarkerCastCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec widen(R.u8()) :: R.u32()
+      defrust widen(value) do
+        cast(value, R.u32())
+      end
+    end
+
+    source = TypeMarkerCastCase.__rustq_source__()
+    assert source =~ "value as u32"
+  end
+
   test "defrust lowers comparison operators" do
     defmodule ComparisonCase do
       use RustQ.Meta
