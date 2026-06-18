@@ -3,6 +3,7 @@ defmodule RustQ.NativeCodegen.HelperModulesTest do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "native defrust modules expose crate-visible ASTs" do
     assert %AST.Function{name: :required_field, vis: :crate} =
@@ -33,8 +34,8 @@ defmodule RustQ.NativeCodegen.HelperModulesTest do
   end
 
   test "AST category predicates classify generated AST nodes" do
-    assert AST.type_node?(A.unit_type())
-    assert AST.type_node?(A.ref_type(:Canvas))
+    assert AST.type_node?(T.unit())
+    assert AST.type_node?(T.ref(:Canvas))
     refute AST.type_node?(A.var(:value))
 
     assert AST.expr_node?(A.var(:value))
@@ -43,6 +44,6 @@ defmodule RustQ.NativeCodegen.HelperModulesTest do
 
     assert AST.pat_node?(A.pat(:value))
     assert AST.pat_node?(A.some_pat(:value))
-    refute AST.pat_node?(A.unit_type())
+    refute AST.pat_node?(T.unit())
   end
 end

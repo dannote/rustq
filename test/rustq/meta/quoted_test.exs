@@ -1,17 +1,17 @@
 defmodule RustQ.Meta.QuotedTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "quoted accepts explicit Rust AST types" do
     function =
       RustQ.Meta.quoted(:draw_translate_impl,
         args: [
-          canvas: A.ref_type([:skia_safe, :Canvas]),
-          opts: A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a]),
+          canvas: T.ref([:skia_safe, :Canvas]),
+          opts: T.path([:generated_opts, :TranslateOpts], lifetimes: [:a]),
           _raw_opts: "&[(Atom, Term<'a>)]"
         ],
-        returns: A.nif_result_type(A.unit_type()),
+        returns: T.nif_result(T.unit()),
         do:
           quote do
             canvas.translate({opts.x, opts.y})

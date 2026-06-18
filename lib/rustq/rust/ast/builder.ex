@@ -138,28 +138,7 @@ defmodule RustQ.Rust.AST.Builder do
   def arg(name, type) when is_binary(type), do: %AST.FunctionArg{name: name, type: type}
   def arg(name, type), do: %AST.FunctionArg{name: name, type: type(type)}
 
-  def type(%{__struct__: _module} = value) do
-    if AST.type_node?(value) do
-      value
-    else
-      raise ArgumentError, "expected RustQ type AST node, got: #{inspect(value)}"
-    end
-  end
-
-  def type(parts) when is_list(parts), do: type_path(parts)
-  def type(part) when is_atom(part) or is_binary(part), do: type_path(part)
-  def type({:raw, _source} = raw), do: raw
-
-  def unit_type, do: %AST.TypeUnit{}
-  def nif_result_type(inner), do: %AST.TypeNifResult{inner: type(inner)}
-
-  def ref_type(inner, opts \\ []),
-    do: %AST.TypeRef{inner: type(inner), lifetime: Keyword.get(opts, :lifetime)}
-
-  def mut_ref_type(inner, opts \\ []),
-    do: %AST.TypeRef{inner: type(inner), mutable: true, lifetime: Keyword.get(opts, :lifetime)}
-
-  def term_type(lifetime \\ :a), do: %AST.TypePath{parts: [:Term], lifetimes: List.wrap(lifetime)}
+  def type(value), do: RustQ.Rust.AST.TypeBuilder.type(value)
 
   def var(name) when is_atom(name), do: %AST.Var{name: name}
   def path(parts) when is_list(parts), do: %AST.Path{parts: parts}
@@ -167,16 +146,8 @@ defmodule RustQ.Rust.AST.Builder do
   def path(first, second), do: %AST.Path{parts: [first, second]}
   def path(first, second, third), do: %AST.Path{parts: [first, second, third]}
 
-  def type_path(parts_or_part, opts \\ [])
-
-  def type_path(parts, opts) when is_list(parts),
-    do: %AST.TypePath{
-      parts: parts,
-      lifetimes: Keyword.get(opts, :lifetimes, []),
-      generics: Keyword.get(opts, :generics, [])
-    }
-
-  def type_path(part, opts) when is_atom(part) or is_binary(part), do: type_path([part], opts)
+  def type_path(parts_or_part, opts \\ []),
+    do: RustQ.Rust.AST.TypeBuilder.path(parts_or_part, opts)
 
   def field(receiver, field), do: %AST.Field{receiver: expr(receiver), field: field}
   def index(receiver, index), do: %AST.Index{receiver: expr(receiver), index: expr(index)}

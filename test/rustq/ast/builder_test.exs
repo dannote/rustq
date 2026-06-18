@@ -3,6 +3,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.TypeBuilder, as: T
 
   require A
 
@@ -11,12 +12,12 @@ defmodule RustQ.Rust.AST.BuilderTest do
       name: :typed,
       lifetime: :a,
       args: [
-        A.arg(:canvas, A.ref_type([:skia_safe, :Canvas])),
-        A.arg(:term, A.term_type()),
-        A.arg(:opts, A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a])),
+        A.arg(:canvas, T.ref([:skia_safe, :Canvas])),
+        A.arg(:term, T.term()),
+        A.arg(:opts, T.path([:generated_opts, :TranslateOpts], lifetimes: [:a])),
         A.arg(:raw_opts, "&[(Atom, Term<'a>)]")
       ],
-      returns: A.nif_result_type(A.unit_type()),
+      returns: T.nif_result(T.unit()),
       body: [A.return(A.ok())]
     }
 
