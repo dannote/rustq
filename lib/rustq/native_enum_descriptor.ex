@@ -15,6 +15,12 @@ defmodule RustQ.NativeEnumDescriptor do
           source_url: String.t() | nil
         }
 
+  @doc "Returns descriptor variants as `{atom_name, rust_variant}` pairs."
+  @spec variants(t()) :: [{atom(), String.t()}]
+  def variants(%__MODULE__{enum: %RustQ.Syn.Enum{variants: variants}}) do
+    Enum.map(variants, &{String.to_atom(Macro.underscore(&1)), &1})
+  end
+
   @doc "Resolves a native enum through a `RustQ.Syn.Index`."
   @spec resolve!(RustQ.Syn.Index.t(), String.t(), keyword()) :: t()
   def resolve!(%RustQ.Syn.Index{} = index, name, opts \\ []) when is_binary(name) do

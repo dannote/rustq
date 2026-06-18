@@ -23,10 +23,15 @@ defmodule RustQ.Rustler.AtomDecoder do
     atoms = Keyword.get(opts, :atoms, "atoms")
     unknown = Keyword.get(opts, :unknown, "Err(rustler::Error::BadArg)")
 
+    cases =
+      Keyword.get_lazy(opts, :cases, fn ->
+        descriptor_cases(Keyword.fetch!(opts, :descriptor), returns)
+      end)
+
     if unknown == "Err(rustler::Error::BadArg)" do
-      build_ast(name, input, result, atoms, Keyword.fetch!(opts, :cases))
+      build_ast(name, input, result, atoms, cases)
     else
-      build_template(name, input, result, atoms, unknown, opts)
+      build_template(name, input, result, atoms, unknown, cases)
     end
   end
 
@@ -68,10 +73,15 @@ defmodule RustQ.Rustler.AtomDecoder do
     |> A.path()
   end
 
-  defp build_template(name, input, result, atoms, unknown, opts) do
+  defp descriptor_cases(%RustQ.NativeEnumDescriptor{} = descriptor, returns) do
+    Enum.map(RustQ.NativeEnumDescriptor.variants(descriptor), fn {atom, variant} ->
+      {atom, "#{Rust.type(returns)}::#{variant}"}
+    end)
+  end
+
+  defp build_template(name, input, result, atoms, unknown, cases) do
     arms =
-      opts
-      |> Keyword.fetch!(:cases)
+      cases
       |> Enum.map(fn {atom, value} ->
         Rust.arm("value if value == #{atoms}::#{atom}()", "Ok(#{Rust.type(value)})")
       end)

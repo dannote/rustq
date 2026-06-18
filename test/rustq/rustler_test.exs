@@ -73,6 +73,30 @@ defmodule RustQ.RustlerTest do
     assert code =~ "_ => Err(rustler::Error::BadArg)"
   end
 
+  test "builds atom decoders from native enum descriptors" do
+    descriptor = %RustQ.NativeEnumDescriptor{
+      name: "SkClipOp",
+      enum: %RustQ.Syn.Enum{name: "SkClipOp", variants: ["Difference", "Intersect"]}
+    }
+
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_decoder_descriptor.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_decoder(:decode_clip_op,
+              returns: :ClipOp,
+              descriptor: descriptor
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "pub fn decode_clip_op(value: Atom) -> NifResult<ClipOp>"
+    assert code =~ "value if value == atoms::difference() => Ok(ClipOp::Difference)"
+    assert code =~ "value if value == atoms::intersect() => Ok(ClipOp::Intersect)"
+  end
+
   test "builds atom decoders with string function and case names" do
     code =
       "__rq_items!();"
