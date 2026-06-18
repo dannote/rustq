@@ -3,7 +3,7 @@ use rustler::{Encoder, Env, NifResult, Term};
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, Expr, ExprCall, ExprLit, ExprMethodCall, ExprPath, Fields, FnArg, GenericArgument,
-    ImplItem, Item, Lit, PathArguments, ReturnType, Type, TypeParamBound, Visibility,
+    ImplItem, Item, ItemFn, Lit, PathArguments, ReturnType, Type, TypeParamBound, Visibility,
 };
 
 use crate::{atoms, template_error};
@@ -59,6 +59,24 @@ pub(crate) fn method_calls<'a>(env: Env<'a>, source: String) -> NifResult<Term<'
     }
 }
 
+pub(crate) fn function_method_calls<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let calls = file
+                .items
+                .into_iter()
+                .filter_map(|item| match item {
+                    Item::Fn(item_fn) => Some(function_method_calls_for(item_fn)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            Ok((atoms::ok(), calls).encode(env))
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
 pub(crate) fn enum_variants<'a>(
     env: Env<'a>,
     source: String,
@@ -91,6 +109,14 @@ struct AtomReferenceVisitor {
 
 struct MethodReferenceVisitor {
     calls: Vec<(String, String)>,
+}
+
+fn function_method_calls_for(item_fn: ItemFn) -> (String, Vec<(String, String)>) {
+    let mut visitor = MethodReferenceVisitor { calls: Vec::new() };
+    visitor.visit_block(&item_fn.block);
+    visitor.calls.sort();
+    visitor.calls.dedup();
+    (item_fn.sig.ident.to_string(), visitor.calls)
 }
 
 impl<'ast> Visit<'ast> for MethodReferenceVisitor {

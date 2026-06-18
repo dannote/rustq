@@ -188,4 +188,27 @@ defmodule RustQ.Syn.MetadataTest do
              %RustQ.Syn.MethodCall{receiver: "state . canvas ()", method: "clip_path"}
            ]
   end
+
+  test "returns receiver method calls grouped by top-level function" do
+    source = """
+    fn draw(canvas: &Canvas, paint: &Paint) {
+        canvas.draw_rect(Rect::default(), paint);
+    }
+
+    fn clip(canvas: &Canvas, path: &Path) {
+        canvas.clip_path(path, ClipOp::Intersect, true);
+    }
+    """
+
+    assert RustQ.Syn.function_method_calls!(source) == [
+             %RustQ.Syn.FunctionMethodCalls{
+               function: "draw",
+               calls: [%RustQ.Syn.MethodCall{receiver: "canvas", method: "draw_rect"}]
+             },
+             %RustQ.Syn.FunctionMethodCalls{
+               function: "clip",
+               calls: [%RustQ.Syn.MethodCall{receiver: "canvas", method: "clip_path"}]
+             }
+           ]
+  end
 end
