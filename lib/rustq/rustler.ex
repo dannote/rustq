@@ -236,7 +236,23 @@ defmodule RustQ.Rustler do
   def resource_type(name, opts \\ []), do: Resource.type_alias(name, opts)
 
   @doc """
-  Builds an options struct plus decoder function for keyword/optionss.
+  Builds an options struct plus decoder function for keyword/options.
+
+  Field specs may be explicit Rust boundary specs:
+
+      RustQ.Rustler.opts_decoder(:RectOpts,
+        fields: [x: [type: :f32, decode: RustQ.Rustler.Decode.opt_decode(:opt_f32, :opts, :x)]]
+      )
+
+  Or structural RustQ types, where the builder derives the Rust boundary type
+  and decoder from `RustQ.Meta.Type.category/1`:
+
+      RustQ.Rustler.opts_decoder(:RectOpts,
+        fields: [x: [type: RustQ.Spec.type(quote(do: RustQ.Type.f32())), required: true]]
+      )
+
+  Structural external/domain types remain `Term<'a>` at the boundary unless an
+  explicit `:decode` expression is supplied.
   """
   @spec opts_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def opts_decoder(name, opts), do: OptsDecoder.build(name, opts)
