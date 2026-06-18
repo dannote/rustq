@@ -13,14 +13,11 @@ defmodule RustQ.Meta do
   their own codegen boundary instead of pretending external Rust modules are
   Elixir modules.
 
-  `quoted/2` is the bridge API for generators that already know exact Rust
-  signature types but still want the function body lowered from valid Elixir.
-  This keeps ownership boundaries explicit: the caller may provide direct Rust
-  AST type nodes such as `A.type_path([:generated_opts, :LineOpts], lifetimes:
-  [:a])`, while RustQ still owns lowering the body syntax (`unwrap!`, `ref`,
-  method calls, tuples, `:ok`, and friends). Prefer this over fake Elixir
-  modules or full hand-built function bodies when only the signature has
-  generator-owned Rust paths.
+  Prefer `@spec` plus `defrust` for user-facing Rusty Elixir, including
+  generated or external Rust paths expressed through `RustQ.Type` markers such
+  as `R.path/1`, `R.path/2`, `R.lifetime/1`, and `R.slice/1`. `quoted/2` is a
+  low-level bridge for internal generators that already hold RustQ AST signature
+  metadata; it is not the intended authoring surface.
 
   Preferred Rusty-Elixir body forms are ordinary Elixir where possible:
 
@@ -158,6 +155,7 @@ defmodule RustQ.Meta do
 
   defp rust_module_map(values), do: values |> List.wrap() |> Map.new()
 
+  @doc false
   @spec quoted(atom(), keyword()) :: AST.Function.t()
   def quoted(name, opts) do
     args = Keyword.fetch!(opts, :args)
