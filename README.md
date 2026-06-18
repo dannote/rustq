@@ -35,6 +35,7 @@ where `mix rustq.gen` or your own codegen task runs.
 | Generate from real `.rs` files | templates, `~R`, placeholders, `RustQ.render_file!/2` |
 | Generate repetitive Rust declarations from data | `RustQ.Rust` builders or RustQ AST builders |
 | Generate Rustler boilerplate | `RustQ.Rustler` helpers or `RustQ.Rustler.Schema` |
+| Introspect existing Rust crates structurally | `RustQ.Syn` |
 | Keep generated files checked in and fresh | `rustq.exs` plus `mix rustq.gen --check` |
 
 ## Rusty Elixir with `defrust`
@@ -214,6 +215,43 @@ defined elsewhere by another generator or crate. If a downstream project already
 generates or owns Rust like `mod generated_opts;`, express the type in the
 `@spec` as an ordinary external remote type such as
 `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` and write body calls normally.
+
+## Rust source introspection with `RustQ.Syn`
+
+`RustQ.Syn` parses real Rust source with `syn` and returns Elixir metadata for
+Rust items. It is for introspecting existing Rust crates, not for parsing Rust
+with regex and not for producing Rusty-Elixir AST.
+
+```elixir
+file = RustQ.Syn.parse_file!("native/foo/src/lib.rs")
+
+[file_enum | _] = RustQ.Syn.enums(file)
+methods = RustQ.Syn.methods(file)
+```
+
+Metadata includes docs and structured type information while keeping rendered
+Rust type strings for display/debugging:
+
+```elixir
+%RustQ.Syn.Method{
+  name: "draw_rect",
+  docs: ["Draws [`Rect`] rect using ..."],
+  args: [
+    %RustQ.Syn.Arg{
+      name: "paint",
+      type: "& Paint",
+      type_ast: %RustQ.Syn.Type.Ref{
+        inner: %RustQ.Syn.Type.Path{name: "Paint"}
+      }
+    }
+  ]
+}
+```
+
+Supported metadata currently covers top-level enums, structs, free functions,
+`impl` blocks, methods, doc comments, and common Rust type shapes such as paths,
+refs, tuples, `Option`, `Result`, `impl Trait`, slices, arrays, `Self`, and raw
+fallbacks.
 
 ## Generated files with `rustq.exs`
 

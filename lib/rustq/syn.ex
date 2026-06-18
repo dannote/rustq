@@ -1,27 +1,66 @@
 defmodule RustQ.Syn do
   @moduledoc """
-  Structural metadata for Rust source parsed with `syn`.
+  Structural metadata for Rust source parsed with [`syn`](https://docs.rs/syn).
 
-  This module exposes Rust AST metadata, not Rusty Elixir AST. It is intended
-  for introspection tasks such as discovering enum variants, struct fields, or
-  function signatures from Rust crates. Conversion from this metadata to
-  `RustQ.Rust.AST` is intentionally explicit and partial.
+  `RustQ.Syn` is for introspecting existing Rust source. It returns Elixir
+  metadata for Rust items such as enums, structs, free functions, `impl` blocks,
+  methods, docs, arguments, return types, and common Rust type shapes.
+
+  This is **Rust AST metadata**, not Rusty Elixir AST and not `RustQ.Rust.AST`.
+  Use it when a generator needs to understand Rust that already exists in an
+  upstream crate, for example to discover a crate's methods or enum variants
+  without parsing Rust text with regex.
+
+  ## Example
+
+      file = RustQ.Syn.parse_file!("native/my_crate/src/lib.rs")
+
+      file
+      |> RustQ.Syn.methods()
+      |> Enum.find(&(&1.name == "draw_rect"))
+
+  Arguments and returns keep both the rendered Rust type string and a structured
+  type node:
+
+      %RustQ.Syn.Arg{
+        name: "paint",
+        type: "& Paint",
+        type_ast: %RustQ.Syn.Type.Ref{
+          inner: %RustQ.Syn.Type.Path{name: "Paint"}
+        }
+      }
+
+  The structured type vocabulary is intentionally partial. Unknown or currently
+  unsupported Rust type forms are represented as `%RustQ.Syn.Type.Raw{}` with
+  the original rendered code preserved.
   """
 
   alias RustQ.Error
 
   defmodule File do
-    @moduledoc "Rust source file metadata."
+    @moduledoc """
+    Rust source file metadata.
+
+    The `items` list contains top-level item metadata structs such as
+    `RustQ.Syn.Enum`, `RustQ.Syn.Struct`, `RustQ.Syn.Function`, and
+    `RustQ.Syn.Impl`.
+    """
     defstruct items: []
 
     @type t :: %__MODULE__{items: [RustQ.Syn.item()]}
   end
 
   defmodule Type do
-    @moduledoc "Structured Rust type metadata."
+    @moduledoc """
+    Namespace for structured Rust type metadata.
+
+    Each type node includes `code`, the rendered Rust tokens for display or
+    diagnostics. Prefer matching on the structured fields when making semantic
+    decisions.
+    """
 
     defmodule Path do
-      @moduledoc "Rust path type metadata."
+      @moduledoc "Rust path type metadata, for example `Paint`, `skia_safe::Canvas`, or `AsRef<Rect>`."
       defstruct [:code, :name, segments: [], args: []]
 
       @type t :: %__MODULE__{
@@ -33,7 +72,7 @@ defmodule RustQ.Syn do
     end
 
     defmodule Ref do
-      @moduledoc "Rust reference type metadata."
+      @moduledoc "Rust reference type metadata, for example `&Paint` or `&mut Path`."
       defstruct [:code, :inner, mutable: false]
 
       @type t :: %__MODULE__{code: String.t(), mutable: boolean(), inner: RustQ.Syn.type()}
@@ -89,7 +128,7 @@ defmodule RustQ.Syn do
     end
 
     defmodule Raw do
-      @moduledoc "Fallback Rust type metadata."
+      @moduledoc "Fallback Rust type metadata for type forms RustQ does not model structurally yet."
       defstruct [:code]
 
       @type t :: %__MODULE__{code: String.t()}
@@ -97,7 +136,7 @@ defmodule RustQ.Syn do
   end
 
   defmodule Enum do
-    @moduledoc "Rust enum metadata."
+    @moduledoc "Rust enum metadata, including doc comments and variant names."
     defstruct [:name, :visibility, docs: [], variants: []]
 
     @type t :: %__MODULE__{
@@ -128,7 +167,7 @@ defmodule RustQ.Syn do
   end
 
   defmodule Function do
-    @moduledoc "Rust free function metadata."
+    @moduledoc "Rust free function metadata, including doc comments, arguments, and return type."
     defstruct [:name, :visibility, docs: [], args: [], returns: nil, returns_ast: nil]
 
     @type t :: %__MODULE__{
@@ -142,14 +181,14 @@ defmodule RustQ.Syn do
   end
 
   defmodule Arg do
-    @moduledoc "Rust function argument metadata."
+    @moduledoc "Rust function or method argument metadata. `type` is rendered Rust; `type_ast` is structured metadata."
     defstruct [:name, :type, :type_ast]
 
     @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
   end
 
   defmodule Impl do
-    @moduledoc "Rust impl block metadata."
+    @moduledoc "Rust impl block metadata, including target type, optional trait, doc comments, and methods."
     defstruct [:target, :target_ast, :trait, docs: [], methods: []]
 
     @type t :: %__MODULE__{
@@ -162,7 +201,7 @@ defmodule RustQ.Syn do
   end
 
   defmodule Method do
-    @moduledoc "Rust impl method metadata."
+    @moduledoc "Rust impl method metadata, including doc comments, arguments, and return type."
     defstruct [:name, :visibility, docs: [], args: [], returns: nil, returns_ast: nil]
 
     @type t :: %__MODULE__{
@@ -193,7 +232,12 @@ defmodule RustQ.Syn do
           | RustQ.Syn.Function.t()
           | RustQ.Syn.Impl.t()
 
-  @doc "Parses Rust source into structural metadata."
+  @doc """
+  Parses Rust source into structural metadata.
+
+  Returns `{:ok, %RustQ.Syn.File{}}` on success. Parser errors are returned in
+  RustQ's normal template-error shape.
+  """
   @spec parse(String.t()) :: {:ok, RustQ.Syn.File.t()} | {:error, term()}
   def parse(source) when is_binary(source) do
     with {:ok, raw_items} <- RustQ.Native.syn_inspect(source) do
@@ -201,7 +245,9 @@ defmodule RustQ.Syn do
     end
   end
 
-  @doc "Parses Rust source into structural metadata, raising on failure."
+  @doc """
+  Parses Rust source into structural metadata, raising `RustQ.Error` on failure.
+  """
   @spec parse!(String.t()) :: RustQ.Syn.File.t()
   def parse!(source) when is_binary(source) do
     case parse(source) do
@@ -213,7 +259,12 @@ defmodule RustQ.Syn do
     end
   end
 
-  @doc "Reads and parses a Rust source file."
+  @doc """
+  Reads and parses a Rust source file.
+
+  File read errors are returned as `{:error, reason}`. Rust parse errors are
+  returned as `{:error, errors}`.
+  """
   @spec parse_file(Path.t()) :: {:ok, RustQ.Syn.File.t()} | {:error, term()}
   def parse_file(path) do
     with {:ok, source} <- Elixir.File.read(path) do
@@ -221,7 +272,9 @@ defmodule RustQ.Syn do
     end
   end
 
-  @doc "Reads and parses a Rust source file, raising on failure."
+  @doc """
+  Reads and parses a Rust source file, raising on file or Rust parse errors.
+  """
   @spec parse_file!(Path.t()) :: RustQ.Syn.File.t()
   def parse_file!(path) do
     path
@@ -249,12 +302,21 @@ defmodule RustQ.Syn do
   def impls(%RustQ.Syn.File{items: items}),
     do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Impl{}, &1))
 
-  @doc "Returns methods from all top-level Rust impl blocks in a parsed file."
+  @doc """
+  Returns methods from all top-level Rust impl blocks in a parsed file.
+
+  Use `impls/1` when the containing impl target or trait matters.
+  """
   @spec methods(RustQ.Syn.File.t()) :: [RustQ.Syn.Method.t()]
   def methods(%RustQ.Syn.File{} = file),
     do: file |> impls() |> Elixir.Enum.flat_map(& &1.methods)
 
-  @doc "Returns variants for a named top-level enum from Rust source."
+  @doc """
+  Returns variants for a named top-level enum from Rust source.
+
+  This is a focused helper for code generators that only need enum variants and
+  do not need the full `RustQ.Syn.File` metadata.
+  """
   @spec enum_variants(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   def enum_variants(source, enum_name) when is_binary(source) and is_binary(enum_name),
     do: RustQ.Native.syn_enum_variants(source, enum_name)

@@ -15,6 +15,7 @@ defmodule RustQ.MixProject do
       package: package(),
       docs: docs(),
       dialyzer: [plt_add_apps: [:mix]],
+      test_ignore_filters: [~r|test/support/|],
       deps: deps()
     ]
   end

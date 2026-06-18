@@ -1,4 +1,4 @@
-defmodule RustQ.SynTest do
+defmodule RustQ.Syn.MetadataTest do
   use ExUnit.Case, async: true
 
   test "parses top-level Rust metadata" do

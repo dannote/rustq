@@ -30,8 +30,9 @@ Preferred order:
    - Acceptable examples: `AST.MacroItem` for macro invocations such as `rustler::atoms!`.
    - If a string fallback is used, keep it local and treat it as a candidate for future AST support.
 
-6. **Schema/typespecs are the source of truth**
-   - Prefer `defstruct`, `@type t`, and RustQ AST schema introspection over parallel hand-written schema maps.
+6. **Use structural sources of truth**
+   - For RustQ-owned Elixir/Rust AST schemas, prefer `defstruct`, `@type t`, and RustQ AST schema introspection over parallel hand-written schema maps.
+   - For external Rust crates, prefer `RustQ.Syn` metadata from original Rust source over duplicate Elixir typespec declarations or regex/source-text parsing.
    - Avoid duplicating field/type/category metadata unless there is no better source.
 
 7. **Self-hosting invariants**
