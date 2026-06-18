@@ -59,6 +59,41 @@ defmodule RustQ.Syn do
     decisions.
     """
 
+    @doc "Returns true when `type` is a path whose final segment is `name`."
+    @spec path?(RustQ.Syn.type(), String.t()) :: boolean()
+    def path?(%RustQ.Syn.Type.Path{name: name}, name), do: true
+    def path?(%RustQ.Syn.Type.Path{segments: segments}, name), do: List.last(segments) == name
+    def path?(_type, _name), do: false
+
+    @doc "Returns true when `type` is a reference to a path whose final segment is `name`."
+    @spec ref_to?(RustQ.Syn.type(), String.t()) :: boolean()
+    def ref_to?(%RustQ.Syn.Type.Ref{inner: inner}, name), do: path?(inner, name)
+    def ref_to?(_type, _name), do: false
+
+    @doc "Returns true when `type` is `impl Trait<Args...>` matching the requested trait and args."
+    @spec impl_trait?(RustQ.Syn.type(), String.t(), [String.t()]) :: boolean()
+    def impl_trait?(type, trait, args \\ [])
+
+    def impl_trait?(%RustQ.Syn.Type.ImplTrait{traits: traits}, trait, args) do
+      Enum.any?(traits, fn
+        %RustQ.Syn.Type.Path{name: ^trait, args: trait_args} ->
+          Enum.map(trait_args, &type_name/1) == args
+
+        _other ->
+          false
+      end)
+    end
+
+    def impl_trait?(_type, _trait, _args), do: false
+
+    @doc "Returns the final path-like name for common type metadata nodes."
+    @spec type_name(RustQ.Syn.type()) :: String.t() | nil
+    def type_name(%RustQ.Syn.Type.Path{name: name}), do: name
+    def type_name(%RustQ.Syn.Type.Self{}), do: "Self"
+    def type_name(%RustQ.Syn.Type.Ref{inner: inner}), do: type_name(inner)
+    def type_name(%RustQ.Syn.Type.Option{inner: inner}), do: type_name(inner)
+    def type_name(_type), do: nil
+
     defmodule Path do
       @moduledoc "Rust path type metadata, for example `Paint`, `skia_safe::Canvas`, or `AsRef<Rect>`."
       defstruct [:code, :name, segments: [], args: []]
