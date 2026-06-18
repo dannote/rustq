@@ -208,7 +208,7 @@ defmodule RustQ.Meta do
     end
   end
 
-  defp normalize_type(type_ast, aliases), do: Type.from_spec_ast(type_ast, aliases)
+  defp normalize_type(type_ast, aliases), do: Type.parse(type_ast, aliases)
 
   defp rust_ast_type(type_ast) do
     %Type{
@@ -554,8 +554,7 @@ defmodule RustQ.Meta do
   defp find_spec!(specs, name, arity, type_aliases) do
     Enum.find_value(specs, fn
       {:spec, {:"::", _, [{^name, _, args}, return]}, _location} when length(args) == arity ->
-        {Enum.map(args, &Type.from_spec_ast(&1, type_aliases)),
-         Type.from_spec_ast(return, type_aliases)}
+        {Enum.map(args, &Type.parse(&1, type_aliases)), Type.parse(return, type_aliases)}
 
       _other ->
         nil

@@ -63,10 +63,8 @@ defmodule RustQ.Meta.Type do
 
   def external?(%__MODULE__{}, _module, _type), do: false
 
-  @spec from_spec_ast(Macro.t(), map()) :: t()
-  def from_spec_ast(ast, aliases \\ %{}), do: parse(ast, aliases)
-
-  @spec type_aliases([term()]) :: map()
+  @doc false
+  @spec parse(Macro.t(), map()) :: t()
   def type_aliases(types) do
     raw =
       types
@@ -170,22 +168,22 @@ defmodule RustQ.Meta.Type do
 
   defp parse_alias_type(ast, _raw, aliases), do: {parse(ast, aliases), aliases}
 
-  defp parse({{:., _, [module, function]}, _, args}, aliases),
+  def parse({{:., _, [module, function]}, _, args}, aliases),
     do: parse_remote(module, function, args, aliases)
 
-  defp parse({:{}, _, elements}, aliases) do
+  def parse({:{}, _, elements}, aliases) do
     tuple_types = Enum.map(elements, &parse(&1, aliases))
     tuple_type(tuple_types)
   end
 
-  defp parse({name, _, args}, aliases) when is_atom(name) and is_list(args) do
+  def parse({name, _, args}, aliases) when is_atom(name) and is_list(args) do
     case Map.get(aliases, {name, length(args)}) do
       nil -> parse_local_type(name, args, aliases)
       alias_type -> alias_type
     end
   end
 
-  defp parse({:|, _, _args} = union, aliases) do
+  def parse({:|, _, _args} = union, aliases) do
     cond do
       option_union?(union) ->
         [_nil, inner] = option_members(union)
@@ -206,15 +204,15 @@ defmodule RustQ.Meta.Type do
     end
   end
 
-  defp parse({:__aliases__, _, parts}, _aliases), do: type(:type, %AST.TypePath{parts: parts})
+  def parse({:__aliases__, _, parts}, _aliases), do: type(:type, %AST.TypePath{parts: parts})
 
-  defp parse(tuple, aliases)
-       when is_tuple(tuple) and tuple_size(tuple) > 0 and not is_ast_tuple(tuple) do
+  def parse(tuple, aliases)
+      when is_tuple(tuple) and tuple_size(tuple) > 0 and not is_ast_tuple(tuple) do
     tuple_types = tuple |> Tuple.to_list() |> Enum.map(&parse(&1, aliases))
     tuple_type(tuple_types)
   end
 
-  defp parse(atom, _aliases) when is_atom(atom), do: type(:type, path(atom))
+  def parse(atom, _aliases) when is_atom(atom), do: type(:type, path(atom))
 
   defp parse_remote(module, function, args, aliases) do
     if type_module?(module),

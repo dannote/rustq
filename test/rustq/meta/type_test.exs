@@ -4,34 +4,34 @@ defmodule RustQ.Meta.TypeTest do
   alias RustQ.Meta.Type
 
   test "maps fitting built-in Elixir types to Rust/Rustler types" do
-    assert Type.from_spec_ast(quote(do: atom())).rust == "Atom"
-    assert Type.from_spec_ast(quote(do: term())).rust == "Term<'a>"
-    assert Type.from_spec_ast(quote(do: boolean())).rust == "bool"
-    assert Type.from_spec_ast(quote(do: integer())).rust == "i64"
-    assert Type.from_spec_ast(quote(do: float())).rust == "f64"
-    assert Type.from_spec_ast(quote(do: number())).rust == "f64"
-    assert Type.from_spec_ast(quote(do: binary())).rust == "Vec<u8>"
+    assert RustQ.Spec.type(quote(do: atom())).rust == "Atom"
+    assert RustQ.Spec.type(quote(do: term())).rust == "Term<'a>"
+    assert RustQ.Spec.type(quote(do: boolean())).rust == "bool"
+    assert RustQ.Spec.type(quote(do: integer())).rust == "i64"
+    assert RustQ.Spec.type(quote(do: float())).rust == "f64"
+    assert RustQ.Spec.type(quote(do: number())).rust == "f64"
+    assert RustQ.Spec.type(quote(do: binary())).rust == "Vec<u8>"
   end
 
   test "parses external Rust module types from ordinary remote types" do
-    assert Type.from_spec_ast(quote(do: GeneratedOpts.OvalOpts.t(R.lifetime(:a)))).rust ==
+    assert RustQ.Spec.type(quote(do: GeneratedOpts.OvalOpts.t(R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"
 
-    assert Type.from_spec_ast(quote(do: R.ref(SkiaSafe.Canvas.t()))).rust ==
+    assert RustQ.Spec.type(quote(do: R.ref(SkiaSafe.Canvas.t()))).rust ==
              "&skia_safe::Canvas"
 
-    assert Type.from_spec_ast(quote(do: R.slice({R.atom(), R.term()}))).rust ==
+    assert RustQ.Spec.type(quote(do: R.slice({R.atom(), R.term()}))).rust ==
              "&[(Atom, Term<'a>)]"
   end
 
   test "categorizes lowered types semantically" do
-    number = Type.from_spec_ast(quote(do: number()))
-    integer = Type.from_spec_ast(quote(do: integer()))
-    boolean = Type.from_spec_ast(quote(do: boolean()))
-    atom = Type.from_spec_ast(quote(do: atom()))
-    string = Type.from_spec_ast(quote(do: String.t()))
-    tuple = Type.from_spec_ast(quote(do: {number(), integer()}))
-    external = Type.from_spec_ast(quote(do: Skia.Path.t()))
+    number = RustQ.Spec.type(quote(do: number()))
+    integer = RustQ.Spec.type(quote(do: integer()))
+    boolean = RustQ.Spec.type(quote(do: boolean()))
+    atom = RustQ.Spec.type(quote(do: atom()))
+    string = RustQ.Spec.type(quote(do: String.t()))
+    tuple = RustQ.Spec.type(quote(do: {number(), integer()}))
+    external = RustQ.Spec.type(quote(do: Skia.Path.t()))
 
     assert Type.category(number) == :number
     assert Type.category(integer) == :integer
@@ -45,7 +45,7 @@ defmodule RustQ.Meta.TypeTest do
   end
 
   test "keeps explicit Rust path marker as a low-level escape hatch" do
-    assert Type.from_spec_ast(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
+    assert RustQ.Spec.type(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"
   end
 
@@ -53,21 +53,21 @@ defmodule RustQ.Meta.TypeTest do
     assert %Type{
              rust: "skia_safe::Canvas",
              meta: %{elixir_module: SkiaSafe.Canvas, elixir_type: :t, elixir_args: []}
-           } = Type.from_spec_ast(quote(do: SkiaSafe.Canvas.t()))
+           } = RustQ.Spec.type(quote(do: SkiaSafe.Canvas.t()))
 
     assert %Type{
              rust: "skia_safe::Canvas::borrowed",
              meta: %{elixir_module: SkiaSafe.Canvas, elixir_type: :borrowed, elixir_args: []}
-           } = Type.from_spec_ast(quote(do: SkiaSafe.Canvas.borrowed()))
+           } = RustQ.Spec.type(quote(do: SkiaSafe.Canvas.borrowed()))
   end
 
   test "keeps external t aliases as direct Rust identifiers" do
-    assert Type.from_spec_ast(quote(do: ItemConst.t())).rust == "ItemConst"
-    assert Type.from_spec_ast(quote(do: ItemStruct.t())).rust == "ItemStruct"
-    assert Type.from_spec_ast(quote(do: Field.t())).rust == "Field"
-    assert Type.from_spec_ast(quote(do: RustQ.Some.External.t())).rust == "External"
+    assert RustQ.Spec.type(quote(do: ItemConst.t())).rust == "ItemConst"
+    assert RustQ.Spec.type(quote(do: ItemStruct.t())).rust == "ItemStruct"
+    assert RustQ.Spec.type(quote(do: Field.t())).rust == "Field"
+    assert RustQ.Spec.type(quote(do: RustQ.Some.External.t())).rust == "External"
 
-    assert Type.from_spec_ast(quote(do: RustQ.Type.nif_result(ItemEnum.t()))).rust ==
+    assert RustQ.Spec.type(quote(do: RustQ.Type.nif_result(ItemEnum.t()))).rust ==
              "NifResult<ItemEnum>"
   end
 

@@ -12,7 +12,7 @@ defmodule RustQ.Spec do
   def type(spec, aliases \\ %{}) do
     spec
     |> normalize()
-    |> RustQ.Meta.Type.from_spec_ast(aliases)
+    |> RustQ.Meta.Type.parse(aliases)
   end
 
   @doc "Builds type aliases from quoted or BEAM abstract type declarations."
@@ -75,8 +75,8 @@ defmodule RustQ.Spec do
     {name, [], Enum.map(args, &normalize/1)}
   end
 
-  def normalize({:atom, _line, atom}), do: atom
-  def normalize({:integer, _line, integer}), do: integer
+  def normalize({:atom, line, atom}) when is_integer(line), do: atom
+  def normalize({:integer, line, integer}) when is_integer(line), do: integer
 
   def normalize({:ann_type, _line, [_var, type]}), do: normalize(type)
   def normalize({:paren_type, _line, [type]}), do: normalize(type)

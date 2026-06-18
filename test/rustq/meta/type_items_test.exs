@@ -72,7 +72,7 @@ defmodule RustQ.Meta.TypeItemsTest do
                  %RustQ.Rust.AST.TypePath{parts: [:u32]}
                ]
              }
-           } = RustQ.Meta.Type.from_spec_ast(quote(do: MyMap.t(String.t(), R.u32())))
+           } = RustQ.Spec.type(quote(do: MyMap.t(String.t(), R.u32())))
   end
 
   test "type aliases generate structural Rust ASTs and decoders" do
