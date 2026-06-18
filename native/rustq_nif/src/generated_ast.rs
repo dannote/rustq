@@ -475,7 +475,12 @@ pub(crate) fn decode_type_vec<'a>(term: Term<'a>) -> NifResult<Type> {
 
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {
     let ident = super::format_ident_value(atom_key(term, "name")?);
-    super::parse_syn::<Pat>(quote!(# ident))
+    let mutable = required_field(term, "mutable")?.decode()?;
+    if mutable {
+        super::parse_syn::<Pat>(quote!(mut # ident))
+    } else {
+        super::parse_syn::<Pat>(quote!(# ident))
+    }
 }
 
 pub(crate) fn decode_pat_wildcard<'a>(_term: Term<'a>) -> NifResult<Pat> {

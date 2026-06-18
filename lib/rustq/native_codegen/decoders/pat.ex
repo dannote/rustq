@@ -6,7 +6,13 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
   @spec decode_pat_var(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_var(term) do
     ident = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    pat!(ident(ident))
+    mutable = unwrap!(unwrap!(required_field(term, "mutable")).decode())
+
+    if mutable do
+      pat!(mut_ident(ident))
+    else
+      pat!(ident(ident))
+    end
   end
 
   @spec decode_pat_wildcard(term()) :: R.nif_result(Pat.t())

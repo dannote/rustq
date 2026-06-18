@@ -526,6 +526,7 @@ defmodule RustQ.Rust.AST.Render do
     [render_pattern(pattern), " => {\n", render_stmt_block(body), "\n},"]
   end
 
+  def render_pattern(%PatVar{name: name, mutable: true}), do: ["mut ", Atom.to_string(name)]
   def render_pattern(%PatVar{name: name}), do: Atom.to_string(name)
   def render_pattern(%PatWildcard{}), do: "_"
   def render_pattern(%PatPath{path: path}), do: render_expr(path)

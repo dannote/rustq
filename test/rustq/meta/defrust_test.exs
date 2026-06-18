@@ -87,6 +87,31 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "raw_opts: &[(Atom, Term<'a>)]"
   end
 
+  test "defrust infers mutable option pattern bindings from mut_ref usage" do
+    defmodule MutableOptionPatternCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec apply_if_present(R.option(Paint.t())) :: R.nif_result(R.unit())
+      defrust apply_if_present(maybe_paint) do
+        case maybe_paint do
+          {:some, paint} ->
+            unwrap!(apply_blend_mode(mut_ref(paint), []))
+            use_paint(ref(paint))
+
+          :none ->
+            :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = MutableOptionPatternCase.__rustq_source__()
+    assert source =~ "Some(mut paint) =>"
+    assert source =~ "apply_blend_mode(&mut paint"
+  end
+
   test "defrust lowers comparison operators" do
     defmodule ComparisonCase do
       use RustQ.Meta

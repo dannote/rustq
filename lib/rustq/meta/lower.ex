@@ -107,9 +107,13 @@ defmodule RustQ.Meta.Lower do
 
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
+        body = lower_clause_body(body, context)
+        mutable_vars = body |> collect_mut_refs() |> MapSet.new()
+
         %AST.Arm{
-          pattern: lower_match_pattern(pattern, case_type),
-          body: lower_clause_body(body, context)
+          pattern:
+            pattern |> lower_match_pattern(case_type) |> mark_mutable_pattern_vars(mutable_vars),
+          body: body
         }
       end)
 
@@ -235,6 +239,36 @@ defmodule RustQ.Meta.Lower do
   defp lower_tuple_pattern({:_, _, _}), do: %AST.PatWildcard{}
   defp lower_tuple_pattern(nil), do: %AST.PatNone{}
   defp lower_tuple_pattern(atom) when is_atom(atom), do: %AST.PatAtomGuard{name: atom}
+
+  defp mark_mutable_pattern_vars(%AST.PatVar{name: name} = pattern, mutable_vars) do
+    if MapSet.member?(mutable_vars, name), do: %{pattern | mutable: true}, else: pattern
+  end
+
+  defp mark_mutable_pattern_vars(%AST.PatSome{pattern: pattern} = some, mutable_vars),
+    do: %{some | pattern: mark_mutable_pattern_vars(pattern, mutable_vars)}
+
+  defp mark_mutable_pattern_vars(%AST.PatOk{pattern: pattern} = ok, mutable_vars),
+    do: %{ok | pattern: mark_mutable_pattern_vars(pattern, mutable_vars)}
+
+  defp mark_mutable_pattern_vars(%AST.PatErr{pattern: pattern} = err, mutable_vars),
+    do: %{err | pattern: mark_mutable_pattern_vars(pattern, mutable_vars)}
+
+  defp mark_mutable_pattern_vars(%AST.PatTuple{patterns: patterns} = tuple, mutable_vars),
+    do: %{tuple | patterns: Enum.map(patterns, &mark_mutable_pattern_vars(&1, mutable_vars))}
+
+  defp mark_mutable_pattern_vars(%AST.PatPathTuple{patterns: patterns} = tuple, mutable_vars),
+    do: %{tuple | patterns: Enum.map(patterns, &mark_mutable_pattern_vars(&1, mutable_vars))}
+
+  defp mark_mutable_pattern_vars(%AST.PatStruct{fields: fields} = struct, mutable_vars) do
+    fields =
+      Enum.map(fields, fn {name, pattern} ->
+        {name, mark_mutable_pattern_vars(pattern, mutable_vars)}
+      end)
+
+    %{struct | fields: fields}
+  end
+
+  defp mark_mutable_pattern_vars(pattern, _mutable_vars), do: pattern
 
   defp lower_expr({:unwrap!, _, [expression]}), do: %AST.Try{expr: lower_expr(expression)}
 
@@ -497,6 +531,7 @@ defmodule RustQ.Meta.Lower do
   defp semantic_expr(other), do: raw_expr(RustQ.Rust.AST.Render.render_expr(lower_expr(other)))
 
   defp semantic_pat({:ident, _, [name]}), do: raw_pat(semantic_interpolation(name))
+  defp semantic_pat({:mut_ident, _, [name]}), do: raw_pat("mut #{semantic_interpolation(name)}")
   defp semantic_pat({:path, _, [path]}), do: raw_pat(semantic_interpolation(path))
 
   defp semantic_pat({:some, _, [pattern]}),

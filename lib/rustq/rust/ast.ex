@@ -473,7 +473,9 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat(), body: [RustQ.Rust.AST.stmt()]})
   )
 
-  defnode(PatVar, :pat, [:name], type: quote(do: %__MODULE__{name: atom()}))
+  defnode(PatVar, :pat, [:name, mutable: false],
+    type: quote(do: %__MODULE__{name: atom(), mutable: boolean()})
+  )
 
   defnode(PatWildcard, :pat, [], type: quote(do: %__MODULE__{}))
 
