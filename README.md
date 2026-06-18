@@ -227,6 +227,9 @@ file = RustQ.Syn.parse_file!("native/foo/src/lib.rs")
 
 [file_enum | _] = RustQ.Syn.enums(file)
 methods = RustQ.Syn.methods(file)
+
+index = RustQ.Syn.Index.from_paths(Path.wildcard("native/foo/src/**/*.rs"))
+method = RustQ.Syn.Index.method!(index, "Canvas", "draw_rect")
 ```
 
 Metadata includes docs and structured type information while keeping rendered
@@ -251,7 +254,8 @@ Rust type strings for display/debugging:
 Supported metadata currently covers top-level enums, structs, free functions,
 `impl` blocks, methods, doc comments, and common Rust type shapes such as paths,
 refs, tuples, `Option`, `Result`, `impl Trait`, slices, arrays, `Self`, and raw
-fallbacks.
+fallbacks. `RustQ.Syn.Type` also provides small predicate helpers such as
+`path?/2`, `ref_to?/2`, and `impl_trait?/3` for semantic matching.
 
 ## Generated files with `rustq.exs`
 

@@ -31,6 +31,7 @@ defmodule RustQ.MixProject do
   defp deps do
     [
       {:rustler, "~> 0.37", runtime: false},
+      {:json_codec, "~> 0.1", runtime: false},
       {:vibe_kit, "~> 0.1", only: [:dev, :test], runtime: false},
       {:igniter, "~> 0.6", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.0", only: [:dev, :test], runtime: false},
