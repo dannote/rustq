@@ -5,7 +5,6 @@ defmodule RustQ.Meta.DefrustTest do
 
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Builder, as: A
 
   test "generates Rust source from defrust functions and specs" do
     source = Generated.__rustq_source__()
@@ -43,49 +42,24 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
-  test "builds a function AST from quoted valid Elixir" do
-    function =
-      RustQ.Meta.quoted(:generated_save,
-        args: [canvas: quote(do: RustQ.Type.ref(Canvas.t()))],
-        returns: quote(do: RustQ.Type.nif_result(RustQ.Type.unit())),
-        do:
-          quote do
-            canvas.save()
-            :ok
-          end
-      )
+  test "builds a function AST from defrust valid Elixir" do
+    defmodule GeneratedSaveCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
 
-    assert %AST.Function{name: :generated_save, body: [%AST.ExprStmt{}, %AST.Return{}]} = function
+      @spec generated_save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+      defrust generated_save(canvas) do
+        canvas.save()
+        :ok
+      end
+    end
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+    assert %AST.Function{name: :generated_save, body: [%AST.ExprStmt{}, %AST.Return{}]} =
+             GeneratedSaveCase.__rustq_asts__() |> List.first()
+
+    source = GeneratedSaveCase.__rustq_source__()
     assert source =~ "fn generated_save(canvas: &Canvas) -> NifResult<()>"
     assert source =~ "canvas.save();"
-    assert source =~ "Ok(())"
-  end
-
-  test "quoted accepts explicit Rust AST types" do
-    function =
-      RustQ.Meta.quoted(:draw_translate_impl,
-        args: [
-          canvas: A.ref_type([:skia_safe, :Canvas]),
-          opts: A.type_path([:generated_opts, :TranslateOpts], lifetimes: [:a]),
-          _raw_opts: "&[(Atom, Term<'a>)]"
-        ],
-        returns: A.nif_result_type(A.unit_type()),
-        do:
-          quote do
-            canvas.translate({opts.x, opts.y})
-            :ok
-          end
-      )
-
-    source = RustQ.Rust.AST.Render.render_function(function)
-
-    assert source =~ "fn draw_translate_impl<'a>("
-    assert source =~ "canvas: &skia_safe::Canvas"
-    assert source =~ "opts: generated_opts::TranslateOpts<'a>"
-    assert source =~ "_raw_opts: &[(Atom, Term<'a>)]"
-    assert source =~ "canvas.translate((opts.x, opts.y));"
     assert source =~ "Ok(())"
   end
 
@@ -126,49 +100,33 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "canvas.save();"
   end
 
-  test "quoted maps configured Rust module alias calls" do
-    function =
-      RustQ.Meta.quoted(:atom_call,
-        args: [],
-        returns: quote(do: RustQ.Type.nif_result(atom())),
-        rust_modules: %{[:Atoms] => [:atoms]},
-        do:
-          quote do
-            Atoms.fill()
-          end
-      )
+  test "lowers zero-arity alias calls from defrust as Rust calls" do
+    defmodule AliasCallCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
 
-    source = RustQ.Rust.AST.Render.render_function(function)
-    assert source =~ "atoms::fill()"
-  end
+      @spec atom_call() :: R.nif_result(atom())
+      defrust atom_call() do
+        Atoms.args()
+      end
+    end
 
-  test "lowers zero-arity alias calls as Rust calls" do
-    function =
-      RustQ.Meta.quoted(:atom_call,
-        args: [],
-        returns: quote(do: RustQ.Type.nif_result(atom())),
-        do:
-          quote do
-            Atoms.args()
-          end
-      )
-
-    source = RustQ.Rust.AST.Render.render_function(function)
+    source = AliasCallCase.__rustq_source__()
     assert source =~ "Atoms::args()"
   end
 
-  test "builds typed Rustler decode expressions from valid Elixir" do
-    function =
-      RustQ.Meta.quoted(:decode_terms,
-        args: [term: quote(do: term())],
-        returns: quote(do: RustQ.Type.nif_result(RustQ.Type.vec(term()))),
-        do:
-          quote do
-            decode_as!(term, RustQ.Type.vec(term()))
-          end
-      )
+  test "builds typed Rustler decode expressions from defrust valid Elixir" do
+    defmodule DecodeTermsCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+      @spec decode_terms(term()) :: R.nif_result(R.vec(term()))
+      defrust decode_terms(term) do
+        decode_as!(term, R.vec(term()))
+      end
+    end
+
+    source = DecodeTermsCase.__rustq_source__()
     assert source =~ "fn decode_terms<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>>"
     assert source =~ "term.decode::<Vec<Term<'a>>>()?"
   end

@@ -18,7 +18,6 @@ defmodule RustQ.Meta.LowerTest do
 
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Builder, as: A
 
   test "defrust consumes idiomatic Rust-facing attributes" do
     assert %RustQ.Rust.AST.Function{attrs: attrs} =
@@ -73,47 +72,44 @@ defmodule RustQ.Meta.LowerTest do
            } = hd(maybe_save.body)
   end
 
-  test "closures and deref lower in method chains" do
-    function =
-      RustQ.Meta.quoted(:maybe_decode_color,
-        args: [args: A.type_path(:Args)],
-        returns: A.nif_result_type(A.unit_type()),
-        do:
-          quote do
-            case args.first().and_then(fn term -> decode_color(deref(term)).ok() end) do
-              {:some, color} -> canvas.clear(color)
-              :none -> :ok
-            end
+  test "defrust lowers closures and deref in method chains" do
+    defmodule ClosureDerefCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
 
-            :ok
-          end
-      )
+      @spec maybe_decode_color(R.ref(Canvas.t()), R.vec(term())) :: R.nif_result(R.unit())
+      defrust maybe_decode_color(canvas, args) do
+        case args.first().and_then(fn term -> decode_color(deref(term)).ok() end) do
+          {:some, color} -> canvas.clear(color)
+          :none -> :ok
+        end
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+        :ok
+      end
+    end
+
+    source = ClosureDerefCase.__rustq_source__()
 
     assert source =~ "args.first().and_then(|term| decode_color(*term).ok())"
     assert source =~ "Some(color) =>"
     assert source =~ "canvas.clear(color);"
   end
 
-  test "option cases use Elixir tuple and atom patterns" do
-    function =
-      RustQ.Meta.quoted(:save_if_present,
-        args: [
-          canvas: A.ref_type(:Canvas),
-          maybe_alpha: quote(do: RustQ.Type.option(RustQ.Type.f32()))
-        ],
-        returns: A.nif_result_type(A.unit_type()),
-        do:
-          quote do
-            case maybe_alpha do
-              {:some, alpha} -> canvas.save_layer_alpha(alpha)
-              :none -> :ok
-            end
+  test "defrust option cases use Elixir tuple and atom patterns" do
+    defmodule OptionCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
 
-            :ok
-          end
-      )
+      @spec save_if_present(R.ref(Canvas.t()), R.option(R.f32())) :: R.nif_result(R.unit())
+      defrust save_if_present(canvas, maybe_alpha) do
+        case maybe_alpha do
+          {:some, alpha} -> canvas.save_layer_alpha(alpha)
+          :none -> :ok
+        end
+
+        :ok
+      end
+    end
 
     assert %AST.Function{
              body: [
@@ -127,9 +123,9 @@ defmodule RustQ.Meta.LowerTest do
                },
                %AST.Return{expr: %AST.Ok{}}
              ]
-           } = function
+           } = OptionCase.__rustq_asts__() |> List.first()
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+    source = OptionCase.__rustq_source__()
     assert source =~ "Some(alpha) =>"
     assert source =~ "None =>"
   end
