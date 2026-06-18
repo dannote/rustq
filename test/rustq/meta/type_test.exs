@@ -9,6 +9,7 @@ defmodule RustQ.Meta.TypeTest do
     assert Type.from_spec_ast(quote(do: boolean())).rust == "bool"
     assert Type.from_spec_ast(quote(do: integer())).rust == "i64"
     assert Type.from_spec_ast(quote(do: float())).rust == "f64"
+    assert Type.from_spec_ast(quote(do: number())).rust == "f64"
     assert Type.from_spec_ast(quote(do: binary())).rust == "Vec<u8>"
   end
 

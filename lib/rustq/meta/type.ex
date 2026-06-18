@@ -175,6 +175,7 @@ defmodule RustQ.Meta.Type do
   defp parse_local_type(:boolean, [], _aliases), do: type(:bool, path(:bool))
   defp parse_local_type(:integer, [], _aliases), do: type(:i64, path(:i64))
   defp parse_local_type(:float, [], _aliases), do: type(:f64, path(:f64))
+  defp parse_local_type(:number, [], _aliases), do: type(:f64, path(:f64))
 
   defp parse_local_type(:term, [], _aliases),
     do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})
