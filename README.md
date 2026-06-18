@@ -144,8 +144,10 @@ assembling statement lists in Elixir.
 ## `defrust` macro frontend
 
 RustQ also has an experimental valid-Elixir frontend for Rusty-Elixir codegen.
-`defrust` reads normal `@spec` types and lowers ordinary Elixir syntax into the
-Rust AST used by the native renderer:
+`defrust` is the user-facing authoring surface: write normal Elixir `@spec`s,
+`@type`s, macros, and function bodies, and RustQ lowers them into the Rust AST
+used by the native renderer. Low-level bridges such as `RustQ.Meta.quoted/2` are
+internal escape hatches for generators, not the normal API.
 
 ```elixir
 defmodule MyApp.Native.Generated do
@@ -164,11 +166,27 @@ defmodule MyApp.Native.Generated do
 end
 ```
 
-Use semantic helpers such as `expr!`, `pat!`, and `stmt!` for Rust-shaped values
-that are still authored as valid Elixir. `Super.*` calls mark the boundary to
-handwritten Rust primitives. Raw token escapes (`raw_expr!`, `raw_pat!`,
-`raw_stmt!`, `raw_arm!`) are explicit low-level escape hatches for cases not yet
-covered by semantic helpers.
+The intended Rusty-Elixir style is:
+
+- use `@spec` as the function signature source of truth
+- use ordinary remote types for external Rust paths where possible:
+  `SkiaSafe.Canvas.t()` renders as `skia_safe::Canvas`, and
+  `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` renders as
+  `generated_opts::OvalOpts<'a>`
+- use `RustQ.Type` (`alias RustQ.Type, as: R`) only where Elixir typespecs need
+  Rust-specific precision: `R.ref/1`, `R.mut_ref/1`, `R.nif_result/1`,
+  `R.unit/0`, `R.slice/1`, `R.term/0`, fixed-width numbers, lifetimes, and
+  container types
+- use ordinary Elixir aliases and calls in bodies; plural module aliases such as
+  `Atoms.fill()` render as snake-case Rust modules such as `atoms::fill()`
+- use normal Elixir `defmacro`, `quote`, and `unquote` for reusable body
+  fragments; RustQ expands those macros before lowering
+- use semantic helpers such as `expr!`, `pat!`, and `stmt!` for Rust-shaped
+  values that are still authored as valid Elixir
+- treat raw token escapes (`raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`) as
+  explicit low-level escape hatches for cases not yet covered by semantic helpers
+
+`Super.*` calls mark the boundary to handwritten Rust primitives.
 
 RustQ dogfoods this layer in `RustQ.NativeCodegen.Decoders.*` to generate much of
 its own native AST decoder support.
@@ -179,6 +197,7 @@ Current `defrust` subset:
 - Skia-driven Rust AST nodes and builders such as `struct`, `impl`, type aliases, `if let`, `let ... else`, `for`, turbofish calls, byte/array literals, casts, indexing/ranges, richer operators, `A.atom/2`, typed option decode helpers, and explicit `A.escape_expr/1` compatibility boundaries
 - ordinary assignment as Rust `let`, explicit `assign!`, explicit `return!`, final expressions, `if`, and `case`
 - aliases, remote calls, method calls, local calls, expression/item macro calls, fields, refs, tuples, lists as `vec![...]`, and literals
+- ordinary external remote types such as `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` for Rust paths like `generated_opts::OvalOpts<'a>`
 - `Enum.map/2` with a single-argument anonymous function lowers to an iterator chain
 - `Option`, `Result`, and `NifResult` return/branch wrapping from `@spec`
 - selected `@type` forms: atom unions, `nil | t`, `{:ok, t} | {:error, e}`, maps, structs, and tagged tuple unions
@@ -226,16 +245,14 @@ mod generated_helpers {
 }
 ```
 
-The non-block form is a low-level RustQ path mapping for generated code that is
-still owned by the same RustQ generation boundary. Do not use `defrustmod` as a
-hand-written declaration for Rust modules that are defined elsewhere by another
-generator or crate. If a downstream project already generates or owns Rust like
-`mod generated_opts;`, its own codegen layer should infer/render
-`generated_opts::...` paths from that project metadata instead of pretending that
-`GeneratedOpts` is an Elixir module or manually declaring it with `defrustmod`.
+Do not use `defrustmod` as a hand-written declaration for Rust modules that are
+defined elsewhere by another generator or crate. If a downstream project already
+generates or owns Rust like `mod generated_opts;`, express the type in the
+`@spec` as an ordinary external remote type such as
+`GeneratedOpts.OvalOpts.t(R.lifetime(:a))` and write body calls normally.
 
-In short: use `defrustmod` to generate or map RustQ-owned module structure; do
-not use it to paper over externally-owned Rust modules/types.
+In short: use `defrustmod` only to generate RustQ-owned module structure; do not
+use it to paper over externally-owned Rust modules/types.
 
 `RustQ.Meta.Type` is the typespec-driven path for `defrust`. `RustQ.Rustler.Schema`
 remains the explicit public schema DSL for Rustler struct/tagged-enum generation;

@@ -247,8 +247,8 @@ defmodule RustQ.Meta.Type do
     })
   end
 
-  defp parse_external_type({:__aliases__, _, parts}, :t, [], _aliases),
-    do: type(:type, path(List.last(parts)))
+  defp parse_external_type({:__aliases__, _, parts}, :t, args, aliases),
+    do: type(:type, external_type_path(parts, args, aliases))
 
   defp parse_external_type({:__aliases__, _, parts}, function, args, aliases) do
     type =
@@ -308,6 +308,40 @@ defmodule RustQ.Meta.Type do
   defp raw_type!(other) do
     raise ArgumentError, "expected R.raw atom marker, got: #{Macro.to_string(other)}"
   end
+
+  defp external_type_path(parts, args, aliases) do
+    %AST.TypePath{
+      parts: external_type_parts(parts),
+      lifetimes: Enum.flat_map(args, &external_type_lifetimes!/1),
+      generics: Enum.flat_map(args, &external_type_generics(&1, aliases))
+    }
+  end
+
+  defp external_type_parts([part]), do: [part]
+  defp external_type_parts([:"Elixir" | parts]), do: [List.last(parts)]
+  defp external_type_parts([:RustQ | parts]), do: [List.last(parts)]
+
+  defp external_type_parts(parts) do
+    {modules, [type]} = Enum.split(parts, -1)
+    Enum.map(modules, &rust_module_part/1) ++ [type]
+  end
+
+  defp external_type_lifetimes!({{:., _, [module, :lifetime]}, _, [name]}) do
+    if type_module?(module), do: [spec_path_part!(name)], else: []
+  end
+
+  defp external_type_lifetimes!(_arg), do: []
+
+  defp external_type_generics({{:., _, [module, :lifetime]}, _, [_name]}, _aliases) do
+    if type_module?(module), do: [], else: raise(ArgumentError, "unsupported lifetime marker")
+  end
+
+  defp external_type_generics(arg, aliases), do: [parse(arg, aliases).ast]
+
+  defp rust_module_part(part) when is_atom(part),
+    do: part |> Atom.to_string() |> Macro.underscore() |> String.to_atom()
+
+  defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
 
   defp rendered_tuple_prefix(1), do: "("
   defp rendered_tuple_prefix(_size), do: "("

@@ -69,8 +69,8 @@ defmodule RustQ.Meta.DefrustTest do
       alias RustQ.Type, as: R
 
       @spec draw_oval_impl(
-              R.ref(R.path({:skia_safe, :Canvas})),
-              R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)),
+              R.ref(SkiaSafe.Canvas.t()),
+              GeneratedOpts.OvalOpts.t(R.lifetime(:a)),
               R.slice({R.atom(), R.term()})
             ) :: R.nif_result(R.unit())
       defrust draw_oval_impl(canvas, opts, raw_opts) do
@@ -153,6 +153,21 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "canvas.save();"
   end
 
+  test "lowers plural module alias calls as snake_case Rust modules" do
+    defmodule AutomaticModuleAliasCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec atom_call() :: R.nif_result(atom())
+      defrust atom_call() do
+        Atoms.fill()
+      end
+    end
+
+    source = AutomaticModuleAliasCase.__rustq_source__()
+    assert source =~ "atoms::fill()"
+  end
+
   test "lowers zero-arity alias calls from defrust as Rust calls" do
     defmodule AliasCallCase do
       use RustQ.Meta
@@ -165,7 +180,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     source = AliasCallCase.__rustq_source__()
-    assert source =~ "Atoms::args()"
+    assert source =~ "atoms::args()"
   end
 
   test "builds typed Rustler decode expressions from defrust valid Elixir" do

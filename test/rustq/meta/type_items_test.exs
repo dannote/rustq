@@ -62,11 +62,11 @@ defmodule RustQ.Meta.TypeItemsTest do
            )
   end
 
-  test "generic type paths keep structured generic arguments" do
+  test "external t types keep structured generic arguments" do
     assert %RustQ.Meta.Type{
-             rust: "MyMap::t<String, u32>",
+             rust: "MyMap<String, u32>",
              ast: %RustQ.Rust.AST.TypePath{
-               parts: [:MyMap, :t],
+               parts: [:MyMap],
                generics: [
                  %RustQ.Rust.AST.TypePath{parts: [:String]},
                  %RustQ.Rust.AST.TypePath{parts: [:u32]}

@@ -27,12 +27,20 @@ of the current branch and the plan below reflects the current codebase:
    - Ordinary Elixir assignment lowers to Rust `let`.
    - Ordinary `case` lowers to Rust `match`.
    - Ordinary aliases/remote calls lower to Rust paths/calls when appropriate.
+   - Reusable Rusty-Elixir body fragments should use normal Elixir `defmacro`,
+     `quote`, and `unquote`; do not invent a RustQ-specific quote system unless
+     ordinary Elixir macros are proven insufficient.
 
 2. **Specs and types are source of truth**
    - `@spec` drives function signatures and return-context lowering.
    - `@type` drives generated Rust enums/structs/decoders where possible.
    - Prefer built-in Elixir types (`atom()`, `term()`, `boolean()`, etc.) when
      they fit; use `RustQ.Type` only for Rust-specific precision.
+   - Express external Rust paths as ordinary remote types where possible, e.g.
+     `SkiaSafe.Canvas.t()` -> `skia_safe::Canvas` and
+     `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` ->
+     `generated_opts::OvalOpts<'a>`. Keep `R.path/1,2` as a low-level escape
+     hatch, not the normal authoring style.
 
 3. **Rust AST before strings**
    - Prefer `RustQ.Rust.AST` nodes and native rendering over handwritten Rust
@@ -376,6 +384,9 @@ Recently completed:
 - Rusty-Elixir supports idiomatic Rust-facing attributes on `defrust`, starting
   with `@nif schedule: "DirtyCpu"` and `@allow :dead_code`, lowered through a
   structural `Attribute` AST node.
+- Rusty-Elixir specs can now express external Rust paths as ordinary remote
+  types such as `GeneratedOpts.OvalOpts.t(R.lifetime(:a))`, and body macros are
+  expanded with normal Elixir macro semantics before lowering.
 - RustQ AST now covers the next Skia-driven Rust shapes: `impl` blocks,
   generic/turbofish path and method calls, `if let`, `for`, byte strings,
   indexing/ranges, casts, unary ops, and comparison/arithmetic binary ops.

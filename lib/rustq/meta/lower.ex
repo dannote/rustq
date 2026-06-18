@@ -687,7 +687,26 @@ defmodule RustQ.Meta.Lower do
 
   defp rust_variant(name), do: name |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
 
-  defp alias_parts({:__aliases__, _, parts}), do: Map.get(current_rust_modules(), parts, parts)
+  defp alias_parts({:__aliases__, _, parts}),
+    do: Map.get(current_rust_modules(), parts, automatic_rust_alias_parts(parts))
+
+  defp automatic_rust_alias_parts(parts) do
+    if rust_module_alias?(parts) do
+      Enum.map(parts, &rust_module_part/1)
+    else
+      parts
+    end
+  end
+
+  defp rust_module_alias?(parts) do
+    parts
+    |> List.last()
+    |> Atom.to_string()
+    |> String.ends_with?("s")
+  end
+
+  defp rust_module_part(part),
+    do: part |> Atom.to_string() |> Macro.underscore() |> String.to_atom()
 
   defp with_rust_modules(rust_modules, fun) do
     key = {__MODULE__, :rust_modules}

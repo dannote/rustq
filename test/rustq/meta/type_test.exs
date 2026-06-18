@@ -12,15 +12,20 @@ defmodule RustQ.Meta.TypeTest do
     assert Type.from_spec_ast(quote(do: binary())).rust == "Vec<u8>"
   end
 
-  test "parses explicit Rust path and raw markers" do
-    assert Type.from_spec_ast(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
+  test "parses external Rust module types from ordinary remote types" do
+    assert Type.from_spec_ast(quote(do: GeneratedOpts.OvalOpts.t(R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"
 
-    assert Type.from_spec_ast(quote(do: R.ref(R.path({:skia_safe, :Canvas})))).rust ==
+    assert Type.from_spec_ast(quote(do: R.ref(SkiaSafe.Canvas.t()))).rust ==
              "&skia_safe::Canvas"
 
     assert Type.from_spec_ast(quote(do: R.slice({R.atom(), R.term()}))).rust ==
              "&[(Atom, Term<'a>)]"
+  end
+
+  test "keeps explicit Rust path marker as a low-level escape hatch" do
+    assert Type.from_spec_ast(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
+             "generated_opts::OvalOpts<'a>"
   end
 
   test "keeps external t aliases as direct Rust identifiers" do
