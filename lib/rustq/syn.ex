@@ -65,7 +65,34 @@ defmodule RustQ.Syn do
     @type t :: %__MODULE__{name: String.t() | nil, type: String.t()}
   end
 
-  @type item :: RustQ.Syn.Enum.t() | RustQ.Syn.Struct.t() | RustQ.Syn.Function.t()
+  defmodule Impl do
+    @moduledoc "Rust impl block metadata."
+    defstruct [:target, :trait, methods: []]
+
+    @type t :: %__MODULE__{
+            target: String.t(),
+            trait: String.t() | nil,
+            methods: [RustQ.Syn.Method.t()]
+          }
+  end
+
+  defmodule Method do
+    @moduledoc "Rust impl method metadata."
+    defstruct [:name, :visibility, args: [], returns: nil]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            args: [RustQ.Syn.Arg.t()],
+            returns: String.t() | nil
+          }
+  end
+
+  @type item ::
+          RustQ.Syn.Enum.t()
+          | RustQ.Syn.Struct.t()
+          | RustQ.Syn.Function.t()
+          | RustQ.Syn.Impl.t()
 
   @doc "Parses Rust source into structural metadata."
   @spec parse(String.t()) :: {:ok, RustQ.Syn.File.t()} | {:error, term()}
@@ -118,6 +145,16 @@ defmodule RustQ.Syn do
   def functions(%RustQ.Syn.File{items: items}),
     do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Function{}, &1))
 
+  @doc "Returns top-level Rust impl block metadata from a parsed file."
+  @spec impls(RustQ.Syn.File.t()) :: [RustQ.Syn.Impl.t()]
+  def impls(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Impl{}, &1))
+
+  @doc "Returns methods from all top-level Rust impl blocks in a parsed file."
+  @spec methods(RustQ.Syn.File.t()) :: [RustQ.Syn.Method.t()]
+  def methods(%RustQ.Syn.File{} = file),
+    do: file |> impls() |> Elixir.Enum.flat_map(& &1.methods)
+
   @doc "Returns variants for a named top-level enum from Rust source."
   @spec enum_variants(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   def enum_variants(source, enum_name) when is_binary(source) and is_binary(enum_name),
@@ -152,10 +189,30 @@ defmodule RustQ.Syn do
     %RustQ.Syn.Function{
       name: name,
       visibility: decode_visibility!(visibility),
-      args: Elixir.Enum.map(args, fn {name, type} -> %RustQ.Syn.Arg{name: name, type: type} end),
+      args: decode_args(args),
       returns: returns
     }
   end
+
+  defp decode_item!({"impl", target, trait, methods}) do
+    %RustQ.Syn.Impl{
+      target: target,
+      trait: trait,
+      methods: Elixir.Enum.map(methods, &decode_method!/1)
+    }
+  end
+
+  defp decode_method!({"method", name, visibility, args, returns}) do
+    %RustQ.Syn.Method{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      args: decode_args(args),
+      returns: returns
+    }
+  end
+
+  defp decode_args(args),
+    do: Elixir.Enum.map(args, fn {name, type} -> %RustQ.Syn.Arg{name: name, type: type} end)
 
   defp decode_visibility!("public"), do: :public
   defp decode_visibility!("private"), do: :private

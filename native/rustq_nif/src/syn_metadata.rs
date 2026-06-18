@@ -1,6 +1,6 @@
 use quote::ToTokens;
 use rustler::{Encoder, Env, NifResult, Term};
-use syn::{Fields, FnArg, Item, ReturnType, Type, Visibility};
+use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
 
 use crate::{atoms, template_error};
 
@@ -70,6 +70,39 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
         Item::Fn(item) => Some(
             (
                 "function",
+                item.sig.ident.to_string(),
+                visibility(&item.vis),
+                item.sig
+                    .inputs
+                    .into_iter()
+                    .map(function_arg)
+                    .collect::<Vec<_>>(),
+                return_type(item.sig.output),
+            )
+                .encode(env),
+        ),
+        Item::Impl(item) => Some(
+            (
+                "impl",
+                type_string(*item.self_ty),
+                item.trait_
+                    .map(|(_bang, path, _for)| path.to_token_stream().to_string()),
+                item.items
+                    .into_iter()
+                    .filter_map(|item| impl_method_term(env, item))
+                    .collect::<Vec<_>>(),
+            )
+                .encode(env),
+        ),
+        _ => None,
+    }
+}
+
+fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
+    match item {
+        ImplItem::Fn(item) => Some(
+            (
+                "method",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
                 item.sig
