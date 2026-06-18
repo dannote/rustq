@@ -12,6 +12,17 @@ defmodule RustQ.Meta.TypeTest do
     assert Type.from_spec_ast(quote(do: binary())).rust == "Vec<u8>"
   end
 
+  test "parses explicit Rust path and raw markers" do
+    assert Type.from_spec_ast(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
+             "generated_opts::OvalOpts<'a>"
+
+    assert Type.from_spec_ast(quote(do: R.ref(R.path({:skia_safe, :Canvas})))).rust ==
+             "&skia_safe::Canvas"
+
+    assert Type.from_spec_ast(quote(do: R.slice({R.atom(), R.term()}))).rust ==
+             "&[(Atom, Term<'a>)]"
+  end
+
   test "keeps external t aliases as direct Rust identifiers" do
     assert Type.from_spec_ast(quote(do: ItemConst.t())).rust == "ItemConst"
     assert Type.from_spec_ast(quote(do: ItemStruct.t())).rust == "ItemStruct"
@@ -46,7 +57,12 @@ defmodule RustQ.Meta.TypeTest do
                {:option, 1},
                {:result, 2},
                {:nif_result, 1},
-               {:vec, 1}
+               {:vec, 1},
+               {:path, 1},
+               {:path, 2},
+               {:lifetime, 1},
+               {:slice, 1},
+               {:raw, 1}
              ]),
              types
            )

@@ -63,6 +63,59 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Ok(())"
   end
 
+  test "defrust specs can use explicit Rust path and raw type markers" do
+    defmodule ExplicitRustTypeCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec draw_oval_impl(
+              R.ref(R.path({:skia_safe, :Canvas})),
+              R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)),
+              R.slice({R.atom(), R.term()})
+            ) :: R.nif_result(R.unit())
+      defrust draw_oval_impl(canvas, opts, raw_opts) do
+        rect = Rect.from_xywh(opts.x, opts.y, opts.width, opts.height)
+        canvas.draw_oval(rect, ref(raw_opts))
+        :ok
+      end
+    end
+
+    source = ExplicitRustTypeCase.__rustq_source__()
+    assert source =~ "fn draw_oval_impl<'a>("
+    assert source =~ "canvas: &skia_safe::Canvas"
+    assert source =~ "opts: generated_opts::OvalOpts<'a>"
+    assert source =~ "raw_opts: &[(Atom, Term<'a>)]"
+  end
+
+  test "defrust expands ordinary Elixir helper macros before lowering" do
+    defmodule MacroBodyCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defmacro with_saved_canvas(do: body) do
+        quote do
+          var!(canvas).save()
+          unquote(body)
+          var!(canvas).restore()
+        end
+      end
+
+      @spec draw(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+      defrust draw(canvas) do
+        with_saved_canvas do
+          canvas.translate({1.0, 2.0})
+        end
+
+        :ok
+      end
+    end
+
+    source = MacroBodyCase.__rustq_source__()
+    assert source =~ "canvas.save();"
+    assert source =~ "canvas.translate((1.0, 2.0));"
+    assert source =~ "canvas.restore();"
+  end
+
   test "defrustmod maps alias calls to Rust module paths" do
     defmodule ModuleMappedCase do
       use RustQ.Meta

@@ -99,7 +99,7 @@ defmodule RustQ.Meta do
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
     rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
 
-    built_asts = Enum.map(defs, &build_ast(&1, specs, type_aliases, rust_modules))
+    built_asts = Enum.map(defs, &build_ast(&1, specs, type_aliases, rust_modules, env))
     asts = Enum.map(built_asts, & &1.ast)
     type_asts = build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &validate_item_ast/1)
@@ -240,13 +240,13 @@ defmodule RustQ.Meta do
 
   defp allow_attr(values), do: %AST.Attribute{path: [:allow], args: List.wrap(values)}
 
-  defp build_ast({call_ast, body_ast}, specs, type_aliases, rust_modules),
-    do: build_ast({call_ast, body_ast, [], nil}, specs, type_aliases, rust_modules)
+  defp build_ast({call_ast, body_ast}, specs, type_aliases, rust_modules, env),
+    do: build_ast({call_ast, body_ast, [], nil}, specs, type_aliases, rust_modules, env)
 
-  defp build_ast({call_ast, body_ast, attrs}, specs, type_aliases, rust_modules),
-    do: build_ast({call_ast, body_ast, attrs, nil}, specs, type_aliases, rust_modules)
+  defp build_ast({call_ast, body_ast, attrs}, specs, type_aliases, rust_modules, env),
+    do: build_ast({call_ast, body_ast, attrs, nil}, specs, type_aliases, rust_modules, env)
 
-  defp build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules) do
+  defp build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules, env) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
@@ -254,6 +254,8 @@ defmodule RustQ.Meta do
     args =
       Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
       |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
+
+    body_ast = expand_body_macros(body_ast, env)
 
     body =
       Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
@@ -272,6 +274,82 @@ defmodule RustQ.Meta do
     }
 
     %{ast: ast, rust_module: rust_module}
+  end
+
+  defp expand_body_macros(body_ast, env) do
+    body_ast
+    |> Macro.prewalk(fn ast -> expand_body_macro(ast, env) end)
+    |> flatten_blocks()
+  end
+
+  defp expand_body_macro({name, _meta, args} = ast, env) when is_atom(name) and is_list(args) do
+    if kernel_or_rusty_form?(name) do
+      ast
+    else
+      expanded = Macro.expand(ast, env)
+
+      if expanded == ast do
+        ast
+      else
+        expand_body_macros(expanded, env)
+      end
+    end
+  end
+
+  defp expand_body_macro(ast, _env), do: ast
+
+  defp flatten_blocks({:__block__, meta, expressions}) do
+    {:__block__, meta, Enum.flat_map(expressions, &flatten_block_expression/1)}
+  end
+
+  defp flatten_blocks(ast), do: ast
+
+  defp flatten_block_expression({:__block__, _meta, expressions}),
+    do: Enum.flat_map(expressions, &flatten_block_expression/1)
+
+  defp flatten_block_expression(expression), do: [expression]
+
+  defp kernel_or_rusty_form?(name) do
+    name in [
+      :=,
+      :!,
+      :!=,
+      :!==,
+      :%,
+      :{},
+      :*,
+      :+,
+      :++,
+      :-,
+      :--,
+      :/,
+      :<,
+      :<=,
+      :==,
+      :===,
+      :=~,
+      :>,
+      :>=,
+      :__aliases__,
+      :__block__,
+      :and,
+      :case,
+      :fn,
+      :for,
+      :if,
+      :in,
+      :is_nil,
+      :not,
+      :or,
+      :ref,
+      :mut_ref,
+      :deref,
+      :raw_expr!,
+      :raw_pat!,
+      :raw_stmt!,
+      :raw_arm!,
+      :unwrap!
+    ]
   end
 
   defp group_module_asts(built_asts) do

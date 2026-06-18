@@ -6,7 +6,7 @@ defmodule RustQ.Type do
   as `atom()`, `term()`, `boolean()`, `integer()`, `float()`, and `binary()` to
   Rust/Rustler types. Use this module where Rust needs extra precision or
   syntax that Elixir types cannot express: fixed-width numbers, references,
-  `NifResult`, `Vec`, and unit.
+  external Rust paths, slices, `NifResult`, `Vec`, and unit.
 
       alias RustQ.Type, as: R
 
@@ -71,6 +71,21 @@ defmodule RustQ.Type do
   @typedoc "Rustler NIF error marker."
   @type nif_error :: atom()
 
+  @typedoc "Explicit Rust path marker for generated or external Rust types."
+  @type path(parts) :: {parts, term()}
+
+  @typedoc "Explicit Rust path marker with options such as `R.lifetime(:a)`."
+  @type path(parts, opts) :: {parts, opts, term()}
+
+  @typedoc "Rust lifetime marker for `R.path/2`."
+  @type lifetime(name) :: {name, term()}
+
+  @typedoc "Rust slice reference `&[T]`."
+  @type slice(t) :: {t, term()}
+
+  @typedoc "Raw Rust type fragment marker for syntax Elixir typespecs cannot model. Prefer structural markers such as `R.slice/1` when possible."
+  @type raw(name) :: {name, term()}
+
   def atom, do: type_only!()
   def bool, do: type_only!()
   def f32, do: type_only!()
@@ -81,6 +96,12 @@ defmodule RustQ.Type do
   def u8, do: type_only!()
   def u32, do: type_only!()
   def unit, do: type_only!()
+
+  def path(_parts), do: type_only!()
+  def path(_parts, _opts), do: type_only!()
+  def lifetime(_name), do: type_only!()
+  def slice(_type), do: type_only!()
+  def raw(_name), do: type_only!()
 
   def ref(_type), do: type_only!()
   def mut_ref(_type), do: type_only!()

@@ -3,6 +3,10 @@ defmodule RustQ.Meta.Type do
 
   alias RustQ.Rust.AST
 
+  defguardp is_ast_tuple(tuple)
+            when tuple_size(tuple) == 3 and is_atom(elem(tuple, 0)) and is_list(elem(tuple, 1)) and
+                   is_list(elem(tuple, 2))
+
   defstruct [:kind, :rust, :ast, meta: %{}]
 
   @type t :: %__MODULE__{kind: atom(), rust: String.t(), ast: term(), meta: map()}
@@ -146,6 +150,14 @@ defmodule RustQ.Meta.Type do
   end
 
   defp parse({:__aliases__, _, parts}, _aliases), do: type(:type, %AST.TypePath{parts: parts})
+
+  defp parse(tuple, aliases)
+       when is_tuple(tuple) and tuple_size(tuple) > 0 and not is_ast_tuple(tuple) do
+    tuple_types = tuple |> Tuple.to_list() |> Enum.map(&parse(&1, aliases))
+    rendered = tuple_types |> Enum.map(& &1.rust) |> Enum.join(", ")
+    type(:tuple, {:raw, "#{rendered_tuple_prefix(tuple_size(tuple))}#{rendered})"})
+  end
+
   defp parse(atom, _aliases) when is_atom(atom), do: type(:type, path(atom))
 
   defp parse_remote(module, function, args, aliases) do
@@ -183,6 +195,19 @@ defmodule RustQ.Meta.Type do
   defp parse_rust_type(:u8, [], _aliases), do: type(:u8, path(:u8))
   defp parse_rust_type(:u32, [], _aliases), do: type(:u32, path(:u32))
   defp parse_rust_type(:unit, [], _aliases), do: type(:unit, %AST.TypeUnit{})
+
+  defp parse_rust_type(:path, [parts], _aliases), do: type(:type, spec_path!(parts, nil))
+  defp parse_rust_type(:path, [parts, opts], _aliases), do: type(:type, spec_path!(parts, opts))
+
+  defp parse_rust_type(:lifetime, [name], _aliases),
+    do: type(:lifetime, {:raw, "'#{spec_path_part!(name)}"})
+
+  defp parse_rust_type(:slice, [inner], aliases) do
+    inner = parse(inner, aliases)
+    type(:slice, {:raw, "&[#{inner.rust}]"})
+  end
+
+  defp parse_rust_type(:raw, [type], _aliases), do: type(:type, raw_type!(type))
 
   defp parse_rust_type(:ref, [inner], aliases) do
     inner = parse(inner, aliases)
@@ -242,6 +267,50 @@ defmodule RustQ.Meta.Type do
   end
 
   defp parse_external_type(_module, function, _args, _aliases), do: type(:type, path(function))
+
+  defp spec_path!({:__block__, _, [parts]}, opts), do: spec_path!(parts, opts)
+
+  defp spec_path!(parts, opts) when is_tuple(parts) do
+    %AST.TypePath{
+      parts: parts |> Tuple.to_list() |> Enum.map(&spec_path_part!/1),
+      lifetimes: spec_path_lifetimes!(opts)
+    }
+  end
+
+  defp spec_path!(part, opts) when is_atom(part), do: spec_path!({part}, opts)
+
+  defp spec_path!(other, _opts) do
+    raise ArgumentError, "expected R.path parts tuple, got: #{Macro.to_string(other)}"
+  end
+
+  defp spec_path_lifetimes!(nil), do: []
+
+  defp spec_path_lifetimes!({{:., _, [module, :lifetime]}, _, [name]}) do
+    if type_module?(module), do: [spec_path_part!(name)], else: []
+  end
+
+  defp spec_path_lifetimes!(other) do
+    raise ArgumentError,
+          "expected R.path option such as R.lifetime(:a), got: #{Macro.to_string(other)}"
+  end
+
+  defp spec_path_part!(part) when is_atom(part), do: part
+  defp spec_path_part!(part) when is_binary(part), do: String.to_atom(part)
+
+  defp spec_path_part!(other) do
+    raise ArgumentError,
+          "expected R.path part to be an atom or string, got: #{Macro.to_string(other)}"
+  end
+
+  defp raw_type!({:__block__, _, [type]}), do: raw_type!(type)
+  defp raw_type!(type) when is_atom(type), do: {:raw, Atom.to_string(type)}
+
+  defp raw_type!(other) do
+    raise ArgumentError, "expected R.raw atom marker, got: #{Macro.to_string(other)}"
+  end
+
+  defp rendered_tuple_prefix(1), do: "("
+  defp rendered_tuple_prefix(_size), do: "("
 
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),
     do: true
