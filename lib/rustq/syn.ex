@@ -248,13 +248,6 @@ defmodule RustQ.Syn do
     @type t :: %__MODULE__{receiver: String.t(), method: String.t()}
   end
 
-  defmodule FunctionMethodCalls do
-    @moduledoc "Receiver method calls grouped by Rust function name."
-    defstruct [:function, calls: []]
-
-    @type t :: %__MODULE__{function: String.t(), calls: [RustQ.Syn.MethodCall.t()]}
-  end
-
   defmodule Signature do
     @moduledoc "Structured Rust function or method signature metadata."
     defstruct [:name, args: [], returns: nil]
@@ -524,30 +517,6 @@ defmodule RustQ.Syn do
     end
   end
 
-  @doc "Returns receiver method calls grouped by top-level Rust function."
-  @spec function_method_calls(String.t()) ::
-          {:ok, [RustQ.Syn.FunctionMethodCalls.t()]} | {:error, term()}
-  def function_method_calls(source) when is_binary(source) do
-    case RustQ.Native.syn_function_method_calls(source) do
-      {:ok, groups} -> {:ok, Elixir.Enum.map(groups, &decode_function_method_calls!/1)}
-      {:error, errors} -> {:error, errors}
-    end
-  end
-
-  @doc "Returns receiver method calls grouped by top-level Rust function, raising on failure."
-  @spec function_method_calls!(String.t()) :: [RustQ.Syn.FunctionMethodCalls.t()]
-  def function_method_calls!(source) do
-    case function_method_calls(source) do
-      {:ok, groups} ->
-        groups
-
-      {:error, errors} ->
-        raise Error,
-          message: "RustQ function method call introspection error: #{inspect(errors)}",
-          errors: errors
-    end
-  end
-
   @doc """
   Returns method names referenced as receiver method calls in Rust source.
 
@@ -585,13 +554,6 @@ defmodule RustQ.Syn do
 
   defp decode_method_call!({receiver, method}) do
     %RustQ.Syn.MethodCall{receiver: receiver, method: method}
-  end
-
-  defp decode_function_method_calls!({function, calls}) do
-    %RustQ.Syn.FunctionMethodCalls{
-      function: function,
-      calls: Elixir.Enum.map(calls, &decode_method_call!/1)
-    }
   end
 
   defp decode_item!({"enum", name, visibility, source_line, docs, variants}) do
