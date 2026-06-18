@@ -213,6 +213,7 @@ defmodule RustQ.Syn do
       :source_line,
       :source_path,
       :signature,
+      :signature_ast,
       docs: [],
       args: [],
       returns: nil,
@@ -225,6 +226,7 @@ defmodule RustQ.Syn do
             source_line: pos_integer() | nil,
             source_path: Path.t() | nil,
             signature: String.t() | nil,
+            signature_ast: RustQ.Syn.Signature.t() | nil,
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -237,6 +239,66 @@ defmodule RustQ.Syn do
     defstruct [:name, :type, :type_ast]
 
     @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
+  end
+
+  defmodule Signature do
+    @moduledoc "Structured Rust function or method signature metadata."
+    defstruct [:name, args: [], returns: nil]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            args: [RustQ.Syn.Arg.t()],
+            returns: RustQ.Syn.type() | nil
+          }
+
+    @doc "Renders a signature from structured type metadata."
+    @spec render(t()) :: String.t()
+    def render(%__MODULE__{name: name, args: args, returns: returns}) do
+      rendered_args = Elixir.Enum.map_join(args, ", ", &render_arg/1)
+      rendered_returns = if returns, do: " -> #{render_type(returns)}", else: ""
+      "fn #{name}(#{rendered_args})#{rendered_returns}"
+    end
+
+    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: type}), do: render_type(type)
+    defp render_arg(%RustQ.Syn.Arg{name: nil, type_ast: type}), do: render_type(type)
+
+    defp render_arg(%RustQ.Syn.Arg{name: name, type_ast: type}),
+      do: "#{name}: #{render_type(type)}"
+
+    defp render_type(%RustQ.Syn.Type.Path{segments: segments, args: []}),
+      do: Elixir.Enum.join(segments, "::")
+
+    defp render_type(%RustQ.Syn.Type.Path{segments: segments, args: args}) do
+      "#{Elixir.Enum.join(segments, "::")}<#{Elixir.Enum.map_join(args, ", ", &render_type/1)}>"
+    end
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: false}),
+      do: "&self"
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: true}),
+      do: "&mut self"
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: false}),
+      do: "&#{render_type(inner)}"
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: true}),
+      do: "&mut #{render_type(inner)}"
+
+    defp render_type(%RustQ.Syn.Type.Tuple{elems: elems}),
+      do: "(#{Elixir.Enum.map_join(elems, ", ", &render_type/1)})"
+
+    defp render_type(%RustQ.Syn.Type.Option{inner: inner}), do: "Option<#{render_type(inner)}>"
+
+    defp render_type(%RustQ.Syn.Type.Result{ok: ok, error: error}),
+      do: "Result<#{render_type(ok)}, #{render_type(error)}>"
+
+    defp render_type(%RustQ.Syn.Type.ImplTrait{traits: traits}),
+      do: "impl #{Elixir.Enum.map_join(traits, " + ", &render_type/1)}"
+
+    defp render_type(%RustQ.Syn.Type.Slice{inner: inner}), do: "[#{render_type(inner)}]"
+    defp render_type(%RustQ.Syn.Type.Array{inner: inner}), do: "[#{render_type(inner)}]"
+    defp render_type(%RustQ.Syn.Type.Self{}), do: "Self"
+    defp render_type(%RustQ.Syn.Type.Raw{code: code}), do: code
   end
 
   defmodule Impl do
@@ -262,6 +324,7 @@ defmodule RustQ.Syn do
       :source_line,
       :source_path,
       :signature,
+      :signature_ast,
       docs: [],
       args: [],
       returns: nil,
@@ -274,6 +337,7 @@ defmodule RustQ.Syn do
             source_line: pos_integer() | nil,
             source_path: Path.t() | nil,
             signature: String.t() | nil,
+            signature_ast: RustQ.Syn.Signature.t() | nil,
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -446,14 +510,16 @@ defmodule RustQ.Syn do
 
   defp decode_item!({"function", name, visibility, {source_line, signature}, docs, args, returns}) do
     {returns, returns_ast} = decode_return(returns)
+    args = decode_args(args)
 
     %RustQ.Syn.Function{
       name: name,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
       signature: signature,
+      signature_ast: %RustQ.Syn.Signature{name: name, args: args, returns: returns_ast},
       docs: docs,
-      args: decode_args(args),
+      args: args,
       returns: returns,
       returns_ast: returns_ast
     }
@@ -476,14 +542,16 @@ defmodule RustQ.Syn do
 
   defp decode_method!({"method", name, visibility, {source_line, signature}, docs, args, returns}) do
     {returns, returns_ast} = decode_return(returns)
+    args = decode_args(args)
 
     %RustQ.Syn.Method{
       name: name,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
       signature: signature,
+      signature_ast: %RustQ.Syn.Signature{name: name, args: args, returns: returns_ast},
       docs: docs,
-      args: decode_args(args),
+      args: args,
       returns: returns,
       returns_ast: returns_ast
     }

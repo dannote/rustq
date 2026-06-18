@@ -57,11 +57,14 @@ defmodule RustQ.Syn.MetadataTest do
                name: "lerp",
                source_line: 14,
                signature: "fn lerp (a : f32 , b : f32) -> f32",
+               signature_ast: lerp_signature,
                args: args,
                returns: "f32"
              }
            ] =
              RustQ.Syn.functions(file)
+
+    assert RustQ.Syn.Signature.render(lerp_signature) == "fn lerp(a: f32, b: f32) -> f32"
 
     assert [
              %RustQ.Syn.Arg{name: "a", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}},
@@ -79,6 +82,7 @@ defmodule RustQ.Syn.MetadataTest do
                    visibility: :public,
                    source_line: 20,
                    signature: "fn offset (& mut self , dx : f32 , dy : f32) -> Self",
+                   signature_ast: offset_signature,
                    docs: ["Offset docs."],
                    args: method_args,
                    returns: "Self",
@@ -97,6 +101,9 @@ defmodule RustQ.Syn.MetadataTest do
              %RustQ.Syn.Arg{name: "dx", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}},
              %RustQ.Syn.Arg{name: "dy", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}}
            ] = method_args
+
+    assert RustQ.Syn.Signature.render(offset_signature) ==
+             "fn offset(&mut self, dx: f32, dy: f32) -> Self"
   end
 
   test "parses common compound type metadata" do
