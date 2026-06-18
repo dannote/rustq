@@ -65,7 +65,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_path_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_path_call(term) do
-    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    path = unwrap!(required_path(term, "path"))
     args = unwrap!(required_expr_list(term, "args"))
     generics = unwrap!(required_type_list(term, "generics"))
     Super.parse_path_call_expr(path, args, generics)
@@ -177,7 +177,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
 
   @spec decode_expr_macro_call(term()) :: R.nif_result(Expr.t())
   defrust decode_expr_macro_call(term) do
-    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    path = unwrap!(required_path(term, "path"))
     args = unwrap!(required_expr_list(term, "args"))
     expr!(macro_call(path, args))
   end

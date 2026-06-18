@@ -145,6 +145,14 @@ pub(crate) fn required_type<'a>(term: Term<'a>, key: &str) -> NifResult<Type> {
     super::decode_type(required_field(term, key)?)
 }
 
+pub(crate) fn required_path<'a>(term: Term<'a>, key: &str) -> NifResult<Path> {
+    super::parse_ast_path(required_field(term, key)?)
+}
+
+pub(crate) fn required_string_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<String>> {
+    super::decode_string_list(required_field(term, key)?)
+}
+
 pub(crate) fn required_type_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Type>> {
     super::decode_type_list(required_field(term, key)?)
 }
@@ -380,7 +388,7 @@ pub(crate) fn decode_ast_macro_item<'a>(term: Term<'a>) -> NifResult<Item> {
 
 pub(crate) fn decode_ast_macro_item_call<'a>(term: Term<'a>) -> NifResult<Item> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItemCall")?;
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let path = required_path(term, "path")?;
     let args = super::decode_macro_item_arg_list(required_field(term, "args")?)?;
     super::parse_macro_item_call(path, args)
 }
@@ -427,7 +435,7 @@ pub(crate) fn decode_lifetime_list<'a>(term: Term<'a>) -> NifResult<Vec<String>>
 }
 
 pub(crate) fn decode_type_path<'a>(term: Term<'a>) -> NifResult<Type> {
-    let parts = super::decode_string_list(required_field(term, "parts")?)?;
+    let parts = required_string_list(term, "parts")?;
     let lifetimes = decode_lifetime_list(required_field(term, "lifetimes")?)?;
     let generics = required_type_list(term, "generics")?;
     super::parse_type_path_with_generics(parts, lifetimes, generics)
@@ -479,7 +487,7 @@ pub(crate) fn decode_pat_none<'a>(_term: Term<'a>) -> NifResult<Pat> {
 }
 
 pub(crate) fn decode_pat_path<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let path = required_path(term, "path")?;
     super::parse_syn::<Pat>(quote!(# path))
 }
 
@@ -508,13 +516,13 @@ pub(crate) fn decode_pat_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
 }
 
 pub(crate) fn decode_pat_path_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let path = required_path(term, "path")?;
     let patterns = required_pat_list(term, "patterns")?;
     super::parse_syn::<Pat>(quote!(# path(# (# patterns),*)))
 }
 
 pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let path = required_path(term, "path")?;
     let fields = super::decode_pat_struct_fields(required_field(term, "fields")?)?;
     super::parse_syn::<Pat>(quote!(# path { # (# fields),* }))
 }
@@ -635,7 +643,7 @@ pub(crate) fn decode_expr_unary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_path_call<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let path = required_path(term, "path")?;
     let args = required_expr_list(term, "args")?;
     let generics = required_type_list(term, "generics")?;
     super::parse_path_call_expr(path, args, generics)
@@ -732,7 +740,7 @@ pub(crate) fn decode_expr_closure<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_macro_call<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let path = super::parse_ast_path(required_field(term, "path")?)?;
+    let path = required_path(term, "path")?;
     let args = required_expr_list(term, "args")?;
     super::parse_syn::<Expr>(quote!(# path!(# (# args),*)))
 }

@@ -21,7 +21,7 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
 
   @spec decode_pat_path(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_path(term) do
-    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    path = unwrap!(required_path(term, "path"))
     pat!(path(path))
   end
 
@@ -56,14 +56,14 @@ defmodule RustQ.NativeCodegen.Decoders.Pat do
 
   @spec decode_pat_path_tuple(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_path_tuple(term) do
-    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    path = unwrap!(required_path(term, "path"))
     patterns = unwrap!(required_pat_list(term, "patterns"))
     pat!(path_tuple(path, patterns))
   end
 
   @spec decode_pat_struct(term()) :: R.nif_result(Pat.t())
   defrust decode_pat_struct(term) do
-    path = unwrap!(Super.parse_ast_path(unwrap!(required_field(term, "path"))))
+    path = unwrap!(required_path(term, "path"))
     fields = unwrap!(Super.decode_pat_struct_fields(unwrap!(required_field(term, "fields"))))
     pat!(struct(path, fields))
   end

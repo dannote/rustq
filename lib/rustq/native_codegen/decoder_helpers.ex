@@ -18,6 +18,16 @@ defmodule RustQ.NativeCodegen.DecoderHelpers do
     Super.decode_type(unwrap!(required_field(term, key)))
   end
 
+  @spec required_path(term(), R.str()) :: R.nif_result(Path.t())
+  defrust required_path(term, key) do
+    Super.parse_ast_path(unwrap!(required_field(term, key)))
+  end
+
+  @spec required_string_list(term(), R.str()) :: R.nif_result(R.vec(String.t()))
+  defrust required_string_list(term, key) do
+    Super.decode_string_list(unwrap!(required_field(term, key)))
+  end
+
   @spec required_type_list(term(), R.str()) :: R.nif_result(R.vec(Type.t()))
   defrust required_type_list(term, key) do
     Super.decode_type_list(unwrap!(required_field(term, key)))
