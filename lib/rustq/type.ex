@@ -9,7 +9,8 @@ defmodule RustQ.Type do
   `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` renders as
   `generated_opts::OvalOpts<'a>`. Use this module where Rust needs extra
   precision or syntax that Elixir types cannot express cleanly: fixed-width
-  numbers, references, lifetimes, slices, `NifResult`, `Vec`, and unit.
+  numbers, enum intent markers, references, lifetimes, slices, `NifResult`,
+  `Vec`, and unit.
 
       alias RustQ.Type, as: R
 
