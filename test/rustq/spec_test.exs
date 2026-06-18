@@ -6,13 +6,9 @@ defmodule RustQ.SpecTest do
              "&skia_safe::Canvas"
   end
 
-  test "lowers quoted native enum types structurally" do
-    assert %RustQ.Meta.Type{
-             kind: :enum,
-             rust: "paint::Cap",
-             meta: %{native_name: "SkPaint_Cap", rust_type: "paint::Cap"}
-           } =
-             RustQ.Spec.type(quote(do: RustQ.Type.native_enum(:"paint::Cap", skia: :SkPaint_Cap)))
+  test "lowers quoted enum intent types structurally" do
+    assert %RustQ.Meta.Type{kind: :enum, rust: "stroke_cap", meta: %{enum: :stroke_cap}} =
+             RustQ.Spec.type(quote(do: RustQ.Type.enum(:stroke_cap)))
   end
 
   test "lowers quoted tuple types structurally" do

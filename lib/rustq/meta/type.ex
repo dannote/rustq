@@ -271,13 +271,9 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(:raw, [type], _aliases), do: type(:type, raw_type!(type))
 
-  defp parse_rust_type(:native_enum, [rust_type, opts], _aliases) do
-    ast = native_enum_type!(rust_type)
-
-    type(:enum, ast, %{
-      native_name: native_enum_option!(opts, :skia),
-      rust_type: rust_type_value!(rust_type)
-    })
+  defp parse_rust_type(:enum, [name], _aliases) do
+    enum = spec_path_part!(name)
+    type(:enum, path(enum), %{enum: enum})
   end
 
   defp parse_rust_type(:ref, [inner], aliases) do
@@ -380,51 +376,6 @@ defmodule RustQ.Meta.Type do
 
   defp raw_type!(other) do
     raise ArgumentError, "expected R.raw atom marker, got: #{Macro.to_string(other)}"
-  end
-
-  defp native_enum_type!(type) when is_atom(type) do
-    type
-    |> Atom.to_string()
-    |> native_enum_type!()
-  end
-
-  defp native_enum_type!(type) when is_binary(type) do
-    if String.contains?(type, "::"), do: {:raw, type}, else: path(String.to_atom(type))
-  end
-
-  defp native_enum_type!(other) do
-    raise ArgumentError,
-          "expected R.native_enum Rust type to be an atom or string, got: #{Macro.to_string(other)}"
-  end
-
-  defp rust_type_value!(type) when is_atom(type), do: Atom.to_string(type)
-  defp rust_type_value!(type) when is_binary(type), do: type
-
-  defp rust_type_value!(other) do
-    raise ArgumentError,
-          "expected R.native_enum Rust type to be an atom or string, got: #{Macro.to_string(other)}"
-  end
-
-  defp native_enum_option!(opts, key) when is_list(opts) do
-    case Keyword.fetch(opts, key) do
-      {:ok, value} when is_binary(value) ->
-        value
-
-      {:ok, value} when is_atom(value) ->
-        Atom.to_string(value)
-
-      {:ok, other} ->
-        raise ArgumentError,
-              "expected R.native_enum #{key} option to be an atom or string, got: #{inspect(other)}"
-
-      :error ->
-        raise ArgumentError, "missing required R.native_enum #{key} option"
-    end
-  end
-
-  defp native_enum_option!(other, key) do
-    raise ArgumentError,
-          "expected R.native_enum #{key} options keyword, got: #{Macro.to_string(other)}"
   end
 
   defp external_type_path(parts, args, aliases) do
