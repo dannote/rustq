@@ -2,6 +2,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   @moduledoc false
 
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
   alias RustQ.Rust.AST.Schema
 
   import RustQ.Rust.AST.ItemBuilder
@@ -39,13 +40,13 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp decode_ast_item_arm(%Schema.Node{name: :macro_item, rust_const: rust_const}) do
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(A.path_call([:decode_ast_macro_item], [:term]))
     end
   end
 
   defp decode_ast_item_arm(%Schema.Node{name: :macro_item_call, rust_const: rust_const}) do
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(A.path_call([:decode_ast_macro_item_call], [:term]))
     end
   end
@@ -53,7 +54,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp decode_ast_item_arm(%Schema.Node{name: name, rust_const: rust_const}) do
     {wrapper, decoder} = item_decoder(name)
 
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(
         A.ok(
           A.path_call([:Item, wrapper], [
@@ -96,7 +97,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp decode_ast_type_arm(%Schema.Node{name: name, rust_const: rust_const}) do
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(A.path_call(type_decoder_path(name), [:term]))
     end
   end
@@ -137,7 +138,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp decode_ast_pat_arm(%Schema.Node{name: name, rust_const: rust_const}) do
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(A.path_call(pat_decoder_path(name), [:term]))
     end
   end
@@ -185,7 +186,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp decode_ast_stmt_arm(%Schema.Node{name: name, rust_const: rust_const}) do
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(A.path_call(stmt_decoder_path(name), [:term]))
     end
   end
@@ -219,7 +220,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   end
 
   defp decode_ast_expr_arm(%Schema.Node{name: name, rust_const: rust_const}) do
-    A.arm A.path_pat([:ast_modules, rust_const]) do
+    A.arm P.path([:ast_modules, rust_const]) do
       A.return(A.path_call(expr_decoder_path(name), [:term]))
     end
   end

@@ -239,24 +239,8 @@ defmodule RustQ.Rust.AST.Builder do
   def and_(left, right), do: binary(left, :and, right)
   def or_(left, right), do: binary(left, :or, right)
 
-  def pat(name) when is_atom(name), do: %AST.PatVar{name: name}
-  def wildcard, do: %AST.PatWildcard{}
-  def path_pat(path), do: %AST.PatPath{path: expr_path(path)}
-  def lit_pat(value), do: %AST.PatLiteral{value: value}
-  def none_pat, do: %AST.PatNone{}
-  def some_pat(pattern), do: %AST.PatSome{pattern: pat_expr(pattern)}
-  def ok_pat(pattern), do: %AST.PatOk{pattern: pat_expr(pattern)}
-  def err_pat(pattern), do: %AST.PatErr{pattern: pat_expr(pattern)}
-
-  def path_tuple_pat(path, patterns),
-    do: %AST.PatPathTuple{path: expr_path(path), patterns: Enum.map(patterns, &pat_expr/1)}
-
-  def struct_pat(path, fields) do
-    %AST.PatStruct{
-      path: expr_path(path),
-      fields: Enum.map(fields, fn {name, pattern} -> {name, pat_expr(pattern)} end)
-    }
-  end
+  def pat(name) when is_atom(name), do: RustQ.Rust.AST.PatternBuilder.var(name)
+  def wildcard, do: RustQ.Rust.AST.PatternBuilder.wildcard()
 
   def expr(%{__struct__: module} = value)
       when module in [
@@ -316,15 +300,7 @@ defmodule RustQ.Rust.AST.Builder do
   def expr_path(parts) when is_list(parts), do: path(parts)
   def expr_path(part), do: path(part)
 
-  def pat_expr(%{__struct__: _module} = value) do
-    if AST.pat_node?(value) do
-      value
-    else
-      raise ArgumentError, "expected RustQ pattern AST node, got: #{inspect(value)}"
-    end
-  end
-
-  def pat_expr(name) when is_atom(name), do: pat(name)
+  def pat_expr(value), do: RustQ.Rust.AST.PatternBuilder.pattern(value)
 
   defp block_values({:__block__, _meta, expressions}) do
     quote do

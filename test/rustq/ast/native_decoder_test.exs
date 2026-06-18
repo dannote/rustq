@@ -6,6 +6,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
   alias RustQ.Native
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
 
   require A
 
@@ -269,11 +270,11 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
                   A.return(:left)
                 end
 
-                A.arm A.path_tuple_pat([:Event, :Click], [A.pat(:click)]) do
+                A.arm P.path_tuple([:Event, :Click], [P.var(:click)]) do
                   A.return(:click)
                 end
 
-                A.arm A.struct_pat([:Click], name: A.pat(:name)) do
+                A.arm P.struct([:Click], name: P.var(:name)) do
                   A.return(:name)
                 end
               end
@@ -296,11 +297,11 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
           A.block do
             A.return do
               A.match A.var(:value) do
-                A.arm A.ok_pat(:inner) do
+                A.arm P.ok(:inner) do
                   A.return(A.ok(:inner))
                 end
 
-                A.arm A.err_pat(:reason) do
+                A.arm P.err(:reason) do
                   A.return(A.err(:reason))
                 end
               end

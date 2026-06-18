@@ -43,6 +43,7 @@ defmodule RustQ.Meta do
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
 
   require A
 
@@ -416,11 +417,11 @@ defmodule RustQ.Meta do
   defp struct_decoder_field({name, _type, :optional}) do
     {name,
      A.match A.method(:term, :map_get, [atom_call(name)]) do
-       A.arm A.ok_pat(:value) do
+       A.arm P.ok(:value) do
          A.return(A.some(A.try(A.method(:value, :decode))))
        end
 
-       A.arm A.err_pat(A.wildcard()) do
+       A.arm P.err(P.wildcard()) do
          A.return(A.none())
        end
      end}
@@ -433,7 +434,7 @@ defmodule RustQ.Meta do
       A.return do
         A.match A.method(:struct_name, :as_str) do
           Enum.map(variants, fn {tag, [%Type{meta: %{rust_name: variant_name}}]} ->
-            A.arm A.lit_pat("Elixir.#{variant_name}") do
+            A.arm P.lit("Elixir.#{variant_name}") do
               A.return do
                 A.method(
                   A.call(String.to_atom("decode_#{Macro.underscore(variant_name)}"), [:term]),

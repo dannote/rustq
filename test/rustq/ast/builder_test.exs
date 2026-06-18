@@ -3,6 +3,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
   alias RustQ.Rust.AST.TypeBuilder, as: T
 
   require A
@@ -126,7 +127,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
 
         A.return do
           A.match A.method(:struct_name, :as_str) do
-            A.arm A.lit_pat("Elixir.Click") do
+            A.arm P.lit("Elixir.Click") do
               A.return(A.method(A.call(:decode_click, [:term]), :map, [A.path([:Event, :Click])]))
             end
 

@@ -3,6 +3,7 @@ defmodule RustQ.NativeCodegen.HelperModulesTest do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
   alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "native defrust modules expose crate-visible ASTs" do
@@ -43,7 +44,7 @@ defmodule RustQ.NativeCodegen.HelperModulesTest do
     refute AST.expr_node?(A.pat(:value))
 
     assert AST.pat_node?(A.pat(:value))
-    assert AST.pat_node?(A.some_pat(:value))
+    assert AST.pat_node?(P.some(:value))
     refute AST.pat_node?(T.unit())
   end
 end

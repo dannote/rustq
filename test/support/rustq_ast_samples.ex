@@ -3,6 +3,7 @@ defmodule RustQ.ASTSamples do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
 
   require A
 
@@ -207,7 +208,7 @@ defmodule RustQ.ASTSamples do
     do:
       function_sample(:let_else_sample, A.var(:value),
         body: [
-          A.let_else(A.some_pat(:value), :maybe, [A.early_return(A.lit(0))]),
+          A.let_else(P.some(:value), :maybe, [A.early_return(A.lit(0))]),
           A.return(:value)
         ],
         returns: "i64"
@@ -229,7 +230,7 @@ defmodule RustQ.ASTSamples do
     do:
       function_sample(:if_let_sample, A.ok(),
         body: [
-          A.if_let(A.some_pat(:value), :maybe, [A.stmt(A.call(:use_value, [:value]))]),
+          A.if_let(P.some(:value), :maybe, [A.stmt(A.call(:use_value, [:value]))]),
           A.return(A.ok())
         ],
         returns: "NifResult<()>"
@@ -366,10 +367,10 @@ defmodule RustQ.ASTSamples do
   def sample_for(:arm), do: match_sample(:arm_sample, A.wildcard())
   def sample_for(:pat_var), do: match_sample(:pat_var_sample, A.pat(:value))
   def sample_for(:pat_wildcard), do: match_sample(:pat_wildcard_sample, A.wildcard())
-  def sample_for(:pat_path), do: match_sample(:pat_path_sample, A.path_pat(["Option", "None"]))
-  def sample_for(:pat_literal), do: match_sample(:pat_literal_sample, A.lit_pat("ready"))
-  def sample_for(:pat_none), do: match_sample(:pat_none_sample, A.none_pat())
-  def sample_for(:pat_some), do: match_sample(:pat_some_sample, A.some_pat(:value))
+  def sample_for(:pat_path), do: match_sample(:pat_path_sample, P.path(["Option", "None"]))
+  def sample_for(:pat_literal), do: match_sample(:pat_literal_sample, P.lit("ready"))
+  def sample_for(:pat_none), do: match_sample(:pat_none_sample, P.none())
+  def sample_for(:pat_some), do: match_sample(:pat_some_sample, P.some(:value))
 
   def sample_for(:pat_atom_guard),
     do: match_sample(:pat_atom_guard_sample, %AST.PatAtomGuard{name: :ok}, args: [value: "Atom"])
@@ -377,14 +378,14 @@ defmodule RustQ.ASTSamples do
   def sample_for(:pat_tuple),
     do: match_sample(:pat_tuple_sample, %AST.PatTuple{patterns: [A.pat(:left), A.pat(:right)]})
 
-  def sample_for(:pat_ok), do: match_sample(:pat_ok_sample, A.ok_pat(:value))
-  def sample_for(:pat_err), do: match_sample(:pat_err_sample, A.err_pat(:reason))
+  def sample_for(:pat_ok), do: match_sample(:pat_ok_sample, P.ok(:value))
+  def sample_for(:pat_err), do: match_sample(:pat_err_sample, P.err(:reason))
 
   def sample_for(:pat_path_tuple),
-    do: match_sample(:pat_path_tuple_sample, A.path_tuple_pat([:Event, :Click], [A.pat(:click)]))
+    do: match_sample(:pat_path_tuple_sample, P.path_tuple([:Event, :Click], [P.var(:click)]))
 
   def sample_for(:pat_struct),
-    do: match_sample(:pat_struct_sample, A.struct_pat([:Click], name: A.pat(:name)))
+    do: match_sample(:pat_struct_sample, P.struct([:Click], name: P.var(:name)))
 
   defp type_sample(name, type) do
     %AST.Const{name: String.to_atom("#{name}_VALUE"), type: type, expr: A.lit(0)}

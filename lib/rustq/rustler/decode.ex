@@ -3,6 +3,7 @@ defmodule RustQ.Rustler.Decode do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
 
   def atom(name, opts \\ []), do: A.atom(name, opts)
 
@@ -39,12 +40,12 @@ defmodule RustQ.Rustler.Decode do
       expr: call_opt_term(opts_var, atom_name, opts),
       arms: [
         %AST.Arm{
-          pattern: A.some_pat(:term),
+          pattern: P.some(:term),
           body: [
             A.return_stmt(A.some(%AST.Try{expr: A.method(:term, :decode, [], generics: [type])}))
           ]
         },
-        %AST.Arm{pattern: A.none_pat(), body: [A.return_stmt(A.none())]}
+        %AST.Arm{pattern: P.none(), body: [A.return_stmt(A.none())]}
       ]
     }
   end
