@@ -40,6 +40,32 @@ defmodule RustQ.Syn.Index do
     |> from_paths(package: package)
   end
 
+  @doc "Returns all indexed top-level enums."
+  @spec enums(t()) :: [RustQ.Syn.Enum.t()]
+  def enums(%__MODULE__{files: files}) do
+    files
+    |> Map.values()
+    |> Enum.flat_map(&RustQ.Syn.enums/1)
+  end
+
+  @doc "Fetches an enum by name."
+  @spec enum(t(), String.t()) :: {:ok, RustQ.Syn.Enum.t()} | :error
+  def enum(%__MODULE__{} = index, name) when is_binary(name) do
+    case Enum.find(enums(index), &(&1.name == name)) do
+      nil -> :error
+      enum -> {:ok, enum}
+    end
+  end
+
+  @doc "Fetches an enum by name, raising if missing."
+  @spec enum!(t(), String.t()) :: RustQ.Syn.Enum.t()
+  def enum!(%__MODULE__{} = index, name) when is_binary(name) do
+    case enum(index, name) do
+      {:ok, enum} -> enum
+      :error -> raise "cannot find Rust enum #{name}"
+    end
+  end
+
   @doc "Returns all indexed top-level impl blocks."
   @spec impls(t()) :: [RustQ.Syn.Impl.t()]
   def impls(%__MODULE__{files: files}) do

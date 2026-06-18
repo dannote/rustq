@@ -9,6 +9,22 @@ defmodule RustQ.Syn.IndexTest do
     assert map_size(index.files) > 0
   end
 
+  test "indexes enums by name" do
+    path =
+      write_source!("""
+      pub enum ClipOp { Intersect, Difference }
+      """)
+
+    index = RustQ.Syn.Index.from_paths([path])
+
+    assert [%RustQ.Syn.Enum{name: "ClipOp"}] = RustQ.Syn.Index.enums(index)
+
+    assert {:ok, %RustQ.Syn.Enum{variants: ["Intersect", "Difference"]}} =
+             RustQ.Syn.Index.enum(index, "ClipOp")
+
+    assert %RustQ.Syn.Enum{name: "ClipOp"} = RustQ.Syn.Index.enum!(index, "ClipOp")
+  end
+
   test "indexes impl methods by target" do
     path =
       Path.join(
@@ -54,5 +70,17 @@ defmodule RustQ.Syn.IndexTest do
     assert %RustQ.Syn.Type.Ref{} = self_arg.type_ast
     assert RustQ.Syn.Type.impl_trait?(rect_arg.type_ast, "AsRef", ["Rect"])
     assert RustQ.Syn.Type.ref_to?(paint_arg.type_ast, "Paint")
+  end
+
+  defp write_source!(source) do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "rustq_syn_index_test_#{System.unique_integer([:positive])}.rs"
+      )
+
+    Process.put(:path, path)
+    File.write!(path, source)
+    path
   end
 end
