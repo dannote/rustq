@@ -60,6 +60,7 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
     case op.as_str() do
       "not" -> Super.parse_unary_expr(op, expr)
       "neg" -> Super.parse_unary_expr(op, expr)
+      "deref" -> Super.parse_unary_expr(op, expr)
       _ -> err(badarg())
     end
   end

@@ -614,6 +614,7 @@ defmodule RustQ.Rust.AST.Render do
 
   defp render_unary_op(:not), do: "!"
   defp render_unary_op(:neg), do: "-"
+  defp render_unary_op(:deref), do: "*"
 
   defp render_derive([]), do: []
 

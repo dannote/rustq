@@ -188,6 +188,7 @@ defmodule RustQ.Rust.AST.Builder do
   def cast(expression, type), do: %AST.Cast{expr: expr(expression), type: type}
   def not_(expression), do: %AST.UnaryOp{op: :not, expr: expr(expression)}
   def neg(expression), do: %AST.UnaryOp{op: :neg, expr: expr(expression)}
+  def deref(expression), do: %AST.UnaryOp{op: :deref, expr: expr(expression)}
   def byte_string(value), do: %AST.ByteString{value: value}
   def escape_expr(source), do: %AST.EscapeExpr{source: source}
   def path_value(parts), do: path(parts)

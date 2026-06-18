@@ -581,6 +581,7 @@ pub(crate) fn decode_expr_unary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
     match op.as_str() {
         "not" => super::parse_unary_expr(op, expr),
         "neg" => super::parse_unary_expr(op, expr),
+        "deref" => super::parse_unary_expr(op, expr),
         _ => Err(rustler::Error::BadArg),
     }
 }

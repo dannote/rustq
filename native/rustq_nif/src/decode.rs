@@ -318,6 +318,7 @@ pub(crate) fn parse_unary_expr(op: String, expr: Expr) -> NifResult<Expr> {
     match op.as_str() {
         "not" => parse_syn::<Expr>(quote!( !#expr )),
         "neg" => parse_syn::<Expr>(quote!( -#expr )),
+        "deref" => parse_syn::<Expr>(quote!( *#expr )),
         _ => Err(rustler::Error::BadArg),
     }
 }

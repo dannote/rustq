@@ -253,6 +253,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:mut_ref, _, [expression]}),
     do: %AST.Ref{expr: lower_expr(expression), mutable: true}
 
+  defp lower_expr({:deref, _, [expression]}),
+    do: %AST.UnaryOp{op: :deref, expr: lower_expr(expression)}
+
   defp lower_expr({:some, _, [expression]}), do: %AST.Some{expr: lower_expr(expression)}
   defp lower_expr({:none, _, []}), do: %AST.None{}
   defp lower_expr({:ok, _, []}), do: %AST.Ok{}
@@ -261,6 +264,8 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
+
+  defp lower_expr({:fn, _, [{:->, _, [[arg], body]}]}), do: lower_closure(arg, body)
 
   defp lower_expr({{:., _, [{:__aliases__, _, [:Enum]}, :map]}, _, [collection, mapper]}),
     do: lower_enum_map(collection, mapper)
@@ -421,6 +426,8 @@ defmodule RustQ.Meta.Lower do
 
   defp semantic_expr({:mut_ref, _, [value]}),
     do: raw_expr("&mut #{semantic_interpolation(value)}")
+
+  defp semantic_expr({:deref, _, [value]}), do: raw_expr("*#{semantic_interpolation(value)}")
 
   defp semantic_expr({:unwrap!, _, [value]}), do: raw_expr("#{semantic_interpolation(value)}?")
 

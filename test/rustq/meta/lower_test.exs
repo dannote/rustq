@@ -73,6 +73,29 @@ defmodule RustQ.Meta.LowerTest do
            } = hd(maybe_save.body)
   end
 
+  test "closures and deref lower in method chains" do
+    function =
+      RustQ.Meta.quoted(:maybe_decode_color,
+        args: [args: A.type_path(:Args)],
+        returns: A.nif_result_type(A.unit_type()),
+        do:
+          quote do
+            case args.first().and_then(fn term -> decode_color(deref(term)).ok() end) do
+              {:some, color} -> canvas.clear(color)
+              :none -> :ok
+            end
+
+            :ok
+          end
+      )
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+
+    assert source =~ "args.first().and_then(|term| decode_color(*term).ok())"
+    assert source =~ "Some(color) =>"
+    assert source =~ "canvas.clear(color);"
+  end
+
   test "option cases use Elixir tuple and atom patterns" do
     function =
       RustQ.Meta.quoted(:save_if_present,

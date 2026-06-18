@@ -29,7 +29,7 @@ defmodule RustQ.Meta do
     * method calls, field access, aliases, and Elixir tuples lower to their Rust
       equivalents
     * `unwrap!(expression)` is the explicit spelling for Rust `expression?`
-    * `ref(expression)` / `mut_ref(expression)` spell Rust borrows
+    * `ref(expression)` / `mut_ref(expression)` spell Rust borrows; `deref(expression)` spells Rust dereference
     * Option branching should use Elixir `case`, for example
       `case maybe do {:some, value} -> ...; :none -> ... end`; do not introduce
       Rust-shaped `if_let` syntax at the authoring layer

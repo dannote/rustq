@@ -214,11 +214,20 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
         body: A.block(do: A.return(A.and_(A.eq(:left, :right), :ok)))
       })
 
+    deref_source =
+      Native.render_ast(%AST.Function{
+        name: :deref_expr,
+        args: [value: "&i64"],
+        returns: "i64",
+        body: A.block(do: A.return(A.deref(:value)))
+      })
+
     assert literal_source =~ ~s|"hello"|
     assert float_source =~ "1.0"
     refute float_source =~ "1f64"
     assert token_macro_source =~ "quote!(None)"
     assert binary_source =~ "left == right && ok"
+    assert deref_source =~ "*value"
   end
 
   test "generated arm decoder renders atom guard patterns" do
