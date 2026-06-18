@@ -26,7 +26,42 @@ defmodule RustQ.Meta.Type do
 
   defstruct [:kind, :rust, :ast, meta: %{}]
 
+  @type category ::
+          :number
+          | :integer
+          | :boolean
+          | :atom
+          | :string
+          | :term
+          | :enum
+          | {:tuple, [t()]}
+          | {:alias, atom()}
+          | :type
+
   @type t :: %__MODULE__{kind: atom(), rust: String.t(), ast: term(), meta: map()}
+
+  @integer_kinds [:i8, :i16, :i32, :i64, :isize, :u8, :u16, :u32, :u64, :usize]
+  @number_kinds [:f32, :f64]
+
+  @doc "Returns the semantic category for a lowered RustQ type."
+  @spec category(t()) :: category()
+  def category(%__MODULE__{kind: kind}) when kind in @number_kinds, do: :number
+  def category(%__MODULE__{kind: kind}) when kind in @integer_kinds, do: :integer
+  def category(%__MODULE__{kind: :bool}), do: :boolean
+  def category(%__MODULE__{kind: :atom}), do: :atom
+  def category(%__MODULE__{kind: :term}), do: :term
+  def category(%__MODULE__{kind: :enum}), do: :enum
+  def category(%__MODULE__{kind: :tuple, meta: %{elements: elements}}), do: {:tuple, elements}
+  def category(%__MODULE__{kind: :alias, meta: %{elixir_name: name}}), do: {:alias, name}
+  def category(%__MODULE__{meta: %{elixir_module: String, elixir_type: :t}}), do: :string
+  def category(%__MODULE__{}), do: :type
+
+  @doc "Returns true when a type originated from a specific Elixir remote type."
+  @spec external?(t(), module(), atom()) :: boolean()
+  def external?(%__MODULE__{meta: %{elixir_module: module, elixir_type: type}}, module, type),
+    do: true
+
+  def external?(%__MODULE__{}, _module, _type), do: false
 
   @spec from_spec_ast(Macro.t(), map()) :: t()
   def from_spec_ast(ast, aliases \\ %{}), do: parse(ast, aliases)

@@ -24,6 +24,26 @@ defmodule RustQ.Meta.TypeTest do
              "&[(Atom, Term<'a>)]"
   end
 
+  test "categorizes lowered types semantically" do
+    number = Type.from_spec_ast(quote(do: number()))
+    integer = Type.from_spec_ast(quote(do: integer()))
+    boolean = Type.from_spec_ast(quote(do: boolean()))
+    atom = Type.from_spec_ast(quote(do: atom()))
+    string = Type.from_spec_ast(quote(do: String.t()))
+    tuple = Type.from_spec_ast(quote(do: {number(), integer()}))
+    external = Type.from_spec_ast(quote(do: Skia.Path.t()))
+
+    assert Type.category(number) == :number
+    assert Type.category(integer) == :integer
+    assert Type.category(boolean) == :boolean
+    assert Type.category(atom) == :atom
+    assert Type.category(string) == :string
+    assert {:tuple, [^number, ^integer]} = Type.category(tuple)
+    assert Type.category(external) == :type
+    assert Type.external?(external, Skia.Path, :t)
+    refute Type.external?(external, Skia.Paint, :t)
+  end
+
   test "keeps explicit Rust path marker as a low-level escape hatch" do
     assert Type.from_spec_ast(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"
