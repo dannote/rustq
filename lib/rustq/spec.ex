@@ -23,6 +23,44 @@ defmodule RustQ.Spec do
     |> RustQ.Meta.Type.type_aliases()
   end
 
+  @doc "Extracts aliases, function specs, and def argument names from a source path or quoted module AST."
+  @spec declarations(Path.t() | Macro.t()) :: %{
+          aliases: %{optional({atom(), non_neg_integer()}) => RustQ.Meta.Type.t()},
+          specs: [{atom(), [Macro.t()]}],
+          defs: %{optional(atom()) => [atom()]}
+        }
+  def declarations(path) when is_binary(path) do
+    path
+    |> File.read!()
+    |> Code.string_to_quoted!(file: path)
+    |> declarations()
+  end
+
+  def declarations({:defmodule, _meta, [_module, [do: body]]}), do: declarations(body)
+
+  def declarations(quoted) do
+    {types, specs, defs} =
+      quoted
+      |> block_expressions()
+      |> Enum.reduce({[], [], %{}}, fn
+        {:@, meta, [{:type, _, [{:"::", _, [_name_ast, _type_ast]} = type_ast]}]},
+        {types, specs, defs} ->
+          {[{:type, type_ast, meta[:line] || 0} | types], specs, defs}
+
+        {:@, _, [{:spec, _, [{:"::", _, [{name, _, arg_types}, _return]}]}]},
+        {types, specs, defs} ->
+          {types, specs ++ [{name, arg_types}], defs}
+
+        {:def, _, [{name, _, args}, _body]}, {types, specs, defs} ->
+          {types, specs, Map.put(defs, name, Enum.map(args || [], &arg_name!/1))}
+
+        _other, acc ->
+          acc
+      end)
+
+    %{aliases: aliases(types), specs: specs, defs: defs}
+  end
+
   @doc "Normalizes a quoted or BEAM abstract typespec form to quoted AST."
   @spec normalize(term()) :: Macro.t()
   def normalize({:type, _line, name, args}) when is_atom(name) do
@@ -90,6 +128,15 @@ defmodule RustQ.Spec do
   end
 
   defp normalize_type_decl(type_decl), do: type_decl
+
+  defp arg_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name
+
+  defp arg_name!(other),
+    do:
+      raise(ArgumentError, "unsupported function declaration argument #{Macro.to_string(other)}")
+
+  defp block_expressions({:__block__, _, expressions}), do: expressions
+  defp block_expressions(expression), do: [expression]
 
   defp anonymous_args(args), do: Enum.map(args, fn _arg -> {:_, [], Elixir} end)
 

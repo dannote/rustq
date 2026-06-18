@@ -1,8 +1,6 @@
 defmodule RustQ.Spec.DeclarationsTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.Spec.Declarations
-
   test "extracts aliases, specs, and def argument names from quoted modules" do
     quoted =
       quote do
@@ -17,8 +15,7 @@ defmodule RustQ.Spec.DeclarationsTest do
         end
       end
 
-    assert %Declarations{aliases: aliases, specs: specs, defs: defs} =
-             Declarations.from_quoted(quoted)
+    assert %{aliases: aliases, specs: specs, defs: defs} = RustQ.Spec.declarations(quoted)
 
     assert %RustQ.Meta.Type{kind: :struct, meta: %{fields: fields}} = aliases[{:line_opts, 0}]
 
