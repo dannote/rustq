@@ -54,6 +54,11 @@ fn syn_inspect<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+fn syn_atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    syn_metadata::atom_references(env, source)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 fn syn_enum_variants<'a>(env: Env<'a>, source: String, enum_name: String) -> NifResult<Term<'a>> {
     syn_metadata::enum_variants(env, source, enum_name)
 }

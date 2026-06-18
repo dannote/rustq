@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = "0.37"
-syn = { version = "2", features = ["full", "visit-mut"] }
+syn = { version = "2", features = ["full", "visit", "visit-mut"] }
 prettyplease = "0.2"
 proc-macro2 = "1"
 quote = "1"

@@ -356,6 +356,30 @@ defmodule RustQ.Syn do
   def enum_variants(source, enum_name) when is_binary(source) and is_binary(enum_name),
     do: RustQ.Native.syn_enum_variants(source, enum_name)
 
+  @doc """
+  Returns atom names referenced as `atoms::name()` calls in Rust source.
+
+  This is intended for generators that need to keep `rustler::atoms!` in sync
+  with existing Rust code without scraping source text. The source is parsed by
+  `syn`; invalid Rust returns a normal RustQ parse error.
+  """
+  @spec atom_references(String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def atom_references(source) when is_binary(source), do: RustQ.Native.syn_atom_references(source)
+
+  @doc "Returns atom names referenced as `atoms::name()` calls in Rust source, raising on failure."
+  @spec atom_references!(String.t()) :: [String.t()]
+  def atom_references!(source) do
+    case atom_references(source) do
+      {:ok, atoms} ->
+        atoms
+
+      {:error, errors} ->
+        raise Error,
+          message: "RustQ atom reference introspection error: #{inspect(errors)}",
+          errors: errors
+    end
+  end
+
   @doc "Returns variants for a named top-level enum from Rust source, raising on failure."
   @spec enum_variants!(String.t(), String.t()) :: [String.t()]
   def enum_variants!(source, enum_name) do

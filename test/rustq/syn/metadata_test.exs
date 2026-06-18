@@ -134,4 +134,14 @@ defmodule RustQ.Syn.MetadataTest do
     assert {:ok, ["One", "Two"]} = RustQ.Syn.enum_variants(source, "Shown")
     assert {:error, "enum Missing not found"} = RustQ.Syn.enum_variants(source, "Missing")
   end
+
+  test "returns rustler atom references from parsed Rust source" do
+    source = """
+    fn decode(value: rustler::Atom) -> bool {
+        value == atoms::ok() || value == atoms::error()
+    }
+    """
+
+    assert RustQ.Syn.atom_references!(source) == ["error", "ok"]
+  end
 end

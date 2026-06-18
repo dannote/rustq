@@ -1,8 +1,9 @@
 use quote::ToTokens;
 use rustler::{Encoder, Env, NifResult, Term};
+use syn::visit::{self, Visit};
 use syn::{
-    Attribute, Expr, ExprLit, Fields, FnArg, GenericArgument, ImplItem, Item, Lit, PathArguments,
-    ReturnType, Type, TypeParamBound, Visibility,
+    Attribute, Expr, ExprCall, ExprLit, ExprPath, Fields, FnArg, GenericArgument, ImplItem, Item,
+    Lit, PathArguments, ReturnType, Type, TypeParamBound, Visibility,
 };
 
 use crate::{atoms, template_error};
@@ -10,6 +11,19 @@ use crate::{atoms, template_error};
 pub(crate) fn inspect_source<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
     match syn::parse_file(&source) {
         Ok(file) => Ok((atoms::ok(), items(env, file.items)).encode(env)),
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let mut visitor = AtomReferenceVisitor { atoms: Vec::new() };
+            visitor.visit_file(&file);
+            visitor.atoms.sort();
+            visitor.atoms.dedup();
+            Ok((atoms::ok(), visitor.atoms).encode(env))
+        }
         Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
     }
 }
@@ -37,6 +51,25 @@ pub(crate) fn enum_variants<'a>(
             }
         }
         Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+struct AtomReferenceVisitor {
+    atoms: Vec<String>,
+}
+
+impl<'ast> Visit<'ast> for AtomReferenceVisitor {
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if let Expr::Path(ExprPath { path, .. }) = &*node.func {
+            if path.segments.len() == 2
+                && path.segments[0].ident == "atoms"
+                && matches!(path.segments[1].arguments, PathArguments::None)
+            {
+                self.atoms.push(path.segments[1].ident.to_string());
+            }
+        }
+
+        visit::visit_expr_call(self, node);
     }
 }
 
