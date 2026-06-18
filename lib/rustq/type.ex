@@ -89,6 +89,9 @@ defmodule RustQ.Type do
   @typedoc "Raw Rust type fragment marker for syntax Elixir typespecs cannot model. Prefer structural markers such as `R.slice/1` when possible."
   @type raw(name) :: {name, term()}
 
+  @typedoc "Native Rust enum marker with descriptor lookup metadata."
+  @type native_enum(rust_type, opts) :: atom() | {rust_type, opts}
+
   def atom, do: type_only!()
   def bool, do: type_only!()
   def f32, do: type_only!()
@@ -112,6 +115,7 @@ defmodule RustQ.Type do
   def lifetime(_name), do: type_only!()
   def slice(_type), do: type_only!()
   def raw(_name), do: type_only!()
+  def native_enum(_rust_type, _opts), do: type_only!()
 
   def ref(_type), do: type_only!()
   def mut_ref(_type), do: type_only!()
