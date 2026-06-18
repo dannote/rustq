@@ -12,6 +12,23 @@ defmodule RustQ.SpecTest do
     assert RustQ.Spec.type(canvas).rust == "skia_safe::Canvas"
   end
 
+  test "builds aliases from quoted type declarations" do
+    aliases =
+      RustQ.Spec.aliases([
+        {:type, quote(do: point :: {number(), number()}), 1},
+        {:type, quote(do: rect_opts :: %{required(:x) => number(), optional(:point) => point()}),
+         2}
+      ])
+
+    assert %RustQ.Meta.Type{kind: :struct, rust: "RectOpts", meta: %{fields: fields}} =
+             aliases[{:rect_opts, 0}]
+
+    assert {:x, %RustQ.Meta.Type{rust: "f64"}, :required} = List.keyfind(fields, :x, 0)
+
+    assert {:point, %RustQ.Meta.Type{kind: :alias, rust: "Point"}, :optional} =
+             List.keyfind(fields, :point, 0)
+  end
+
   test "builds aliases from BEAM abstract type declarations" do
     types = [
       type: {:point, {:type, 1, :tuple, [{:type, 1, :number, []}, {:type, 1, :number, []}]}, []},

@@ -70,6 +70,17 @@ defmodule RustQ.Spec do
   defp union_ast([left, right]), do: {:|, [], [left, right]}
   defp union_ast([left | rest]), do: {:|, [], [left, union_ast(rest)]}
 
+  defp normalize_type_decl(
+         {:type, {:"::", meta, [{name, name_meta, context}, type]} = _type_ast, line}
+       )
+       when is_atom(name) and is_atom(context) do
+    {:type, {:"::", meta, [{name, name_meta, nil}, type]}, line}
+  end
+
+  defp normalize_type_decl({:type, {:"::", _, _} = type_ast, line}) do
+    {:type, type_ast, line}
+  end
+
   defp normalize_type_decl({kind, {name, type, args}}) when kind in [:type, :opaque] do
     {:type, {:"::", [], [{name, [], anonymous_args(args)}, normalize(type)]}, 0}
   end
