@@ -6,6 +6,7 @@ mod generated_ast;
 mod parse;
 mod parse_item;
 mod parse_type;
+mod syn_metadata;
 mod template;
 
 pub(crate) use decode::*;
@@ -45,6 +46,16 @@ fn render_ast(ast: Term) -> NifResult<String> {
         attrs: Vec::new(),
         items: vec![item],
     }))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn syn_inspect<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    syn_metadata::inspect_source(env, source)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn syn_enum_variants<'a>(env: Env<'a>, source: String, enum_name: String) -> NifResult<Term<'a>> {
+    syn_metadata::enum_variants(env, source, enum_name)
 }
 
 rustler::init!("Elixir.RustQ.Native");

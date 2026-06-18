@@ -106,7 +106,9 @@ pub(crate) fn decode_attribute_list(term: Term) -> NifResult<Vec<syn::Attribute>
 }
 
 fn decode_attribute(term: Term) -> NifResult<syn::Attribute> {
-    let path = path_from_parts(decode_string_list(term.map_get(atom(term.get_env(), "path")?)?)?)?;
+    let path = path_from_parts(decode_string_list(
+        term.map_get(atom(term.get_env(), "path")?)?,
+    )?)?;
     let arg_term = term.map_get(atom(term.get_env(), "args")?)?;
 
     if let Ok((tag, value)) = arg_term.decode::<(Term, Term)>() {
@@ -140,7 +142,12 @@ fn decode_attribute_args(term: Term) -> NifResult<Vec<AttributeArg>> {
 
     term.decode::<Vec<Term>>()?
         .into_iter()
-        .map(|value| Ok(AttributeArg::Ident(format_ident!("{}", atom_or_string(value)?))))
+        .map(|value| {
+            Ok(AttributeArg::Ident(format_ident!(
+                "{}",
+                atom_or_string(value)?
+            )))
+        })
         .collect()
 }
 
@@ -189,7 +196,10 @@ pub(crate) fn decode_block(term: Term) -> NifResult<syn::Block> {
     syn::parse2::<syn::Block>(quote!({ #(#stmts)* })).map_err(|_| rustler::Error::BadArg)
 }
 
-pub(crate) fn decode_optional_block_field(term: Term, field: &str) -> NifResult<Option<syn::Block>> {
+pub(crate) fn decode_optional_block_field(
+    term: Term,
+    field: &str,
+) -> NifResult<Option<syn::Block>> {
     let value = term.map_get(atom(term.get_env(), field)?)?;
     let values = value.decode::<Vec<Term>>()?;
 
@@ -379,7 +389,10 @@ pub(crate) fn parse_path_expr(path: syn::Path) -> NifResult<Expr> {
     parse_syn::<Expr>(quote!(#path))
 }
 
-pub(crate) fn parse_atom_value_expr(module: Vec<String>, name: proc_macro2::Ident) -> NifResult<Expr> {
+pub(crate) fn parse_atom_value_expr(
+    module: Vec<String>,
+    name: proc_macro2::Ident,
+) -> NifResult<Expr> {
     let module = path_from_parts(module)?;
     parse_syn::<Expr>(quote!(#module::#name()))
 }
