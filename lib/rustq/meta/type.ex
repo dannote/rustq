@@ -259,23 +259,25 @@ defmodule RustQ.Meta.Type do
     })
   end
 
-  defp parse_external_type({:__aliases__, _, parts}, :t, args, aliases),
-    do: type(:type, external_type_path(parts, args, aliases))
+  defp parse_external_type({:__aliases__, _, parts}, :t, args, aliases) do
+    type(:type, external_type_path(parts, args, aliases), external_type_meta(parts, :t, args))
+  end
 
   defp parse_external_type({:__aliases__, _, parts}, function, args, aliases) do
     type =
       case args do
         [] ->
-          %AST.TypePath{parts: parts ++ [function]}
+          %AST.TypePath{parts: external_type_parts(parts) ++ [function]}
 
         args ->
           %AST.TypePath{
-            parts: parts ++ [function],
-            generics: Enum.map(args, &parse(&1, aliases).ast)
+            parts: external_type_parts(parts) ++ [function],
+            lifetimes: Enum.flat_map(args, &external_type_lifetimes!/1),
+            generics: Enum.flat_map(args, &external_type_generics(&1, aliases))
           }
       end
 
-    type(:type, type)
+    type(:type, type, external_type_meta(parts, function, args))
   end
 
   defp parse_external_type(_module, function, _args, _aliases), do: type(:type, path(function))
@@ -326,6 +328,14 @@ defmodule RustQ.Meta.Type do
       parts: external_type_parts(parts),
       lifetimes: Enum.flat_map(args, &external_type_lifetimes!/1),
       generics: Enum.flat_map(args, &external_type_generics(&1, aliases))
+    }
+  end
+
+  defp external_type_meta(parts, function, args) do
+    %{
+      elixir_module: Module.concat(parts),
+      elixir_type: function,
+      elixir_args: args
     }
   end
 

@@ -29,6 +29,18 @@ defmodule RustQ.Meta.TypeTest do
              "generated_opts::OvalOpts<'a>"
   end
 
+  test "keeps external Elixir origin metadata" do
+    assert %Type{
+             rust: "skia_safe::Canvas",
+             meta: %{elixir_module: SkiaSafe.Canvas, elixir_type: :t, elixir_args: []}
+           } = Type.from_spec_ast(quote(do: SkiaSafe.Canvas.t()))
+
+    assert %Type{
+             rust: "skia_safe::Canvas::borrowed",
+             meta: %{elixir_module: SkiaSafe.Canvas, elixir_type: :borrowed, elixir_args: []}
+           } = Type.from_spec_ast(quote(do: SkiaSafe.Canvas.borrowed()))
+  end
+
   test "keeps external t aliases as direct Rust identifiers" do
     assert Type.from_spec_ast(quote(do: ItemConst.t())).rust == "ItemConst"
     assert Type.from_spec_ast(quote(do: ItemStruct.t())).rust == "ItemStruct"
