@@ -241,6 +241,13 @@ defmodule RustQ.Syn do
     @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
   end
 
+  defmodule MethodCall do
+    @moduledoc "Receiver method call metadata found in Rust source."
+    defstruct [:receiver, :method]
+
+    @type t :: %__MODULE__{receiver: String.t(), method: String.t()}
+  end
+
   defmodule Signature do
     @moduledoc "Structured Rust function or method signature metadata."
     defstruct [:name, args: [], returns: nil]
@@ -483,6 +490,34 @@ defmodule RustQ.Syn do
   end
 
   @doc """
+  Returns receiver method calls found in Rust source.
+
+  For example, `canvas.draw_rect(...)` contributes
+  `%RustQ.Syn.MethodCall{receiver: "canvas", method: "draw_rect"}`.
+  """
+  @spec method_calls(String.t()) :: {:ok, [RustQ.Syn.MethodCall.t()]} | {:error, term()}
+  def method_calls(source) when is_binary(source) do
+    case RustQ.Native.syn_method_calls(source) do
+      {:ok, calls} -> {:ok, Elixir.Enum.map(calls, &decode_method_call!/1)}
+      {:error, errors} -> {:error, errors}
+    end
+  end
+
+  @doc "Returns receiver method calls found in Rust source, raising on failure."
+  @spec method_calls!(String.t()) :: [RustQ.Syn.MethodCall.t()]
+  def method_calls!(source) do
+    case method_calls(source) do
+      {:ok, calls} ->
+        calls
+
+      {:error, errors} ->
+        raise Error,
+          message: "RustQ method call introspection error: #{inspect(errors)}",
+          errors: errors
+    end
+  end
+
+  @doc """
   Returns method names referenced as receiver method calls in Rust source.
 
   For example, `canvas.draw_rect(...)` contributes `"draw_rect"`.
@@ -515,6 +550,10 @@ defmodule RustQ.Syn do
       {:error, errors} ->
         raise Error, message: "RustQ enum introspection error: #{inspect(errors)}", errors: errors
     end
+  end
+
+  defp decode_method_call!({receiver, method}) do
+    %RustQ.Syn.MethodCall{receiver: receiver, method: method}
   end
 
   defp decode_item!({"enum", name, visibility, source_line, docs, variants}) do

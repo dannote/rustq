@@ -9,5 +9,6 @@ defmodule RustQ.Native do
   def syn_inspect(_source), do: :erlang.nif_error(:nif_not_loaded)
   def syn_atom_references(_source), do: :erlang.nif_error(:nif_not_loaded)
   def syn_method_references(_source), do: :erlang.nif_error(:nif_not_loaded)
+  def syn_method_calls(_source), do: :erlang.nif_error(:nif_not_loaded)
   def syn_enum_variants(_source, _enum_name), do: :erlang.nif_error(:nif_not_loaded)
 end

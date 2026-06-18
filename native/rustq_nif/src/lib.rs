@@ -64,6 +64,11 @@ fn syn_method_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+fn syn_method_calls<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    syn_metadata::method_calls(env, source)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
 fn syn_enum_variants<'a>(env: Env<'a>, source: String, enum_name: String) -> NifResult<Term<'a>> {
     syn_metadata::enum_variants(env, source, enum_name)
 }

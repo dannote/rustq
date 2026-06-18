@@ -31,11 +31,29 @@ pub(crate) fn atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Ter
 pub(crate) fn method_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
     match syn::parse_file(&source) {
         Ok(file) => {
-            let mut visitor = MethodReferenceVisitor { methods: Vec::new() };
+            let mut visitor = MethodReferenceVisitor { calls: Vec::new() };
             visitor.visit_file(&file);
-            visitor.methods.sort();
-            visitor.methods.dedup();
-            Ok((atoms::ok(), visitor.methods).encode(env))
+            visitor.calls.sort();
+            visitor.calls.dedup();
+            let methods = visitor
+                .calls
+                .into_iter()
+                .map(|(_receiver, method)| method)
+                .collect::<Vec<_>>();
+            Ok((atoms::ok(), methods).encode(env))
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn method_calls<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let mut visitor = MethodReferenceVisitor { calls: Vec::new() };
+            visitor.visit_file(&file);
+            visitor.calls.sort();
+            visitor.calls.dedup();
+            Ok((atoms::ok(), visitor.calls).encode(env))
         }
         Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
     }
@@ -72,12 +90,15 @@ struct AtomReferenceVisitor {
 }
 
 struct MethodReferenceVisitor {
-    methods: Vec<String>,
+    calls: Vec<(String, String)>,
 }
 
 impl<'ast> Visit<'ast> for MethodReferenceVisitor {
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
-        self.methods.push(node.method.to_string());
+        self.calls.push((
+            node.receiver.to_token_stream().to_string(),
+            node.method.to_string(),
+        ));
         visit::visit_expr_method_call(self, node);
     }
 }

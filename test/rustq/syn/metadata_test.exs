@@ -173,4 +173,19 @@ defmodule RustQ.Syn.MetadataTest do
 
     assert RustQ.Syn.method_references!(source) == ["draw_rect", "save"]
   end
+
+  test "returns receiver-aware method calls from parsed Rust source" do
+    source = """
+    fn draw(canvas: &Canvas, state: &mut State, paint: &Paint) {
+        canvas.draw_rect(Rect::default(), paint);
+        state.canvas().clip_path(path, ClipOp::Intersect, true);
+    }
+    """
+
+    assert RustQ.Syn.method_calls!(source) == [
+             %RustQ.Syn.MethodCall{receiver: "canvas", method: "draw_rect"},
+             %RustQ.Syn.MethodCall{receiver: "state", method: "canvas"},
+             %RustQ.Syn.MethodCall{receiver: "state . canvas ()", method: "clip_path"}
+           ]
+  end
 end
