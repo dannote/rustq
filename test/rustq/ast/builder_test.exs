@@ -77,6 +77,15 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert RustQ.Rust.AST.Render.render_function(function) =~ "(1i64, 2i64)"
   end
 
+  test "builds semantic badarg helpers" do
+    assert %AST.Path{parts: [:rustler, :Error, :BadArg]} = A.badarg()
+
+    assert %AST.Return{expr: %AST.Err{expr: %AST.Path{parts: [:rustler, :Error, :BadArg]}}} =
+             A.return_badarg()
+
+    assert %AST.Arm{pattern: %AST.PatWildcard{}, body: [%AST.Return{}]} = A.badarg_arm()
+  end
+
   test "renders if and binary operators through native AST" do
     function = %AST.Function{
       name: :expect,
@@ -88,7 +97,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
             A.if_expr(
               A.and_(A.var(:left), A.eq(A.var(:right), true)),
               [A.return(A.ok())],
-              [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
+              [A.return_badarg()]
             )
           )
         end
@@ -120,9 +129,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
               A.return(A.method(A.call(:decode_click, [:term]), :map, [A.path([:Event, :Click])]))
             end
 
-            A.arm A.wildcard() do
-              A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-            end
+            A.badarg_arm()
           end
         end
       end

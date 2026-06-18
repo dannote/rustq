@@ -342,10 +342,7 @@ defmodule RustQ.ASTSamples do
   def sample_for(:ok), do: function_sample(:ok_sample, A.ok(), returns: "NifResult<()> ")
 
   def sample_for(:err),
-    do:
-      function_sample(:err_sample, A.err(A.path([:rustler, :Error, :BadArg])),
-        returns: "NifResult<()> "
-      )
+    do: function_sample(:err_sample, A.err(A.badarg()), returns: "NifResult<()> ")
 
   def sample_for(:nif_raise_atom),
     do:

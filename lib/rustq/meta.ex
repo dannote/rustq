@@ -334,12 +334,7 @@ defmodule RustQ.Meta do
                 A.arm %AST.PatAtomGuard{name: variant} do
                   A.return(A.ok(A.path([rust_name, rust_variant(variant)])))
                 end
-              end) ++
-                [
-                  A.arm A.wildcard() do
-                    A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-                  end
-                ]
+              end) ++ [A.badarg_arm()]
             end
           end
         end
@@ -451,12 +446,7 @@ defmodule RustQ.Meta do
                 )
               end
             end
-          end) ++
-            [
-              A.arm A.wildcard() do
-                A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-              end
-            ]
+          end) ++ [A.badarg_arm()]
         end
       end
     end

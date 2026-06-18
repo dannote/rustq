@@ -54,10 +54,7 @@ defmodule RustQ.Rustler.AtomDecoder do
       }
     end) ++
       [
-        %AST.Arm{
-          pattern: A.wildcard(),
-          body: [A.return_stmt(A.err(A.path([:rustler, :Error, :BadArg])))]
-        }
+        A.badarg_arm()
       ]
   end
 

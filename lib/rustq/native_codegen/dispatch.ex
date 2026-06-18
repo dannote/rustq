@@ -35,11 +35,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp decode_ast_item_arms do
     Schema.nodes(:item)
     |> Enum.map(&decode_ast_item_arm/1)
-    |> Kernel.++([
-      A.arm A.wildcard() do
-        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-      end
-    ])
+    |> Kernel.++([A.badarg_arm()])
   end
 
   defp decode_ast_item_arm(%Schema.Node{name: :macro_item, rust_const: rust_const}) do
@@ -96,11 +92,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp decode_ast_type_arms do
     Schema.nodes(:type)
     |> Enum.map(&decode_ast_type_arm/1)
-    |> Kernel.++([
-      A.arm A.wildcard() do
-        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-      end
-    ])
+    |> Kernel.++([A.badarg_arm()])
   end
 
   defp decode_ast_type_arm(%Schema.Node{name: name, rust_const: rust_const}) do
@@ -141,11 +133,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp decode_ast_pat_arms do
     Schema.nodes(:pat)
     |> Enum.map(&decode_ast_pat_arm/1)
-    |> Kernel.++([
-      A.arm A.wildcard() do
-        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-      end
-    ])
+    |> Kernel.++([A.badarg_arm()])
   end
 
   defp decode_ast_pat_arm(%Schema.Node{name: name, rust_const: rust_const}) do
@@ -193,11 +181,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp decode_ast_stmt_arms do
     Schema.nodes(:stmt)
     |> Enum.map(&decode_ast_stmt_arm/1)
-    |> Kernel.++([
-      A.arm A.wildcard() do
-        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-      end
-    ])
+    |> Kernel.++([A.badarg_arm()])
   end
 
   defp decode_ast_stmt_arm(%Schema.Node{name: name, rust_const: rust_const}) do
@@ -231,11 +215,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp decode_ast_expr_arms do
     Schema.nodes(:expr)
     |> Enum.map(&decode_ast_expr_arm/1)
-    |> Kernel.++([
-      A.arm A.wildcard() do
-        A.return(A.err(A.path([:rustler, :Error, :BadArg])))
-      end
-    ])
+    |> Kernel.++([A.badarg_arm()])
   end
 
   defp decode_ast_expr_arm(%Schema.Node{name: name, rust_const: rust_const}) do

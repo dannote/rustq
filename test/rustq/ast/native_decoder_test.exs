@@ -319,7 +319,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
               A.if_expr(
                 :condition,
                 [A.return(A.ok())],
-                [A.return(A.err(A.path([:rustler, :Error, :BadArg])))]
+                [A.return_badarg()]
               )
             )
           end
@@ -370,7 +370,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
         name: :err_expr,
         args: [],
         returns: "NifResult<()> ",
-        body: A.block(do: A.return(A.err(A.path([:rustler, :Error, :BadArg]))))
+        body: A.block(do: A.return(A.err(A.badarg())))
       })
 
     assert try_source =~ "fallible()?"

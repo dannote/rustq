@@ -201,6 +201,9 @@ defmodule RustQ.Rust.AST.Builder do
   def ok, do: %AST.Ok{}
   def ok(expression), do: %AST.Ok{expr: expr(expression)}
   def err(expression), do: %AST.Err{expr: expr(expression)}
+  def badarg, do: path([:rustler, :Error, :BadArg])
+  def return_badarg, do: return_stmt(err(badarg()))
+  def badarg_arm, do: %AST.Arm{pattern: wildcard(), body: [return_badarg()]}
   def lit(value), do: %AST.Literal{value: value}
   def token_macro(path, tokens), do: %AST.TokenMacro{path: expr_path(path), tokens: tokens}
 
