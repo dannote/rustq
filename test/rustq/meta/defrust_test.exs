@@ -132,6 +132,23 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
   end
 
+  test "defrust lowers structural Rust struct literals" do
+    defmodule StructLiteralCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec cubic(R.f64(), R.f64()) :: R.path(:CubicResampler)
+      defrust cubic(b, c) do
+        struct_literal(CubicResampler, b: cast(b, :f32), c: cast(c, :f32))
+      end
+    end
+
+    source = StructLiteralCase.__rustq_source__()
+    assert source =~ "CubicResampler {"
+    assert source =~ "b: b as f32"
+    assert source =~ "c: c as f32"
+  end
+
   test "defrust lowers bitwise helper calls" do
     defmodule BitwiseHelperCase do
       use RustQ.Meta

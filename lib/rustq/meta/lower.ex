@@ -342,6 +342,12 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:badarg, _, []}), do: %AST.Path{parts: [:rustler, :Error, :BadArg]}
 
+  defp lower_expr({:struct_literal, _, [path, fields]}),
+    do: %AST.StructLiteral{
+      path: lower_struct_literal_path(path),
+      fields: lower_named_fields(fields)
+    }
+
   defp lower_expr({:==, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
 
@@ -685,6 +691,12 @@ defmodule RustQ.Meta.Lower do
 
   defp quote_tokens(other) do
     raise ArgumentError, "unsupported quote tokens: #{Macro.to_string(other)}"
+  end
+
+  defp lower_struct_literal_path(path), do: lower_expr(path)
+
+  defp lower_named_fields(fields) when is_list(fields) do
+    Enum.map(fields, fn {name, expression} -> {name, lower_expr(expression)} end)
   end
 
   defp lower_token_macro_path(atom) when is_atom(atom), do: %AST.Path{parts: [atom]}
