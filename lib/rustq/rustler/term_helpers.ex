@@ -21,31 +21,9 @@ defmodule RustQ.Rustler.TermHelpers do
     :type_str
   ]
 
-  @rusty_names [:get, :is_nil, :opt, :bool_val, :list_val]
+  @rusty_names [:get, :is_nil, :opt, :str_val, :bool_val, :f64_val, :list_val]
 
   @templates %{
-    str_val: ~R"""
-    fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String {
-        match get(term, key) {
-            Some(t) => t
-                .decode::<String>()
-                .or_else(|_| t.atom_to_string())
-                .unwrap_or_default(),
-            None => String::new(),
-        }
-    }
-    """,
-    f64_val: ~R"""
-    fn f64_val(term: Term, key: rustler::Atom) -> f64 {
-        get(term, key)
-            .and_then(|t| {
-                t.decode::<f64>()
-                    .ok()
-                    .or_else(|| t.decode::<i64>().ok().map(|i| i as f64))
-            })
-            .unwrap_or(0.0)
-    }
-    """,
     type_atom: ~R"""
     fn type_atom(term: Term) -> Option<rustler::Atom> {
         get(term, __rq_type_key!()).and_then(|t| t.decode::<rustler::Atom>().ok())
@@ -100,6 +78,26 @@ defmodule RustQ.Rustler.TermHelpers do
     end
   end
 
+  @spec str_val(term(), R.path({:rustler, :Atom})) :: String.t()
+  defrust str_val(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, String.t()) do
+          {:ok, decoded} ->
+            decoded
+
+          {:error, _reason} ->
+            case value.atom_to_string() do
+              {:ok, decoded} -> decoded
+              {:error, _reason} -> String.new()
+            end
+        end
+
+      :none ->
+        String.new()
+    end
+  end
+
   @spec bool_val(term(), R.path({:rustler, :Atom})) :: R.bool()
   defrust bool_val(term, key) do
     case get(term, key) do
@@ -111,6 +109,26 @@ defmodule RustQ.Rustler.TermHelpers do
 
       :none ->
         false
+    end
+  end
+
+  @spec f64_val(term(), R.path({:rustler, :Atom})) :: R.f64()
+  defrust f64_val(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.f64()) do
+          {:ok, decoded} ->
+            decoded
+
+          {:error, _reason} ->
+            case decode_as(value, R.i64()) do
+              {:ok, decoded} -> cast(decoded, :f64)
+              {:error, _reason} -> 0.0
+            end
+        end
+
+      :none ->
+        0.0
     end
   end
 
