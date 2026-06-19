@@ -186,12 +186,22 @@ defmodule RustQ.Syn do
 
   defmodule Use do
     @moduledoc "Rust `use` item metadata, including reexport aliases."
-    defstruct [:path, :alias, :visibility, :source_line, :source_path, docs: [], segments: []]
+    defstruct [
+      :path,
+      :alias,
+      :visibility,
+      :source_line,
+      :source_path,
+      docs: [],
+      segments: [],
+      glob?: false
+    ]
 
     @type t :: %__MODULE__{
             path: String.t(),
             segments: [String.t()],
-            alias: String.t(),
+            alias: String.t() | nil,
+            glob?: boolean(),
             visibility: :public | :private,
             source_line: pos_integer() | nil,
             source_path: Path.t() | nil,
@@ -608,11 +618,12 @@ defmodule RustQ.Syn do
     }
   end
 
-  defp decode_item!({"use", path, segments, alias, visibility, source_line, docs}) do
+  defp decode_item!({"use", path, segments, alias, glob?, {visibility, source_line}, docs}) do
     %RustQ.Syn.Use{
       path: path,
       segments: segments,
       alias: alias,
+      glob?: glob?,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
       docs: docs

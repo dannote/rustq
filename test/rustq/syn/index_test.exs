@@ -72,6 +72,27 @@ defmodule RustQ.Syn.IndexTest do
     if path = Process.get(:path), do: File.rm(path)
   end
 
+  test "indexes glob reexports structurally" do
+    path =
+      write_source!("""
+      pub use blend_mode::*;
+      """)
+
+    index = RustQ.Syn.Index.from_paths([path])
+
+    assert [
+             %RustQ.Syn.Use{
+               path: "blend_mode",
+               segments: ["blend_mode"],
+               alias: nil,
+               glob?: true,
+               visibility: :public
+             }
+           ] = RustQ.Syn.Index.uses(index)
+  after
+    if path = Process.get(:path), do: File.rm(path)
+  end
+
   test "indexes type aliases by name" do
     path =
       write_source!("""

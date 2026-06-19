@@ -184,14 +184,14 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
             )
                 .encode(env),
         ),
-        Item::Use(item) => use_alias(&item.tree).map(|(path, segments, alias)| {
+        Item::Use(item) => use_alias(&item.tree).map(|(path, segments, alias, glob)| {
             (
                 "use",
                 path,
                 segments,
                 alias,
-                visibility(&item.vis),
-                line(item.use_token.span),
+                glob,
+                (visibility(&item.vis), line(item.use_token.span)),
                 docs(&item.attrs),
             )
                 .encode(env)
@@ -212,8 +212,11 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
     }
 }
 
-fn use_alias(tree: &UseTree) -> Option<(String, Vec<String>, String)> {
-    fn walk(tree: &UseTree, prefix: Vec<String>) -> Option<(String, Vec<String>, String)> {
+fn use_alias(tree: &UseTree) -> Option<(String, Vec<String>, Option<String>, bool)> {
+    fn walk(
+        tree: &UseTree,
+        prefix: Vec<String>,
+    ) -> Option<(String, Vec<String>, Option<String>, bool)> {
         match tree {
             UseTree::Path(path) => {
                 let mut prefix = prefix;
@@ -223,13 +226,14 @@ fn use_alias(tree: &UseTree) -> Option<(String, Vec<String>, String)> {
             UseTree::Rename(rename) => {
                 let mut path = prefix;
                 path.push(rename.ident.to_string());
-                Some((path.join("::"), path, rename.rename.to_string()))
+                Some((path.join("::"), path, Some(rename.rename.to_string()), false))
             }
             UseTree::Name(name) => {
                 let mut path = prefix;
                 path.push(name.ident.to_string());
-                Some((path.join("::"), path, name.ident.to_string()))
+                Some((path.join("::"), path, Some(name.ident.to_string()), false))
             }
+            UseTree::Glob(_glob) => Some((prefix.join("::"), prefix, None, true)),
             _ => None,
         }
     }
