@@ -62,7 +62,7 @@ defmodule RustQ.Rustler.OptsHelpers do
           R.nif_result(R.option(R.f32()))
   defrust opt_f32_option(opts, key) do
     case opt_term(opts, key) do
-      {:some, term} -> {:ok, cast(decode_as!(term, R.f64()), :f32)}
+      {:some, term} -> {:ok, some(cast(decode_as!(term, R.f64()), :f32))}
       :none -> {:ok, nil}
     end
   end
@@ -80,7 +80,7 @@ defmodule RustQ.Rustler.OptsHelpers do
           R.nif_result(R.option(R.bool()))
   defrust opt_bool_option(opts, key) do
     case opt_term(opts, key) do
-      {:some, term} -> {:ok, decode_as!(term, R.bool())}
+      {:some, term} -> {:ok, some(decode_as!(term, R.bool()))}
       :none -> {:ok, nil}
     end
   end
@@ -89,7 +89,7 @@ defmodule RustQ.Rustler.OptsHelpers do
           R.nif_result(R.option(R.path(:Atom)))
   defrust opt_atom_option(opts, key) do
     case opt_term(opts, key) do
-      {:some, term} -> {:ok, decode_as!(term, R.path(:Atom))}
+      {:some, term} -> {:ok, some(decode_as!(term, R.path(:Atom)))}
       :none -> {:ok, nil}
     end
   end

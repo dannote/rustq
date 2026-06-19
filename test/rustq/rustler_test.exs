@@ -154,6 +154,9 @@ defmodule RustQ.RustlerTest do
     assert code =~ "fn opt_term<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> Option<Term<'a>>"
     assert code =~ "fn opt_f32<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<f32>"
     assert code =~ "fn opt_atom_option<'a>"
+    assert code =~ "Ok(Some(term.decode::<f64>()? as f32))"
+    assert code =~ "Ok(Some(term.decode::<bool>()?))"
+    assert code =~ "Ok(Some(term.decode::<Atom>()?))"
   end
 
   test "builds cached atom functions" do
