@@ -345,17 +345,17 @@ defmodule RustQ.Meta.Type do
     parts |> Tuple.to_list() |> spec_path_tuple!(opts)
   end
 
+  defp spec_path!(part, opts) when is_atom(part), do: spec_path!({part}, opts)
+
+  defp spec_path!(other, _opts) do
+    raise ArgumentError, "expected R.path parts tuple, got: #{Macro.to_string(other)}"
+  end
+
   defp spec_path_tuple!(parts, opts) do
     %AST.TypePath{
       parts: Enum.map(parts, &spec_path_part!/1),
       lifetimes: spec_path_lifetimes!(opts)
     }
-  end
-
-  defp spec_path!(part, opts) when is_atom(part), do: spec_path!({part}, opts)
-
-  defp spec_path!(other, _opts) do
-    raise ArgumentError, "expected R.path parts tuple, got: #{Macro.to_string(other)}"
   end
 
   defp spec_path_lifetimes!(nil), do: []
