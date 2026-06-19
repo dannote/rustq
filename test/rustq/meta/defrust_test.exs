@@ -132,6 +132,25 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
   end
 
+  test "defrust lowers arrays and indexed assignment" do
+    defmodule ArrayIndexCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec fill(R.u8()) :: R.nif_result(R.unit())
+      defrust fill(value) do
+        values = array([cast(0, :u8), cast(0, :u8)])
+        index = cast(0, :usize)
+        assign!(index(values, index), value)
+        :ok
+      end
+    end
+
+    source = ArrayIndexCase.__rustq_source__()
+    assert source =~ "let mut values = [0i64 as u8, 0i64 as u8];"
+    assert source =~ "values[index] = value;"
+  end
+
   test "defrust lowers structural Rust struct literals" do
     defmodule StructLiteralCase do
       use RustQ.Meta

@@ -355,6 +355,12 @@ defmodule RustQ.Meta.Lower do
       fields: lower_named_fields(fields)
     }
 
+  defp lower_expr({:array, _, [values]}),
+    do: %AST.ArrayLiteral{values: Enum.map(values, &lower_expr/1)}
+
+  defp lower_expr({:index, _, [receiver, index]}),
+    do: %AST.Index{receiver: lower_expr(receiver), index: lower_expr(index)}
+
   defp lower_expr({:==, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
 
@@ -798,6 +804,13 @@ defmodule RustQ.Meta.Lower do
   defp mark_mutable_expr_fallback(%AST.Field{} = expr, mutable_vars),
     do: %{expr | receiver: mark_mutable_expr(expr.receiver, mutable_vars)}
 
+  defp mark_mutable_expr_fallback(%AST.Index{} = expr, mutable_vars),
+    do: %{
+      expr
+      | receiver: mark_mutable_expr(expr.receiver, mutable_vars),
+        index: mark_mutable_expr(expr.index, mutable_vars)
+    }
+
   defp mark_mutable_expr_fallback(%AST.Ref{} = expr, mutable_vars),
     do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
 
@@ -838,6 +851,13 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp do_collect_mutable_let_refs(%AST.Assign{target: %AST.Var{name: name}} = assign, acc) do
+    do_collect_mutable_let_refs(assign.expr, [name | acc])
+  end
+
+  defp do_collect_mutable_let_refs(
+         %AST.Assign{target: %AST.Index{receiver: %AST.Var{name: name}}} = assign,
+         acc
+       ) do
     do_collect_mutable_let_refs(assign.expr, [name | acc])
   end
 
