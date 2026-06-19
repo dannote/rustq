@@ -132,6 +132,16 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
   end
 
+  test "Meta returns rendered defrust items" do
+    item = RustQ.Meta.defrust_item(RustQ.Meta.GeneratedCase, :draw_save)
+
+    assert RustQ.Rust.to_fragment(item) =~ "fn draw_save"
+
+    assert_raise ArgumentError, fn ->
+      RustQ.Meta.defrust_item(RustQ.Meta.GeneratedCase, :missing)
+    end
+  end
+
   test "defrust lowers zero-arity closures" do
     defmodule ZeroArityClosureCase do
       use RustQ.Meta

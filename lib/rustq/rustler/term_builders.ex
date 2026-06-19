@@ -45,10 +45,6 @@ defmodule RustQ.Rustler.TermBuilders do
 
   defp rusty_item(name) do
     function_name = Map.fetch!(@function_names, name)
-
-    __rustq_asts__()
-    |> Enum.find(&(&1.name == function_name))
-    |> RustQ.Rust.AST.Render.render_item()
-    |> Rust.item()
+    RustQ.Meta.defrust_item(__MODULE__, function_name)
   end
 end

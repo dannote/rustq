@@ -141,6 +141,27 @@ defmodule RustQ.Meta do
   def __take_pending_attrs__(module), do: pending_attrs(module)
   def __current_rust_mod__(module), do: Module.get_attribute(module, :rustq_current_rust_mod)
 
+  @doc false
+  @spec defrust_item(module(), atom()) :: Rust.Fragment.t()
+  def defrust_item(module, name) when is_atom(module) and is_atom(name) do
+    module
+    |> defrust_ast!(name)
+    |> RustQ.Rust.AST.Render.render_item()
+    |> Rust.item()
+  end
+
+  @doc false
+  @spec defrust_items(module(), [atom()]) :: [Rust.Fragment.t()]
+  def defrust_items(module, names) when is_atom(module) and is_list(names),
+    do: Enum.map(names, &defrust_item(module, &1))
+
+  @doc false
+  @spec defrust_ast!(module(), atom()) :: AST.Function.t()
+  def defrust_ast!(module, name) when is_atom(module) and is_atom(name) do
+    Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
+      raise ArgumentError, "#{inspect(module)} has no defrust item named #{name}"
+  end
+
   defp rust_module_mapping!(alias_ast, opts) do
     alias_parts = alias_parts!(alias_ast)
     rust_parts = opts |> Keyword.fetch!(:as) |> List.wrap()

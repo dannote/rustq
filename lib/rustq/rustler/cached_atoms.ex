@@ -29,7 +29,7 @@ defmodule RustQ.Rustler.CachedAtoms do
 
     helper_items =
       if include_helpers? do
-        [rust_item(Enum.find(__rustq_asts__(), &(&1.name == :cached_atom)))]
+        [RustQ.Meta.defrust_item(__MODULE__, :cached_atom)]
       else
         []
       end

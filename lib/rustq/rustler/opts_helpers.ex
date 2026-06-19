@@ -99,12 +99,7 @@ defmodule RustQ.Rustler.OptsHelpers do
     |> Enum.map(&helper_item/1)
   end
 
-  defp helper_item(name) when name in @rusty_names do
-    __rustq_asts__()
-    |> Enum.find(&(&1.name == name))
-    |> RustQ.Rust.AST.Render.render_item()
-    |> Rust.item()
-  end
+  defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.defrust_item(__MODULE__, name)
 
   defp helper_item(name) do
     name

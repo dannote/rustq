@@ -167,10 +167,5 @@ defmodule RustQ.Rustler.TermHelpers do
 
   defp names(opts), do: HelperSelection.names(opts, @names)
 
-  defp helper_item(name) when name in @rusty_names do
-    __rustq_asts__()
-    |> Enum.find(&(&1.name == name))
-    |> RustQ.Rust.AST.Render.render_item()
-    |> Rust.item()
-  end
+  defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.defrust_item(__MODULE__, name)
 end
