@@ -110,7 +110,8 @@ defmodule RustQ.Rust.AST.Render do
       try do
         RustQ.Native.render_ast(item)
       rescue
-        _error in [ArgumentError, FunctionClauseError, RuntimeError] -> fallback.(item)
+        _error in [ArgumentError, FunctionClauseError, RuntimeError, UndefinedFunctionError] ->
+          fallback.(item)
       catch
         :exit, _reason -> fallback.(item)
       end
