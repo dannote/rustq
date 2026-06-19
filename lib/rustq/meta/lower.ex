@@ -378,6 +378,12 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:or, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :or, right: lower_expr(right)}
 
+  defp lower_expr({{:., _, [{:__aliases__, _, [:Bitwise]}, :bsr]}, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :shr, right: lower_expr(right)}
+
+  defp lower_expr({{:., _, [{:__aliases__, _, [:Bitwise]}, :band]}, _, [left, right]}),
+    do: %AST.BinaryOp{left: lower_expr(left), op: :bitand, right: lower_expr(right)}
+
   defp lower_expr({:if, _, [condition, branches]}),
     do: lower_if(condition, branches, %Context{position: :expr})
 
@@ -660,6 +666,8 @@ defmodule RustQ.Meta.Lower do
   defp semantic_binary_op(:div), do: "/"
   defp semantic_binary_op(:and), do: "&&"
   defp semantic_binary_op(:or), do: "||"
+  defp semantic_binary_op(:shr), do: ">>"
+  defp semantic_binary_op(:bitand), do: "&"
 
   defp raw_expr(tokens), do: parse_syn(:Expr, tokens)
   defp raw_pat(tokens), do: parse_syn(:Pat, tokens)

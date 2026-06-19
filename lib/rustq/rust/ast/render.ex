@@ -600,6 +600,8 @@ defmodule RustQ.Rust.AST.Render do
   defp render_binary_op(:div), do: "/"
   defp render_binary_op(:and), do: "&&"
   defp render_binary_op(:or), do: "||"
+  defp render_binary_op(:shr), do: ">>"
+  defp render_binary_op(:bitand), do: "&"
 
   defp render_method_receiver(%BinaryOp{} = expr), do: ["(", render_expr(expr), ")"]
   defp render_method_receiver(%Cast{} = expr), do: ["(", render_expr(expr), ")"]

@@ -132,6 +132,22 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
   end
 
+  test "defrust lowers bitwise helper calls" do
+    defmodule BitwiseHelperCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec red(R.u32()) :: R.u8()
+      defrust red(rgba) do
+        Bitwise.band(Bitwise.bsr(rgba, 24), 0xFF)
+        |> cast(:u8)
+      end
+    end
+
+    source = BitwiseHelperCase.__rustq_source__()
+    assert source =~ "(rgba >> 24 & 255) as u8"
+  end
+
   test "defrust lowers arithmetic operators" do
     defmodule ArithmeticCase do
       use RustQ.Meta
