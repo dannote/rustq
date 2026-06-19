@@ -70,6 +70,7 @@ defmodule RustQ.Rust.AST.Render do
     TypeNifResult,
     TypeOption,
     TypePath,
+    TypeRaw,
     TypeRef,
     TypeResult,
     TypeSlice,
@@ -81,19 +82,19 @@ defmodule RustQ.Rust.AST.Render do
     VecLiteral
   }
 
-  def render_item(%Use{} = item), do: render_native(item, &render_use/1)
-  def render_item(%Module{} = item), do: render_native(item, &render_module/1)
-  def render_item(%Const{} = item), do: render_native(item, &render_const/1)
-  def render_item(%Static{} = item), do: render_native(item, &render_static/1)
-  def render_item(%TypeAlias{} = item), do: render_native(item, &render_type_alias/1)
-  def render_item(%MacroItem{} = item), do: render_native(item, &render_macro_item/1)
+  def render_item(%Use{} = item), do: render_native(item)
+  def render_item(%Module{} = item), do: render_native(item)
+  def render_item(%Const{} = item), do: render_native(item)
+  def render_item(%Static{} = item), do: render_native(item)
+  def render_item(%TypeAlias{} = item), do: render_native(item)
+  def render_item(%MacroItem{} = item), do: render_native(item)
 
   def render_item(%MacroItemCall{} = item), do: render_macro_item_call(item)
 
-  def render_item(%Impl{} = item), do: render_native(item, &render_impl/1)
-  def render_item(%Function{} = item), do: render_native(item, &do_render_function/1)
-  def render_item(%Struct{} = item), do: render_native(item, &render_struct/1)
-  def render_item(%Enum{} = item), do: render_native(item, &render_enum/1)
+  def render_item(%Impl{} = item), do: render_native(item)
+  def render_item(%Function{} = item), do: render_native(item)
+  def render_item(%Struct{} = item), do: render_native(item)
+  def render_item(%Enum{} = item), do: render_native(item)
 
   def render_file(items) do
     items
@@ -103,20 +104,7 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_function(%Function{} = function), do: render_item(function)
 
-  defp render_native(item, fallback) do
-    if Application.get_env(:rustq, :strict_native_ast, false) do
-      RustQ.Native.render_ast(item)
-    else
-      try do
-        RustQ.Native.render_ast(item)
-      rescue
-        _error in [ArgumentError, FunctionClauseError, RuntimeError, UndefinedFunctionError] ->
-          fallback.(item)
-      catch
-        :exit, _reason -> fallback.(item)
-      end
-    end
-  end
+  defp render_native(item), do: RustQ.Native.render_ast(item)
 
   def render_use(%Use{parts: parts}) when is_list(parts),
     do: ["use ", Elixir.Enum.map_join(parts, "::", &to_string/1), ";"]
@@ -344,6 +332,7 @@ defmodule RustQ.Rust.AST.Render do
   def render_type(type) when is_binary(type), do: type
   def render_type(type) when is_atom(type), do: to_string(type)
   def render_type({:raw, source}), do: source
+  def render_type(%TypeRaw{source: source}), do: source
   def render_type({:vec, inner}), do: ["Vec<", render_type(inner), ">"]
   def render_type({:option, inner}), do: ["Option<", render_type(inner), ">"]
   def render_type({:ref, inner}), do: ["&", render_type(inner)]

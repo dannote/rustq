@@ -110,7 +110,10 @@ defmodule RustQ.NativeCodegen.Dispatch do
               :type_option,
               :type_result,
               :type_nif_result,
-              :type_vec
+              :type_vec,
+              :type_slice,
+              :type_array,
+              :type_raw
             ],
        do: [type_decoder(name)]
 

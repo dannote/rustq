@@ -131,6 +131,8 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
       "div" -> expr!(binary(left, :div, right))
       "and" -> expr!(binary(left, :and, right))
       "or" -> expr!(binary(left, :or, right))
+      "shr" -> expr!(binary(left, :shr, right))
+      "bitand" -> expr!(binary(left, :bitand, right))
       _ -> err(badarg())
     end
   end
@@ -146,8 +148,8 @@ defmodule RustQ.NativeCodegen.Decoders.Expr do
   defrust decode_expr_if(term) do
     condition = unwrap!(required_expr(term, "condition"))
     then_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "then"))))
-    else_block = unwrap!(Super.decode_block(unwrap!(required_field(term, "else"))))
-    expr!(if_else(condition, then_block, else_block))
+    else_block = unwrap!(Super.decode_optional_block_field(term, "else"))
+    Super.parse_if_expr(condition, then_block, else_block)
   end
 
   @spec decode_expr_tuple(term()) :: R.nif_result(R.path(:Expr))

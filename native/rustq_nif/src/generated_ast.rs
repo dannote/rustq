@@ -35,6 +35,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
     pub(crate) const TYPE_SLICE: &str = "Elixir.RustQ.Rust.AST.TypeSlice";
     pub(crate) const TYPE_ARRAY: &str = "Elixir.RustQ.Rust.AST.TypeArray";
+    pub(crate) const TYPE_RAW: &str = "Elixir.RustQ.Rust.AST.TypeRaw";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
     pub(crate) const LET_ELSE: &str = "Elixir.RustQ.Rust.AST.LetElse";
@@ -216,8 +217,9 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         ast_modules::TYPE_RESULT => decode_type_result(term),
         ast_modules::TYPE_NIF_RESULT => decode_type_nif_result(term),
         ast_modules::TYPE_VEC => decode_type_vec(term),
-        ast_modules::TYPE_SLICE => super::decode_type_slice(term),
-        ast_modules::TYPE_ARRAY => super::decode_type_array(term),
+        ast_modules::TYPE_SLICE => decode_type_slice(term),
+        ast_modules::TYPE_ARRAY => decode_type_array(term),
+        ast_modules::TYPE_RAW => decode_type_raw(term),
         ast_modules::TYPE_UNIT => decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
     }
@@ -456,6 +458,11 @@ pub(crate) fn decode_type_unit<'a>(term: Term<'a>) -> NifResult<Type> {
     super::parse_type_unit(term)
 }
 
+pub(crate) fn decode_type_raw<'a>(term: Term<'a>) -> NifResult<Type> {
+    let source = required_field(term, "source")?.decode()?;
+    super::parse_type_raw(source)
+}
+
 pub(crate) fn decode_type_ref<'a>(term: Term<'a>) -> NifResult<Type> {
     let inner = required_type(term, "inner")?;
     let mutable = required_field(term, "mutable")?.decode()?;
@@ -482,6 +489,17 @@ pub(crate) fn decode_type_nif_result<'a>(term: Term<'a>) -> NifResult<Type> {
 pub(crate) fn decode_type_vec<'a>(term: Term<'a>) -> NifResult<Type> {
     let inner = required_type(term, "inner")?;
     super::parse_type_generic("Vec", vec![inner])
+}
+
+pub(crate) fn decode_type_slice<'a>(term: Term<'a>) -> NifResult<Type> {
+    let inner = required_type(term, "inner")?;
+    super::parse_type_slice(inner)
+}
+
+pub(crate) fn decode_type_array<'a>(term: Term<'a>) -> NifResult<Type> {
+    let inner = required_type(term, "inner")?;
+    let size = required_field(term, "size")?;
+    super::parse_type_array(inner, size)
 }
 
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {
@@ -603,7 +621,7 @@ pub(crate) fn decode_arm<'a>(term: Term<'a>) -> NifResult<Arm> {
         super::decode_atom_guard_arm(pat_term, block)
     } else {
         let pat = super::decode_pat(pat_term)?;
-        super::parse_syn::<Arm>(quote!(# pat => # block,))
+        super::parse_block_arm(pat, block)
     }
 }
 
@@ -717,6 +735,8 @@ pub(crate) fn decode_expr_binary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
         "div" => super::parse_syn::<Expr>(quote!(# left / # right)),
         "and" => super::parse_syn::<Expr>(quote!(# left && # right)),
         "or" => super::parse_syn::<Expr>(quote!(# left || # right)),
+        "shr" => super::parse_syn::<Expr>(quote!(# left >> # right)),
+        "bitand" => super::parse_syn::<Expr>(quote!(# left & # right)),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -730,8 +750,8 @@ pub(crate) fn decode_expr_match<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_if<'a>(term: Term<'a>) -> NifResult<Expr> {
     let condition = required_expr(term, "condition")?;
     let then_block = super::decode_block(required_field(term, "then")?)?;
-    let else_block = super::decode_block(required_field(term, "else")?)?;
-    super::parse_syn::<Expr>(quote!(if # condition # then_block else # else_block))
+    let else_block = super::decode_optional_block_field(term, "else")?;
+    super::parse_if_expr(condition, then_block, else_block)
 }
 
 pub(crate) fn decode_expr_tuple<'a>(term: Term<'a>) -> NifResult<Expr> {

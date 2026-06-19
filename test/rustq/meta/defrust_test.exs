@@ -206,7 +206,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     source = BitwiseHelperCase.__rustq_source__()
-    assert source =~ "(rgba >> 24 & 255) as u8"
+    assert source =~ "(rgba >> 24i64 & 255i64) as u8"
   end
 
   test "defrust lowers arithmetic operators" do
@@ -517,8 +517,8 @@ defmodule RustQ.Meta.DefrustTest do
 
     source = IntegerMatchCase.__rustq_source__()
 
-    assert source =~ "1 =>"
-    assert source =~ "2 =>"
+    assert source =~ "1i64 =>"
+    assert source =~ "2i64 =>"
   end
 
   test "lowers Rust tuple field access from defrust valid Elixir" do

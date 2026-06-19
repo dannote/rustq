@@ -262,7 +262,7 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(:slice, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:slice, {:raw, "&[#{inner.rust}]"})
+    type(:slice, %AST.TypeRef{inner: %AST.TypeSlice{inner: inner.ast}})
   end
 
   defp parse_rust_type(:raw, [type], _aliases), do: type(:type, raw_type!(type))
@@ -374,8 +374,8 @@ defmodule RustQ.Meta.Type do
   end
 
   defp raw_type!({:__block__, _, [type]}), do: raw_type!(type)
-  defp raw_type!(type) when is_atom(type), do: {:raw, Atom.to_string(type)}
-  defp raw_type!(type) when is_binary(type), do: {:raw, type}
+  defp raw_type!(type) when is_atom(type), do: %AST.TypeRaw{source: Atom.to_string(type)}
+  defp raw_type!(type) when is_binary(type), do: %AST.TypeRaw{source: type}
 
   defp raw_type!(other) do
     raise ArgumentError, "expected R.raw atom marker or string, got: #{Macro.to_string(other)}"
@@ -425,7 +425,7 @@ defmodule RustQ.Meta.Type do
 
   defp tuple_type(tuple_types) do
     rendered = Enum.map_join(tuple_types, ", ", & &1.rust)
-    type(:tuple, {:raw, "(#{rendered})"}, %{elements: tuple_types})
+    type(:tuple, %AST.TypeRaw{source: "(#{rendered})"}, %{elements: tuple_types})
   end
 
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),

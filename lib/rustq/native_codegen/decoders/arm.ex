@@ -13,7 +13,7 @@ defmodule RustQ.NativeCodegen.Decoders.Arm do
       Super.decode_atom_guard_arm(pat_term, block)
     else
       pat = unwrap!(Super.decode_pat(pat_term))
-      arm!(pat, block)
+      Super.parse_block_arm(pat, block)
     end
   end
 end

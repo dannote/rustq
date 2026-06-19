@@ -30,4 +30,16 @@ defmodule RustQ.ArchitectureTest do
 
     Enum.each(forbidden, &refute(source =~ &1))
   end
+
+  test "token quote semantic helpers stay confined to native syn decoder generation" do
+    allowed_prefix = "lib/rustq/native_codegen/"
+    helper_call = ~r/\b(?:expr|pat|stmt|arm)!\s*\(/
+
+    offenders =
+      @source_paths
+      |> Enum.reject(&String.starts_with?(&1, allowed_prefix))
+      |> Enum.filter(&(File.read!(&1) =~ helper_call))
+
+    assert offenders == []
+  end
 end

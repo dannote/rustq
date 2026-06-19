@@ -65,6 +65,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:type_vec), do: "Vec<u8>"
   defp semantic_fragment(:type_slice), do: "type_slice_VALUE: [&str]"
   defp semantic_fragment(:type_array), do: "type_array_VALUE: [u8; 4]"
+  defp semantic_fragment(:type_raw), do: "type_raw_VALUE: std::marker::PhantomData"
   defp semantic_fragment(:type_unit), do: "type_unit_VALUE: ()"
   defp semantic_fragment(:let), do: "let value = 1i64;"
   defp semantic_fragment(:let_else), do: "let Some(value) = maybe"
@@ -202,6 +203,9 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:type_array),
     do: type_sample(:type_array, %AST.TypeArray{inner: A.type_path(:u8), size: 4})
+
+  def sample_for(:type_raw),
+    do: type_sample(:type_raw, %AST.TypeRaw{source: "std::marker::PhantomData<&'a ()>"})
 
   def sample_for(:type_unit), do: type_sample(:type_unit, %AST.TypeUnit{})
 

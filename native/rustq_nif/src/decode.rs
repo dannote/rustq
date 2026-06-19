@@ -7,7 +7,10 @@ use crate::generated_ast::{
     decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
     optional_map_get, struct_name,
 };
-use crate::{parse_expr, parse_path, parse_syn, parse_type, path_from_parts};
+use crate::{
+    ident_from_part, parse_expr, parse_syn, parse_type, parse_type_generic, parse_type_ref,
+    path_from_parts,
+};
 
 // Primitive-boundary inventory:
 // - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
@@ -196,6 +199,21 @@ pub(crate) fn decode_block(term: Term) -> NifResult<syn::Block> {
     syn::parse2::<syn::Block>(quote!({ #(#stmts)* })).map_err(|_| rustler::Error::BadArg)
 }
 
+pub(crate) fn parse_block_arm(pat: Pat, block: syn::Block) -> NifResult<Arm> {
+    Ok(Arm {
+        attrs: Vec::new(),
+        pat,
+        guard: None,
+        fat_arrow_token: Default::default(),
+        body: Box::new(Expr::Block(syn::ExprBlock {
+            attrs: Vec::new(),
+            label: None,
+            block,
+        })),
+        comma: Some(Default::default()),
+    })
+}
+
 pub(crate) fn decode_optional_block_field(
     term: Term,
     field: &str,
@@ -250,6 +268,18 @@ pub(crate) fn parse_return_stmt(expr: Expr) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(return #expr;))
 }
 
+pub(crate) fn parse_if_expr(
+    condition: Expr,
+    then_block: syn::Block,
+    else_block: Option<syn::Block>,
+) -> NifResult<Expr> {
+    if let Some(else_block) = else_block {
+        parse_syn::<Expr>(quote!(if #condition #then_block else #else_block))
+    } else {
+        parse_syn::<Expr>(quote!(if #condition #then_block))
+    }
+}
+
 pub(crate) fn parse_if_let_stmt(
     pattern: Pat,
     expr: Expr,
@@ -290,7 +320,13 @@ pub(crate) fn parse_method_call_expr(
     args: Vec<Expr>,
     generics: Vec<Type>,
 ) -> NifResult<Expr> {
-    if generics.is_empty() {
+    if matches!(receiver, Expr::Binary(_)) {
+        if generics.is_empty() {
+            parse_syn::<Expr>(quote!((#receiver).#method(#(#args),*)))
+        } else {
+            parse_syn::<Expr>(quote!((#receiver).#method::<#(#generics),*>(#(#args),*)))
+        }
+    } else if generics.is_empty() {
         parse_syn::<Expr>(quote!(#receiver.#method(#(#args),*)))
     } else {
         parse_syn::<Expr>(quote!(#receiver.#method::<#(#generics),*>(#(#args),*)))
@@ -321,7 +357,11 @@ pub(crate) fn parse_range_expr(start: Option<Expr>, stop: Option<Expr>) -> NifRe
 }
 
 pub(crate) fn parse_cast_expr(expr: Expr, ty: Type) -> NifResult<Expr> {
-    parse_syn::<Expr>(quote!(#expr as #ty))
+    if matches!(expr, Expr::Binary(_)) {
+        parse_syn::<Expr>(quote!((#expr) as #ty))
+    } else {
+        parse_syn::<Expr>(quote!(#expr as #ty))
+    }
 }
 
 pub(crate) fn parse_unary_expr(op: String, expr: Expr) -> NifResult<Expr> {
@@ -373,16 +413,18 @@ pub(crate) fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
 }
 
 pub(crate) fn decode_atom_guard_arm(pat_term: Term, block: syn::Block) -> NifResult<Arm> {
-    let name = format_ident!("{}", atom_key(pat_term, "name")?);
+    let name = format_ident_value(atom_key(pat_term, "name")?);
     parse_syn::<Arm>(quote!(value if value == atoms::#name() => #block,))
 }
 
 pub(crate) fn format_ident_value(name: String) -> proc_macro2::Ident {
-    format_ident!("{}", name)
+    ident_from_part(&name)
 }
 
 pub(crate) fn parse_ast_path(term: Term) -> NifResult<syn::Path> {
-    parse_path(&path_parts(term.map_get(atom(term.get_env(), "parts")?)?)?)
+    path_from_parts(decode_string_list(
+        term.map_get(atom(term.get_env(), "parts")?)?,
+    )?)
 }
 
 pub(crate) fn parse_path_expr(path: syn::Path) -> NifResult<Expr> {
@@ -454,8 +496,11 @@ fn decode_literal_term(term: Term) -> NifResult<LiteralTerm> {
 
 pub(crate) fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     match decode_literal_term(term)? {
+        LiteralTerm::Bool(true) => parse_syn::<Pat>(quote!(true)),
+        LiteralTerm::Bool(false) => parse_syn::<Pat>(quote!(false)),
+        LiteralTerm::I64(value) => parse_syn::<Pat>(quote!(#value)),
+        LiteralTerm::F64(value) => parse_syn::<Pat>(quote!(#value)),
         LiteralTerm::String(value) | LiteralTerm::Atom(value) => parse_syn::<Pat>(quote!(#value)),
-        _ => Err(rustler::Error::BadArg),
     }
 }
 
@@ -542,25 +587,31 @@ pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
         return parse_type(&source);
     }
 
+    if term.is_atom() {
+        return parse_type(&atom_or_string(term)?);
+    }
+
+    if let Ok((tag, value)) = term.decode::<(Term, Term)>() {
+        return decode_type_tuple2(atom_or_string(tag)?.as_str(), value);
+    }
+
+    if let Ok((tag, ok, error)) = term.decode::<(Term, Term, Term)>() {
+        if atom_or_string(tag)? == "result" {
+            return parse_type_generic("Result", vec![decode_type(ok)?, decode_type(error)?]);
+        }
+    }
+
     decode_ast_type(term)
 }
 
-pub(crate) fn decode_type_slice(term: Term) -> NifResult<Type> {
-    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
-    parse_syn(quote!([#inner]))
-}
-
-pub(crate) fn decode_type_array(term: Term) -> NifResult<Type> {
-    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
-    let size = decode_array_size(term.map_get(atom(term.get_env(), "size")?)?)?;
-    parse_syn(quote!([#inner; #size]))
-}
-
-fn decode_array_size(term: Term) -> NifResult<Expr> {
-    if let Ok(value) = term.decode::<u64>() {
-        parse_expr(value.to_string())
-    } else {
-        parse_expr(atom_or_string(term)?)
+fn decode_type_tuple2(tag: &str, value: Term) -> NifResult<Type> {
+    match tag {
+        "option" => parse_type_generic("Option", vec![decode_type(value)?]),
+        "vec" => parse_type_generic("Vec", vec![decode_type(value)?]),
+        "ref" => parse_type_ref(decode_type(value)?, false, None),
+        "mut_ref" => parse_type_ref(decode_type(value)?, true, None),
+        "raw" => parse_type(&atom_or_string(value)?),
+        _ => Err(rustler::Error::BadArg),
     }
 }
 

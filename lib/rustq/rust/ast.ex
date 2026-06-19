@@ -154,6 +154,9 @@ defmodule RustQ.Rust.AST do
           | TypeResult.t()
           | TypeNifResult.t()
           | TypeVec.t()
+          | TypeSlice.t()
+          | TypeArray.t()
+          | TypeRaw.t()
           | TypeUnit.t()
 
   @type pat ::
@@ -360,6 +363,8 @@ defmodule RustQ.Rust.AST do
   defnode(TypeArray, :type, [:inner, :size],
     type: quote(do: %__MODULE__{inner: AST.type(), size: String.t() | integer()})
   )
+
+  defnode(TypeRaw, :type, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
   defnode(TypeUnit, :type, [], type: quote(do: %__MODULE__{}))
 
@@ -625,6 +630,7 @@ defmodule RustQ.Rust.AST do
       TypeVec,
       TypeSlice,
       TypeArray,
+      TypeRaw,
       TypeUnit,
       Let,
       LetElse,

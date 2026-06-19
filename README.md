@@ -612,7 +612,7 @@ RustQ.render_file!("native/src/generated.template.rs",
 You can also pass a command path/string with `rustfmt: "/path/to/rustfmt"`.
 Rustfmt failures return structured `:rustfmt_error` metadata.
 
-## Fragment validation and strict native AST rendering
+## Fragment validation and native AST rendering
 
 You can validate individual Rust fragments in the same contexts RustQ splices:
 
@@ -621,15 +621,9 @@ RustQ.valid_fragment?(:field, "pub id: i64")
 RustQ.parse_fragment!(:arm, RustQ.Rust.arm("Some(value)", "value"))
 ```
 
-Native AST rendering is the primary backend. During development you can disable
-silent fallback rendering with:
-
-```elixir
-config :rustq, :strict_native_ast, true
-```
-
-Use strict mode when adding AST nodes or native decoder coverage so unsupported
-nodes fail visibly instead of falling back to the Elixir debug renderer.
+Native AST rendering is the required backend for RustQ AST items. Unsupported
+nodes fail visibly instead of falling back to a parallel Elixir renderer, so new
+AST nodes must include native decoding/rendering coverage.
 
 ## License
 

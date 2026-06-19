@@ -27,6 +27,12 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
     Super.parse_type_unit(term)
   end
 
+  @spec decode_type_raw(term()) :: R.nif_result(R.path(:Type))
+  defrust decode_type_raw(term) do
+    source = unwrap!(unwrap!(required_field(term, "source")).decode())
+    Super.parse_type_raw(source)
+  end
+
   @spec decode_type_ref(term()) :: R.nif_result(R.path(:Type))
   defrust decode_type_ref(term) do
     inner = unwrap!(required_type(term, "inner"))
@@ -58,5 +64,18 @@ defmodule RustQ.NativeCodegen.Decoders.Type do
   defrust decode_type_vec(term) do
     inner = unwrap!(required_type(term, "inner"))
     Super.parse_type_generic("Vec", [inner])
+  end
+
+  @spec decode_type_slice(term()) :: R.nif_result(R.path(:Type))
+  defrust decode_type_slice(term) do
+    inner = unwrap!(required_type(term, "inner"))
+    Super.parse_type_slice(inner)
+  end
+
+  @spec decode_type_array(term()) :: R.nif_result(R.path(:Type))
+  defrust decode_type_array(term) do
+    inner = unwrap!(required_type(term, "inner"))
+    size = unwrap!(required_field(term, "size"))
+    Super.parse_type_array(inner, size)
   end
 end

@@ -1,7 +1,6 @@
 use rustler::NifResult;
 use syn::parse::Parser;
-use syn::punctuated::Punctuated;
-use syn::{Arm, Block, Expr, Pat, PathSegment, Stmt, Token, Type};
+use syn::{Arm, Block, Expr, Pat, Stmt, Type};
 
 pub(crate) trait ParseSynTokens: Sized {
     fn parse_syn_tokens(tokens: proc_macro2::TokenStream) -> syn::Result<Self>;
@@ -68,21 +67,66 @@ pub(crate) fn path_from_parts(parts: Vec<String>) -> NifResult<syn::Path> {
         return Err(rustler::Error::BadArg);
     }
 
-    let mut segments = Punctuated::<PathSegment, Token![::]>::new();
+    let source = parts
+        .iter()
+        .map(|part| path_part_source(part))
+        .collect::<Vec<_>>()
+        .join("::");
 
-    for part in parts {
-        let ident = syn::Ident::new(&part, proc_macro2::Span::call_site());
-        segments.push(PathSegment::from(ident));
-    }
-
-    Ok(syn::Path {
-        leading_colon: None,
-        segments,
-    })
+    syn::parse_str(&source).map_err(|_| rustler::Error::BadArg)
 }
 
-pub(crate) fn parse_path(source: &str) -> NifResult<syn::Path> {
-    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
+pub(crate) fn ident_from_part(part: &str) -> syn::Ident {
+    if rust_keyword(part) {
+        syn::Ident::new_raw(part, proc_macro2::Span::call_site())
+    } else {
+        syn::Ident::new(part, proc_macro2::Span::call_site())
+    }
+}
+
+fn path_part_source(part: &str) -> String {
+    if rust_keyword(part) {
+        format!("r#{part}")
+    } else {
+        part.to_string()
+    }
+}
+
+fn rust_keyword(part: &str) -> bool {
+    matches!(
+        part,
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "static"
+            | "struct"
+            | "trait"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+    )
 }
 
 pub(crate) fn parse_expr(source: impl AsRef<str>) -> NifResult<Expr> {

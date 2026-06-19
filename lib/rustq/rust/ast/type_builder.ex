@@ -15,7 +15,7 @@ defmodule RustQ.Rust.AST.TypeBuilder do
 
   def type(parts) when is_list(parts), do: path(parts)
   def type(part) when is_atom(part) or is_binary(part), do: path(part)
-  def type({:raw, _source} = raw), do: raw
+  def type({:raw, source}), do: raw(source)
 
   def path(parts_or_part, opts \\ [])
 
@@ -33,6 +33,8 @@ defmodule RustQ.Rust.AST.TypeBuilder do
     |> String.split("::")
     |> path(opts)
   end
+
+  def raw(source), do: %AST.TypeRaw{source: IO.iodata_to_binary(source)}
 
   def unit, do: %AST.TypeUnit{}
   def nif_result(inner), do: %AST.TypeNifResult{inner: type(inner)}

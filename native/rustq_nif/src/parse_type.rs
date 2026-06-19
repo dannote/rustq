@@ -26,6 +26,25 @@ pub(crate) fn parse_type_unit(_term: rustler::Term) -> NifResult<Type> {
     parse_syn(quote!(()))
 }
 
+pub(crate) fn parse_type_raw(source: String) -> NifResult<Type> {
+    syn::parse_str::<Type>(&source).map_err(|_| rustler::Error::BadArg)
+}
+
+pub(crate) fn parse_type_slice(inner: Type) -> NifResult<Type> {
+    parse_syn(quote!([#inner]))
+}
+
+pub(crate) fn parse_type_array(inner: Type, size: rustler::Term) -> NifResult<Type> {
+    let size_source = if let Ok(size) = size.decode::<u64>() {
+        size.to_string()
+    } else {
+        size.decode::<String>()?
+    };
+
+    let size: syn::Expr = syn::parse_str(&size_source).map_err(|_| rustler::Error::BadArg)?;
+    parse_syn(quote!([#inner; #size]))
+}
+
 pub(crate) fn parse_type_ref(
     inner: Type,
     mutable: bool,

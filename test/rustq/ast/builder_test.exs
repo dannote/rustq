@@ -159,7 +159,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
 
     source = Render.render_function(function)
 
-    assert source =~ "1 =>"
+    assert source =~ "1i64 =>"
     assert source =~ "Ok(atoms::clear())"
   end
 

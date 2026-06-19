@@ -182,7 +182,7 @@ pub(crate) fn parse_item_struct(
         quote!()
     };
 
-    parse_syn(quote!(#(#derive)* #(#attrs)* #vis struct #name #generics { #(#fields)* }))
+    parse_syn(quote!(#(#derive)* #(#attrs)* #vis struct #name #generics { #(#fields,)* }))
 }
 
 pub(crate) fn parse_function_arg(name: syn::Ident, ty: Type) -> NifResult<FnArg> {
