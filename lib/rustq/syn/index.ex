@@ -71,6 +71,58 @@ defmodule RustQ.Syn.Index do
     |> Enum.flat_map(&RustQ.Syn.enums/1)
   end
 
+  @doc "Returns all indexed top-level use aliases."
+  @spec uses(t()) :: [RustQ.Syn.Use.t()]
+  def uses(%__MODULE__{files: files}) do
+    files
+    |> Map.values()
+    |> Enum.flat_map(&RustQ.Syn.uses/1)
+  end
+
+  @doc "Fetches a top-level use alias by alias name."
+  @spec use_alias(t(), String.t()) :: {:ok, RustQ.Syn.Use.t()} | :error
+  def use_alias(%__MODULE__{} = index, alias) when is_binary(alias) do
+    case Enum.find(uses(index), &(&1.alias == alias)) do
+      nil -> :error
+      use -> {:ok, use}
+    end
+  end
+
+  @doc "Fetches a top-level use alias by alias name, raising if missing."
+  @spec use_alias!(t(), String.t()) :: RustQ.Syn.Use.t()
+  def use_alias!(%__MODULE__{} = index, alias) when is_binary(alias) do
+    case use_alias(index, alias) do
+      {:ok, use} -> use
+      :error -> raise "cannot find Rust use alias #{alias}"
+    end
+  end
+
+  @doc "Returns all indexed top-level type aliases."
+  @spec type_aliases(t()) :: [RustQ.Syn.TypeAlias.t()]
+  def type_aliases(%__MODULE__{files: files}) do
+    files
+    |> Map.values()
+    |> Enum.flat_map(&RustQ.Syn.type_aliases/1)
+  end
+
+  @doc "Fetches a top-level type alias by name."
+  @spec type_alias(t(), String.t()) :: {:ok, RustQ.Syn.TypeAlias.t()} | :error
+  def type_alias(%__MODULE__{} = index, name) when is_binary(name) do
+    case Enum.find(type_aliases(index), &(&1.name == name)) do
+      nil -> :error
+      alias -> {:ok, alias}
+    end
+  end
+
+  @doc "Fetches a top-level type alias by name, raising if missing."
+  @spec type_alias!(t(), String.t()) :: RustQ.Syn.TypeAlias.t()
+  def type_alias!(%__MODULE__{} = index, name) when is_binary(name) do
+    case type_alias(index, name) do
+      {:ok, alias} -> alias
+      :error -> raise "cannot find Rust type alias #{name}"
+    end
+  end
+
   @doc "Fetches an enum by name."
   @spec enum(t(), String.t()) :: {:ok, RustQ.Syn.Enum.t()} | :error
   def enum(%__MODULE__{} = index, name) when is_binary(name) do

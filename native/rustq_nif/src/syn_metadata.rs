@@ -3,7 +3,7 @@ use rustler::{Encoder, Env, NifResult, Term};
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, Expr, ExprCall, ExprLit, ExprMethodCall, ExprPath, Fields, FnArg, GenericArgument,
-    ImplItem, Item, Lit, PathArguments, ReturnType, Type, TypeParamBound, Visibility,
+    ImplItem, Item, Lit, PathArguments, ReturnType, Type, TypeParamBound, UseTree, Visibility,
 };
 
 use crate::{atoms, template_error};
@@ -184,8 +184,56 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
             )
                 .encode(env),
         ),
+        Item::Use(item) => use_alias(&item.tree).map(|(path, alias)| {
+            (
+                "use",
+                path,
+                alias,
+                visibility(&item.vis),
+                line(item.use_token.span),
+                docs(&item.attrs),
+            )
+                .encode(env)
+        }),
+        Item::Type(item) => Some(
+            (
+                "type_alias",
+                item.ident.to_string(),
+                visibility(&item.vis),
+                line(item.ident.span()),
+                docs(&item.attrs),
+                type_string(&item.ty),
+                type_metadata(env, &item.ty),
+            )
+                .encode(env),
+        ),
         _ => None,
     }
+}
+
+fn use_alias(tree: &UseTree) -> Option<(String, String)> {
+    fn walk(tree: &UseTree, prefix: Vec<String>) -> Option<(String, String)> {
+        match tree {
+            UseTree::Path(path) => {
+                let mut prefix = prefix;
+                prefix.push(path.ident.to_string());
+                walk(&path.tree, prefix)
+            }
+            UseTree::Rename(rename) => {
+                let mut path = prefix;
+                path.push(rename.ident.to_string());
+                Some((path.join("::"), rename.rename.to_string()))
+            }
+            UseTree::Name(name) => {
+                let mut path = prefix;
+                path.push(name.ident.to_string());
+                Some((path.join("::"), name.ident.to_string()))
+            }
+            _ => None,
+        }
+    }
+
+    walk(tree, Vec::new())
 }
 
 fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {

@@ -184,6 +184,35 @@ defmodule RustQ.Syn do
           }
   end
 
+  defmodule Use do
+    @moduledoc "Rust `use` item metadata, including reexport aliases."
+    defstruct [:path, :alias, :visibility, :source_line, :source_path, docs: []]
+
+    @type t :: %__MODULE__{
+            path: String.t(),
+            alias: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            docs: [String.t()]
+          }
+  end
+
+  defmodule TypeAlias do
+    @moduledoc "Rust `type` alias metadata."
+    defstruct [:name, :visibility, :source_line, :source_path, :type, :type_ast, docs: []]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            type: String.t(),
+            type_ast: RustQ.Syn.type(),
+            docs: [String.t()]
+          }
+  end
+
   defmodule Struct do
     @moduledoc "Rust struct metadata."
     defstruct [:name, :visibility, :source_line, :source_path, docs: [], fields: []]
@@ -372,6 +401,8 @@ defmodule RustQ.Syn do
 
   @type item ::
           RustQ.Syn.Enum.t()
+          | RustQ.Syn.Use.t()
+          | RustQ.Syn.TypeAlias.t()
           | RustQ.Syn.Struct.t()
           | RustQ.Syn.Function.t()
           | RustQ.Syn.Impl.t()
@@ -430,6 +461,16 @@ defmodule RustQ.Syn do
   @spec enums(RustQ.Syn.File.t()) :: [RustQ.Syn.Enum.t()]
   def enums(%RustQ.Syn.File{items: items}),
     do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Enum{}, &1))
+
+  @doc "Returns top-level Rust `use` alias metadata from a parsed file."
+  @spec uses(RustQ.Syn.File.t()) :: [RustQ.Syn.Use.t()]
+  def uses(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Use{}, &1))
+
+  @doc "Returns top-level Rust type alias metadata from a parsed file."
+  @spec type_aliases(RustQ.Syn.File.t()) :: [RustQ.Syn.TypeAlias.t()]
+  def type_aliases(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.TypeAlias{}, &1))
 
   @doc "Returns top-level Rust struct metadata from a parsed file."
   @spec structs(RustQ.Syn.File.t()) :: [RustQ.Syn.Struct.t()]
@@ -563,6 +604,27 @@ defmodule RustQ.Syn do
       source_line: source_line,
       docs: docs,
       variants: variants
+    }
+  end
+
+  defp decode_item!({"use", path, alias, visibility, source_line, docs}) do
+    %RustQ.Syn.Use{
+      path: path,
+      alias: alias,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs
+    }
+  end
+
+  defp decode_item!({"type_alias", name, visibility, source_line, docs, type, type_ast}) do
+    %RustQ.Syn.TypeAlias{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs,
+      type: type,
+      type_ast: decode_type!(type_ast)
     }
   end
 

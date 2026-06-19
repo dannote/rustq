@@ -44,6 +44,60 @@ defmodule RustQ.Syn.IndexTest do
     assert %RustQ.Syn.Enum{name: "ClipOp"} = RustQ.Syn.Index.enum!(index, "ClipOp")
   end
 
+  test "indexes use aliases by alias" do
+    path =
+      write_source!("""
+      pub use sb::SkPaint_Cap as Cap;
+      use crate::Paint;
+      """)
+
+    index = RustQ.Syn.Index.from_paths([path])
+
+    assert [
+             %RustQ.Syn.Use{
+               path: "sb::SkPaint_Cap",
+               alias: "Cap",
+               visibility: :public,
+               source_path: ^path
+             },
+             %RustQ.Syn.Use{path: "crate::Paint", alias: "Paint", visibility: :private}
+           ] = RustQ.Syn.Index.uses(index)
+
+    assert {:ok, %RustQ.Syn.Use{path: "sb::SkPaint_Cap"}} =
+             RustQ.Syn.Index.use_alias(index, "Cap")
+
+    assert %RustQ.Syn.Use{alias: "Cap"} = RustQ.Syn.Index.use_alias!(index, "Cap")
+  after
+    if path = Process.get(:path), do: File.rm(path)
+  end
+
+  test "indexes type aliases by name" do
+    path =
+      write_source!("""
+      pub type PathOp = skia_bindings::SkPathOp;
+      type Local = crate::Private;
+      """)
+
+    index = RustQ.Syn.Index.from_paths([path])
+
+    assert [
+             %RustQ.Syn.TypeAlias{
+               name: "PathOp",
+               visibility: :public,
+               type: "skia_bindings :: SkPathOp",
+               source_path: ^path
+             },
+             %RustQ.Syn.TypeAlias{name: "Local", visibility: :private}
+           ] = RustQ.Syn.Index.type_aliases(index)
+
+    assert {:ok, %RustQ.Syn.TypeAlias{name: "PathOp"}} =
+             RustQ.Syn.Index.type_alias(index, "PathOp")
+
+    assert %RustQ.Syn.TypeAlias{name: "PathOp"} = RustQ.Syn.Index.type_alias!(index, "PathOp")
+  after
+    if path = Process.get(:path), do: File.rm(path)
+  end
+
   test "indexes impl methods by target" do
     path =
       Path.join(
