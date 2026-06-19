@@ -88,10 +88,12 @@ The current repository manifest only generates `native/rustq_nif/src/generated_a
 ### Legacy Rust/Rustler builders
 
 `RustQ.Rust` and `RustQ.Rustler.*` still intentionally exist. They are useful for
-public API compatibility and for template-oriented generation. They are, however,
-mostly string/template-backed. Future work should migrate reusable shapes into
+public API compatibility and for template-oriented generation. Most safe,
+reusable Rustler helpers now render through `defrust` or `RustQ.Rust.AST`
+builders; remaining raw/template paths should be treated as explicit primitive
+or compatibility boundaries. Future work should migrate reusable shapes into
 `RustQ.Rust.AST` only when that improves dogfooding or public ergonomics; do not
-rewrite all legacy builders just for churn.
+rewrite legacy builders just for churn.
 
 ### AST-first `defrust` path
 
@@ -151,9 +153,9 @@ Native Rust is split by responsibility:
 | NIF entrypoints | Native primitive | `lib.rs` is now thin and should stay that way. |
 | Generic parsing | Native primitive | `parse_syn::<T>`, `parse_type`, `parse_path`, `parse_expr` are intentional primitives. |
 | Item/type assembly | Native primitive, isolated | `parse_item.rs` and `parse_type.rs` centralize remaining `syn` assembly. |
-| Rustler term helpers | Mostly dogfooded | `required_field`, `optional_map_get`, `atom_key`, `is_nil`, `struct_name`, `expect_struct` are `defrust`. |
+| Rustler term/options helpers | Dogfooded | Safe term helpers, opts helpers, term builders, cached atom helpers, atom decoders, tagged enum decoders/encoders, resources, and term decoder shells render through `defrust` or RustQ AST. Raw `NIF_TERM` builders remain explicit unsafe escape hatches. |
 | Dispatch | AST builder generated | Item/type/pat/stmt/expr dispatch is generated from schema. |
-| Item decoders | Mostly dogfooded extraction | Field extraction is `defrust`; final assembly remains parse primitive. |
+| Item decoders | Mostly dogfooded extraction | Field extraction is `defrust`; receiver args and lifetime-bearing impls are structural AST; final `syn` assembly remains parse primitive. |
 | Type decoders | Dogfooded extraction | Container assembly still often formats/parses type strings. |
 | Expr/Pat/Stmt/Arm decoders | Mostly dogfooded | Semantic helpers cover most shapes; atom guard arms and let-pattern mutability remain primitive. |
 | Collections | Generic primitive | `decode_list<T>` and `decode_optional_field<T>` avoid duplicated loops. |
@@ -376,11 +378,12 @@ Recently completed:
 - `RustQ.Rustler.Atoms` now generates its atom macro through RustQ AST
   (`MacroItemCall`, optionally wrapped in `Module`) before returning a legacy
   splice fragment, proving a narrow migration path for older Rustler helpers.
-- `RustQ.Rustler.AtomDecoder` now uses RustQ AST for the default BadArg decoder
-  path, falling back to its legacy template only for custom unknown-arm source.
+- `RustQ.Rustler.AtomDecoder` now uses RustQ AST for both the default BadArg
+  decoder path and custom unknown-arm fallbacks; custom unknown source is an
+  expression-level escape hatch, not a whole-function template.
 - RustQ AST now models `static` items, including native decoder support, and
-  `RustQ.Rustler.CachedAtoms` uses that AST for its per-atom statics/functions
-  while retaining the shared helper template.
+  `RustQ.Rustler.CachedAtoms` uses AST/`defrust` for the shared helper plus
+  per-atom statics/functions.
 - Rusty-Elixir supports idiomatic Rust-facing attributes on `defrust`, starting
   with `@nif schedule: "DirtyCpu"` and `@allow :dead_code`, lowered through a
   structural `Attribute` AST node.
@@ -390,9 +393,10 @@ Recently completed:
 - RustQ AST now covers the next Skia-driven Rust shapes: `impl` blocks,
   generic/turbofish path and method calls, `if let`, `for`, byte strings,
   indexing/ranges, casts, unary ops, and comparison/arithmetic binary ops.
-- `RustQ.Rustler.NifWrappers`, resource structs/impls, and options structs now
-  use RustQ AST on their compatible/default paths while retaining legacy
-  templates for raw decoder bodies and advanced compatibility cases.
+- `RustQ.Rustler.NifWrappers`, resource structs/impls, options structs, tagged
+  enums, atom decoders, safe term builders, and term decoder shells now use RustQ
+  AST on their compatible/default paths. Raw decoder expressions remain explicit
+  escape hatches where callers provide Rust snippets.
 - Resource decoder helpers now render through builder-authored RustQ AST, and
   the AST surface covers type aliases, `let ... else`, array literals, recursive
   grouped-use fallback rendering, and struct/enum general attributes.
@@ -402,6 +406,17 @@ Recently completed:
   cached atoms, NifStructs, and options decoders use builder-authored AST paths
   on their default paths. Options decoders accept typed AST decode expressions
   while keeping string decodes as explicit escape fallbacks.
+- `RustQ.Rust.ast_item/1` and `ast_items/1` are the standard bridge from RustQ
+  AST items back to spliceable fragments. `RustQ.Meta.item(module, name)`,
+  `items(module, names)`, and `ast!(module, name)` provide the corresponding
+  internal bridge for RustQ-owned `defrust` helper modules.
+- RustQ AST supports receiver arguments and lifetime-bearing impl blocks, which
+  removed the final tagged-enum encoder/decoder templates.
+- `RustQ.Rustler.TermHelpers`, `OptsHelpers`, `TermBuilders`, `CachedAtoms`,
+  `AtomDecoder`, `TaggedEnum`, `Resource`, and `TermDecoder` have been
+  dogfooded through `defrust` or AST-backed generation. The remaining Rustler
+  template path is `NifTermBuilders`, which intentionally wraps unsafe raw
+  `NIF_TERM` operations.
 - Broader quality gates (`mix test` and native `cargo clippy -D warnings`) have
   been run successfully after the AST/type cleanup.
 - `mix ci` currently reaches Credo and fails on existing strict style/design

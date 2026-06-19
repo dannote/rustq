@@ -11,6 +11,18 @@
   such as `atoms::fill()`.
 - Demote `RustQ.Meta.quoted` and `RustQ.Type.path` to low-level escape
   hatches instead of the normal authoring style.
+- Add small AST reuse bridges for RustQ-owned codegen helpers:
+  `RustQ.Rust.ast_item/1`, `RustQ.Rust.ast_items/1`, and the internal
+  `RustQ.Meta.item(module, name)` / `items(module, names)` / `ast!(module, name)`
+  helpers.
+- Add Rust AST support for receiver arguments and lifetime-bearing impl blocks,
+  including Rustler shapes such as `impl<'a> rustler::Decoder<'a> for Type` and
+  `fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a>`.
+- Dogfood Rustler helper generation through `defrust` and RustQ AST builders:
+  term helpers, opts helpers, term builders, cached atoms, atom decoders, tagged
+  enum decoders/encoders, resources, and term decoder shells no longer rely on
+  hand-written helper templates. Explicit raw `NIF_TERM` builders remain the
+  unsafe escape hatch.
 
 ## v0.5.1 - 2026-06-15
 
