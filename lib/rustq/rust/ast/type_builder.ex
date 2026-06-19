@@ -26,7 +26,13 @@ defmodule RustQ.Rust.AST.TypeBuilder do
       generics: Keyword.get(opts, :generics, [])
     }
 
-  def path(part, opts) when is_atom(part) or is_binary(part), do: path([part], opts)
+  def path(part, opts) when is_atom(part), do: path([part], opts)
+
+  def path(part, opts) when is_binary(part) do
+    part
+    |> String.split("::")
+    |> path(opts)
+  end
 
   def unit, do: %AST.TypeUnit{}
   def nif_result(inner), do: %AST.TypeNifResult{inner: type(inner)}
