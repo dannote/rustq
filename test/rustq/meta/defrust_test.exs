@@ -250,6 +250,24 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "generated_opts::decode_path_opts(&opts)"
   end
 
+  test "defrustmod maps nested alias constant paths" do
+    defmodule NestedModuleConstantCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod(SkiaSafe.ArcSize, as: [:skia_safe, :path_builder, :ArcSize])
+
+      @spec large() :: R.nif_result(R.path(:ArcSize))
+      defrust large() do
+        {:ok, SkiaSafe.ArcSize.Large}
+      end
+    end
+
+    source = NestedModuleConstantCase.__rustq_source__()
+
+    assert source =~ "Ok(skia_safe::path_builder::ArcSize::Large)"
+  end
+
   test "defrustmod groups nested defrust declarations" do
     defmodule NestedModuleCase do
       use RustQ.Meta

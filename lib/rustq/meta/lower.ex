@@ -388,8 +388,8 @@ defmodule RustQ.Meta.Lower do
     no_parens? = Keyword.get(call_meta, :no_parens, false)
 
     cond do
-      no_parens? and alias_ast?(receiver) ->
-        %AST.Path{parts: alias_parts(receiver) ++ [field_or_function]}
+      no_parens? and alias_path_ast?(receiver) ->
+        %AST.Path{parts: alias_path_parts(receiver) ++ [field_or_function]}
 
       no_parens? ->
         %AST.Field{receiver: lower_expr(receiver), field: field_or_function}
@@ -426,7 +426,7 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp lower_expr({:__aliases__, _, parts}), do: %AST.Path{parts: parts}
+  defp lower_expr({:__aliases__, _, parts}), do: %AST.Path{parts: mapped_alias_parts(parts)}
 
   defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
   defp lower_expr({left, right}), do: %AST.Tuple{values: [lower_expr(left), lower_expr(right)]}
@@ -833,6 +833,13 @@ defmodule RustQ.Meta.Lower do
   defp alias_ast?({:__aliases__, _, _parts}), do: true
   defp alias_ast?(_other), do: false
 
+  defp alias_path_ast?({:__aliases__, _, _parts}), do: true
+
+  defp alias_path_ast?({{:., _, [receiver, _field]}, meta, []}),
+    do: Keyword.get(meta, :no_parens, false) and alias_path_ast?(receiver)
+
+  defp alias_path_ast?(_other), do: false
+
   defp super_alias_ast?({:__aliases__, _, [:Super]}), do: true
   defp super_alias_ast?(_other), do: false
 
@@ -842,7 +849,37 @@ defmodule RustQ.Meta.Lower do
   defp rust_variant(name), do: name |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
 
   defp alias_parts({:__aliases__, _, parts}),
-    do: Map.get(current_rust_modules(), parts, automatic_rust_alias_parts(parts))
+    do: mapped_alias_parts(parts)
+
+  defp alias_path_parts(ast), do: ast |> raw_alias_path_parts() |> mapped_alias_parts()
+
+  defp raw_alias_path_parts({:__aliases__, _, parts}), do: parts
+
+  defp raw_alias_path_parts({{:., _, [receiver, field]}, meta, []}) do
+    if Keyword.get(meta, :no_parens, false) do
+      raw_alias_path_parts(receiver) ++ [field]
+    else
+      raise ArgumentError, "unsupported alias path"
+    end
+  end
+
+  defp mapped_alias_parts(parts) do
+    modules = current_rust_modules()
+
+    parts
+    |> alias_prefixes()
+    |> Enum.find_value(fn {prefix, suffix} ->
+      mapped = Map.get(modules, prefix)
+      if mapped, do: mapped ++ suffix
+    end) || automatic_rust_alias_parts(parts)
+  end
+
+  defp alias_prefixes(parts) do
+    parts
+    |> length()
+    |> Range.new(1, -1)
+    |> Enum.map(fn count -> Enum.split(parts, count) end)
+  end
 
   defp automatic_rust_alias_parts(parts) do
     if rust_module_alias?(parts) do
