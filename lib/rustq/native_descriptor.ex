@@ -90,15 +90,20 @@ defmodule RustQ.NativeDescriptor do
 
   defp source_url(nil, _method), do: nil
 
-  defp source_url(package, %Method{source_path: path, source_line: line})
+  defp source_url(package, %{__struct__: Method, source_path: path, source_line: line})
        when is_binary(path) and is_integer(line),
        do: RustQ.Cargo.source_link(package, path, line)
 
   defp source_url(_package, _method), do: nil
 
   defp type_matches?(_type, :any), do: true
-  defp type_matches?(%Type.Ref{inner: %Type.Self{}}, :self_ref), do: true
-  defp type_matches?(%Type.Ref{inner: %Type.Self{}}, {:ref, "Self"}), do: true
+
+  defp type_matches?(%{__struct__: Type.Ref, inner: %{__struct__: Type.Self}}, :self_ref),
+    do: true
+
+  defp type_matches?(%{__struct__: Type.Ref, inner: %{__struct__: Type.Self}}, {:ref, "Self"}),
+    do: true
+
   defp type_matches?(type, {:ref, name}), do: Type.ref_to?(type, name)
 
   defp type_matches?(type, {:impl_trait, trait, args}),

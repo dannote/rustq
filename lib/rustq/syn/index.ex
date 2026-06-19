@@ -226,10 +226,10 @@ defmodule RustQ.Syn.Index do
 
   defp aliases(index), do: uses(index) ++ type_aliases(index)
 
-  defp alias_targets?(%Use{segments: segments}, target),
+  defp alias_targets?(%{__struct__: Use, segments: segments}, target),
     do: List.last(segments) == target
 
-  defp alias_targets?(%TypeAlias{type_ast: type}, target),
+  defp alias_targets?(%{__struct__: TypeAlias, type_ast: type}, target),
     do: Type.path?(type, target)
 
   defp public_alias_name(index, alias),
@@ -252,7 +252,7 @@ defmodule RustQ.Syn.Index do
     index
     |> uses()
     |> Enum.find(fn
-      %RustQ.Syn.Use{visibility: :public, segments: segments, alias: alias_name} ->
+      %{__struct__: RustQ.Syn.Use, visibility: :public, segments: segments, alias: alias_name} ->
         segments == Tuple.to_list(alias_ref) and alias_name != name
 
       _use ->
@@ -262,11 +262,11 @@ defmodule RustQ.Syn.Index do
 
   defp alias_ref(index, alias), do: {source_module(index, alias.source_path), alias_name(alias)}
 
-  defp alias_name(%RustQ.Syn.Use{alias: alias}), do: alias
-  defp alias_name(%RustQ.Syn.TypeAlias{name: name}), do: name
+  defp alias_name(%{__struct__: RustQ.Syn.Use, alias: alias}), do: alias
+  defp alias_name(%{__struct__: RustQ.Syn.TypeAlias, name: name}), do: name
 
   defp source_module(
-         %__MODULE__{package: %RustQ.Cargo.Package{manifest_path: manifest_path}},
+         %__MODULE__{package: %{__struct__: RustQ.Cargo.Package, manifest_path: manifest_path}},
          path
        )
        when is_binary(path) do
@@ -285,18 +285,18 @@ defmodule RustQ.Syn.Index do
     |> List.last()
   end
 
-  defp attach_source_path(%RustQ.Syn.File{items: items} = file, path) do
+  defp attach_source_path(%{__struct__: RustQ.Syn.File, items: items} = file, path) do
     %{file | items: Enum.map(items, &attach_item_source_path(&1, path))}
   end
 
-  defp attach_item_source_path(%RustQ.Syn.Impl{methods: methods} = item, path) do
+  defp attach_item_source_path(%{__struct__: RustQ.Syn.Impl, methods: methods} = item, path) do
     %{item | source_path: path, methods: Enum.map(methods, &%{&1 | source_path: path})}
   end
 
   defp attach_item_source_path(item, path), do: %{item | source_path: path}
 
-  defp target_matches?(%RustQ.Syn.Type.Path{name: name}, target), do: name == target
+  defp target_matches?(%{__struct__: RustQ.Syn.Type.Path, name: name}, target), do: name == target
 
-  defp target_matches?(%RustQ.Syn.Type.Raw{code: code}, target), do: code == target
+  defp target_matches?(%{__struct__: RustQ.Syn.Type.Raw, code: code}, target), do: code == target
   defp target_matches?(_type, _target), do: false
 end

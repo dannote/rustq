@@ -20,7 +20,7 @@ defmodule RustQ.NativeEnumDescriptor do
 
   @doc "Returns descriptor variants as `{atom_name, rust_variant}` pairs."
   @spec variants(t()) :: [{atom(), String.t()}]
-  def variants(%__MODULE__{enum: %SynEnum{variants: variants}}) do
+  def variants(%__MODULE__{enum: %{__struct__: SynEnum, variants: variants}}) do
     Enum.map(variants, &{RustQ.Atom.identifier!(Macro.underscore(&1)), &1})
   end
 
@@ -54,7 +54,7 @@ defmodule RustQ.NativeEnumDescriptor do
 
   defp source_url(nil, _enum), do: nil
 
-  defp source_url(package, %RustQ.Syn.Enum{source_path: path, source_line: line})
+  defp source_url(package, %{__struct__: RustQ.Syn.Enum, source_path: path, source_line: line})
        when is_binary(path) and is_integer(line),
        do: RustQ.Cargo.source_link(package, path, line)
 
