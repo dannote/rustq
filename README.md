@@ -44,7 +44,7 @@ where `mix rustq.gen` or your own codegen task runs.
 Elixir `@spec` and `@type` declarations, expands ordinary Elixir macros, and
 lowers the resulting valid Elixir body into RustQ's Rust AST.
 
-Low-level bridges such as `RustQ.Meta.quoted/2` are internal escape hatches for
+Low-level bridges such as `RustQ.Meta.quoted` are internal escape hatches for
 generators, not the normal authoring API.
 
 A Rusty-Elixir implementation can look like this:
@@ -155,11 +155,18 @@ Current `defrust` lowering supports a growing valid-Elixir subset:
 - Option cases can be written as `{:some, value}` and `:none`
 - Result cases can be written as `{:ok, value}` and `{:error, reason}`
 - `unwrap!(expr)` spells Rust `expr?`
+- `assign!(target, expr)` spells Rust assignment for explicit mutation, and
+  `return!(expr)` spells early return
 - `ref(expr)`, `mut_ref(expr)`, and `deref(expr)` spell Rust borrows and
   dereference
-- aliases, remote calls, method calls, local calls, fields, tuples, literals,
-  lists as `vec![...]`, expression/item macro calls, and one-argument
-  `Enum.map/2` are supported
+- `decode_as(term, type)` and `decode_as!(term, type)` spell Rustler typed
+  decode probes and required decodes
+- `array([...])`, `index(collection, index)`, and `struct_literal(Path, fields)`
+  lower to Rust array literals, indexing, and struct literals
+- `Bitwise.bsr/2` and `Bitwise.band/2` lower to Rust `>>` and `&`
+- aliases, remote calls, method calls, local calls, fields, tuples, nested tuple
+  patterns, literals, lists as `vec![...]`, simple `for` comprehensions,
+  expression/item macro calls, and one-argument `Enum.map/2` are supported
 - Rust-facing attributes such as `@nif schedule: "DirtyCpu"` and
   `@allow :dead_code` are supported before `defrust`
 

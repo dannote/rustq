@@ -71,7 +71,7 @@ defmodule RustQ.Rust do
   @spec stmt(iodata()) :: Fragment.t()
   def stmt(code), do: %Fragment{kind: :stmt, code: code}
 
-  @spec block([term()]) :: Block.t()
+  @spec block([term()]) :: term()
   def block(lines), do: %Block{lines: lines}
 
   @spec let_(iodata(), iodata()) :: Fragment.t()

@@ -3,8 +3,8 @@ defmodule RustQ.Spec do
   Public helpers for lowering Elixir typespec forms into RustQ type metadata.
 
   `RustQ.Spec` accepts both ordinary quoted typespec AST and Erlang/BEAM
-  abstract typespec forms returned by `Code.Typespec.fetch_specs/1` and
-  `Code.Typespec.fetch_types/1`.
+  abstract typespec forms returned by the standard library Code.Typespec fetch
+  helpers.
   """
 
   @doc "Lowers a typespec type form to `RustQ.Meta.Type` metadata."

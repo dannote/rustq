@@ -9,7 +9,7 @@
   Rusty-Elixir body fragments can use `defmacro`, `quote`, and `unquote`.
 - Lower plural alias calls such as `Atoms.fill()` to snake-case Rust module calls
   such as `atoms::fill()`.
-- Demote `RustQ.Meta.quoted/2` and `RustQ.Type.path/1,2` to low-level escape
+- Demote `RustQ.Meta.quoted` and `RustQ.Type.path` to low-level escape
   hatches instead of the normal authoring style.
 
 ## v0.5.1 - 2026-06-15
