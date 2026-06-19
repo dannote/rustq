@@ -141,7 +141,11 @@ defmodule RustQ.Rust.AST.Builder do
   def type(value), do: RustQ.Rust.AST.TypeBuilder.type(value)
 
   def var(name) when is_atom(name), do: %AST.Var{name: name}
+  def path_parts(parts) when is_list(parts), do: parts
+  def path_parts(path) when is_binary(path), do: String.split(path, "::")
+  def path_parts(part), do: [part]
   def path(parts) when is_list(parts), do: %AST.Path{parts: parts}
+  def path(part) when is_binary(part), do: %AST.Path{parts: path_parts(part)}
   def path(part), do: %AST.Path{parts: [part]}
   def path(first, second), do: %AST.Path{parts: [first, second]}
   def path(first, second, third), do: %AST.Path{parts: [first, second, third]}

@@ -32,9 +32,12 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert source =~ "-> NifResult<()>"
   end
 
-  test "splits Rust path strings into type path parts" do
+  test "splits Rust path strings into type and expression path parts" do
     assert %AST.TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
     assert RustQ.Rust.AST.Render.render_type(T.path("paint::Cap")) == "paint::Cap"
+
+    assert %AST.Path{parts: ["paint", "Cap", "Butt"]} = A.path("paint::Cap::Butt")
+    assert RustQ.Rust.AST.Render.render_expr(A.path("paint::Cap::Butt")) == "paint::Cap::Butt"
   end
 
   test "renders token macro expressions through native AST" do
