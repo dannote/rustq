@@ -18,6 +18,7 @@ defmodule RustQ.Meta.LowerTest do
 
   alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Meta.Lower
   alias RustQ.NativeCodegen.Decoders
   alias RustQ.NativeCodegen.Helpers
   alias RustQ.Rust.AST
@@ -74,6 +75,35 @@ defmodule RustQ.Meta.LowerTest do
                ]
              }
            } = hd(maybe_save.body)
+  end
+
+  test "non-raw semantic helpers lower directly to AST nodes" do
+    assert [
+             %AST.Return{
+               expr: %AST.Some{expr: %AST.Var{name: :value}}
+             }
+           ] = Lower.quoted_body(quote(do: expr!(some(value))), nil)
+
+    assert [
+             %AST.Return{
+               expr: %AST.PatOk{pattern: %AST.PatVar{name: :value}}
+             }
+           ] = Lower.quoted_body(quote(do: pat!({:ok, value})), nil)
+
+    assert [
+             %AST.Return{
+               expr: %AST.ExprStmt{expr: %AST.MethodCall{method: :clear}}
+             }
+           ] = Lower.quoted_body(quote(do: stmt!(canvas.clear(color))), nil)
+
+    assert [
+             %AST.Return{
+               expr: %AST.Arm{
+                 pattern: %AST.PatOk{pattern: %AST.PatVar{name: :value}},
+                 body: [%AST.Return{expr: %AST.Var{name: :value}}]
+               }
+             }
+           ] = Lower.quoted_body(quote(do: arm!({:ok, value}, value)), nil)
   end
 
   test "defrust lowers closures and deref in method chains" do

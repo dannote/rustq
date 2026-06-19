@@ -336,16 +336,18 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({{:., _, [{:__aliases__, _, [:Enum]}, :map]}, _, [collection, mapper]}),
     do: lower_enum_map(collection, mapper)
 
-  defp lower_expr({:expr!, _, [expression]}), do: semantic_expr(expression)
-  defp lower_expr({:pat!, _, [pattern]}), do: semantic_pat(pattern)
-  defp lower_expr({:stmt!, _, [expression]}), do: semantic_stmt(expression)
+  defp lower_expr({:expr!, _, [expression]}), do: lower_expr(expression)
+  defp lower_expr({:pat!, _, [pattern]}), do: lower_semantic_pat(pattern)
+  defp lower_expr({:stmt!, _, [expression]}), do: %AST.ExprStmt{expr: lower_expr(expression)}
 
   defp lower_expr({:raw_expr!, _, [tokens]}), do: parse_syn(:Expr, tokens)
   defp lower_expr({:raw_pat!, _, [tokens]}), do: parse_syn(:Pat, tokens)
   defp lower_expr({:raw_stmt!, _, [tokens]}), do: parse_syn(:Stmt, tokens)
   defp lower_expr({:raw_arm!, _, [tokens]}), do: parse_syn(:Arm, tokens)
 
-  defp lower_expr({:arm!, _, [pattern, block]}), do: semantic_arm(pattern, block)
+  defp lower_expr({:arm!, _, [pattern, block]}) do
+    %AST.Arm{pattern: lower_semantic_pat(pattern), body: lower_semantic_arm_body(block)}
+  end
 
   defp lower_expr({:badarg, _, []}), do: %AST.Path{parts: [:rustler, :Error, :BadArg]}
 
@@ -558,141 +560,66 @@ defmodule RustQ.Meta.Lower do
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
 
-  defp semantic_expr(:ok), do: raw_expr("Ok(())")
-  defp semantic_expr({:ok, value}), do: raw_expr("Ok(#{semantic_interpolation(value)})")
-  defp semantic_expr({:error, value}), do: raw_expr("Err(#{semantic_interpolation(value)})")
-  defp semantic_expr({:{}, _, [:ok, value]}), do: raw_expr("Ok(#{semantic_interpolation(value)})")
+  defp lower_semantic_pat({:ident, _, [name]}), do: %AST.PatVar{name: semantic_atom!(name)}
 
-  defp semantic_expr({:{}, _, [:error, value]}),
-    do: raw_expr("Err(#{semantic_interpolation(value)})")
+  defp lower_semantic_pat({:mut_ident, _, [name]}),
+    do: %AST.PatVar{name: semantic_atom!(name), mutable: true}
 
-  defp semantic_expr({:some, _, [value]}), do: raw_expr("Some(#{semantic_interpolation(value)})")
-  defp semantic_expr({:none, _, []}), do: raw_expr("None")
-  defp semantic_expr({:err, _, [value]}), do: raw_expr("Err(#{semantic_interpolation(value)})")
-  defp semantic_expr({:ref, _, [value]}), do: raw_expr("&#{semantic_interpolation(value)}")
+  defp lower_semantic_pat({:path, _, [path]}), do: %AST.PatPath{path: lower_expr_path(path)}
 
-  defp semantic_expr({:mut_ref, _, [value]}),
-    do: raw_expr("&mut #{semantic_interpolation(value)}")
+  defp lower_semantic_pat({:some, _, [pattern]}),
+    do: %AST.PatSome{pattern: lower_semantic_pat(pattern)}
 
-  defp semantic_expr({:deref, _, [value]}), do: raw_expr("*#{semantic_interpolation(value)}")
+  defp lower_semantic_pat({:ok, pattern}), do: %AST.PatOk{pattern: lower_semantic_pat(pattern)}
 
-  defp semantic_expr({:unwrap!, _, [value]}), do: raw_expr("#{semantic_interpolation(value)}?")
+  defp lower_semantic_pat({:error, pattern}),
+    do: %AST.PatErr{pattern: lower_semantic_pat(pattern)}
 
-  defp semantic_expr({:ident, _, [name]}), do: raw_expr(semantic_interpolation(name))
+  defp lower_semantic_pat({:{}, _, [:ok, pattern]}),
+    do: %AST.PatOk{pattern: lower_semantic_pat(pattern)}
 
-  defp semantic_expr({:field, _, [receiver, field]}),
-    do: raw_expr("#{semantic_interpolation(receiver)}.#{semantic_ident(field)}")
+  defp lower_semantic_pat({:{}, _, [:error, pattern]}),
+    do: %AST.PatErr{pattern: lower_semantic_pat(pattern)}
 
-  defp semantic_expr({:path_call, _, [path, args]}),
-    do: raw_expr("#{semantic_interpolation(path)}(#{semantic_splice(args)})")
+  defp lower_semantic_pat({:tuple, _, [patterns]}),
+    do: %AST.PatTuple{patterns: Enum.map(patterns, &lower_semantic_pat/1)}
 
-  defp semantic_expr({:method_call, _, [receiver, method, args]}),
-    do:
-      raw_expr(
-        "#{semantic_interpolation(receiver)}.#{semantic_ident(method)}(#{semantic_splice(args)})"
-      )
+  defp lower_semantic_pat({:path_tuple, _, [path, patterns]}),
+    do: %AST.PatPathTuple{
+      path: lower_expr_path(path),
+      patterns: Enum.map(patterns, &lower_semantic_pat/1)
+    }
 
-  defp semantic_expr({:macro_call, _, [path, args]}),
-    do: raw_expr("#{semantic_interpolation(path)}!(#{semantic_splice(args)})")
+  defp lower_semantic_pat({:struct, _, [path, fields]}),
+    do: %AST.PatStruct{path: lower_expr_path(path), fields: lower_semantic_pat_fields(fields)}
 
-  defp semantic_expr({:struct_literal, _, [path, fields]}),
-    do: raw_expr("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
+  defp lower_semantic_pat(nil), do: %AST.PatNone{}
+  defp lower_semantic_pat(:_), do: %AST.PatWildcard{}
+  defp lower_semantic_pat({:_, _, _}), do: %AST.PatWildcard{}
+  defp lower_semantic_pat(other), do: lower_match_pattern(other, nil)
 
-  defp semantic_expr({:tuple, _, [values]}), do: raw_expr("(#{semantic_splice(values)})")
-  defp semantic_expr({:vec, _, [values]}), do: raw_expr("vec![#{semantic_splice(values)}]")
+  defp lower_semantic_pat_fields(fields) when is_list(fields) do
+    Enum.map(fields, fn {name, pattern} -> {name, lower_semantic_pat(pattern)} end)
+  end
 
-  defp semantic_expr({:closure, _, [args, body]}),
-    do: raw_expr("|#{semantic_splice(args)}| #{semantic_interpolation(body)}")
+  defp lower_semantic_arm_body(body),
+    do: lower_clause_body(body, %Context{position: :return})
 
-  defp semantic_expr({:binary, _, [left, op, right]}),
-    do:
-      raw_expr(
-        "#{semantic_interpolation(left)} #{semantic_binary_op(op)} #{semantic_interpolation(right)}"
-      )
+  defp lower_expr_path(%AST.Path{} = path), do: path
 
-  defp semantic_expr({:match, _, [expr, arms]}),
-    do: raw_expr("match #{semantic_interpolation(expr)} { #{semantic_concat(arms)} }")
+  defp lower_expr_path(expression) do
+    case lower_expr(expression) do
+      %AST.Path{} = path -> path
+      other -> raise ArgumentError, "expected Rust path, got: #{inspect(other)}"
+    end
+  end
 
-  defp semantic_expr({:if_else, _, [condition, then_block, else_block]}),
-    do:
-      raw_expr(
-        "if #{semantic_interpolation(condition)} #{semantic_interpolation(then_block)} else #{semantic_interpolation(else_block)}"
-      )
+  defp semantic_atom!(atom) when is_atom(atom), do: atom
+  defp semantic_atom!({name, _, context}) when is_atom(name) and is_atom(context), do: name
 
-  defp semantic_expr({:atom_value, _, [name]}), do: raw_expr("atoms::#{semantic_ident(name)}()")
-
-  defp semantic_expr({:raise_atom, _, [name]}),
-    do: raw_expr("rustler::Error::RaiseAtom(#{semantic_interpolation(name)})")
-
-  defp semantic_expr(nil), do: raw_expr("None")
-
-  defp semantic_expr(other), do: raw_expr(Render.render_expr(lower_expr(other)))
-
-  defp semantic_pat({:ident, _, [name]}), do: raw_pat(semantic_interpolation(name))
-  defp semantic_pat({:mut_ident, _, [name]}), do: raw_pat("mut #{semantic_interpolation(name)}")
-  defp semantic_pat({:path, _, [path]}), do: raw_pat(semantic_interpolation(path))
-
-  defp semantic_pat({:some, _, [pattern]}),
-    do: raw_pat("Some(#{semantic_interpolation(pattern)})")
-
-  defp semantic_pat({:ok, pattern}), do: raw_pat("Ok(#{semantic_interpolation(pattern)})")
-  defp semantic_pat({:error, pattern}), do: raw_pat("Err(#{semantic_interpolation(pattern)})")
-
-  defp semantic_pat({:{}, _, [:ok, pattern]}),
-    do: raw_pat("Ok(#{semantic_interpolation(pattern)})")
-
-  defp semantic_pat({:{}, _, [:error, pattern]}),
-    do: raw_pat("Err(#{semantic_interpolation(pattern)})")
-
-  defp semantic_pat({:tuple, _, [patterns]}), do: raw_pat("(#{semantic_splice(patterns)})")
-
-  defp semantic_pat({:path_tuple, _, [path, patterns]}),
-    do: raw_pat("#{semantic_interpolation(path)}(#{semantic_splice(patterns)})")
-
-  defp semantic_pat({:struct, _, [path, fields]}),
-    do: raw_pat("#{semantic_interpolation(path)} { #{semantic_splice(fields)} }")
-
-  defp semantic_pat(nil), do: raw_pat("None")
-  defp semantic_pat(:_), do: raw_pat("_")
-  defp semantic_pat(other), do: raw_pat(semantic_interpolation(other))
-
-  defp semantic_stmt(expression), do: raw_stmt("#{semantic_interpolation(expression)};")
-
-  defp semantic_arm(pattern, block),
-    do: parse_syn(:Arm, "#{semantic_interpolation(pattern)} => #{semantic_interpolation(block)},")
-
-  defp semantic_interpolation({name, _, context}) when is_atom(name) and is_atom(context),
-    do: "##{name}"
-
-  defp semantic_interpolation(other), do: Render.render_expr(lower_expr(other))
-
-  defp semantic_ident({name, _, context}) when is_atom(name) and is_atom(context), do: "##{name}"
-  defp semantic_ident(name) when is_atom(name), do: Atom.to_string(name)
-
-  defp semantic_splice({name, _, context}) when is_atom(name) and is_atom(context),
-    do: "#(##{name}),*"
-
-  defp semantic_concat({name, _, context}) when is_atom(name) and is_atom(context),
-    do: "#(##{name})*"
-
-  defp semantic_binary_op(:eq), do: "=="
-  defp semantic_binary_op(:ne), do: "!="
-  defp semantic_binary_op(:lt), do: "<"
-  defp semantic_binary_op(:lte), do: "<="
-  defp semantic_binary_op(:gt), do: ">"
-  defp semantic_binary_op(:gte), do: ">="
-  defp semantic_binary_op(:add), do: "+"
-  defp semantic_binary_op(:sub), do: "-"
-  defp semantic_binary_op(:mul), do: "*"
-  defp semantic_binary_op(:div), do: "/"
-  defp semantic_binary_op(:and), do: "&&"
-  defp semantic_binary_op(:or), do: "||"
-  defp semantic_binary_op(:shr), do: ">>"
-  defp semantic_binary_op(:bitand), do: "&"
-
-  defp raw_expr(tokens), do: parse_syn(:Expr, tokens)
-  defp raw_pat(tokens), do: parse_syn(:Pat, tokens)
-  defp raw_stmt(tokens), do: parse_syn(:Stmt, tokens)
+  defp semantic_atom!(other) do
+    raise ArgumentError, "expected atom identifier, got: #{Macro.to_string(other)}"
+  end
 
   defp parse_syn(type, tokens) do
     %AST.PathCall{
