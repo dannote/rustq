@@ -312,6 +312,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:deref, _, [expression]}),
     do: %AST.UnaryOp{op: :deref, expr: lower_expr(expression)}
 
+  defp lower_expr({:tuple_field, _, [expression, index]}) when is_integer(index),
+    do: %AST.Field{receiver: lower_expr(expression), field: index}
+
   defp lower_expr({:some, _, [expression]}), do: %AST.Some{expr: lower_expr(expression)}
   defp lower_expr({:none, _, []}), do: %AST.None{}
   defp lower_expr({:ok, _, []}), do: %AST.Ok{}

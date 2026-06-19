@@ -337,6 +337,22 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "term.decode::<Vec<Term<'a>>>()?"
   end
 
+  test "lowers Rust tuple field access from defrust valid Elixir" do
+    defmodule TupleFieldCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec first(R.raw(:Tuple1)) :: R.nif_result(R.i64())
+      defrust first(tuple) do
+        {:ok, tuple_field(tuple, 0)}
+      end
+    end
+
+    source = TupleFieldCase.__rustq_source__()
+
+    assert source =~ "Ok(tuple.0)"
+  end
+
   test "builds typed Rustler decode result probes from defrust valid Elixir" do
     defmodule DecodeResultProbeCase do
       use RustQ.Meta

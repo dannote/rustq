@@ -373,9 +373,10 @@ defmodule RustQ.Meta.Type do
 
   defp raw_type!({:__block__, _, [type]}), do: raw_type!(type)
   defp raw_type!(type) when is_atom(type), do: {:raw, Atom.to_string(type)}
+  defp raw_type!(type) when is_binary(type), do: {:raw, type}
 
   defp raw_type!(other) do
-    raise ArgumentError, "expected R.raw atom marker, got: #{Macro.to_string(other)}"
+    raise ArgumentError, "expected R.raw atom marker or string, got: #{Macro.to_string(other)}"
   end
 
   defp external_type_path(parts, args, aliases) do
