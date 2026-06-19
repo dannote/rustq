@@ -32,6 +32,12 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert source =~ "-> NifResult<()>"
   end
 
+  test "builds slice and array type nodes" do
+    assert render_type(T.slice(T.ref(:str))) == "[&str]"
+    assert render_type(T.ref(T.slice(T.ref(:str)))) == "&[&str]"
+    assert render_type(T.array(:u8, 4)) == "[u8; 4]"
+  end
+
   test "splits Rust path strings into type and expression path parts" do
     assert %AST.TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
     assert RustQ.Rust.AST.Render.render_type(T.path("paint::Cap")) == "paint::Cap"
@@ -149,4 +155,6 @@ defmodule RustQ.Rust.AST.BuilderTest do
              %AST.Return{expr: %AST.Match{arms: [%AST.Arm{}, %AST.Arm{}]}}
            ] = body
   end
+
+  defp render_type(type), do: type |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
 end

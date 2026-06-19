@@ -555,6 +555,25 @@ pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
     decode_ast_type(term)
 }
 
+pub(crate) fn decode_type_slice(term: Term) -> NifResult<Type> {
+    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
+    parse_syn(quote!([#inner]))
+}
+
+pub(crate) fn decode_type_array(term: Term) -> NifResult<Type> {
+    let inner = decode_type(term.map_get(atom(term.get_env(), "inner")?)?)?;
+    let size = decode_array_size(term.map_get(atom(term.get_env(), "size")?)?)?;
+    parse_syn(quote!([#inner; #size]))
+}
+
+fn decode_array_size(term: Term) -> NifResult<Expr> {
+    if let Ok(value) = term.decode::<u64>() {
+        parse_expr(value.to_string())
+    } else {
+        parse_expr(atom_or_string(term)?)
+    }
+}
+
 pub(crate) fn decode_string_list(term: Term) -> NifResult<Vec<String>> {
     term.decode::<Vec<Term>>()?
         .into_iter()

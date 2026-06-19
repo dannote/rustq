@@ -65,11 +65,13 @@ defmodule RustQ.Rust.AST.Render do
     Try,
     Tuple,
     TypeAlias,
+    TypeArray,
     TypeNifResult,
     TypeOption,
     TypePath,
     TypeRef,
     TypeResult,
+    TypeSlice,
     TypeUnit,
     TypeVec,
     UnaryOp,
@@ -355,6 +357,10 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_type(%TypeNifResult{inner: inner}), do: ["NifResult<", render_type(inner), ">"]
   def render_type(%TypeVec{inner: inner}), do: ["Vec<", render_type(inner), ">"]
+  def render_type(%TypeSlice{inner: inner}), do: ["[", render_type(inner), "]"]
+
+  def render_type(%TypeArray{inner: inner, size: size}),
+    do: ["[", render_type(inner), "; ", to_string(size), "]"]
 
   def render_stmt(%Let{} = stmt) do
     mut = if stmt.mutable, do: "mut ", else: ""

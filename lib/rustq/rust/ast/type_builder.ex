@@ -37,6 +37,8 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def unit, do: %AST.TypeUnit{}
   def nif_result(inner), do: %AST.TypeNifResult{inner: type(inner)}
   def vec(inner), do: %AST.TypeVec{inner: type(inner)}
+  def slice(inner), do: %AST.TypeSlice{inner: type(inner)}
+  def array(inner, size), do: %AST.TypeArray{inner: type(inner), size: size}
 
   def ref(inner, opts \\ []),
     do: %AST.TypeRef{inner: type(inner), lifetime: Keyword.get(opts, :lifetime)}

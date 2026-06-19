@@ -57,6 +57,8 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:type_result), do: "Result<u32, String>"
   defp semantic_fragment(:type_nif_result), do: "NifResult<u32>"
   defp semantic_fragment(:type_vec), do: "Vec<u8>"
+  defp semantic_fragment(:type_slice), do: "type_slice_VALUE: [&str]"
+  defp semantic_fragment(:type_array), do: "type_array_VALUE: [u8; 4]"
   defp semantic_fragment(:type_unit), do: "type_unit_VALUE: ()"
   defp semantic_fragment(:let), do: "let value = 1i64;"
   defp semantic_fragment(:let_else), do: "let Some(value) = maybe"
@@ -188,6 +190,13 @@ defmodule RustQ.ASTSamples do
     do: type_sample(:type_nif_result, %AST.TypeNifResult{inner: A.type_path(:u32)})
 
   def sample_for(:type_vec), do: type_sample(:type_vec, %AST.TypeVec{inner: A.type_path(:u8)})
+
+  def sample_for(:type_slice),
+    do: type_sample(:type_slice, %AST.TypeSlice{inner: %AST.TypeRef{inner: A.type_path(:str)}})
+
+  def sample_for(:type_array),
+    do: type_sample(:type_array, %AST.TypeArray{inner: A.type_path(:u8), size: 4})
+
   def sample_for(:type_unit), do: type_sample(:type_unit, %AST.TypeUnit{})
 
   def sample_for(:let),

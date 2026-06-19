@@ -33,6 +33,8 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_RESULT: &str = "Elixir.RustQ.Rust.AST.TypeResult";
     pub(crate) const TYPE_NIF_RESULT: &str = "Elixir.RustQ.Rust.AST.TypeNifResult";
     pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
+    pub(crate) const TYPE_SLICE: &str = "Elixir.RustQ.Rust.AST.TypeSlice";
+    pub(crate) const TYPE_ARRAY: &str = "Elixir.RustQ.Rust.AST.TypeArray";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
     pub(crate) const LET_ELSE: &str = "Elixir.RustQ.Rust.AST.LetElse";
@@ -214,6 +216,8 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         ast_modules::TYPE_RESULT => decode_type_result(term),
         ast_modules::TYPE_NIF_RESULT => decode_type_nif_result(term),
         ast_modules::TYPE_VEC => decode_type_vec(term),
+        ast_modules::TYPE_SLICE => super::decode_type_slice(term),
+        ast_modules::TYPE_ARRAY => super::decode_type_array(term),
         ast_modules::TYPE_UNIT => decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
     }
