@@ -345,10 +345,16 @@ defmodule RustQ.Meta.DefrustTest do
       defrust atom_call() do
         Atoms.args()
       end
+
+      @spec nil_atom_call() :: R.nif_result(atom())
+      defrust nil_atom_call() do
+        Atoms.nil()
+      end
     end
 
     source = AliasCallCase.__rustq_source__()
     assert source =~ "atoms::args()"
+    assert source =~ "atoms::nil()"
   end
 
   test "lowers simple for comprehensions to Rust for loops" do

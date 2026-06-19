@@ -416,7 +416,7 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   def render_expr(%Var{name: name}), do: Atom.to_string(name)
-  def render_expr(%Path{parts: parts}), do: Elixir.Enum.map_join(parts, "::", &to_string/1)
+  def render_expr(%Path{parts: parts}), do: Elixir.Enum.map_join(parts, "::", &render_path_part/1)
 
   def render_expr(%Field{receiver: receiver, field: field}),
     do: [render_expr(receiver), ".", to_string(field)]
@@ -587,6 +587,9 @@ defmodule RustQ.Rust.AST.Render do
 
   defp render_generics(generics),
     do: ["::<", generics |> Elixir.Enum.map(&render_type/1) |> Elixir.Enum.intersperse(", "), ">"]
+
+  defp render_path_part(nil), do: "nil"
+  defp render_path_part(part), do: to_string(part)
 
   defp render_binary_op(:eq), do: "=="
   defp render_binary_op(:ne), do: "!="
