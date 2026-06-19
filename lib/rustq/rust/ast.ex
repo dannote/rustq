@@ -156,7 +156,7 @@ defmodule RustQ.Rust.AST do
           | TypeVec.t()
           | TypeSlice.t()
           | TypeArray.t()
-          | TypeRaw.t()
+          | RustQ.Rust.AST.TypeRaw.t()
           | TypeUnit.t()
 
   @type pat ::
