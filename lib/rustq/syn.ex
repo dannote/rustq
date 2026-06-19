@@ -1,0 +1,754 @@
+defmodule RustQ.Syn do
+  @moduledoc """
+  Structural metadata for Rust source parsed with [`syn`](https://docs.rs/syn).
+
+  `RustQ.Syn` is for introspecting existing Rust source. It returns Elixir
+  metadata for Rust items such as enums, structs, free functions, `impl` blocks,
+  methods, docs, arguments, return types, and common Rust type shapes.
+
+  This is **Rust AST metadata**, not Rusty Elixir AST and not `RustQ.Rust.AST`.
+  Use it when a generator needs to understand Rust that already exists in an
+  upstream crate, for example to discover a crate's methods or enum variants
+  without parsing Rust text with regex.
+
+  ## Example
+
+      file = RustQ.Syn.parse_file!("native/my_crate/src/lib.rs")
+
+      file
+      |> RustQ.Syn.methods()
+      |> Enum.find(&(&1.name == "draw_rect"))
+
+  Arguments and returns keep both the rendered Rust type string and a structured
+  type node:
+
+      %RustQ.Syn.Arg{
+        name: "paint",
+        type: "& Paint",
+        type_ast: %RustQ.Syn.Type.Ref{
+          inner: %RustQ.Syn.Type.Path{name: "Paint"}
+        }
+      }
+
+  The structured type vocabulary is intentionally partial. Unknown or currently
+  unsupported Rust type forms are represented as `%RustQ.Syn.Type.Raw{}` with
+  the original rendered code preserved.
+  """
+
+  alias RustQ.Error
+
+  defmodule File do
+    @moduledoc """
+    Rust source file metadata.
+
+    The `items` list contains top-level item metadata structs such as
+    `RustQ.Syn.Enum`, `RustQ.Syn.Struct`, `RustQ.Syn.Function`, and
+    `RustQ.Syn.Impl`.
+    """
+    defstruct items: []
+
+    @type t :: %__MODULE__{items: [RustQ.Syn.item()]}
+  end
+
+  defmodule Type do
+    @moduledoc """
+    Namespace for structured Rust type metadata.
+
+    Each type node includes `code`, the rendered Rust tokens for display or
+    diagnostics. Prefer matching on the structured fields when making semantic
+    decisions.
+    """
+
+    @doc "Returns true when `type` is a path whose final segment is `name`."
+    @spec path?(RustQ.Syn.type(), String.t()) :: boolean()
+    def path?(%RustQ.Syn.Type.Path{name: name}, name), do: true
+    def path?(%RustQ.Syn.Type.Path{segments: segments}, name), do: List.last(segments) == name
+    def path?(_type, _name), do: false
+
+    @doc "Returns true when `type` is a reference to a path whose final segment is `name`."
+    @spec ref_to?(RustQ.Syn.type(), String.t()) :: boolean()
+    def ref_to?(%RustQ.Syn.Type.Ref{inner: inner}, name), do: path?(inner, name)
+    def ref_to?(_type, _name), do: false
+
+    @doc "Returns true when `type` is `impl Trait<Args...>` matching the requested trait and args."
+    @spec impl_trait?(RustQ.Syn.type(), String.t(), [String.t()]) :: boolean()
+    def impl_trait?(type, trait, args \\ [])
+
+    def impl_trait?(%RustQ.Syn.Type.ImplTrait{traits: traits}, trait, args) do
+      Enum.any?(traits, fn
+        %RustQ.Syn.Type.Path{name: ^trait, args: trait_args} ->
+          Enum.map(trait_args, &type_name/1) == args
+
+        _other ->
+          false
+      end)
+    end
+
+    def impl_trait?(_type, _trait, _args), do: false
+
+    @doc "Returns the final path-like name for common type metadata nodes."
+    @spec type_name(RustQ.Syn.type()) :: String.t() | nil
+    def type_name(%RustQ.Syn.Type.Path{name: name}), do: name
+    def type_name(%RustQ.Syn.Type.Self{}), do: "Self"
+    def type_name(%RustQ.Syn.Type.Ref{inner: inner}), do: type_name(inner)
+    def type_name(%RustQ.Syn.Type.Option{inner: inner}), do: type_name(inner)
+    def type_name(_type), do: nil
+
+    defmodule Path do
+      @moduledoc "Rust path type metadata, for example `Paint`, `skia_safe::Canvas`, or `AsRef<Rect>`."
+      defstruct [:code, :name, segments: [], args: []]
+
+      @type t :: %__MODULE__{
+              code: String.t(),
+              name: String.t(),
+              segments: [String.t()],
+              args: [RustQ.Syn.type()]
+            }
+    end
+
+    defmodule Ref do
+      @moduledoc "Rust reference type metadata, for example `&Paint` or `&mut Path`."
+      defstruct [:code, :inner, mutable: false]
+
+      @type t :: %__MODULE__{code: String.t(), mutable: boolean(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Tuple do
+      @moduledoc "Rust tuple type metadata."
+      defstruct [:code, elems: []]
+
+      @type t :: %__MODULE__{code: String.t(), elems: [RustQ.Syn.type()]}
+    end
+
+    defmodule Option do
+      @moduledoc "Rust Option<T> type metadata."
+      defstruct [:code, :inner]
+
+      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Result do
+      @moduledoc "Rust Result<T, E> type metadata."
+      defstruct [:code, :ok, :error]
+
+      @type t :: %__MODULE__{code: String.t(), ok: RustQ.Syn.type(), error: RustQ.Syn.type()}
+    end
+
+    defmodule ImplTrait do
+      @moduledoc "Rust impl Trait type metadata."
+      defstruct [:code, traits: []]
+
+      @type t :: %__MODULE__{code: String.t(), traits: [RustQ.Syn.type()]}
+    end
+
+    defmodule Slice do
+      @moduledoc "Rust slice type metadata."
+      defstruct [:code, :inner]
+
+      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Array do
+      @moduledoc "Rust array type metadata."
+      defstruct [:code, :inner]
+
+      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+    end
+
+    defmodule Self do
+      @moduledoc "Rust Self type metadata."
+      defstruct [:code]
+
+      @type t :: %__MODULE__{code: String.t()}
+    end
+
+    defmodule Raw do
+      @moduledoc "Fallback Rust type metadata for type forms RustQ does not model structurally yet."
+      defstruct [:code]
+
+      @type t :: %__MODULE__{code: String.t()}
+    end
+  end
+
+  defmodule Enum do
+    @moduledoc "Rust enum metadata, including doc comments and variant names."
+    defstruct [:name, :visibility, :source_line, :source_path, docs: [], variants: []]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            docs: [String.t()],
+            variants: [String.t()]
+          }
+  end
+
+  defmodule Use do
+    @moduledoc "Rust `use` item metadata, including reexport aliases."
+    defstruct [
+      :path,
+      :alias,
+      :visibility,
+      :source_line,
+      :source_path,
+      docs: [],
+      segments: [],
+      glob?: false
+    ]
+
+    @type t :: %__MODULE__{
+            path: String.t(),
+            segments: [String.t()],
+            alias: String.t() | nil,
+            glob?: boolean(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            docs: [String.t()]
+          }
+  end
+
+  defmodule TypeAlias do
+    @moduledoc "Rust `type` alias metadata."
+    defstruct [:name, :visibility, :source_line, :source_path, :type, :type_ast, docs: []]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            type: String.t(),
+            type_ast: RustQ.Syn.type(),
+            docs: [String.t()]
+          }
+  end
+
+  defmodule Struct do
+    @moduledoc "Rust struct metadata."
+    defstruct [:name, :visibility, :source_line, :source_path, docs: [], fields: []]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            docs: [String.t()],
+            fields: [RustQ.Syn.Field.t()]
+          }
+  end
+
+  defmodule Field do
+    @moduledoc "Rust struct field metadata."
+    defstruct [:name, :type, :type_ast]
+
+    @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
+  end
+
+  defmodule Function do
+    @moduledoc "Rust free function metadata, including doc comments, arguments, and return type."
+    defstruct [
+      :name,
+      :visibility,
+      :source_line,
+      :source_path,
+      :signature,
+      :signature_ast,
+      docs: [],
+      args: [],
+      returns: nil,
+      returns_ast: nil
+    ]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            signature: String.t() | nil,
+            signature_ast: RustQ.Syn.Signature.t() | nil,
+            docs: [String.t()],
+            args: [RustQ.Syn.Arg.t()],
+            returns: String.t() | nil,
+            returns_ast: RustQ.Syn.type() | nil
+          }
+  end
+
+  defmodule Arg do
+    @moduledoc "Rust function or method argument metadata. `type` is rendered Rust; `type_ast` is structured metadata."
+    defstruct [:name, :type, :type_ast]
+
+    @type t :: %__MODULE__{name: String.t() | nil, type: String.t(), type_ast: RustQ.Syn.type()}
+  end
+
+  defmodule MethodCall do
+    @moduledoc "Receiver method call metadata found in Rust source."
+    defstruct [:receiver, :method]
+
+    @type t :: %__MODULE__{receiver: String.t(), method: String.t()}
+  end
+
+  defmodule Signature do
+    @moduledoc "Structured Rust function or method signature metadata."
+    defstruct [:name, args: [], returns: nil]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            args: [RustQ.Syn.Arg.t()],
+            returns: RustQ.Syn.type() | nil
+          }
+
+    @doc "Renders a signature from structured type metadata."
+    @spec render(t()) :: String.t()
+    def render(%__MODULE__{name: name, args: args, returns: returns}) do
+      rendered_args = Elixir.Enum.map_join(args, ", ", &render_arg/1)
+      rendered_returns = if returns, do: " -> #{render_type(returns)}", else: ""
+      "fn #{name}(#{rendered_args})#{rendered_returns}"
+    end
+
+    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: %RustQ.Syn.Type.Ref{mutable: false}}),
+      do: "&self"
+
+    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: %RustQ.Syn.Type.Ref{mutable: true}}),
+      do: "&mut self"
+
+    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: type}), do: render_type(type)
+    defp render_arg(%RustQ.Syn.Arg{name: nil, type_ast: type}), do: render_type(type)
+
+    defp render_arg(%RustQ.Syn.Arg{name: name, type_ast: type}),
+      do: "#{name}: #{render_type(type)}"
+
+    defp render_type(%RustQ.Syn.Type.Path{segments: segments, args: []}),
+      do: Elixir.Enum.join(segments, "::")
+
+    defp render_type(%RustQ.Syn.Type.Path{segments: segments, args: args}) do
+      "#{Elixir.Enum.join(segments, "::")}<#{Elixir.Enum.map_join(args, ", ", &render_type/1)}>"
+    end
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: false}),
+      do: "&Self"
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: true}),
+      do: "&mut Self"
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: false}),
+      do: "&#{render_type(inner)}"
+
+    defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: true}),
+      do: "&mut #{render_type(inner)}"
+
+    defp render_type(%RustQ.Syn.Type.Tuple{elems: elems}),
+      do: "(#{Elixir.Enum.map_join(elems, ", ", &render_type/1)})"
+
+    defp render_type(%RustQ.Syn.Type.Option{inner: inner}), do: "Option<#{render_type(inner)}>"
+
+    defp render_type(%RustQ.Syn.Type.Result{ok: ok, error: error}),
+      do: "Result<#{render_type(ok)}, #{render_type(error)}>"
+
+    defp render_type(%RustQ.Syn.Type.ImplTrait{traits: traits}),
+      do: "impl #{Elixir.Enum.map_join(traits, " + ", &render_type/1)}"
+
+    defp render_type(%RustQ.Syn.Type.Slice{inner: inner}), do: "[#{render_type(inner)}]"
+    defp render_type(%RustQ.Syn.Type.Array{inner: inner}), do: "[#{render_type(inner)}]"
+    defp render_type(%RustQ.Syn.Type.Self{}), do: "Self"
+    defp render_type(%RustQ.Syn.Type.Raw{code: code}), do: code
+  end
+
+  defmodule Impl do
+    @moduledoc "Rust impl block metadata, including target type, optional trait, doc comments, and methods."
+    defstruct [:target, :target_ast, :trait, :source_line, :source_path, docs: [], methods: []]
+
+    @type t :: %__MODULE__{
+            target: String.t(),
+            target_ast: RustQ.Syn.type(),
+            trait: String.t() | nil,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            docs: [String.t()],
+            methods: [RustQ.Syn.Method.t()]
+          }
+  end
+
+  defmodule Method do
+    @moduledoc "Rust impl method metadata, including doc comments, arguments, and return type."
+    defstruct [
+      :name,
+      :visibility,
+      :source_line,
+      :source_path,
+      :signature,
+      :signature_ast,
+      docs: [],
+      args: [],
+      returns: nil,
+      returns_ast: nil
+    ]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            signature: String.t() | nil,
+            signature_ast: RustQ.Syn.Signature.t() | nil,
+            docs: [String.t()],
+            args: [RustQ.Syn.Arg.t()],
+            returns: String.t() | nil,
+            returns_ast: RustQ.Syn.type() | nil
+          }
+  end
+
+  @type type ::
+          RustQ.Syn.Type.Path.t()
+          | RustQ.Syn.Type.Ref.t()
+          | RustQ.Syn.Type.Tuple.t()
+          | RustQ.Syn.Type.Option.t()
+          | RustQ.Syn.Type.Result.t()
+          | RustQ.Syn.Type.ImplTrait.t()
+          | RustQ.Syn.Type.Slice.t()
+          | RustQ.Syn.Type.Array.t()
+          | RustQ.Syn.Type.Self.t()
+          | RustQ.Syn.Type.Raw.t()
+
+  @type item ::
+          RustQ.Syn.Enum.t()
+          | RustQ.Syn.Use.t()
+          | RustQ.Syn.TypeAlias.t()
+          | RustQ.Syn.Struct.t()
+          | RustQ.Syn.Function.t()
+          | RustQ.Syn.Impl.t()
+
+  @doc """
+  Parses Rust source into structural metadata.
+
+  Returns `{:ok, %RustQ.Syn.File{}}` on success. Parser errors are returned in
+  RustQ's normal template-error shape.
+  """
+  @spec parse(String.t()) :: {:ok, RustQ.Syn.File.t()} | {:error, term()}
+  def parse(source) when is_binary(source) do
+    with {:ok, raw_items} <- RustQ.Native.syn_inspect(source) do
+      {:ok, %RustQ.Syn.File{items: Elixir.Enum.map(raw_items, &decode_item!/1)}}
+    end
+  end
+
+  @doc """
+  Parses Rust source into structural metadata, raising `RustQ.Error` on failure.
+  """
+  @spec parse!(String.t()) :: RustQ.Syn.File.t()
+  def parse!(source) when is_binary(source) do
+    case parse(source) do
+      {:ok, file} ->
+        file
+
+      {:error, errors} ->
+        raise Error, message: "RustQ syn parse error: #{inspect(errors)}", errors: errors
+    end
+  end
+
+  @doc """
+  Reads and parses a Rust source file.
+
+  File read errors are returned as `{:error, reason}`. Rust parse errors are
+  returned as `{:error, errors}`.
+  """
+  @spec parse_file(Path.t()) :: {:ok, RustQ.Syn.File.t()} | {:error, term()}
+  def parse_file(path) do
+    with {:ok, source} <- Elixir.File.read(path) do
+      parse(source)
+    end
+  end
+
+  @doc """
+  Reads and parses a Rust source file, raising on file or Rust parse errors.
+  """
+  @spec parse_file!(Path.t()) :: RustQ.Syn.File.t()
+  def parse_file!(path) do
+    path
+    |> Elixir.File.read!()
+    |> parse!()
+  end
+
+  @doc "Returns top-level Rust enum metadata from a parsed file."
+  @spec enums(RustQ.Syn.File.t()) :: [RustQ.Syn.Enum.t()]
+  def enums(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Enum{}, &1))
+
+  @doc "Returns top-level Rust `use` alias metadata from a parsed file."
+  @spec uses(RustQ.Syn.File.t()) :: [RustQ.Syn.Use.t()]
+  def uses(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Use{}, &1))
+
+  @doc "Returns top-level Rust type alias metadata from a parsed file."
+  @spec type_aliases(RustQ.Syn.File.t()) :: [RustQ.Syn.TypeAlias.t()]
+  def type_aliases(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.TypeAlias{}, &1))
+
+  @doc "Returns top-level Rust struct metadata from a parsed file."
+  @spec structs(RustQ.Syn.File.t()) :: [RustQ.Syn.Struct.t()]
+  def structs(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Struct{}, &1))
+
+  @doc "Returns top-level Rust free function metadata from a parsed file."
+  @spec functions(RustQ.Syn.File.t()) :: [RustQ.Syn.Function.t()]
+  def functions(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Function{}, &1))
+
+  @doc "Returns top-level Rust impl block metadata from a parsed file."
+  @spec impls(RustQ.Syn.File.t()) :: [RustQ.Syn.Impl.t()]
+  def impls(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Impl{}, &1))
+
+  @doc """
+  Returns methods from all top-level Rust impl blocks in a parsed file.
+
+  Use `impls/1` when the containing impl target or trait matters.
+  """
+  @spec methods(RustQ.Syn.File.t()) :: [RustQ.Syn.Method.t()]
+  def methods(%RustQ.Syn.File{} = file),
+    do: file |> impls() |> Elixir.Enum.flat_map(& &1.methods)
+
+  @doc """
+  Returns variants for a named top-level enum from Rust source.
+
+  This is a focused helper for code generators that only need enum variants and
+  do not need the full `RustQ.Syn.File` metadata.
+  """
+  @spec enum_variants(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def enum_variants(source, enum_name) when is_binary(source) and is_binary(enum_name),
+    do: RustQ.Native.syn_enum_variants(source, enum_name)
+
+  @doc """
+  Returns atom names referenced as `atoms::name()` calls in Rust source.
+
+  This is intended for generators that need to keep `rustler::atoms!` in sync
+  with existing Rust code without scraping source text. The source is parsed by
+  `syn`; invalid Rust returns a normal RustQ parse error.
+  """
+  @spec atom_references(String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def atom_references(source) when is_binary(source), do: RustQ.Native.syn_atom_references(source)
+
+  @doc "Returns atom names referenced as `atoms::name()` calls in Rust source, raising on failure."
+  @spec atom_references!(String.t()) :: [String.t()]
+  def atom_references!(source) do
+    case atom_references(source) do
+      {:ok, atoms} ->
+        atoms
+
+      {:error, errors} ->
+        raise Error,
+          message: "RustQ atom reference introspection error: #{inspect(errors)}",
+          errors: errors
+    end
+  end
+
+  @doc """
+  Returns receiver method calls found in Rust source.
+
+  For example, `canvas.draw_rect(...)` contributes
+  `%RustQ.Syn.MethodCall{receiver: "canvas", method: "draw_rect"}`.
+  """
+  @spec method_calls(String.t()) :: {:ok, [RustQ.Syn.MethodCall.t()]} | {:error, term()}
+  def method_calls(source) when is_binary(source) do
+    case RustQ.Native.syn_method_calls(source) do
+      {:ok, calls} -> {:ok, Elixir.Enum.map(calls, &decode_method_call!/1)}
+      {:error, errors} -> {:error, errors}
+    end
+  end
+
+  @doc "Returns receiver method calls found in Rust source, raising on failure."
+  @spec method_calls!(String.t()) :: [RustQ.Syn.MethodCall.t()]
+  def method_calls!(source) do
+    case method_calls(source) do
+      {:ok, calls} ->
+        calls
+
+      {:error, errors} ->
+        raise Error,
+          message: "RustQ method call introspection error: #{inspect(errors)}",
+          errors: errors
+    end
+  end
+
+  @doc """
+  Returns method names referenced as receiver method calls in Rust source.
+
+  For example, `canvas.draw_rect(...)` contributes `"draw_rect"`.
+  """
+  @spec method_references(String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def method_references(source) when is_binary(source),
+    do: RustQ.Native.syn_method_references(source)
+
+  @doc "Returns method names referenced as receiver method calls in Rust source, raising on failure."
+  @spec method_references!(String.t()) :: [String.t()]
+  def method_references!(source) do
+    case method_references(source) do
+      {:ok, methods} ->
+        methods
+
+      {:error, errors} ->
+        raise Error,
+          message: "RustQ method reference introspection error: #{inspect(errors)}",
+          errors: errors
+    end
+  end
+
+  @doc "Returns variants for a named top-level enum from Rust source, raising on failure."
+  @spec enum_variants!(String.t(), String.t()) :: [String.t()]
+  def enum_variants!(source, enum_name) do
+    case enum_variants(source, enum_name) do
+      {:ok, variants} ->
+        variants
+
+      {:error, errors} ->
+        raise Error, message: "RustQ enum introspection error: #{inspect(errors)}", errors: errors
+    end
+  end
+
+  defp decode_method_call!({receiver, method}) do
+    %RustQ.Syn.MethodCall{receiver: receiver, method: method}
+  end
+
+  defp decode_item!({"enum", name, visibility, source_line, docs, variants}) do
+    %RustQ.Syn.Enum{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs,
+      variants: variants
+    }
+  end
+
+  defp decode_item!({"use", path, segments, alias, glob?, {visibility, source_line}, docs}) do
+    %RustQ.Syn.Use{
+      path: path,
+      segments: segments,
+      alias: alias,
+      glob?: glob?,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs
+    }
+  end
+
+  defp decode_item!({"type_alias", name, visibility, source_line, docs, type, type_ast}) do
+    %RustQ.Syn.TypeAlias{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs,
+      type: type,
+      type_ast: decode_type!(type_ast)
+    }
+  end
+
+  defp decode_item!({"struct", name, visibility, source_line, docs, fields}) do
+    %RustQ.Syn.Struct{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs,
+      fields: Elixir.Enum.map(fields, &decode_field!/1)
+    }
+  end
+
+  defp decode_item!({"function", name, visibility, {source_line, signature}, docs, args, returns}) do
+    {returns, returns_ast} = decode_return(returns)
+    args = decode_args(args)
+
+    %RustQ.Syn.Function{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      signature: signature,
+      signature_ast: %RustQ.Syn.Signature{name: name, args: args, returns: returns_ast},
+      docs: docs,
+      args: args,
+      returns: returns,
+      returns_ast: returns_ast
+    }
+  end
+
+  defp decode_item!({"impl", target, target_ast, trait, source_line, docs, methods}) do
+    %RustQ.Syn.Impl{
+      target: target,
+      target_ast: decode_type!(target_ast),
+      trait: trait,
+      source_line: source_line,
+      docs: docs,
+      methods: Elixir.Enum.map(methods, &decode_method!/1)
+    }
+  end
+
+  defp decode_field!({name, type, type_ast}) do
+    %RustQ.Syn.Field{name: name, type: type, type_ast: decode_type!(type_ast)}
+  end
+
+  defp decode_method!({"method", name, visibility, {source_line, signature}, docs, args, returns}) do
+    {returns, returns_ast} = decode_return(returns)
+    args = decode_args(args)
+
+    %RustQ.Syn.Method{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      signature: signature,
+      signature_ast: %RustQ.Syn.Signature{name: name, args: args, returns: returns_ast},
+      docs: docs,
+      args: args,
+      returns: returns,
+      returns_ast: returns_ast
+    }
+  end
+
+  defp decode_args(args), do: Elixir.Enum.map(args, &decode_arg!/1)
+
+  defp decode_arg!({name, type, type_ast}) do
+    %RustQ.Syn.Arg{name: name, type: type, type_ast: decode_type!(type_ast)}
+  end
+
+  defp decode_return(nil), do: {nil, nil}
+  defp decode_return({type, type_ast}), do: {type, decode_type!(type_ast)}
+
+  defp decode_type!({"path", code, segments, args}) do
+    %RustQ.Syn.Type.Path{
+      code: code,
+      name: List.last(segments),
+      segments: segments,
+      args: Elixir.Enum.map(args, &decode_type!/1)
+    }
+  end
+
+  defp decode_type!({"ref", code, mutable, inner}) do
+    %RustQ.Syn.Type.Ref{code: code, mutable: mutable, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"tuple", code, elems}) do
+    %RustQ.Syn.Type.Tuple{code: code, elems: Elixir.Enum.map(elems, &decode_type!/1)}
+  end
+
+  defp decode_type!({"option", code, inner}) do
+    %RustQ.Syn.Type.Option{code: code, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"result", code, ok, error}) do
+    %RustQ.Syn.Type.Result{code: code, ok: decode_type!(ok), error: decode_type!(error)}
+  end
+
+  defp decode_type!({"impl_trait", code, traits}) do
+    %RustQ.Syn.Type.ImplTrait{code: code, traits: Elixir.Enum.map(traits, &decode_type!/1)}
+  end
+
+  defp decode_type!({"slice", code, inner}) do
+    %RustQ.Syn.Type.Slice{code: code, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"array", code, inner}) do
+    %RustQ.Syn.Type.Array{code: code, inner: decode_type!(inner)}
+  end
+
+  defp decode_type!({"self", code}), do: %RustQ.Syn.Type.Self{code: code}
+  defp decode_type!({"raw", code}), do: %RustQ.Syn.Type.Raw{code: code}
+
+  defp decode_visibility!("public"), do: :public
+  defp decode_visibility!("private"), do: :private
+end

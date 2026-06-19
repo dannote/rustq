@@ -1,25 +1,23 @@
 defmodule RustQ.Rustler.CachedAtoms do
   @moduledoc false
 
-  use RustQ.Sigil
+  use RustQ.Meta
 
   alias RustQ.Rust
+  alias RustQ.Type, as: R
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
 
-  @helpers_template ~R"""
-  fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom {
-      *cell.get_or_init(|| Atom::from_term(name.encode(env)).unwrap())
-  }
-  """
+  import RustQ.Rust.AST.ItemBuilder, only: [function: 3, static: 3]
 
-  @static_template ~R"""
-  static __rq_STATIC: OnceLock<Atom> = OnceLock::new();
-  """
+  require A
+  require I
 
-  @fn_template ~R"""
-  fn __rq_fn_name(env: Env) -> Atom {
-      cached_atom(env, &__rq_STATIC, __rq_atom_name!())
-  }
-  """
+  @spec cached_atom(R.path(:Env), R.ref(R.raw(:"OnceLock<Atom>")), R.ref(R.path(:str))) ::
+          R.atom()
+  defrust cached_atom(env, cell, name) do
+    deref(cell.get_or_init(fn -> Atom.from_term(name.encode(env)).unwrap() end))
+  end
 
   @spec build([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
           Rust.Fragment.t()
@@ -31,7 +29,7 @@ defmodule RustQ.Rustler.CachedAtoms do
 
     helper_items =
       if include_helpers? do
-        [Rust.item(RustQ.render!(@helpers_template, "rustler_cached_atom_helpers.rs"))]
+        [RustQ.Meta.item(__MODULE__, :cached_atom)]
       else
         []
       end
@@ -40,15 +38,23 @@ defmodule RustQ.Rustler.CachedAtoms do
   end
 
   defp atom_items({name, value}) do
-    bindings = [
-      STATIC: static_name(name),
-      fn_name: "#{name}_atom",
-      atom_name: Rust.expr(Rust.literal(value))
-    ]
+    static_name = static_name(name)
 
     [
-      Rust.item(RustQ.render!(@static_template, "rustler_cached_atom_static.rs", bind: bindings)),
-      Rust.item(RustQ.render!(@fn_template, "rustler_cached_atom_fn.rs", bind: bindings))
+      Rust.ast_item(
+        static(String.to_atom(static_name), "OnceLock<Atom>", A.path_call([:OnceLock, :new]))
+      ),
+      Rust.ast_item(
+        function String.to_atom("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
+          A.return(
+            A.call(:cached_atom, [
+              A.var(:env),
+              A.ref(A.var(String.to_atom(static_name))),
+              A.lit(value)
+            ])
+          )
+        end
+      )
     ]
   end
 

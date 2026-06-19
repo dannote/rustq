@@ -1,11 +1,19 @@
 # RustQ
 
-RustQ is Rust template quasiquoting for Elixir. It helps Elixir projects generate
-Rust from real `.rs` templates instead of building Rust strings by hand.
+RustQ helps Elixir projects generate Rust without building Rust strings by hand.
+It parses real Rust, validates generated fragments, and lets Elixir act as a
+macro language for Rust codegen.
 
-Use it for Rustler projects, schema-driven NIF surfaces, or any codegen where you
-want Rust syntax highlighting, Rust parsing, formatting, and AST-aware
-placeholder replacement.
+RustQ now has two complementary authoring styles:
+
+- **Rusty Elixir with `defrust`** — write Rust implementation logic as valid
+  Elixir using `@spec`, `@type`, `defmacro`, `quote`, ordinary `case`, aliases,
+  calls, and pattern matching. RustQ lowers that Elixir AST into Rust AST.
+- **Real Rust templates and builders** — generate Rust from `.rs` templates,
+  placeholders, Rust fragment builders, and Rustler helper generators.
+
+The goal is not to embed Rust syntax in Elixir. The goal is to use Elixir as a
+typed macro metalanguage for generating real Rust safely.
 
 ## Installation
 
@@ -17,6 +25,295 @@ Add RustQ to `mix.exs`:
 
 RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available
 where `mix rustq.gen` or your own codegen task runs.
+
+## Choose an authoring style
+
+| Need | Use |
+| --- | --- |
+| Write Rust implementation logic in Elixir | `RustQ.Meta.defrust` |
+| Compose reusable Rusty-Elixir body fragments | ordinary Elixir `defmacro`, `quote`, and `unquote` |
+| Generate from real `.rs` files | templates, `~R`, placeholders, `RustQ.render_file!/2` |
+| Generate repetitive Rust declarations from data | `RustQ.Rust` builders or RustQ AST builders |
+| Generate Rustler boilerplate | `RustQ.Rustler` helpers or `RustQ.Rustler.Schema` |
+| Introspect existing Rust crates structurally | `RustQ.Syn` |
+| Keep generated files checked in and fresh | `rustq.exs` plus `mix rustq.gen --check` |
+
+## Rusty Elixir with `defrust`
+
+`defrust` is the high-level user-facing Rusty-Elixir surface. It reads normal
+Elixir `@spec` and `@type` declarations, expands ordinary Elixir macros, and
+lowers the resulting valid Elixir body into RustQ's Rust AST.
+
+Low-level bridges such as `RustQ.Meta.quoted` are internal escape hatches for
+generators, not the normal authoring API.
+
+A Rusty-Elixir implementation can look like this:
+
+```elixir
+defmodule MyApp.Native.GeneratedShapes do
+  use RustQ.Meta
+
+  alias RustQ.Type, as: R
+
+  defmacro with_fill_paint(do: body) do
+    quote do
+      case unwrap!(opt_fill_paint(var!(raw_opts), Atoms.fill())) do
+        {:some, var!(paint)} ->
+          var!(paint) = var!(paint)
+          unwrap!(apply_blend_mode(mut_ref(var!(paint)), var!(raw_opts)))
+          unquote(body)
+
+        :none ->
+          :ok
+      end
+    end
+  end
+
+  defmacro with_stroke_paint(width, do: body) do
+    quote do
+      case unwrap!(opt_color(var!(raw_opts), Atoms.stroke())) do
+        {:some, var!(color)} ->
+          var!(stroke_paint_value) =
+            unwrap!(stroke_paint(var!(color), unquote(width), var!(raw_opts)))
+
+          unquote(body)
+
+        :none ->
+          :ok
+      end
+    end
+  end
+
+  @spec draw_circle_impl(
+          R.ref(SkiaSafe.Canvas.t()),
+          GeneratedOpts.CircleOpts.t(R.lifetime(:a)),
+          R.slice({R.atom(), R.term()})
+        ) :: R.nif_result(R.unit())
+  defrust draw_circle_impl(canvas, opts, raw_opts) do
+    center = Point.new(opts.x, opts.y)
+
+    with_fill_paint do
+      canvas.draw_circle(center, opts.radius, ref(paint))
+    end
+
+    with_stroke_paint opts.stroke_width.unwrap_or(1.0) do
+      canvas.draw_circle(center, opts.radius, ref(stroke_paint_value))
+    end
+
+    :ok
+  end
+end
+```
+
+That is ordinary Elixir syntax. RustQ uses the typespec and lowering rules to
+render Rust like:
+
+```rust
+fn draw_circle_impl<'a>(
+    canvas: &skia_safe::Canvas,
+    opts: generated_opts::CircleOpts<'a>,
+    raw_opts: &[(Atom, Term<'a>)],
+) -> NifResult<()> {
+    // ... real Rust AST output ...
+}
+```
+
+### Rusty-Elixir rules
+
+The intended style is:
+
+- use `@spec` as the function signature source of truth
+- use ordinary Elixir `@type` declarations for Rust enums/structs/decoders when
+  RustQ owns those shapes
+- use ordinary external remote types for external Rust paths where possible:
+  `SkiaSafe.Canvas.t()` renders as `skia_safe::Canvas`, and
+  `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` renders as
+  `generated_opts::OvalOpts<'a>`
+- use `RustQ.Type` (`alias RustQ.Type, as: R`) only where Elixir typespecs need
+  Rust-specific precision: `R.ref/1`, `R.mut_ref/1`, `R.nif_result/1`,
+  `R.unit/0`, `R.slice/1`, `R.term/0`, fixed-width numbers, lifetimes, options,
+  results, and vectors
+- use ordinary aliases and calls in bodies; plural module aliases such as
+  `Atoms.fill()` render as snake-case Rust modules such as `atoms::fill()`
+- use normal Elixir `defmacro`, `quote`, and `unquote` for reusable Rusty-Elixir
+  fragments; RustQ expands those macros before lowering
+- keep Rust-owned concepts in the Rust-owning project or crate; do not invent
+  fake Elixir modules just to force a Rust path
+- treat raw token escapes as last-resort escape hatches
+
+`R.path/1,2` exists as a low-level escape hatch for Rust paths that cannot be
+expressed cleanly as ordinary remote types. It should not be the default style.
+
+### Rusty-Elixir body syntax
+
+Current `defrust` lowering supports a growing valid-Elixir subset:
+
+- ordinary assignment lowers to Rust `let`
+- final expressions lower according to the `@spec` return type
+- `:ok` under `R.nif_result(R.unit())` lowers to `Ok(())`
+- `case` lowers to Rust `match`
+- Option cases can be written as `{:some, value}` and `:none`
+- Result cases can be written as `{:ok, value}` and `{:error, reason}`
+- `unwrap!(expr)` spells Rust `expr?`
+- `assign!(target, expr)` spells Rust assignment for explicit mutation, and
+  `return!(expr)` spells early return
+- `ref(expr)`, `mut_ref(expr)`, and `deref(expr)` spell Rust borrows and
+  dereference
+- `decode_as(term, type)` and `decode_as!(term, type)` spell Rustler typed
+  decode probes and required decodes
+- `array([...])`, `index(collection, index)`, and `struct_literal(Path, fields)`
+  lower to Rust array literals, indexing, and struct literals
+- `Bitwise.bsr/2` and `Bitwise.band/2` lower to Rust `>>` and `&`
+- aliases, remote calls, method calls, local calls, fields, tuples, nested tuple
+  patterns, literals, lists as `vec![...]`, simple `for` comprehensions,
+  expression/item macro calls, and one-argument `Enum.map/2` are supported
+- Rust-facing attributes such as `@nif schedule: "DirtyCpu"` and
+  `@allow :dead_code` are supported before `defrust`
+
+Use semantic helpers such as `expr!`, `pat!`, `stmt!`, and `arm!` for
+Rust-shaped values that are still authored as valid Elixir. `Super.*` calls mark
+the boundary to nearby handwritten Rust primitives for Rustler term APIs,
+generic `syn` parsing/assembly, or collection glue.
+
+Raw token escapes (`raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`) are explicit
+low-level escape hatches for cases not yet covered by semantic helpers.
+
+RustQ dogfoods this layer in `RustQ.NativeCodegen.Decoders.*` to generate much of
+its own native AST decoder support.
+
+For RustQ-owned helper modules that expose `defrust` functions for codegen,
+`RustQ.Meta.item(module, name)`, `items(module, names)`, and `ast!(module, name)`
+provide the internal bridge from a compiled `defrust` function to a reusable Rust
+fragment or AST node:
+
+```elixir
+RustQ.Meta.item(MyApp.Native.Generated, :save)
+RustQ.Meta.items(MyApp.Native.Generated, [:save, :restore])
+RustQ.Meta.ast!(MyApp.Native.Generated, :save)
+```
+
+These helpers are intentionally small; they are for reusing RustQ-generated Rust
+items without adding a binding-level framework.
+
+### Advanced: RustQ-owned modules with `defrustmod`
+
+`defrustmod` is for RustQ-owned Rust module structure. Use the block form when
+RustQ itself is responsible for generating the Rust module and the functions
+inside it:
+
+```elixir
+defmodule MyApp.Native.Generated do
+  use RustQ.Meta
+  alias RustQ.Type, as: R
+
+  defmodule Canvas do
+    @type t :: term()
+  end
+
+  defrustmod GeneratedHelpers, as: :generated_helpers do
+    @spec save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+    defrust save(canvas) do
+      canvas.save()
+      :ok
+    end
+  end
+end
+```
+
+This renders a Rust module such as:
+
+```rust
+mod generated_helpers {
+    fn save(canvas: &Canvas) -> NifResult<()> {
+        canvas.save();
+        Ok(())
+    }
+}
+```
+
+Do not use `defrustmod` as a hand-written declaration for Rust modules that are
+defined elsewhere by another generator or crate. If a downstream project already
+generates or owns Rust like `mod generated_opts;`, express the type in the
+`@spec` as an ordinary external remote type such as
+`GeneratedOpts.OvalOpts.t(R.lifetime(:a))` and write body calls normally.
+
+## Rust source introspection with `RustQ.Syn`
+
+`RustQ.Syn` parses real Rust source with `syn` and returns Elixir metadata for
+Rust items. It is for introspecting existing Rust crates, not for parsing Rust
+with regex and not for producing Rusty-Elixir AST.
+
+```elixir
+file = RustQ.Syn.parse_file!("native/foo/src/lib.rs")
+
+[file_enum | _] = RustQ.Syn.enums(file)
+methods = RustQ.Syn.methods(file)
+
+index = RustQ.Syn.Index.from_paths(Path.wildcard("native/foo/src/**/*.rs"))
+method = RustQ.Syn.Index.method!(index, "Canvas", "draw_rect")
+```
+
+Metadata includes docs and structured type information while keeping rendered
+Rust type strings for display/debugging:
+
+```elixir
+%RustQ.Syn.Method{
+  name: "draw_rect",
+  docs: ["Draws [`Rect`] rect using ..."],
+  args: [
+    %RustQ.Syn.Arg{
+      name: "paint",
+      type: "& Paint",
+      type_ast: %RustQ.Syn.Type.Ref{
+        inner: %RustQ.Syn.Type.Path{name: "Paint"}
+      }
+    }
+  ]
+}
+```
+
+Supported metadata currently covers top-level enums, structs, free functions,
+`impl` blocks, methods, doc comments, and common Rust type shapes such as paths,
+refs, tuples, `Option`, `Result`, `impl Trait`, slices, arrays, `Self`, and raw
+fallbacks. `RustQ.Syn.Type` also provides small predicate helpers such as
+`path?/2`, `ref_to?/2`, and `impl_trait?/3` for semantic matching.
+
+## Generated files with `rustq.exs`
+
+Create `rustq.exs` in your project root to keep generated files checked in and
+fresh:
+
+```elixir
+use RustQ.Config
+
+alias RustQ.Rustler
+
+require_file "lib/my_app/codegen/content_schema.ex"
+
+rust "native/my_nif/src/generated_term_helpers.rs" do
+  Rustler.term_helpers(type_key: "atoms::r#type()")
+end
+
+rust "native/my_nif/src/generated_content.rs" do
+  MyApp.Codegen.ContentSchema.rust_items()
+end
+```
+
+The manifest is ordinary Elixir, so use aliases, helper functions, modules, and
+macros to keep project-specific codegen readable.
+
+Then run:
+
+```sh
+mix rustq.gen
+mix rustq.gen --check
+mix rustq.gen term_helpers
+```
+
+Path-only targets infer their name from the file name and strip a leading
+`generated_`, so `generated_term_helpers.rs` is selectable as `term_helpers`.
+
+Use `mix rustq.gen --check` in CI to fail when generated files are stale.
 
 ## Generate from real Rust templates
 
@@ -92,15 +389,15 @@ RustQ placeholders use the visually distinct `__rq_` prefix. The exact shape
 matches the Rust syntax position, but the name is consistent with the Elixir
 `bind:` or `splice:` key:
 
-- `__rq_Name` — identifier, type path, or lifetime replacement.
-- `__rq_value!()` — expression or type replacement.
-- `__rq_items!();` — item splice point.
-- `__rq_methods!();` — impl-item splice point.
-- `__rq_body!();` — statement splice point.
-- `__rq_arms => unreachable!(),` — match-arm splice point.
-- `__rq_fields: (),` — struct-field splice point.
-- `__rq_include!("relative/path.rs");` — file include expanded before parsing.
-- `fn target(__rq_args: ()) {}` — function-argument splice point.
+- `__rq_Name` — identifier, type path, or lifetime replacement
+- `__rq_value!()` — expression or type replacement
+- `__rq_items!();` — item splice point
+- `__rq_methods!();` — impl-item splice point
+- `__rq_body!();` — statement splice point
+- `__rq_arms => unreachable!(),` — match-arm splice point
+- `__rq_fields: (),` — struct-field splice point
+- `__rq_include!("relative/path.rs");` — file include expanded before parsing
+- `fn target(__rq_args: ()) {}` — function-argument splice point
 
 Placeholders are replaced in parsed Rust syntax positions, not inside arbitrary
 macro token trees. If you need a generated value in a macro call, bind it outside
@@ -119,7 +416,10 @@ println!("{}", __rq_value!());
 
 ## Rust builders
 
-`RustQ.Rust` provides small Elixir builders for common Rust fragments:
+`RustQ.Rust` provides small Elixir builders for common Rust fragments. Use these
+when generating Rust declarations from data. For larger implementation bodies,
+prefer `defrust` when the body can be valid Elixir, or real Rust templates when
+handwritten Rust is clearer.
 
 ```elixir
 alias RustQ.Rust
@@ -136,49 +436,38 @@ items = [
 ```
 
 Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
-`Rust.expr/1`, and `Rust.arm/1` when hand-written Rust is clearer than a builder.
+`Rust.expr/1`, and `Rust.arm/1` when hand-written Rust is clearer than a
+builder.
 
-For larger wrapper bodies, prefer real Rust templates with placeholders over
-assembling statement lists in Elixir.
-
-## Optional rustfmt
-
-Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:
+When codegen already has a `RustQ.Rust.AST` item, use `Rust.ast_item/1` or
+`Rust.ast_items/1` as the standard AST-to-fragment bridge instead of rendering
+AST items by hand:
 
 ```elixir
-RustQ.render_file!("native/src/generated.template.rs",
-  splice: [items: items],
-  rustfmt: true
-)
+alias RustQ.Rust
+alias RustQ.Rust.AST.Builder, as: A
+
+Rust.ast_item(A.const(:ANSWER, :i32, A.lit(42)))
 ```
 
-You can also pass a command path/string with `rustfmt: "/path/to/rustfmt"`.
-Rustfmt failures return structured `:rustfmt_error` metadata.
-
-## Composing splices
-
-When multiple generators contribute to one template, pass nested splice sources
-or use `RustQ.Splice.merge/1`. Duplicate names are concatenated:
+For structural Rust item generation, prefer the AST builders directly. They
+cover Rustler-friendly shapes such as lifetime-bearing impl blocks and receiver
+arguments:
 
 ```elixir
-RustQ.render_file!("native/src/generated.template.rs",
-  splice: [
-    MyApp.BaseGenerator.splices(schema),
-    MyApp.NativeGenerator.splices(schema),
-    items: RustQ.Rust.item("pub fn generated() {}")
-  ]
+A.impl(A.type_path(:Content),
+  lifetimes: [:a],
+  trait: A.type_path([:rustler, :Decoder], lifetimes: [:a]),
+  items: [decode_function]
 )
-```
 
-For explicit composition:
-
-```elixir
-splices =
-  RustQ.Splice.merge([
-    MyApp.BaseGenerator.splices(schema),
-    MyApp.NativeGenerator.splices(schema),
-    items: RustQ.Rust.item("pub fn generated() {}")
-  ])
+%RustQ.Rust.AST.Function{
+  name: :encode,
+  lifetime: :a,
+  args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
+  returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
+  body: [A.return(A.method(:value, :encode, [:env]))]
+}
 ```
 
 ## Rustler helpers
@@ -283,43 +572,47 @@ end
 Optionality is part of the Rust type (`{:option, :String}`), not a separate
 boolean flag.
 
-## Generated files with `rustq.exs`
+## Composing splices
 
-Create `rustq.exs` in your project root:
+When multiple generators contribute to one template, pass nested splice sources
+or use `RustQ.Splice.merge/1`. Duplicate names are concatenated:
 
 ```elixir
-use RustQ.Config
-
-alias RustQ.Rustler
-
-require_file "lib/my_app/codegen/content_schema.ex"
-
-rust "native/my_nif/src/generated_term_helpers.rs" do
-  Rustler.term_helpers(type_key: "atoms::r#type()")
-end
-
-rust "native/my_nif/src/generated_content.rs" do
-  MyApp.Codegen.ContentSchema.rust_items()
-end
+RustQ.render_file!("native/src/generated.template.rs",
+  splice: [
+    MyApp.BaseGenerator.splices(schema),
+    MyApp.NativeGenerator.splices(schema),
+    items: RustQ.Rust.item("pub fn generated() {}")
+  ]
+)
 ```
 
-The manifest is ordinary Elixir, so use aliases, helper functions, modules, and
-macros to keep project-specific codegen readable.
+For explicit composition:
 
-Then run:
-
-```sh
-mix rustq.gen
-mix rustq.gen --check
-mix rustq.gen term_helpers
+```elixir
+splices =
+  RustQ.Splice.merge([
+    MyApp.BaseGenerator.splices(schema),
+    MyApp.NativeGenerator.splices(schema),
+    items: RustQ.Rust.item("pub fn generated() {}")
+  ])
 ```
 
-Path-only targets infer their name from the file name and strip a leading
-`generated_`, so `generated_term_helpers.rs` is selectable as `term_helpers`.
+## Optional rustfmt
 
-Use `mix rustq.gen --check` in CI to fail when generated files are stale.
+Pass `rustfmt: true` to format generated source through `rustfmt --emit stdout`:
 
-## Fragment validation
+```elixir
+RustQ.render_file!("native/src/generated.template.rs",
+  splice: [items: items],
+  rustfmt: true
+)
+```
+
+You can also pass a command path/string with `rustfmt: "/path/to/rustfmt"`.
+Rustfmt failures return structured `:rustfmt_error` metadata.
+
+## Fragment validation and strict native AST rendering
 
 You can validate individual Rust fragments in the same contexts RustQ splices:
 
@@ -327,6 +620,16 @@ You can validate individual Rust fragments in the same contexts RustQ splices:
 RustQ.valid_fragment?(:field, "pub id: i64")
 RustQ.parse_fragment!(:arm, RustQ.Rust.arm("Some(value)", "value"))
 ```
+
+Native AST rendering is the primary backend. During development you can disable
+silent fallback rendering with:
+
+```elixir
+config :rustq, :strict_native_ast, true
+```
+
+Use strict mode when adding AST nodes or native decoder coverage so unsupported
+nodes fail visibly instead of falling back to the Elixir debug renderer.
 
 ## License
 

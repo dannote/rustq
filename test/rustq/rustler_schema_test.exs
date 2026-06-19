@@ -68,7 +68,8 @@ defmodule RustQ.RustlerSchemaTest do
     assert code =~ "pub body: Vec<ExContent>"
     assert code =~ "pub enum ExContent"
     assert code =~ "Text(ExText)"
-    assert code =~ ~S/"Elixir.Folio.Content.Text" => Ok(ExContent::Text(Decoder::decode(term)?))/
+    assert code =~ ~S/"Elixir.Folio.Content.Text"/
+    assert code =~ "Ok(ExContent::Text(rustler::Decoder::decode(term)?))"
     assert code =~ ~S/Err(rustler::Error::RaiseAtom("unknown_content_variant"))/
   end
 
@@ -83,8 +84,8 @@ defmodule RustQ.RustlerSchemaTest do
     assert code =~ "Enum(ExEnum)"
 
     assert code =~ ~S/"Elixir.Folio.Content.EnumList" =>/
-    assert code =~ "Ok(ExContent::Enum(Decoder::decode(term)?))"
+    assert code =~ "Ok(ExContent::Enum(rustler::Decoder::decode(term)?))"
     assert code =~ ~S/"Elixir.Folio.Content.TermItem" =>/
-    assert code =~ "Ok(ExContent::TermItem(Decoder::decode(term)?))"
+    assert code =~ "Ok(ExContent::TermItem(rustler::Decoder::decode(term)?))"
   end
 end

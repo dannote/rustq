@@ -1,50 +1,34 @@
 defmodule RustQ.Rustler.Resource do
   @moduledoc false
 
-  use RustQ.Sigil
-
   alias RustQ.Rust
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
 
-  @struct_template ~R"""
-  struct __rq_Resource {
-      __rq_fields: (),
-  }
-  """
+  import RustQ.Rust.AST.ItemBuilder, only: [field: 3, function: 3, impl: 3]
 
-  @impl_template ~R"""
-  #[rustler::resource_impl]
-  impl rustler::Resource for __rq_Resource {}
-  """
-
-  @decode_template ~R"""
-  fn __rq_decode_fn<'a>(term: Term<'a>) -> NifResult<ResourceArc<__rq_Resource>> {
-      term.decode::<ResourceArc<__rq_Resource>>()
-  }
-  """
-
-  @handle_decode_template ~R"""
-  fn __rq_decode_fn<'a>(term: Term<'a>) -> NifResult<ResourceArc<__rq_Resource>> {
-      term.map_get(Atom::from_bytes(term.get_env(), __rq_field!())?)?
-          .decode::<ResourceArc<__rq_Resource>>()
-  }
-  """
+  require A
+  require I
 
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts \\ []) do
-    fields =
-      opts
-      |> Keyword.get(:fields, [])
-      |> Enum.map(fn {field, type} -> Rust.field(field, type, vis: :pub) end)
+    struct_item = resource_struct_ast(name, Keyword.get(opts, :fields, []))
+    impl_item = resource_impl_ast(name)
 
-    [
-      Rust.item(
-        RustQ.render!(@struct_template, "rustler_resource_struct.rs",
-          bind: [Resource: name],
-          splice: [fields: fields]
-        )
-      ),
-      Rust.item(RustQ.render!(@impl_template, "rustler_resource_impl.rs", bind: [Resource: name]))
-    ]
+    Rust.ast_items([struct_item, impl_item])
+  end
+
+  defp resource_struct_ast(name, fields) do
+    I.struct String.to_atom(to_string(name)) do
+      Enum.map(fields, fn {field_name, type} -> field(field_name, type, vis: :pub) end)
+    end
+  end
+
+  defp resource_impl_ast(name) do
+    impl A.type_path(name), trait: [:rustler, :Resource], attrs: [A.resource_impl_attr()] do
+      []
+    end
   end
 
   @spec type_alias(atom() | String.t(), keyword()) :: Rust.TypeAlias.t()
@@ -68,11 +52,7 @@ defmodule RustQ.Rustler.Resource do
   def decode(name, opts \\ []) do
     function_name = Keyword.get(opts, :fn, "decode_#{Macro.underscore(to_string(name))}_resource")
 
-    Rust.item(
-      RustQ.render!(@decode_template, "rustler_resource_decode.rs",
-        bind: [Resource: name, decode_fn: function_name]
-      )
-    )
+    Rust.ast_item(resource_decode_ast(name, function_name))
   end
 
   @spec handle_decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
@@ -82,18 +62,54 @@ defmodule RustQ.Rustler.Resource do
 
     field = Keyword.get(opts, :handle_field, "ref")
 
-    Rust.item(
-      RustQ.render!(@handle_decode_template, "rustler_resource_handle_decode.rs",
-        bind: [Resource: name, decode_fn: function_name, field: {:expr, byte_string(field)}]
-      )
-    )
+    Rust.ast_item(resource_handle_decode_ast(name, function_name, field))
   end
 
-  defp byte_string(field) when is_atom(field), do: byte_string(Atom.to_string(field))
-  defp byte_string(field) when is_binary(field), do: "b#{inspect(field)}"
+  defp resource_decode_ast(name, function_name) do
+    resource_type = resource_arc_type(name)
+
+    function String.to_atom(to_string(function_name)),
+      lifetime: :a,
+      args: [term: A.type_path(:Term, lifetimes: [:a])],
+      returns: %AST.TypeNifResult{inner: resource_type} do
+      A.return(A.method(:term, :decode, [], generics: [resource_type]))
+    end
+  end
+
+  defp resource_handle_decode_ast(name, function_name, field) do
+    resource_type = resource_arc_type(name)
+
+    function String.to_atom(to_string(function_name)),
+      lifetime: :a,
+      args: [term: A.type_path(:Term, lifetimes: [:a])],
+      returns: %AST.TypeNifResult{inner: resource_type} do
+      A.return(
+        A.method(
+          A.try(
+            A.method(:term, :map_get, [
+              A.try(
+                A.path_call([:Atom, :from_bytes], [
+                  A.method(:term, :get_env),
+                  A.byte_string(field_to_string(field))
+                ])
+              )
+            ])
+          ),
+          :decode,
+          [],
+          generics: [resource_type]
+        )
+      )
+    end
+  end
+
+  defp resource_arc_type(name), do: A.type_path(:ResourceArc, generics: [A.type_path(name)])
+
+  defp field_to_string(field) when is_atom(field), do: Atom.to_string(field)
+  defp field_to_string(field) when is_binary(field), do: field
 
   @spec init(atom() | String.t()) :: Rust.Fragment.t()
   def init(name) do
-    Rust.item("rustler::resource!(#{name}, env);")
+    Rust.ast_item(A.macro_item_call([:rustler, :resource], [name, :env]))
   end
 end

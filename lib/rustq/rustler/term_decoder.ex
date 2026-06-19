@@ -1,23 +1,14 @@
 defmodule RustQ.Rustler.TermDecoder do
   @moduledoc false
 
-  use RustQ.Sigil
-
   alias RustQ.Rust
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
 
-  @struct_template ~R"""
-  struct __rq_Struct<'__rq_lifetime> {
-      __rq_fields: (),
-  }
-  """
+  import RustQ.Rust.AST.ItemBuilder, only: [field: 3]
 
-  @function_template ~R"""
-  fn __rq_decode_fn<'__rq_lifetime>(__rq_args: ()) -> __rq_result!() {
-      Ok(__rq_Struct {
-          __rq_inits: (),
-      })
-  }
-  """
+  require I
 
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts) do
@@ -30,42 +21,51 @@ defmodule RustQ.Rustler.TermDecoder do
     result = Keyword.get(opts, :result, :nif)
     result_type = result_type(name, lifetime, result)
 
-    bindings = [
-      Struct: name,
-      lifetime: lifetime,
-      decode_fn: function_name,
-      result: Rust.type(result_type)
-    ]
+    Rust.ast_items([
+      struct_ast(name, fields, lifetime),
+      decoder_ast(name, function_name, fields, term_arg, term_type, result_type, result, lifetime)
+    ])
+  end
 
-    [
-      Rust.item(
-        RustQ.render!(@struct_template, "rustler_term_decoder_struct.rs",
-          bind: bindings,
-          splice: [fields: struct_fields(fields)]
+  defp struct_ast(name, fields, lifetime) do
+    I.struct ident_atom(name), lifetime: lifetime do
+      struct_fields(fields)
+    end
+  end
+
+  defp decoder_ast(
+         name,
+         function_name,
+         fields,
+         term_arg,
+         term_type,
+         result_type,
+         result,
+         lifetime
+       ) do
+    %AST.Function{
+      name: ident_atom(function_name),
+      lifetime: lifetime,
+      args: [A.arg(ident_atom(term_arg), term_type)],
+      returns: Rust.type(result_type),
+      body: [
+        A.return_stmt(
+          A.ok(A.struct(A.path(ident_atom(name)), decoder_inits(fields, term_arg, result)))
         )
-      ),
-      Rust.item(
-        RustQ.render!(@function_template, "rustler_term_decoder_fn.rs",
-          bind: bindings,
-          splice: [
-            args: [Rust.arg(term_arg, {:raw, term_type})],
-            inits: decoder_inits(fields, term_arg, result)
-          ]
-        )
-      )
-    ]
+      ]
+    }
   end
 
   defp struct_fields(fields) do
-    Enum.map(fields, fn {field, spec} ->
-      Rust.field(field, Keyword.fetch!(spec, :type))
+    Enum.map(fields, fn {field_name, spec} ->
+      field(field_name, Keyword.fetch!(spec, :type), vis: nil)
     end)
   end
 
   defp decoder_inits(fields, term_arg, result) do
-    Enum.map(fields, fn {field, spec} ->
-      spec = Keyword.put_new(spec, :field, field)
-      "#{field}: #{decoder_expr(spec, term_arg, result)}"
+    Enum.map(fields, fn {field_name, spec} ->
+      spec = Keyword.put_new(spec, :field, field_name)
+      {field_name, A.escape_expr(decoder_expr(spec, term_arg, result))}
     end)
   end
 
@@ -105,6 +105,9 @@ defmodule RustQ.Rustler.TermDecoder do
 
   defp result_type(name, lifetime, :nif), do: {:raw, "NifResult<#{name}<'#{lifetime}>>"}
   defp result_type(name, lifetime, result), do: {:raw, "#{result}<#{name}<'#{lifetime}>>"}
+
+  defp ident_atom(value) when is_atom(value), do: value
+  defp ident_atom(value) when is_binary(value), do: String.to_atom(value)
 
   defp default_decoder_name(name), do: "decode_#{Macro.underscore(to_string(name))}"
 end

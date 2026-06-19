@@ -1,0 +1,462 @@
+use quote::ToTokens;
+use rustler::{Encoder, Env, NifResult, Term};
+use syn::visit::{self, Visit};
+use syn::{
+    Attribute, Expr, ExprCall, ExprLit, ExprMethodCall, ExprPath, Fields, FnArg, GenericArgument,
+    ImplItem, Item, Lit, PathArguments, ReturnType, Type, TypeParamBound, UseTree, Visibility,
+};
+
+use crate::{atoms, template_error};
+
+pub(crate) fn inspect_source<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => Ok((atoms::ok(), items(env, file.items)).encode(env)),
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let mut visitor = AtomReferenceVisitor { atoms: Vec::new() };
+            visitor.visit_file(&file);
+            visitor.atoms.sort();
+            visitor.atoms.dedup();
+            Ok((atoms::ok(), visitor.atoms).encode(env))
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn method_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let mut visitor = MethodReferenceVisitor { calls: Vec::new() };
+            visitor.visit_file(&file);
+            visitor.calls.sort();
+            visitor.calls.dedup();
+            let methods = visitor
+                .calls
+                .into_iter()
+                .map(|(_receiver, method)| method)
+                .collect::<Vec<_>>();
+            Ok((atoms::ok(), methods).encode(env))
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn method_calls<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let mut visitor = MethodReferenceVisitor { calls: Vec::new() };
+            visitor.visit_file(&file);
+            visitor.calls.sort();
+            visitor.calls.dedup();
+            Ok((atoms::ok(), visitor.calls).encode(env))
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+pub(crate) fn enum_variants<'a>(
+    env: Env<'a>,
+    source: String,
+    enum_name: String,
+) -> NifResult<Term<'a>> {
+    match syn::parse_file(&source) {
+        Ok(file) => {
+            let variants = file.items.into_iter().find_map(|item| match item {
+                Item::Enum(item) if item.ident == enum_name => Some(
+                    item.variants
+                        .into_iter()
+                        .map(|variant| variant.ident.to_string())
+                        .collect::<Vec<_>>(),
+                ),
+                _ => None,
+            });
+
+            match variants {
+                Some(variants) => Ok((atoms::ok(), variants).encode(env)),
+                None => Ok((atoms::error(), format!("enum {enum_name} not found")).encode(env)),
+            }
+        }
+        Err(error) => Ok((atoms::error(), vec![template_error(error)]).encode(env)),
+    }
+}
+
+struct AtomReferenceVisitor {
+    atoms: Vec<String>,
+}
+
+struct MethodReferenceVisitor {
+    calls: Vec<(String, String)>,
+}
+
+impl<'ast> Visit<'ast> for MethodReferenceVisitor {
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        self.calls.push((
+            node.receiver.to_token_stream().to_string(),
+            node.method.to_string(),
+        ));
+        visit::visit_expr_method_call(self, node);
+    }
+}
+
+impl<'ast> Visit<'ast> for AtomReferenceVisitor {
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if let Expr::Path(ExprPath { path, .. }) = &*node.func {
+            if path.segments.len() == 2
+                && path.segments[0].ident == "atoms"
+                && matches!(path.segments[1].arguments, PathArguments::None)
+            {
+                self.atoms.push(path.segments[1].ident.to_string());
+            }
+        }
+
+        visit::visit_expr_call(self, node);
+    }
+}
+
+fn items<'a>(env: Env<'a>, items: Vec<Item>) -> Vec<Term<'a>> {
+    items
+        .into_iter()
+        .filter_map(|item| item_term(env, item))
+        .collect()
+}
+
+fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
+    match item {
+        Item::Enum(item) => Some(
+            (
+                "enum",
+                item.ident.to_string(),
+                visibility(&item.vis),
+                line(item.ident.span()),
+                docs(&item.attrs),
+                item.variants
+                    .into_iter()
+                    .map(|variant| variant.ident.to_string())
+                    .collect::<Vec<_>>(),
+            )
+                .encode(env),
+        ),
+        Item::Struct(item) => Some(
+            (
+                "struct",
+                item.ident.to_string(),
+                visibility(&item.vis),
+                line(item.ident.span()),
+                docs(&item.attrs),
+                fields(env, item.fields),
+            )
+                .encode(env),
+        ),
+        Item::Fn(item) => Some(
+            (
+                "function",
+                item.sig.ident.to_string(),
+                visibility(&item.vis),
+                (
+                    line(item.sig.ident.span()),
+                    item.sig.to_token_stream().to_string(),
+                ),
+                docs(&item.attrs),
+                item.sig
+                    .inputs
+                    .into_iter()
+                    .map(|arg| function_arg(env, arg))
+                    .collect::<Vec<_>>(),
+                return_type(env, item.sig.output),
+            )
+                .encode(env),
+        ),
+        Item::Impl(item) => Some(
+            (
+                "impl",
+                type_string(&item.self_ty),
+                type_metadata(env, &item.self_ty),
+                item.trait_
+                    .map(|(_bang, path, _for)| path.to_token_stream().to_string()),
+                line(item.impl_token.span),
+                docs(&item.attrs),
+                item.items
+                    .into_iter()
+                    .filter_map(|item| impl_method_term(env, item))
+                    .collect::<Vec<_>>(),
+            )
+                .encode(env),
+        ),
+        Item::Use(item) => use_alias(&item.tree).map(|(path, segments, alias, glob)| {
+            (
+                "use",
+                path,
+                segments,
+                alias,
+                glob,
+                (visibility(&item.vis), line(item.use_token.span)),
+                docs(&item.attrs),
+            )
+                .encode(env)
+        }),
+        Item::Type(item) => Some(
+            (
+                "type_alias",
+                item.ident.to_string(),
+                visibility(&item.vis),
+                line(item.ident.span()),
+                docs(&item.attrs),
+                type_string(&item.ty),
+                type_metadata(env, &item.ty),
+            )
+                .encode(env),
+        ),
+        _ => None,
+    }
+}
+
+fn use_alias(tree: &UseTree) -> Option<(String, Vec<String>, Option<String>, bool)> {
+    fn walk(
+        tree: &UseTree,
+        prefix: Vec<String>,
+    ) -> Option<(String, Vec<String>, Option<String>, bool)> {
+        match tree {
+            UseTree::Path(path) => {
+                let mut prefix = prefix;
+                prefix.push(path.ident.to_string());
+                walk(&path.tree, prefix)
+            }
+            UseTree::Rename(rename) => {
+                let mut path = prefix;
+                path.push(rename.ident.to_string());
+                Some((
+                    path.join("::"),
+                    path,
+                    Some(rename.rename.to_string()),
+                    false,
+                ))
+            }
+            UseTree::Name(name) => {
+                let mut path = prefix;
+                path.push(name.ident.to_string());
+                Some((path.join("::"), path, Some(name.ident.to_string()), false))
+            }
+            UseTree::Glob(_glob) => Some((prefix.join("::"), prefix, None, true)),
+            _ => None,
+        }
+    }
+
+    walk(tree, Vec::new())
+}
+
+fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
+    match item {
+        ImplItem::Fn(item) => Some(
+            (
+                "method",
+                item.sig.ident.to_string(),
+                visibility(&item.vis),
+                (
+                    line(item.sig.ident.span()),
+                    item.sig.to_token_stream().to_string(),
+                ),
+                docs(&item.attrs),
+                item.sig
+                    .inputs
+                    .into_iter()
+                    .map(|arg| function_arg(env, arg))
+                    .collect::<Vec<_>>(),
+                return_type(env, item.sig.output),
+            )
+                .encode(env),
+        ),
+        _ => None,
+    }
+}
+
+fn line(span: proc_macro2::Span) -> usize {
+    span.start().line
+}
+
+fn fields<'a>(env: Env<'a>, fields: Fields) -> Vec<(Option<String>, String, Term<'a>)> {
+    fields
+        .into_iter()
+        .map(|field| {
+            let ty = field.ty;
+            (
+                field.ident.map(|ident| ident.to_string()),
+                type_string(&ty),
+                type_metadata(env, &ty),
+            )
+        })
+        .collect()
+}
+
+fn function_arg<'a>(env: Env<'a>, arg: FnArg) -> (Option<String>, String, Term<'a>) {
+    match arg {
+        FnArg::Receiver(receiver) => (
+            Some("self".to_string()),
+            receiver.to_token_stream().to_string(),
+            receiver_type_metadata(env, &receiver),
+        ),
+        FnArg::Typed(arg) => {
+            let ty = *arg.ty;
+            (
+                pat_name(*arg.pat),
+                type_string(&ty),
+                type_metadata(env, &ty),
+            )
+        }
+    }
+}
+
+fn pat_name(pat: syn::Pat) -> Option<String> {
+    match pat {
+        syn::Pat::Ident(ident) => Some(ident.ident.to_string()),
+        _ => None,
+    }
+}
+
+fn return_type<'a>(env: Env<'a>, output: ReturnType) -> Option<(String, Term<'a>)> {
+    match output {
+        ReturnType::Default => None,
+        ReturnType::Type(_, ty) => Some((type_string(&ty), type_metadata(env, &ty))),
+    }
+}
+
+fn type_string(ty: &Type) -> String {
+    ty.to_token_stream().to_string()
+}
+
+fn receiver_type_metadata<'a>(env: Env<'a>, receiver: &syn::Receiver) -> Term<'a> {
+    let self_term = ("self", "Self").encode(env);
+
+    if let Some((_and, _lifetime)) = &receiver.reference {
+        (
+            "ref",
+            receiver.to_token_stream().to_string(),
+            receiver.mutability.is_some(),
+            self_term,
+        )
+            .encode(env)
+    } else {
+        self_term
+    }
+}
+
+fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
+    let code = type_string(ty);
+
+    match ty {
+        Type::Path(path) if path.qself.is_none() && path.path.is_ident("Self") => {
+            ("self", code).encode(env)
+        }
+        Type::Path(path) if path.qself.is_none() => path_type_metadata(env, code, &path.path),
+        Type::Reference(reference) => (
+            "ref",
+            code,
+            reference.mutability.is_some(),
+            type_metadata(env, &reference.elem),
+        )
+            .encode(env),
+        Type::Tuple(tuple) => (
+            "tuple",
+            code,
+            tuple
+                .elems
+                .iter()
+                .map(|elem| type_metadata(env, elem))
+                .collect::<Vec<_>>(),
+        )
+            .encode(env),
+        Type::ImplTrait(impl_trait) => (
+            "impl_trait",
+            code,
+            impl_trait
+                .bounds
+                .iter()
+                .filter_map(|bound| trait_bound_metadata(env, bound))
+                .collect::<Vec<_>>(),
+        )
+            .encode(env),
+        Type::Slice(slice) => ("slice", code, type_metadata(env, &slice.elem)).encode(env),
+        Type::Array(array) => ("array", code, type_metadata(env, &array.elem)).encode(env),
+        _ => ("raw", code).encode(env),
+    }
+}
+
+fn path_type_metadata<'a>(env: Env<'a>, code: String, path: &syn::Path) -> Term<'a> {
+    let segments = path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>();
+
+    let args = path
+        .segments
+        .last()
+        .map(|segment| generic_args(env, &segment.arguments))
+        .unwrap_or_default();
+
+    let name = segments.last().cloned().unwrap_or_else(|| code.clone());
+
+    match name.as_str() {
+        "Option" if args.len() == 1 => ("option", code, args[0]).encode(env),
+        "Result" if args.len() == 2 => ("result", code, args[0], args[1]).encode(env),
+        _ => ("path", code, segments, args).encode(env),
+    }
+}
+
+fn trait_bound_metadata<'a>(env: Env<'a>, bound: &TypeParamBound) -> Option<Term<'a>> {
+    match bound {
+        TypeParamBound::Trait(trait_bound) => Some(path_type_metadata(
+            env,
+            trait_bound.path.to_token_stream().to_string(),
+            &trait_bound.path,
+        )),
+        _ => None,
+    }
+}
+
+fn generic_args<'a>(env: Env<'a>, arguments: &PathArguments) -> Vec<Term<'a>> {
+    match arguments {
+        PathArguments::AngleBracketed(args) => args
+            .args
+            .iter()
+            .filter_map(|arg| match arg {
+                GenericArgument::Type(ty) => Some(type_metadata(env, ty)),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn docs(attrs: &[Attribute]) -> Vec<String> {
+    attrs
+        .iter()
+        .filter_map(|attr| {
+            if !attr.path().is_ident("doc") {
+                return None;
+            }
+
+            match &attr.meta {
+                syn::Meta::NameValue(name_value) => match &name_value.value {
+                    Expr::Lit(ExprLit {
+                        lit: Lit::Str(value),
+                        ..
+                    }) => Some(value.value().trim().to_string()),
+                    _ => None,
+                },
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+fn visibility(vis: &Visibility) -> &'static str {
+    match vis {
+        Visibility::Public(_) => "public",
+        _ => "private",
+    }
+}

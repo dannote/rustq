@@ -71,7 +71,7 @@ defmodule RustQ.Rust do
   @spec stmt(iodata()) :: Fragment.t()
   def stmt(code), do: %Fragment{kind: :stmt, code: code}
 
-  @spec block([term()]) :: Block.t()
+  @spec block([term()]) :: term()
   def block(lines), do: %Block{lines: lines}
 
   @spec let_(iodata(), iodata()) :: Fragment.t()
@@ -137,6 +137,12 @@ defmodule RustQ.Rust do
 
   @spec unquote(:item)(iodata()) :: Fragment.t()
   def unquote(:item)(code), do: %Fragment{kind: :item, code: code}
+
+  @spec ast_item(term()) :: Fragment.t()
+  def ast_item(ast), do: item(RustQ.Rust.AST.Render.render_item(ast))
+
+  @spec ast_items([term()]) :: [Fragment.t()]
+  def ast_items(asts), do: Enum.map(asts, &ast_item/1)
 
   @spec impl_item(iodata()) :: Fragment.t()
   def impl_item(code), do: %Fragment{kind: :impl_item, code: code}
@@ -470,6 +476,16 @@ defmodule RustQ.Rust do
   end
 
   @spec type(rust_type()) :: String.t()
+  def type(%{__struct__: _module} = value) do
+    if RustQ.Rust.AST.type_node?(value) do
+      value
+      |> RustQ.Rust.AST.Render.render_type()
+      |> IO.iodata_to_binary()
+    else
+      raise ArgumentError, "expected Rust type, got: #{inspect(value)}"
+    end
+  end
+
   def type(value) when is_binary(value), do: value
   def type(value) when is_atom(value), do: ident(value)
 

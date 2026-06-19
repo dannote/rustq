@@ -1,9 +1,11 @@
 defmodule RustQ.Rustler.TermHelpers do
   @moduledoc false
 
-  use RustQ.Sigil
+  use RustQ.Meta
 
   alias RustQ.Rust
+  alias RustQ.Type, as: R
+  alias RustQ.Rustler.HelperSelection
 
   @names [
     :get,
@@ -18,100 +20,152 @@ defmodule RustQ.Rustler.TermHelpers do
     :type_str
   ]
 
-  @templates %{
-    get: ~R"""
-    fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-        term.map_get(key).ok()
-    }
-    """,
-    is_nil: ~R"""
-    fn is_nil(term: Term) -> bool {
-        term.is_atom() && term.atom_to_string().ok().as_deref() == Some("nil")
-    }
-    """,
-    opt: ~R"""
-    fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-        get(term, key).filter(|t| !is_nil(*t))
-    }
-    """,
-    str_val: ~R"""
-    fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String {
-        match get(term, key) {
-            Some(t) => t
-                .decode::<String>()
-                .or_else(|_| t.atom_to_string())
-                .unwrap_or_default(),
-            None => String::new(),
-        }
-    }
-    """,
-    bool_val: ~R"""
-    fn bool_val(term: Term, key: rustler::Atom) -> bool {
-        get(term, key)
-            .and_then(|t| t.decode::<bool>().ok())
-            .unwrap_or(false)
-    }
-    """,
-    f64_val: ~R"""
-    fn f64_val(term: Term, key: rustler::Atom) -> f64 {
-        get(term, key)
-            .and_then(|t| {
-                t.decode::<f64>()
-                    .ok()
-                    .or_else(|| t.decode::<i64>().ok().map(|i| i as f64))
-            })
-            .unwrap_or(0.0)
-    }
-    """,
-    list_val: ~R"""
-    fn list_val<'a>(term: Term<'a>, key: rustler::Atom) -> Vec<Term<'a>> {
-        get(term, key)
-            .and_then(|t| t.decode::<Vec<Term>>().ok())
-            .unwrap_or_default()
-    }
-    """,
-    type_atom: ~R"""
-    fn type_atom(term: Term) -> Option<rustler::Atom> {
-        get(term, __rq_type_key!()).and_then(|t| t.decode::<rustler::Atom>().ok())
-    }
-    """,
-    type_eq: ~R"""
-    fn type_eq(term: Term, expected: rustler::Atom) -> bool {
-        type_atom(term) == Some(expected)
-    }
-    """,
-    type_str: ~R"""
-    fn type_str(term: Term) -> String {
-        get(term, __rq_type_key!())
-            .and_then(|t| t.atom_to_string().ok())
-            .unwrap_or_else(|| "<no type>".into())
-    }
-    """
-  }
+  @rusty_names @names
+
+  @spec get(term(), R.path({:rustler, :Atom})) :: R.option(term())
+  defrust get(term, key) do
+    case term.map_get(key) do
+      {:ok, value} -> value
+      {:error, _reason} -> nil
+    end
+  end
+
+  @spec is_nil(term()) :: R.bool()
+  defrust is_nil(term) do
+    if term.is_atom() do
+      case term.atom_to_string() do
+        {:ok, value} -> value == "nil"
+        {:error, _reason} -> false
+      end
+    else
+      false
+    end
+  end
+
+  @spec opt(term(), R.path({:rustler, :Atom})) :: R.option(term())
+  defrust opt(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        if is_nil(value) do
+          nil
+        else
+          value
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec str_val(term(), R.path({:rustler, :Atom})) :: String.t()
+  defrust str_val(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, String.t()) do
+          {:ok, decoded} ->
+            decoded
+
+          {:error, _reason} ->
+            case value.atom_to_string() do
+              {:ok, decoded} -> decoded
+              {:error, _reason} -> String.new()
+            end
+        end
+
+      :none ->
+        String.new()
+    end
+  end
+
+  @spec bool_val(term(), R.path({:rustler, :Atom})) :: R.bool()
+  defrust bool_val(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.bool()) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> false
+        end
+
+      :none ->
+        false
+    end
+  end
+
+  @spec f64_val(term(), R.path({:rustler, :Atom})) :: R.f64()
+  defrust f64_val(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.f64()) do
+          {:ok, decoded} ->
+            decoded
+
+          {:error, _reason} ->
+            case decode_as(value, R.i64()) do
+              {:ok, decoded} -> cast(decoded, :f64)
+              {:error, _reason} -> 0.0
+            end
+        end
+
+      :none ->
+        0.0
+    end
+  end
+
+  @spec list_val(term(), R.path({:rustler, :Atom})) :: R.vec(term())
+  defrust list_val(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.vec(term())) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> Vec.new()
+        end
+
+      :none ->
+        Vec.new()
+    end
+  end
+
+  @spec type_atom(term()) :: R.option(R.path({:rustler, :Atom}))
+  defrust type_atom(term) do
+    case get(term, Atoms.type()) do
+      {:some, value} ->
+        case decode_as(value, R.path({:rustler, :Atom})) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> nil
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec type_eq(term(), R.path({:rustler, :Atom})) :: R.bool()
+  defrust type_eq(term, expected) do
+    type_atom(term) == some(expected)
+  end
+
+  @spec type_str(term()) :: String.t()
+  defrust type_str(term) do
+    case type_atom(term) do
+      {:some, atom} ->
+        case atom.atom_to_string() do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> String.from("<no type>")
+        end
+
+      :none ->
+        String.from("<no type>")
+    end
+  end
 
   @spec build(keyword()) :: [Rust.Fragment.t()]
   def build(opts \\ []) do
-    type_key = Keyword.get(opts, :type_key, "atoms::r#type()")
-
     opts
     |> names()
-    |> Enum.map(&template!/1)
-    |> Enum.map(fn template ->
-      template
-      |> RustQ.render!("rustler_term_helper.rs", bind: [type_key: Rust.expr(type_key)])
-      |> Rust.item()
-    end)
+    |> Enum.map(&helper_item/1)
   end
 
-  defp names(opts) do
-    opts
-    |> Keyword.get(:include, @names)
-    |> include_names()
-    |> Kernel.--(List.wrap(Keyword.get(opts, :exclude, [])))
-  end
+  defp names(opts), do: HelperSelection.names(opts, @names)
 
-  defp include_names(:all), do: @names
-  defp include_names(names), do: List.wrap(names)
-
-  defp template!(name), do: Map.fetch!(@templates, name)
+  defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.item(__MODULE__, name)
 end

@@ -73,6 +73,48 @@ defmodule RustQ.RustlerTest do
     assert code =~ "_ => Err(rustler::Error::BadArg)"
   end
 
+  test "builds atom decoders from native enum descriptors" do
+    descriptor = %RustQ.NativeEnumDescriptor{
+      name: "SkClipOp",
+      enum: %RustQ.Syn.Enum{name: "SkClipOp", variants: ["Difference", "Intersect"]}
+    }
+
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_decoder_descriptor.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_decoder(:decode_clip_op,
+              returns: :ClipOp,
+              descriptor: descriptor
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "pub fn decode_clip_op(value: Atom) -> NifResult<ClipOp>"
+    assert code =~ "value if value == atoms::difference() => Ok(ClipOp::Difference)"
+    assert code =~ "value if value == atoms::intersect() => Ok(ClipOp::Intersect)"
+  end
+
+  test "builds atom decoders with string function and case names" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_decoder_strings.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_decoder("decode_fill_rule",
+              returns: :FillRule,
+              cases: [{"even_odd", "FillRule::EvenOdd"}]
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "pub fn decode_fill_rule(value: Atom) -> NifResult<FillRule>"
+    assert code =~ "value if value == atoms::even_odd() => Ok(FillRule::EvenOdd)"
+  end
+
   test "builds atom dispatch functions" do
     code =
       "__rq_items!();"
@@ -107,9 +149,14 @@ defmodule RustQ.RustlerTest do
 
     assert code =~ "fn decode_opts<'a>(term: Term<'a>) -> NifResult<Vec<(Atom, Term<'a>)>>"
     assert code =~ "term.map_get(atoms::opts())?"
+    assert code =~ "fn decode_args<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>>"
+    assert code =~ "term.map_get(atoms::args())?"
     assert code =~ "fn opt_term<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> Option<Term<'a>>"
     assert code =~ "fn opt_f32<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<f32>"
     assert code =~ "fn opt_atom_option<'a>"
+    assert code =~ "Ok(Some(term.decode::<f64>()? as f32))"
+    assert code =~ "Ok(Some(term.decode::<bool>()?))"
+    assert code =~ "Ok(Some(term.decode::<Atom>()?))"
   end
 
   test "builds cached atom functions" do
@@ -119,7 +166,7 @@ defmodule RustQ.RustlerTest do
         splice: [items: RustQ.Rustler.cached_atoms([:ok, {:node_changes, "nodeChanges"}])]
       )
 
-    assert code =~ "fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom"
+    assert code =~ "fn cached_atom(env: Env, cell: &OnceLock<Atom>, name: &str) -> Atom"
     assert code =~ "static OK_ATOM: OnceLock<Atom> = OnceLock::new();"
     assert code =~ "fn ok_atom(env: Env) -> Atom"
     assert code =~ ~S/cached_atom(env, &NODE_CHANGES_ATOM, "nodeChanges")/
@@ -189,7 +236,8 @@ defmodule RustQ.RustlerTest do
     assert code =~ "pub enum ExContent"
     assert code =~ "Text(ExText)"
     assert code =~ "impl<'a> rustler::Decoder<'a> for ExContent"
-    assert code =~ ~S/"Elixir.Folio.Content.Text" => Ok(ExContent::Text(Decoder::decode(term)?))/
+    assert code =~ ~S/"Elixir.Folio.Content.Text"/
+    assert code =~ "Ok(ExContent::Text(rustler::Decoder::decode(term)?))"
     assert code =~ "impl rustler::Encoder for ExContent"
     assert code =~ "ExContent::Text(value) => value.encode(env)"
   end
@@ -204,7 +252,7 @@ defmodule RustQ.RustlerTest do
     assert code =~ "fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
     assert code =~ "fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
     assert code =~ "fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String"
-    assert code =~ "get(term, a::r#type())"
+    assert code =~ "get(term, atoms::r#type())"
   end
 
   test "builds term decoders" do
@@ -337,7 +385,8 @@ defmodule RustQ.RustlerTest do
     assert code =~
              "fn decode_document_resource<'a>(term: Term<'a>) -> NifResult<ResourceArc<Document>>"
 
-    assert code =~ "rustler::resource!(Document, env);"
+    assert code =~ "rustler::resource! {"
+    assert code =~ "Document, env,"
   end
 
   test "builds resource boilerplate" do
@@ -397,6 +446,9 @@ defmodule RustQ.RustlerTest do
   end
 
   test "builds option struct decoders" do
+    alias RustQ.Rust.AST.Builder, as: A
+    alias RustQ.Rustler.Decode, as: R
+
     code =
       "__rq_items!();"
       |> RustQ.render!("opts.rs",
@@ -405,8 +457,16 @@ defmodule RustQ.RustlerTest do
             RustQ.Rustler.opts_decoder(:RectOpts,
               lifetime: :a,
               fields: [
-                x: [type: :f32, decode: "opt_f32(opts, atoms::x())?"],
-                fill: [type: {:option, "Term<'a>"}, decode: "opt_term(opts, atoms::fill())"]
+                x: [type: :f32, decode: R.opt_decode(:opt_f32, :opts, :x)],
+                mode: [type: :Atom, decode: R.required_opt_decode(:opt_atom_option, :opts, :mode)],
+                count: [
+                  type: {:option, :i64},
+                  decode: R.optional_term_decode(:opts, :count, :i64)
+                ],
+                fill: [
+                  type: {:option, "Term<'a>"},
+                  decode: A.call(:opt_term, [:opts, A.atom(:fill)])
+                ]
               ]
             )
         ]
@@ -414,14 +474,49 @@ defmodule RustQ.RustlerTest do
 
     assert code =~ "pub struct RectOpts<'a>"
     assert code =~ "pub x: f32"
+    assert code =~ "pub mode: Atom"
+    assert code =~ "pub count: Option<i64>"
     assert code =~ "pub fill: Option<Term<'a>>"
 
     assert code =~
              "pub fn decode_rect_opts<'a>(opts: &[(Atom, Term<'a>)]) -> NifResult<RectOpts<'a>>"
 
     assert code =~ "x: opt_f32(opts, atoms::x())?"
+    assert code =~ "mode: opt_atom_option(opts, atoms::mode())?.ok_or(rustler::Error::BadArg)?"
+    assert code =~ "match opt_term(opts, atoms::count())"
+    assert code =~ "Some(term) => Some(term.decode::<i64>()?)"
+    assert code =~ "None => None"
     assert code =~ "fill: opt_term(opts, atoms::fill())"
     assert code =~ "_phantom: std::marker::PhantomData"
+  end
+
+  test "builds option struct decoders from Meta type fields" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("typed_opts.rs",
+        splice: [
+          items:
+            RustQ.Rustler.opts_decoder(:TypedOpts,
+              lifetime: :a,
+              fields: [
+                x: [type: RustQ.Spec.type(quote(do: RustQ.Type.f32())), required: true],
+                mode: [type: RustQ.Spec.type(quote(do: RustQ.Type.enum(:mode))), required: true],
+                label: [type: RustQ.Spec.type(quote(do: String.t()))],
+                paint: [type: RustQ.Spec.type(quote(do: Skia.Paint.t()))]
+              ]
+            )
+        ]
+      )
+
+    assert code =~ "pub x: f32"
+    assert code =~ "pub mode: Atom"
+    assert code =~ "pub label: Option<String>"
+    assert code =~ "pub paint: Option<Term<'a>>"
+    assert code =~ "x: opt_f32(opts, atoms::x())?"
+    assert code =~ "mode: opt_atom_option(opts, atoms::mode())?.ok_or(rustler::Error::BadArg)?"
+    assert code =~ "match opt_term(opts, atoms::label())"
+    assert code =~ "Some(term) => Some(term.decode::<String>()?)"
+    assert code =~ "paint: opt_term(opts, atoms::paint())"
   end
 
   test "builds bare atoms blocks" do

@@ -1,17 +1,9 @@
 defmodule RustQ.Rustler.AtomDecoder do
   @moduledoc false
 
-  use RustQ.Sigil
-
   alias RustQ.Rust
-
-  @template ~R"""
-  pub fn __rq_fn_name(value: __rq_input!()) -> __rq_result!() {
-      match value {
-          __rq_arms => unreachable!(),
-      }
-  }
-  """
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
 
   @spec build(atom() | String.t(), keyword()) :: Rust.Fragment.t()
   def build(name, opts) do
@@ -21,19 +13,70 @@ defmodule RustQ.Rustler.AtomDecoder do
     atoms = Keyword.get(opts, :atoms, "atoms")
     unknown = Keyword.get(opts, :unknown, "Err(rustler::Error::BadArg)")
 
-    arms =
-      opts
-      |> Keyword.fetch!(:cases)
-      |> Enum.map(fn {atom, value} ->
-        Rust.arm("value if value == #{atoms}::#{atom}()", "Ok(#{Rust.type(value)})")
+    cases =
+      Keyword.get_lazy(opts, :cases, fn ->
+        descriptor_cases(Keyword.fetch!(opts, :descriptor), returns)
       end)
-      |> Kernel.++([Rust.arm("_", unknown)])
 
-    @template
-    |> RustQ.render!("rustler_atom_decoder.rs",
-      bind: [fn_name: name, input: Rust.expr(Rust.type(input)), result: Rust.expr(result)],
-      splice: [arms: arms]
-    )
-    |> Rust.item()
+    build_ast(name, input, result, atoms, unknown, cases)
+  end
+
+  defp build_ast(name, input, result, atoms, unknown, cases) do
+    function = %AST.Function{
+      name: ident_atom(name),
+      vis: :pub,
+      args: [A.function_arg(:value, Rust.type(input))],
+      returns: result,
+      body: [
+        A.return_stmt(%AST.Match{expr: A.var(:value), arms: atom_arms(cases, atoms, unknown)})
+      ]
+    }
+
+    Rust.ast_item(function)
+  end
+
+  defp atom_arms(cases, atoms, unknown) do
+    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&String.to_atom/1)
+
+    Enum.map(cases, fn {atom, value} ->
+      %AST.Arm{
+        pattern: %AST.PatAtomGuard{name: ident_atom(atom), module: module},
+        body: [A.return_stmt(A.ok(rust_value_expr(value)))]
+      }
+    end) ++
+      [
+        unknown_arm(unknown)
+      ]
+  end
+
+  defp ident_atom(value) when is_atom(value), do: value
+  defp ident_atom(value) when is_binary(value), do: String.to_atom(value)
+
+  defp rust_value_expr(%{__struct__: _module} = value) do
+    if AST.expr_node?(value), do: value, else: value |> Rust.type() |> A.path()
+  end
+
+  defp rust_value_expr(value), do: value |> Rust.type() |> A.path()
+
+  defp unknown_arm("Err(rustler::Error::BadArg)"), do: A.badarg_arm()
+
+  defp unknown_arm(%{__struct__: _module} = expr) do
+    if AST.expr_node?(expr) do
+      %AST.Arm{pattern: %AST.PatWildcard{}, body: [A.return_stmt(expr)]}
+    else
+      raise ArgumentError, "expected RustQ expression AST for unknown arm, got: #{inspect(expr)}"
+    end
+  end
+
+  defp unknown_arm(unknown) when is_binary(unknown) do
+    %AST.Arm{pattern: %AST.PatWildcard{}, body: [A.return_stmt(A.escape_expr(unknown))]}
+  end
+
+  defp descriptor_cases(%RustQ.NativeEnumDescriptor{} = descriptor, returns) do
+    return_parts = returns |> Rust.type() |> A.path_parts()
+
+    Enum.map(RustQ.NativeEnumDescriptor.variants(descriptor), fn {atom, variant} ->
+      {atom, A.path(return_parts ++ [variant])}
+    end)
   end
 end

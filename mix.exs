@@ -15,6 +15,7 @@ defmodule RustQ.MixProject do
       package: package(),
       docs: docs(),
       dialyzer: [plt_add_apps: [:mix]],
+      test_ignore_filters: [~r|test/support/|],
       deps: deps()
     ]
   end
@@ -30,6 +31,7 @@ defmodule RustQ.MixProject do
   defp deps do
     [
       {:rustler, "~> 0.37", runtime: false},
+      {:json_codec, "~> 0.1", runtime: false},
       {:vibe_kit, "~> 0.1", only: [:dev, :test], runtime: false},
       {:igniter, "~> 0.6", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.0", only: [:dev, :test], runtime: false},
@@ -49,6 +51,7 @@ defmodule RustQ.MixProject do
         "rust.fmt --check",
         "rust.check",
         "rust.clippy",
+        "rustq.gen --check",
         "rustq.templates.check",
         "test",
         "credo --strict",
@@ -96,6 +99,7 @@ defmodule RustQ.MixProject do
         "priv/fixtures/rustler_template_check/src/lib.rs",
         ".formatter.exs",
         "mix.exs",
+        "rustq.exs",
         "README.md",
         "CHANGELOG.md",
         "LICENSE"

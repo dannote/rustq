@@ -157,6 +157,12 @@ defmodule RustQ.Config do
     end
   end
 
+  defmacro from_module(module) do
+    quote do
+      unquote(module).__rustq_items__()
+    end
+  end
+
   def __start__, do: Process.put(:rustq_config_targets, [])
   def __delete__, do: Process.delete(:rustq_config_targets)
 

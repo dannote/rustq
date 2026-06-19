@@ -1,4 +1,4 @@
-defmodule RustQ.GeneratedTest do
+defmodule RustQ.Config.GeneratedTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Generated
@@ -131,6 +131,37 @@ defmodule RustQ.GeneratedTest do
     code = Keyword.fetch!(target, :build).()
     assert code =~ "fn first()"
     assert code =~ "fn second()"
+  end
+
+  test "loads rustq manifests with defrust module items" do
+    path = tmp_path("rustq.exs")
+
+    File.mkdir_p!(Path.dirname(path))
+
+    File.write!(path, """
+    use RustQ.Config
+
+    defmodule GeneratedDefrustManifest do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec generated(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+      defrust generated(canvas) do
+        canvas.save()
+        :ok
+      end
+    end
+
+    rust "native/generated_helpers.rs" do
+      from_module GeneratedDefrustManifest
+    end
+    """)
+
+    assert [{"helpers", target}] = Generated.load_manifest!(path)
+    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
+    code = Keyword.fetch!(target, :build).()
+    assert code =~ "fn generated(canvas: &Canvas) -> NifResult<()>"
+    assert code =~ "canvas.save();"
   end
 
   test "loads rustq manifests with rust_items block shortcut" do
