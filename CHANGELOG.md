@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.6.0 - 2026-06-19
+
 - Reframe Rusty Elixir as the high-level `defrust` authoring surface.
 - Add external Rust type specs through ordinary remote types such as
   `GeneratedOpts.OvalOpts.t(RustQ.Type.lifetime(:a))`.

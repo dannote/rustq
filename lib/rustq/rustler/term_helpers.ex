@@ -66,10 +66,7 @@ defmodule RustQ.Rustler.TermHelpers do
             decoded
 
           {:error, _reason} ->
-            case value.atom_to_string() do
-              {:ok, decoded} -> decoded
-              {:error, _reason} -> String.new()
-            end
+            value.atom_to_string().unwrap_or_default()
         end
 
       :none ->
@@ -81,10 +78,7 @@ defmodule RustQ.Rustler.TermHelpers do
   defrust bool_val(term, key) do
     case get(term, key) do
       {:some, value} ->
-        case decode_as(value, R.bool()) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> false
-        end
+        value.decode().unwrap_or_default()
 
       :none ->
         false
@@ -115,10 +109,7 @@ defmodule RustQ.Rustler.TermHelpers do
   defrust list_val(term, key) do
     case get(term, key) do
       {:some, value} ->
-        case decode_as(value, R.vec(term())) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> Vec.new()
-        end
+        value.decode().unwrap_or_default()
 
       :none ->
         Vec.new()
@@ -146,9 +137,9 @@ defmodule RustQ.Rustler.TermHelpers do
 
   @spec type_str(term()) :: String.t()
   defrust type_str(term) do
-    case type_atom(term) do
-      {:some, atom} ->
-        case atom.atom_to_string() do
+    case get(term, Atoms.type()) do
+      {:some, value} ->
+        case value.atom_to_string() do
           {:ok, decoded} -> decoded
           {:error, _reason} -> String.from("<no type>")
         end

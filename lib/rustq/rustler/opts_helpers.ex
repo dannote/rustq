@@ -45,16 +45,18 @@ defmodule RustQ.Rustler.OptsHelpers do
 
   @spec opt_f32(R.slice({R.path(:Atom), term()}), R.path(:Atom)) :: R.nif_result(R.f32())
   defrust opt_f32(opts, key) do
-    case opt_f32_default(opts, key, 0.0 / 0.0) do
-      {:ok, value} ->
+    case opt_term(opts, key) do
+      {:some, term} ->
+        value = cast(decode_as!(term, R.f64()), :f32)
+
         if value.is_nan() do
           {:error, Rustler.Error.BadArg}
         else
           {:ok, value}
         end
 
-      {:error, reason} ->
-        {:error, reason}
+      :none ->
+        {:error, Rustler.Error.BadArg}
     end
   end
 

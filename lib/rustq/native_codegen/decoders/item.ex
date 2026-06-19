@@ -39,7 +39,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     trait_path = unwrap!(Super.decode_optional_type_field(term, "trait"))
     impl_items = unwrap!(required_item_list(term, "items"))
     attrs = unwrap!(Super.decode_attribute_list(unwrap!(required_field(term, "attrs"))))
-    lifetimes = unwrap!(Super.decode_lifetime_list(unwrap!(required_field(term, "lifetimes"))))
+    lifetimes = unwrap!(decode_lifetime_list(unwrap!(required_field(term, "lifetimes"))))
     Super.parse_item_impl(target, trait_path, impl_items, attrs, lifetimes)
   end
 

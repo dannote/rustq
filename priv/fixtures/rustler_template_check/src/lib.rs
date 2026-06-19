@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 #![allow(non_snake_case)]
+#![allow(clippy::manual_ok_err)]
+#![allow(clippy::manual_unwrap_or_default)]
 
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use std::sync::OnceLock;
@@ -36,6 +38,7 @@ mod atoms {
         consequent,
         alternate,
         opts,
+        args,
     }
 }
 

@@ -530,6 +530,16 @@ defmodule RustQ.Rust.AST.Render do
     ["match ", render_expr(match.expr), " {\n", indent(arms), "\n}"]
   end
 
+  def render_expr(%If{else: []} = if_expr) do
+    [
+      "if ",
+      render_expr(if_expr.condition),
+      " {\n",
+      render_stmt_block(if_expr.then),
+      "\n}"
+    ]
+  end
+
   def render_expr(%If{} = if_expr) do
     [
       "if ",
