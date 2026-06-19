@@ -378,6 +378,31 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "push_pair(name, count);"
   end
 
+  test "marks mutable lets inside if branches" do
+    defmodule IfBranchMutationCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec collect_if(R.bool(), R.vec(R.f64())) :: R.nif_result(R.unit())
+      defrust collect_if(enabled, values) do
+        if enabled do
+          mapped = Vec.with_capacity(values.len())
+
+          for value <- values do
+            mapped.push(cast(value, :f32))
+          end
+
+          use_values(mapped.as_slice())
+        end
+
+        :ok
+      end
+    end
+
+    source = IfBranchMutationCase.__rustq_source__()
+    assert source =~ "let mut mapped = Vec::with_capacity(values.len());"
+  end
+
   test "keeps tuple pattern lets through mutability inference" do
     defmodule TupleLetCase do
       use RustQ.Meta

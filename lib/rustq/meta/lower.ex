@@ -760,6 +760,15 @@ defmodule RustQ.Meta.Lower do
     %{match | expr: mark_mutable_expr(match.expr, mutable_vars), arms: arms}
   end
 
+  defp mark_mutable_expr(%AST.If{} = expr, mutable_vars) do
+    %{
+      expr
+      | condition: mark_mutable_expr(expr.condition, mutable_vars),
+        then: Enum.map(expr.then, &mark_mutable_lets(&1, mutable_vars)),
+        else: Enum.map(expr.else, &mark_mutable_lets(&1, mutable_vars))
+    }
+  end
+
   defp mark_mutable_expr(expr, mutable_vars), do: mark_mutable_expr_fallback(expr, mutable_vars)
 
   defp mark_mutable_expr_fallback(%AST.PathCall{} = expr, mutable_vars),
