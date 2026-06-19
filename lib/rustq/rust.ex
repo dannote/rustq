@@ -470,6 +470,16 @@ defmodule RustQ.Rust do
   end
 
   @spec type(rust_type()) :: String.t()
+  def type(%{__struct__: _module} = value) do
+    if RustQ.Rust.AST.type_node?(value) do
+      value
+      |> RustQ.Rust.AST.Render.render_type()
+      |> IO.iodata_to_binary()
+    else
+      raise ArgumentError, "expected Rust type, got: #{inspect(value)}"
+    end
+  end
+
   def type(value) when is_binary(value), do: value
   def type(value) when is_atom(value), do: ident(value)
 

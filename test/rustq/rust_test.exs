@@ -2,6 +2,7 @@ defmodule RustQ.RustTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "builds module, const, and type alias items" do
     module =
@@ -25,6 +26,7 @@ defmodule RustQ.RustTest do
     assert Rust.type(:ResourceArc, [:Document]) == "ResourceArc<Document>"
     assert Rust.ref(:Document, lifetime: :static) == "&'static Document"
     assert Rust.static_slice(:Atom) == "&'static [Atom]"
+    assert Rust.type(T.ref(T.slice(T.ref(:str)))) == "&[&str]"
   end
 
   test "builds functions with generics and where clauses" do
