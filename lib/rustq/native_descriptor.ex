@@ -51,21 +51,25 @@ defmodule RustQ.NativeDescriptor do
     expected_args = Keyword.get(opts, :args, :any)
     expected_returns = Keyword.get(opts, :returns, :any)
 
-    if expected_args != :any do
-      actual = Enum.map(method.args, & &1.type_ast)
-
-      unless length(actual) == length(expected_args) and
-               Enum.zip(actual, expected_args)
-               |> Enum.all?(fn {type, expected} -> type_matches?(type, expected) end) do
-        raise "unexpected native args for #{RustQ.NativeRef.format(descriptor.ref)}: #{inspect(method.args)}"
-      end
-    end
+    assert_args_match!(descriptor, expected_args)
 
     unless return_matches?(method.returns_ast, expected_returns) do
       raise "unexpected native return for #{RustQ.NativeRef.format(descriptor.ref)}: #{inspect(method.returns_ast)}"
     end
 
     descriptor
+  end
+
+  defp assert_args_match!(_descriptor, :any), do: :ok
+
+  defp assert_args_match!(%__MODULE__{} = descriptor, expected_args) do
+    actual = Enum.map(descriptor.method.args, & &1.type_ast)
+
+    unless length(actual) == length(expected_args) and
+             Enum.zip(actual, expected_args)
+             |> Enum.all?(fn {type, expected} -> type_matches?(type, expected) end) do
+      raise "unexpected native args for #{RustQ.NativeRef.format(descriptor.ref)}: #{inspect(descriptor.method.args)}"
+    end
   end
 
   defp validate_package!(%RustQ.Syn.Index{package: nil}, _ref), do: :ok

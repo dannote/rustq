@@ -3,6 +3,7 @@ defmodule RustQ.Rust.AST.Render do
 
   alias RustQ.Rust.AST.{
     Arm,
+    ArrayLiteral,
     Assign,
     AtomValue,
     Attribute,
@@ -41,6 +42,8 @@ defmodule RustQ.Rust.AST.Render do
     Ok,
     PatAtomGuard,
     PatErr,
+    Path,
+    PathCall,
     PatLiteral,
     PatNone,
     PatOk,
@@ -51,8 +54,6 @@ defmodule RustQ.Rust.AST.Render do
     PatTuple,
     PatVar,
     PatWildcard,
-    Path,
-    PathCall,
     Range,
     Ref,
     Return,
@@ -77,8 +78,7 @@ defmodule RustQ.Rust.AST.Render do
     UnaryOp,
     Use,
     Var,
-    VecLiteral,
-    ArrayLiteral
+    VecLiteral
   }
 
   def render_item(%Use{} = item), do: render_native(item, &render_use/1)

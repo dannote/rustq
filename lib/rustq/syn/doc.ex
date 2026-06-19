@@ -9,9 +9,7 @@ defmodule RustQ.Syn.Doc do
   """
   @spec markdown([String.t()]) :: String.t()
   def markdown(lines) when is_list(lines) do
-    lines
-    |> Enum.map(&line/1)
-    |> Enum.join("\n")
+    Enum.map_join(lines, "\n", &line/1)
   end
 
   @doc "Normalizes one Rust doc line for Markdown output."

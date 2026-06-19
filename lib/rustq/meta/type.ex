@@ -139,12 +139,7 @@ defmodule RustQ.Meta.Type do
       map_type?(ast) ->
         {fields, _aliases} = map_fields(ast, raw, aliases)
 
-        lifetimes =
-          if Enum.any?(fields, fn {_name, type, _presence} ->
-               String.contains?(type.rust, "'a")
-             end), do: [:a], else: []
-
-        type(:struct, %AST.TypePath{parts: [rust_name], lifetimes: lifetimes}, %{
+        type(:struct, %AST.TypePath{parts: [rust_name], lifetimes: field_lifetimes(fields)}, %{
           elixir_name: name,
           rust_name: rust_name,
           fields: fields
@@ -428,7 +423,7 @@ defmodule RustQ.Meta.Type do
   defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
 
   defp tuple_type(tuple_types) do
-    rendered = tuple_types |> Enum.map(& &1.rust) |> Enum.join(", ")
+    rendered = Enum.map_join(tuple_types, ", ", & &1.rust)
     type(:tuple, {:raw, "(#{rendered})"}, %{elements: tuple_types})
   end
 
@@ -451,6 +446,12 @@ defmodule RustQ.Meta.Type do
   defp map_type?({:%{}, _, fields}) when is_list(fields), do: true
   defp map_type?(_ast), do: false
 
+  defp field_lifetimes(fields) do
+    if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
+      do: [:a],
+      else: []
+  end
+
   defp map_fields({:%{}, _, fields}, raw, aliases) do
     Enum.map_reduce(fields, aliases, fn
       {{:required, _, [name]}, ast}, aliases ->
@@ -468,12 +469,7 @@ defmodule RustQ.Meta.Type do
 
   defp atom_union?(ast), do: ast |> union_members() |> Enum.all?(&is_atom/1)
 
-  defp option_union?(ast),
-    do:
-      (
-        members = union_members(ast)
-        nil in members and length(members) == 2
-      )
+  defp option_union?(ast), do: ast |> union_members() |> option_members?()
 
   defp option_members(ast),
     do:
@@ -483,11 +479,20 @@ defmodule RustQ.Meta.Type do
       )
 
   defp result_union?(ast) do
-    members = union_members(ast)
-
-    length(members) == 2 and Enum.any?(members, &match?({:ok, _}, &1)) and
-      Enum.any?(members, &match?({:error, _}, &1))
+    ast
+    |> union_members()
+    |> result_members?()
   end
+
+  defp option_members?([left, right]), do: is_nil(left) or is_nil(right)
+  defp option_members?(_members), do: false
+
+  defp result_members?([left, right]) do
+    (match?({:ok, _}, left) and match?({:error, _}, right)) or
+      (match?({:error, _}, left) and match?({:ok, _}, right))
+  end
+
+  defp result_members?(_members), do: false
 
   defp tuple_union?({:|, _, _} = ast, raw, aliases),
     do: ast |> union_members() |> Enum.all?(&tagged_tuple?(&1, raw, aliases))

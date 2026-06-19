@@ -4,8 +4,8 @@ defmodule RustQ.Rustler.TermHelpers do
   use RustQ.Meta
 
   alias RustQ.Rust
-  alias RustQ.Type, as: R
   alias RustQ.Rustler.HelperSelection
+  alias RustQ.Type, as: R
 
   @names [
     :get,

@@ -77,7 +77,7 @@ defmodule RustQ.Meta.GeneratedCase do
   @spec unwrap_code(R.result(R.u32(), atom())) :: R.nif_result(R.u32())
   defrust unwrap_code(result) do
     case result do
-      {:ok, value} -> {:ok, value}
+      {:ok, value} -> {:ok, value + 0}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -111,7 +111,7 @@ defmodule RustQ.Meta.GeneratedCase do
   defrust nested_result(result) do
     if is_ready() do
       case result do
-        {:ok, value} -> {:ok, value}
+        {:ok, value} -> {:ok, value + 0}
         {:error, reason} -> {:error, reason}
       end
     else
@@ -123,7 +123,7 @@ defmodule RustQ.Meta.GeneratedCase do
   defrust nested_nif_result(result) do
     if is_ready() do
       case result do
-        {:ok, value} -> {:ok, value}
+        {:ok, value} -> {:ok, value + 0}
         {:error, reason} -> {:error, reason}
       end
     else

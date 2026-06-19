@@ -22,8 +22,7 @@ defmodule RustQ.Spec.DeclarationsTest do
     assert {:from, %RustQ.Meta.Type{kind: :alias, meta: %{elixir_name: :point}}, :required} =
              List.keyfind(fields, :from, 0)
 
-    assert [{:line, spec_args}] = specs
-    assert length(spec_args) == 3
+    assert [{:line, [_, _, _]}] = specs
     assert defs.line == [:document, :point, :opts]
     assert defs.helper == [:value]
   end

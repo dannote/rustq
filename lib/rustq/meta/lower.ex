@@ -29,8 +29,7 @@ defmodule RustQ.Meta.Lower do
   def function_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     body_ast
     |> quoted_body(return_type, vars, opts)
-    |> Enum.map(&RustQ.Rust.AST.Render.render_stmt/1)
-    |> Enum.join("\n")
+    |> Enum.map_join("\n", &RustQ.Rust.AST.Render.render_stmt/1)
   end
 
   defp lower_block(expressions, %Context{} = context) do

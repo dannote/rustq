@@ -4,9 +4,9 @@ defmodule RustQ.Rustler.CachedAtoms do
   use RustQ.Meta
 
   alias RustQ.Rust
-  alias RustQ.Type, as: R
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Type, as: R
 
   import RustQ.Rust.AST.ItemBuilder, only: [function: 3, static: 3]
 
