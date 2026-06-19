@@ -5,6 +5,13 @@ defmodule RustQ.Syn.Index do
   Use an index when a generator needs to query many Rust files without keeping
   project-specific source maps. The index stores parsed files by path and offers
   lookup helpers for impl blocks and methods by target type.
+
+  It also indexes Rust `use` items and `type` aliases. Generators can inspect
+  them directly with `uses/1` and `type_aliases/1`, or ask for the public Rust
+  name that exposes a native/bindings type with `public_type_name/2` and
+  `public_type_name!/2`. Reexport chains such as `pub use paint::Cap as
+  PaintCap;` are followed so callers can prefer the crate's public API surface
+  over internal module names.
   """
 
   defstruct files: %{}, package: nil
