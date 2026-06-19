@@ -42,6 +42,6 @@ defmodule RustQ.Rustler.TermBuilders do
 
   defp rusty_item(name) do
     function_name = Map.fetch!(@function_names, name)
-    RustQ.Meta.defrust_item(__MODULE__, function_name)
+    RustQ.Meta.item(__MODULE__, function_name)
   end
 end

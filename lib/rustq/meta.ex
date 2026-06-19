@@ -52,7 +52,7 @@ defmodule RustQ.Meta do
 
   defmacro __using__(_opts) do
     quote do
-      import RustQ.Meta
+      import RustQ.Meta, except: [item: 2, items: 2, ast!: 2]
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_current_rust_mod, accumulate: false)
@@ -142,21 +142,21 @@ defmodule RustQ.Meta do
   def __current_rust_mod__(module), do: Module.get_attribute(module, :rustq_current_rust_mod)
 
   @doc false
-  @spec defrust_item(module(), atom()) :: Rust.Fragment.t()
-  def defrust_item(module, name) when is_atom(module) and is_atom(name) do
+  @spec item(module(), atom()) :: Rust.Fragment.t()
+  def item(module, name) when is_atom(module) and is_atom(name) do
     module
-    |> defrust_ast!(name)
+    |> ast!(name)
     |> Rust.ast_item()
   end
 
   @doc false
-  @spec defrust_items(module(), [atom()]) :: [Rust.Fragment.t()]
-  def defrust_items(module, names) when is_atom(module) and is_list(names),
-    do: Enum.map(names, &defrust_item(module, &1))
+  @spec items(module(), [atom()]) :: [Rust.Fragment.t()]
+  def items(module, names) when is_atom(module) and is_list(names),
+    do: Enum.map(names, &item(module, &1))
 
   @doc false
-  @spec defrust_ast!(module(), atom()) :: AST.Function.t()
-  def defrust_ast!(module, name) when is_atom(module) and is_atom(name) do
+  @spec ast!(module(), atom()) :: AST.Function.t()
+  def ast!(module, name) when is_atom(module) and is_atom(name) do
     Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
       raise ArgumentError, "#{inspect(module)} has no defrust item named #{name}"
   end

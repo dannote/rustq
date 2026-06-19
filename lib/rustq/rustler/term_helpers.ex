@@ -167,5 +167,5 @@ defmodule RustQ.Rustler.TermHelpers do
 
   defp names(opts), do: HelperSelection.names(opts, @names)
 
-  defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.defrust_item(__MODULE__, name)
+  defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.item(__MODULE__, name)
 end
