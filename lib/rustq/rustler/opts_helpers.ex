@@ -2,7 +2,6 @@ defmodule RustQ.Rustler.OptsHelpers do
   @moduledoc false
 
   use RustQ.Meta
-  use RustQ.Sigil
 
   alias RustQ.Rust
   alias RustQ.Rustler.HelperSelection
@@ -19,21 +18,9 @@ defmodule RustQ.Rustler.OptsHelpers do
     :opt_atom_option
   ]
 
-  @rusty_names @names -- [:opt_f32]
+  @rusty_names @names
 
-  @templates %{
-    opt_f32: ~R"""
-    fn opt_f32<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<f32> {
-        opt_f32_default(opts, key, f32::NAN).and_then(|value| {
-            if value.is_nan() {
-                Err(rustler::Error::BadArg)
-            } else {
-                Ok(value)
-            }
-        })
-    }
-    """
-  }
+  defrustmod(Rustler, as: :rustler)
 
   @spec decode_opts(term()) :: R.nif_result(R.vec({R.path(:Atom), term()}))
   defrust decode_opts(term) do
@@ -54,6 +41,21 @@ defmodule RustQ.Rustler.OptsHelpers do
     end
 
     nil
+  end
+
+  @spec opt_f32(R.slice({R.path(:Atom), term()}), R.path(:Atom)) :: R.nif_result(R.f32())
+  defrust opt_f32(opts, key) do
+    case opt_f32_default(opts, key, 0.0 / 0.0) do
+      {:ok, value} ->
+        if value.is_nan() do
+          {:error, Rustler.Error.BadArg}
+        else
+          {:ok, value}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @spec opt_f32_option(R.slice({R.path(:Atom), term()}), R.path(:Atom)) ::
@@ -101,13 +103,5 @@ defmodule RustQ.Rustler.OptsHelpers do
 
   defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.item(__MODULE__, name)
 
-  defp helper_item(name) do
-    name
-    |> template!()
-    |> RustQ.render!("rustler_opts_helper.rs")
-    |> Rust.item()
-  end
-
   defp names(opts), do: HelperSelection.names(opts, @names)
-  defp template!(name), do: Map.fetch!(@templates, name)
 end
