@@ -257,6 +257,12 @@ defmodule RustQ.Meta.Lower do
   defp lower_tuple_pattern({name, _, context}) when is_atom(name) and is_atom(context),
     do: %AST.PatVar{name: name}
 
+  defp lower_tuple_pattern({:{}, _, patterns}),
+    do: %AST.PatTuple{patterns: Enum.map(patterns, &lower_tuple_pattern/1)}
+
+  defp lower_tuple_pattern(patterns) when is_tuple(patterns),
+    do: %AST.PatTuple{patterns: patterns |> Tuple.to_list() |> Enum.map(&lower_tuple_pattern/1)}
+
   defp lower_tuple_pattern({:_, _, _}), do: %AST.PatWildcard{}
   defp lower_tuple_pattern(nil), do: %AST.PatNone{}
   defp lower_tuple_pattern(atom) when is_atom(atom), do: %AST.PatAtomGuard{name: atom}

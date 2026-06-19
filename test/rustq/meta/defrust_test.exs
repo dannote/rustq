@@ -493,6 +493,26 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Ok(tuple.0)"
   end
 
+  test "lowers nested tuple decode probe matches" do
+    defmodule NestedTupleDecodeProbeCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec probe(term()) :: R.nif_result(R.unit())
+      defrust probe(term) do
+        case decode_as(term, {R.atom(), {R.f64(), R.f64()}}) do
+          {:ok, {tag, {x, y}}} -> handle(tag, x, y)
+          {:error, _reason} -> :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = NestedTupleDecodeProbeCase.__rustq_source__()
+    assert source =~ "Ok((tag, (x, y))) =>"
+  end
+
   test "builds typed Rustler decode result probes from defrust valid Elixir" do
     defmodule DecodeResultProbeCase do
       use RustQ.Meta
