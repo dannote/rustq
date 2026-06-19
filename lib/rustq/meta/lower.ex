@@ -798,6 +798,10 @@ defmodule RustQ.Meta.Lower do
     do_collect_mutable_let_refs(stmt.expr, [name | acc])
   end
 
+  defp do_collect_mutable_let_refs(%AST.Assign{target: %AST.Var{name: name}} = assign, acc) do
+    do_collect_mutable_let_refs(assign.expr, [name | acc])
+  end
+
   defp do_collect_mutable_let_refs(%AST.Ref{mutable: true, expr: %AST.Var{name: name}} = ref, acc) do
     do_collect_mutable_let_refs(ref.expr, [name | acc])
   end

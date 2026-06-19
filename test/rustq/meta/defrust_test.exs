@@ -339,6 +339,24 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "push_pair(name, count);"
   end
 
+  test "marks assign bang targets as mutable lets" do
+    defmodule AssignBangMutationCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec toggle() :: R.nif_result(R.bool())
+      defrust toggle() do
+        flag = true
+        assign!(flag, false)
+        {:ok, flag}
+      end
+    end
+
+    source = AssignBangMutationCase.__rustq_source__()
+    assert source =~ "let mut flag = true;"
+    assert source =~ "flag = false;"
+  end
+
   test "builds typed Rustler decode expressions from defrust valid Elixir" do
     defmodule DecodeTermsCase do
       use RustQ.Meta
