@@ -13,8 +13,8 @@ defmodule RustQ.Rustler.TermBuilders do
     struct_from_terms: :make_struct_from_terms
   }
 
-  @spec make_map_from_terms(R.path(:Env, R.lifetime(:a)), R.slice({R.term(), R.term()})) ::
-          R.nif_result(R.term())
+  @spec make_map_from_terms(R.path(:Env, R.lifetime(:a)), R.slice({term(), term()})) ::
+          R.nif_result(term())
   defrust make_map_from_terms(env, pairs) do
     keys = Vec.with_capacity(pairs.len())
     values = Vec.with_capacity(pairs.len())
@@ -27,8 +27,8 @@ defmodule RustQ.Rustler.TermBuilders do
     Term.map_from_term_arrays(env, ref(keys), ref(values))
   end
 
-  @spec make_struct_from_terms(R.path(:Env, R.lifetime(:a)), R.slice(R.term()), R.slice(R.term())) ::
-          R.nif_result(R.term())
+  @spec make_struct_from_terms(R.path(:Env, R.lifetime(:a)), R.slice(term()), R.slice(term())) ::
+          R.nif_result(term())
   defrust make_struct_from_terms(env, keys, values) do
     Term.map_from_term_arrays(env, keys, values)
   end

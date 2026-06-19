@@ -14,6 +14,10 @@ defmodule RustQ.Syn.Index do
   over internal module names.
   """
 
+  alias RustQ.Syn.Type
+  alias RustQ.Syn.TypeAlias
+  alias RustQ.Syn.Use
+
   defstruct files: %{}, package: nil
 
   @type t :: %__MODULE__{
@@ -222,20 +226,20 @@ defmodule RustQ.Syn.Index do
 
   defp aliases(index), do: uses(index) ++ type_aliases(index)
 
-  defp alias_targets?(%RustQ.Syn.Use{segments: segments}, target),
+  defp alias_targets?(%Use{segments: segments}, target),
     do: List.last(segments) == target
 
-  defp alias_targets?(%RustQ.Syn.TypeAlias{type_ast: type}, target),
-    do: RustQ.Syn.Type.path?(type, target)
+  defp alias_targets?(%TypeAlias{type_ast: type}, target),
+    do: Type.path?(type, target)
 
   defp public_alias_name(index, alias),
-    do: public_alias_name(index, alias_ref(index, alias), MapSet.new())
+    do: public_alias_name(index, alias_ref(index, alias), [])
 
   defp public_alias_name(index, alias_ref, seen) do
-    if MapSet.member?(seen, alias_ref) do
+    if alias_ref in seen do
       elem(alias_ref, 1)
     else
-      seen = MapSet.put(seen, alias_ref)
+      seen = [alias_ref | seen]
 
       case public_reexport(index, alias_ref) do
         nil -> elem(alias_ref, 1)

@@ -30,7 +30,7 @@ defmodule RustQ.Rustler.TermHelpers do
     end
   end
 
-  @spec is_nil(term()) :: R.bool()
+  @spec is_nil(term()) :: boolean()
   defrust is_nil(term) do
     if term.is_atom() do
       case term.atom_to_string() do
@@ -74,7 +74,7 @@ defmodule RustQ.Rustler.TermHelpers do
     end
   end
 
-  @spec bool_val(term(), R.path({:rustler, :Atom})) :: R.bool()
+  @spec bool_val(term(), R.path({:rustler, :Atom})) :: boolean()
   defrust bool_val(term, key) do
     case get(term, key) do
       {:some, value} ->
@@ -130,7 +130,7 @@ defmodule RustQ.Rustler.TermHelpers do
     end
   end
 
-  @spec type_eq(term(), R.path({:rustler, :Atom})) :: R.bool()
+  @spec type_eq(term(), R.path({:rustler, :Atom})) :: boolean()
   defrust type_eq(term, expected) do
     type_atom(term) == some(expected)
   end

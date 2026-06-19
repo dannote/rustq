@@ -1,6 +1,7 @@
 defmodule RustQ.NativeCodegen.Modules do
   @moduledoc false
 
+  alias RustQ.NativeCodegen.ModuleHelpers
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.Schema
 
@@ -8,7 +9,7 @@ defmodule RustQ.NativeCodegen.Modules do
     [
       atoms_module(),
       ast_modules_module(),
-      RustQ.NativeCodegen.ModuleHelpers.asts()
+      ModuleHelpers.asts()
     ]
   end
 

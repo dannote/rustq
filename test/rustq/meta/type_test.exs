@@ -2,6 +2,8 @@ defmodule RustQ.Meta.TypeTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.Type
+  alias RustQ.Some.External
+  alias RustQ.Spec
 
   test "maps fitting built-in Elixir types to Rust/Rustler types" do
     assert RustQ.Spec.type(quote(do: atom())).rust == "Atom"
@@ -68,7 +70,7 @@ defmodule RustQ.Meta.TypeTest do
     assert RustQ.Spec.type(quote(do: ItemConst.t())).rust == "ItemConst"
     assert RustQ.Spec.type(quote(do: ItemStruct.t())).rust == "ItemStruct"
     assert RustQ.Spec.type(quote(do: Field.t())).rust == "Field"
-    assert RustQ.Spec.type(quote(do: RustQ.Some.External.t())).rust == "External"
+    assert Spec.type(quote(do: External.t())).rust == "External"
 
     assert RustQ.Spec.type(quote(do: RustQ.Type.nif_result(ItemEnum.t()))).rust ==
              "NifResult<ItemEnum>"

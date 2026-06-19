@@ -1,6 +1,14 @@
 defmodule RustQ.Syn.MetadataTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Syn
+  alias RustQ.Syn.Arg
+  alias RustQ.Syn.Impl
+  alias RustQ.Syn.Method
+  alias RustQ.Syn.MethodCall
+  alias RustQ.Syn.Signature
+  alias RustQ.Syn.Type
+
   test "parses top-level Rust metadata" do
     source = """
     /// Path operation docs.
@@ -28,32 +36,32 @@ defmodule RustQ.Syn.MetadataTest do
     }
     """
 
-    assert {:ok, file} = RustQ.Syn.parse(source)
+    assert {:ok, file} = Syn.parse(source)
 
     assert [
-             %RustQ.Syn.Enum{
+             %Syn.Enum{
                name: "SkPathOp",
                visibility: :public,
                source_line: 2,
                docs: ["Path operation docs."],
                variants: ["Difference", "Intersect", "Union"]
              }
-           ] = RustQ.Syn.enums(file)
+           ] = Syn.enums(file)
 
-    assert [%RustQ.Syn.Struct{name: "Point", docs: ["Point docs."], fields: fields}] =
-             RustQ.Syn.structs(file)
+    assert [%Syn.Struct{name: "Point", docs: ["Point docs."], fields: fields}] =
+             Syn.structs(file)
 
     assert [
-             %RustQ.Syn.Field{
+             %Syn.Field{
                name: "x",
                type: "f32",
-               type_ast: %RustQ.Syn.Type.Path{name: "f32"}
+               type_ast: %Type.Path{name: "f32"}
              },
-             %RustQ.Syn.Field{name: "y", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}}
+             %Syn.Field{name: "y", type: "f32", type_ast: %Type.Path{name: "f32"}}
            ] = fields
 
     assert [
-             %RustQ.Syn.Function{
+             %Syn.Function{
                name: "lerp",
                source_line: 14,
                signature: "fn lerp (a : f32 , b : f32) -> f32",
@@ -62,22 +70,22 @@ defmodule RustQ.Syn.MetadataTest do
                returns: "f32"
              }
            ] =
-             RustQ.Syn.functions(file)
+             Syn.functions(file)
 
-    assert RustQ.Syn.Signature.render(lerp_signature) == "fn lerp(a: f32, b: f32) -> f32"
+    assert Signature.render(lerp_signature) == "fn lerp(a: f32, b: f32) -> f32"
 
     assert [
-             %RustQ.Syn.Arg{name: "a", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}},
-             %RustQ.Syn.Arg{name: "b", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}}
+             %Arg{name: "a", type: "f32", type_ast: %Type.Path{name: "f32"}},
+             %Arg{name: "b", type: "f32", type_ast: %Type.Path{name: "f32"}}
            ] = args
 
     assert [
-             %RustQ.Syn.Impl{
+             %Impl{
                target: "Point",
-               target_ast: %RustQ.Syn.Type.Path{name: "Point"},
+               target_ast: %Type.Path{name: "Point"},
                trait: nil,
                methods: [
-                 %RustQ.Syn.Method{
+                 %Method{
                    name: "offset",
                    visibility: :public,
                    source_line: 20,
@@ -86,23 +94,23 @@ defmodule RustQ.Syn.MetadataTest do
                    docs: ["Offset docs."],
                    args: method_args,
                    returns: "Self",
-                   returns_ast: %RustQ.Syn.Type.Self{code: "Self"}
+                   returns_ast: %Type.Self{code: "Self"}
                  }
                ]
              }
-           ] = RustQ.Syn.impls(file)
+           ] = Syn.impls(file)
 
     assert [
-             %RustQ.Syn.Arg{
+             %Arg{
                name: "self",
                type: "& mut self",
-               type_ast: %RustQ.Syn.Type.Ref{mutable: true, inner: %RustQ.Syn.Type.Self{}}
+               type_ast: %Type.Ref{mutable: true, inner: %Type.Self{}}
              },
-             %RustQ.Syn.Arg{name: "dx", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}},
-             %RustQ.Syn.Arg{name: "dy", type: "f32", type_ast: %RustQ.Syn.Type.Path{name: "f32"}}
+             %Arg{name: "dx", type: "f32", type_ast: %Type.Path{name: "f32"}},
+             %Arg{name: "dy", type: "f32", type_ast: %Type.Path{name: "f32"}}
            ] = method_args
 
-    assert RustQ.Syn.Signature.render(offset_signature) ==
+    assert Signature.render(offset_signature) ==
              "fn offset(&mut self, dx: f32, dy: f32) -> Self"
   end
 
@@ -115,30 +123,30 @@ defmodule RustQ.Syn.MetadataTest do
     }
     """
 
-    assert [method] = source |> RustQ.Syn.parse!() |> RustQ.Syn.methods()
+    assert [method] = source |> Syn.parse!() |> Syn.methods()
 
-    assert %RustQ.Syn.Method{
+    assert %Method{
              args: [
-               %RustQ.Syn.Arg{type_ast: %RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}}},
-               %RustQ.Syn.Arg{
-                 type_ast: %RustQ.Syn.Type.ImplTrait{
+               %Arg{type_ast: %Type.Ref{inner: %Type.Self{}}},
+               %Arg{
+                 type_ast: %Type.ImplTrait{
                    traits: [
-                     %RustQ.Syn.Type.Path{
+                     %Type.Path{
                        name: "AsRef",
-                       args: [%RustQ.Syn.Type.Path{name: "Rect"}]
+                       args: [%Type.Path{name: "Rect"}]
                      }
                    ]
                  }
                },
-               %RustQ.Syn.Arg{
-                 type_ast: %RustQ.Syn.Type.Option{
-                   inner: %RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Path{name: "Paint"}}
+               %Arg{
+                 type_ast: %Type.Option{
+                   inner: %Type.Ref{inner: %Type.Path{name: "Paint"}}
                  }
                }
              ],
-             returns_ast: %RustQ.Syn.Type.Result{
-               ok: %RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}},
-               error: %RustQ.Syn.Type.Path{name: "Error"}
+             returns_ast: %Type.Result{
+               ok: %Type.Ref{inner: %Type.Self{}},
+               error: %Type.Path{name: "Error"}
              }
            } = method
   end
@@ -149,8 +157,8 @@ defmodule RustQ.Syn.MetadataTest do
     pub enum Shown { One, Two }
     """
 
-    assert {:ok, ["One", "Two"]} = RustQ.Syn.enum_variants(source, "Shown")
-    assert {:error, "enum Missing not found"} = RustQ.Syn.enum_variants(source, "Missing")
+    assert {:ok, ["One", "Two"]} = Syn.enum_variants(source, "Shown")
+    assert {:error, "enum Missing not found"} = Syn.enum_variants(source, "Missing")
   end
 
   test "returns rustler atom references from parsed Rust source" do
@@ -160,7 +168,7 @@ defmodule RustQ.Syn.MetadataTest do
     }
     """
 
-    assert RustQ.Syn.atom_references!(source) == ["error", "ok"]
+    assert Syn.atom_references!(source) == ["error", "ok"]
   end
 
   test "returns receiver method references from parsed Rust source" do
@@ -171,7 +179,7 @@ defmodule RustQ.Syn.MetadataTest do
     }
     """
 
-    assert RustQ.Syn.method_references!(source) == ["draw_rect", "save"]
+    assert Syn.method_references!(source) == ["draw_rect", "save"]
   end
 
   test "returns receiver-aware method calls from parsed Rust source" do
@@ -182,10 +190,10 @@ defmodule RustQ.Syn.MetadataTest do
     }
     """
 
-    assert RustQ.Syn.method_calls!(source) == [
-             %RustQ.Syn.MethodCall{receiver: "canvas", method: "draw_rect"},
-             %RustQ.Syn.MethodCall{receiver: "state", method: "canvas"},
-             %RustQ.Syn.MethodCall{receiver: "state . canvas ()", method: "clip_path"}
+    assert Syn.method_calls!(source) == [
+             %MethodCall{receiver: "canvas", method: "draw_rect"},
+             %MethodCall{receiver: "state", method: "canvas"},
+             %MethodCall{receiver: "state . canvas ()", method: "clip_path"}
            ]
   end
 end

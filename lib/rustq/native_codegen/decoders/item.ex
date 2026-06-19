@@ -3,7 +3,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
 
   use RustQ.NativeCodegen.DefrustModule
 
-  @spec decode_ast_use(term()) :: R.nif_result(ItemUse.t())
+  @spec decode_ast_use(term()) :: R.nif_result(R.path(:ItemUse))
   defrust decode_ast_use(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Use"))
     parts = unwrap!(required_field(term, "parts"))
@@ -23,7 +23,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     end
   end
 
-  @spec decode_ast_module(term()) :: R.nif_result(ItemMod.t())
+  @spec decode_ast_module(term()) :: R.nif_result(R.path(:ItemMod))
   defrust decode_ast_module(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Module"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -32,7 +32,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_module(name, vis, items)
   end
 
-  @spec decode_ast_impl(term()) :: R.nif_result(ItemImpl.t())
+  @spec decode_ast_impl(term()) :: R.nif_result(R.path(:ItemImpl))
   defrust decode_ast_impl(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Impl"))
     target = unwrap!(required_type(term, "target"))
@@ -43,7 +43,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_impl(target, trait_path, impl_items, attrs, lifetimes)
   end
 
-  @spec decode_ast_const(term()) :: R.nif_result(ItemConst.t())
+  @spec decode_ast_const(term()) :: R.nif_result(R.path(:ItemConst))
   defrust decode_ast_const(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Const"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -53,7 +53,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_const(name, ty, expr, vis)
   end
 
-  @spec decode_ast_type_alias(term()) :: R.nif_result(ItemType.t())
+  @spec decode_ast_type_alias(term()) :: R.nif_result(R.path(:ItemType))
   defrust decode_ast_type_alias(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.TypeAlias"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -62,7 +62,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_type(name, ty, vis)
   end
 
-  @spec decode_ast_static(term()) :: R.nif_result(ItemStatic.t())
+  @spec decode_ast_static(term()) :: R.nif_result(R.path(:ItemStatic))
   defrust decode_ast_static(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Static"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -73,7 +73,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_static(name, ty, expr, mutable, vis)
   end
 
-  @spec decode_ast_function(term()) :: R.nif_result(ItemFn.t())
+  @spec decode_ast_function(term()) :: R.nif_result(R.path(:ItemFn))
   defrust decode_ast_function(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Function"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -95,7 +95,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     end)
   end
 
-  @spec decode_ast_struct(term()) :: R.nif_result(ItemStruct.t())
+  @spec decode_ast_struct(term()) :: R.nif_result(R.path(:ItemStruct))
   defrust decode_ast_struct(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Struct"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -107,14 +107,14 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_struct(name, vis, derive, lifetime, fields, attrs)
   end
 
-  @spec decode_ast_macro_item(term()) :: R.nif_result(Item.t())
+  @spec decode_ast_macro_item(term()) :: R.nif_result(R.path(:Item))
   defrust decode_ast_macro_item(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItem"))
     source = unwrap!(Super.string_field(term, "source"))
     Super.parse_macro_item(source)
   end
 
-  @spec decode_ast_macro_item_call(term()) :: R.nif_result(Item.t())
+  @spec decode_ast_macro_item_call(term()) :: R.nif_result(R.path(:Item))
   defrust decode_ast_macro_item_call(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItemCall"))
     path = unwrap!(required_path(term, "path"))
@@ -122,7 +122,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_macro_item_call(path, args)
   end
 
-  @spec decode_ast_enum(term()) :: R.nif_result(ItemEnum.t())
+  @spec decode_ast_enum(term()) :: R.nif_result(R.path(:ItemEnum))
   defrust decode_ast_enum(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Enum"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -133,7 +133,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_item_enum(name, vis, derive, variants, attrs)
   end
 
-  @spec decode_function_arg(term()) :: R.nif_result(FnArg.t())
+  @spec decode_function_arg(term()) :: R.nif_result(R.path(:FnArg))
   defrust decode_function_arg(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.FunctionArg"))
     receiver = unwrap!(decode_as(unwrap!(required_field(term, "receiver")), R.bool()))
@@ -148,7 +148,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     end
   end
 
-  @spec decode_struct_field(term()) :: R.nif_result(Field.t())
+  @spec decode_struct_field(term()) :: R.nif_result(R.path(:Field))
   defrust decode_struct_field(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.StructField"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
@@ -157,7 +157,7 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
     Super.parse_struct_field(name, ty, vis)
   end
 
-  @spec decode_enum_variant(term()) :: R.nif_result(Variant.t())
+  @spec decode_enum_variant(term()) :: R.nif_result(R.path(:Variant))
   defrust decode_enum_variant(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant"))
     name = Super.format_ident_value(unwrap!(atom_key(term, "name")))

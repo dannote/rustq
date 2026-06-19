@@ -1,28 +1,35 @@
 defmodule RustQ.NativeCodegen.HelperModulesTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.NativeCodegen.DecoderHelpers
+  alias RustQ.NativeCodegen.Helpers
+  alias RustQ.NativeCodegen.ModuleHelpers
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.Function
+  alias RustQ.Rust.AST.Path
+  alias RustQ.Rust.AST.PathCall
   alias RustQ.Rust.AST.PatternBuilder, as: P
+  alias RustQ.Rust.AST.Return
   alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "native defrust modules expose crate-visible ASTs" do
-    assert %AST.Function{name: :required_field, vis: :crate} =
-             Enum.find(RustQ.NativeCodegen.Helpers.asts(), &(&1.name == :required_field))
+    assert %Function{name: :required_field, vis: :crate} =
+             Enum.find(Helpers.asts(), &(&1.name == :required_field))
 
-    assert %AST.Function{name: :atom, vis: :crate} =
-             Enum.find(RustQ.NativeCodegen.ModuleHelpers.asts(), &(&1.name == :atom))
+    assert %Function{name: :atom, vis: :crate} =
+             Enum.find(ModuleHelpers.asts(), &(&1.name == :atom))
   end
 
   test "decoder helper ASTs are crate-visible and delegate required fields" do
-    helpers = RustQ.NativeCodegen.DecoderHelpers.asts()
+    helpers = DecoderHelpers.asts()
 
-    assert %AST.Function{
+    assert %Function{
              name: :required_expr,
              vis: :crate,
              body: [
-               %AST.Return{
-                 expr: %AST.PathCall{path: %AST.Path{parts: [:super, :decode_expr]}}
+               %Return{
+                 expr: %PathCall{path: %Path{parts: [:super, :decode_expr]}}
                }
              ]
            } = Enum.find(helpers, &(&1.name == :required_expr))

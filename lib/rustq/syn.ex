@@ -59,15 +59,18 @@ defmodule RustQ.Syn do
     decisions.
     """
 
+    alias RustQ.Syn.Type.Path
+    alias RustQ.Syn.Type.Ref
+
     @doc "Returns true when `type` is a path whose final segment is `name`."
     @spec path?(RustQ.Syn.type(), String.t()) :: boolean()
-    def path?(%RustQ.Syn.Type.Path{name: name}, name), do: true
-    def path?(%RustQ.Syn.Type.Path{segments: segments}, name), do: List.last(segments) == name
+    def path?(%Path{name: name}, name), do: true
+    def path?(%Path{segments: segments}, name), do: List.last(segments) == name
     def path?(_type, _name), do: false
 
     @doc "Returns true when `type` is a reference to a path whose final segment is `name`."
     @spec ref_to?(RustQ.Syn.type(), String.t()) :: boolean()
-    def ref_to?(%RustQ.Syn.Type.Ref{inner: inner}, name), do: path?(inner, name)
+    def ref_to?(%Ref{inner: inner}, name), do: path?(inner, name)
     def ref_to?(_type, _name), do: false
 
     @doc "Returns true when `type` is `impl Trait<Args...>` matching the requested trait and args."
@@ -652,20 +655,16 @@ defmodule RustQ.Syn do
   end
 
   defp decode_item!({"function", name, visibility, {source_line, signature}, docs, args, returns}) do
-    {returns, returns_ast} = decode_return(returns)
-    args = decode_args(args)
-
-    %RustQ.Syn.Function{
-      name: name,
-      visibility: decode_visibility!(visibility),
-      source_line: source_line,
-      signature: signature,
-      signature_ast: %RustQ.Syn.Signature{name: name, args: args, returns: returns_ast},
-      docs: docs,
-      args: args,
-      returns: returns,
-      returns_ast: returns_ast
-    }
+    decode_callable!(
+      RustQ.Syn.Function,
+      name,
+      visibility,
+      source_line,
+      signature,
+      docs,
+      args,
+      returns
+    )
   end
 
   defp decode_item!({"impl", target, target_ast, trait, source_line, docs, methods}) do
@@ -684,10 +683,23 @@ defmodule RustQ.Syn do
   end
 
   defp decode_method!({"method", name, visibility, {source_line, signature}, docs, args, returns}) do
+    decode_callable!(
+      RustQ.Syn.Method,
+      name,
+      visibility,
+      source_line,
+      signature,
+      docs,
+      args,
+      returns
+    )
+  end
+
+  defp decode_callable!(module, name, visibility, source_line, signature, docs, args, returns) do
     {returns, returns_ast} = decode_return(returns)
     args = decode_args(args)
 
-    %RustQ.Syn.Method{
+    struct(module, %{
       name: name,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
@@ -697,7 +709,7 @@ defmodule RustQ.Syn do
       args: args,
       returns: returns,
       returns_ast: returns_ast
-    }
+    })
   end
 
   defp decode_args(args), do: Elixir.Enum.map(args, &decode_arg!/1)

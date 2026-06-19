@@ -3,12 +3,18 @@ defmodule RustQ.ASTSamples do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.MacroItem
+  alias RustQ.Rust.AST.MacroItemCall
+  alias RustQ.Rust.AST.Module
   alias RustQ.Rust.AST.PatternBuilder, as: P
+  alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.AST.Schema
+  alias RustQ.Rust.AST.Use
 
   require A
 
   def all do
-    RustQ.Rust.AST.Schema.nodes()
+    Schema.nodes()
     |> Map.new(fn node -> {node.name, sample_for(node.name)} end)
   end
 
@@ -16,19 +22,19 @@ defmodule RustQ.ASTSamples do
     source =~ base_fragment(ast) and source =~ semantic_fragment(name)
   end
 
-  defp base_fragment(%AST.Use{parts: parts}) when is_list(parts),
+  defp base_fragment(%Use{parts: parts}) when is_list(parts),
     do: "use #{Enum.map_join(parts, "::", &to_string/1)};"
 
-  defp base_fragment(%AST.Use{group: {base, names}}) do
+  defp base_fragment(%Use{group: {base, names}}) do
     "use #{Enum.map_join(base, "::", &to_string/1)}::{#{Enum.map_join(names, ", ", &to_string/1)}};"
   end
 
-  defp base_fragment(%AST.Use{tree: tree}), do: "use #{tree};"
-  defp base_fragment(%AST.Module{name: name}), do: "mod #{name}"
-  defp base_fragment(%AST.MacroItem{source: source}), do: source
+  defp base_fragment(%Use{tree: tree}), do: "use #{tree};"
+  defp base_fragment(%Module{name: name}), do: "mod #{name}"
+  defp base_fragment(%MacroItem{source: source}), do: source
 
-  defp base_fragment(%AST.MacroItemCall{path: path}) do
-    [RustQ.Rust.AST.Render.render_expr(path), "!"] |> IO.iodata_to_binary()
+  defp base_fragment(%MacroItemCall{path: path}) do
+    [Render.render_expr(path), "!"] |> IO.iodata_to_binary()
   end
 
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
@@ -36,7 +42,7 @@ defmodule RustQ.ASTSamples do
   defp base_fragment(%AST.TypeAlias{name: name}), do: "type #{name}"
 
   defp base_fragment(%AST.Impl{target: target}),
-    do: "impl #{RustQ.Rust.AST.Render.render_type(target)}"
+    do: "impl #{Render.render_type(target)}"
 
   defp base_fragment(%AST.Struct{name: name}), do: "struct #{name}"
   defp base_fragment(%AST.Enum{name: name}), do: "enum #{name}"

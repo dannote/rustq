@@ -6,8 +6,6 @@ defmodule RustQ.Rustler.TermDecoder do
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
 
-  import RustQ.Rust.AST.ItemBuilder, only: [field: 3]
-
   require I
 
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
@@ -58,7 +56,7 @@ defmodule RustQ.Rustler.TermDecoder do
 
   defp struct_fields(fields) do
     Enum.map(fields, fn {field_name, spec} ->
-      field(field_name, Keyword.fetch!(spec, :type), vis: nil)
+      I.field(field_name, Keyword.fetch!(spec, :type), vis: nil)
     end)
   end
 
@@ -107,7 +105,7 @@ defmodule RustQ.Rustler.TermDecoder do
   defp result_type(name, lifetime, result), do: {:raw, "#{result}<#{name}<'#{lifetime}>>"}
 
   defp ident_atom(value) when is_atom(value), do: value
-  defp ident_atom(value) when is_binary(value), do: String.to_atom(value)
+  defp ident_atom(value) when is_binary(value), do: RustQ.Atom.identifier!(value)
 
   defp default_decoder_name(name), do: "decode_#{Macro.underscore(to_string(name))}"
 end

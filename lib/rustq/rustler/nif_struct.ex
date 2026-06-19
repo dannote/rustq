@@ -13,7 +13,7 @@ defmodule RustQ.Rustler.NifStruct do
   @spec build(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
   def build(name, module, opts \\ []) do
     ast =
-      I.struct String.to_atom(to_string(name)),
+      I.struct RustQ.Atom.identifier!(to_string(name)),
         vis: Keyword.get(opts, :vis, :pub),
         derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
         attrs: [
@@ -29,7 +29,9 @@ defmodule RustQ.Rustler.NifStruct do
   defp struct_fields(fields, default_vis) do
     Enum.map(fields, fn
       %RustQ.Rust.Field{} = rust_field ->
-        field(String.to_atom(to_string(rust_field.name)), rust_field.type, vis: rust_field.vis)
+        field(RustQ.Atom.identifier!(to_string(rust_field.name)), rust_field.type,
+          vis: rust_field.vis
+        )
 
       {field_name, type} ->
         field(field_name, type, vis: default_vis)
@@ -46,7 +48,7 @@ defmodule RustQ.Rustler.NifStruct do
     cond do
       String.contains?(attr, " = ") ->
         [path, value] = String.split(attr, " = ", parts: 2)
-        A.attr_value(String.to_atom(path), String.trim(value, ~s|"|))
+        A.attr_value(RustQ.Atom.identifier!(path), String.trim(value, ~s|"|))
 
       String.ends_with?(attr, ")") and String.contains?(attr, "(") ->
         [path, args] = String.split(String.trim_trailing(attr, ")"), "(", parts: 2)
@@ -55,12 +57,12 @@ defmodule RustQ.Rustler.NifStruct do
           args
           |> String.split(",", trim: true)
           |> Enum.map(&String.trim/1)
-          |> Enum.map(&String.to_atom/1)
+          |> Enum.map(&RustQ.Atom.identifier!/1)
 
-        A.attr(String.to_atom(path), args)
+        A.attr(RustQ.Atom.identifier!(path), args)
 
       true ->
-        A.attr(String.to_atom(attr))
+        A.attr(RustQ.Atom.identifier!(attr))
     end
   end
 

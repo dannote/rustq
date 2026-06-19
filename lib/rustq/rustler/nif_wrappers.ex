@@ -26,13 +26,13 @@ defmodule RustQ.Rustler.NifWrappers do
 
     if ast_compatible?(opts) do
       ast =
-        function String.to_atom(to_string(name)),
+        function RustQ.Atom.identifier!(to_string(name)),
           args: args,
           returns: Keyword.fetch!(opts, :returns),
           lifetime: Keyword.get(opts, :lifetime),
           vis: Keyword.get(opts, :vis),
           attrs: [nif_attribute(opts)] do
-          A.return(A.call(String.to_atom(to_string(impl)), Keyword.keys(args)))
+          A.return(A.call(RustQ.Atom.identifier!(to_string(impl)), Keyword.keys(args)))
         end
 
       Rust.ast_item(ast)

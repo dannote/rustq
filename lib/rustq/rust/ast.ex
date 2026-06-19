@@ -7,19 +7,101 @@ defmodule RustQ.Rust.AST do
   AST, then renders them only at the final fragment-validation boundary.
   """
 
+  alias __MODULE__, as: AST
+
+  alias __MODULE__.{
+    Arm,
+    ArrayLiteral,
+    Assign,
+    AtomValue,
+    Attribute,
+    BinaryOp,
+    ByteString,
+    Cast,
+    Closure,
+    Const,
+    Derive,
+    EarlyReturn,
+    Enum,
+    EnumVariant,
+    Err,
+    EscapeExpr,
+    ExprStmt,
+    Field,
+    For,
+    Function,
+    FunctionArg,
+    If,
+    IfLet,
+    Impl,
+    Index,
+    Let,
+    LetElse,
+    Literal,
+    LocalCall,
+    MacroCall,
+    MacroItem,
+    MacroItemCall,
+    Match,
+    MethodCall,
+    Module,
+    NifRaiseAtom,
+    None,
+    Ok,
+    PatAtomGuard,
+    PatErr,
+    Path,
+    PathCall,
+    PatLiteral,
+    PatNone,
+    PatOk,
+    PatPath,
+    PatPathTuple,
+    PatSome,
+    PatStruct,
+    PatTuple,
+    PatVar,
+    PatWildcard,
+    Range,
+    Ref,
+    Return,
+    Some,
+    Static,
+    Struct,
+    StructField,
+    StructLiteral,
+    TokenMacro,
+    Try,
+    Tuple,
+    TypeAlias,
+    TypeArray,
+    TypeNifResult,
+    TypeOption,
+    TypePath,
+    TypeRef,
+    TypeResult,
+    TypeSlice,
+    TypeUnit,
+    TypeVec,
+    UnaryOp,
+    Use,
+    Var,
+    VecLiteral
+  }
+
   @typedoc false
   @type item ::
-          RustQ.Rust.AST.Use.t()
-          | RustQ.Rust.AST.Module.t()
-          | RustQ.Rust.AST.Const.t()
-          | RustQ.Rust.AST.Static.t()
-          | RustQ.Rust.AST.TypeAlias.t()
-          | RustQ.Rust.AST.MacroItem.t()
-          | RustQ.Rust.AST.MacroItemCall.t()
-          | RustQ.Rust.AST.Impl.t()
-          | RustQ.Rust.AST.Function.t()
-          | RustQ.Rust.AST.Struct.t()
-          | RustQ.Rust.AST.Enum.t()
+          Use.t()
+          | Module.t()
+          | Const.t()
+          | Static.t()
+          | TypeAlias.t()
+          | MacroItem.t()
+          | MacroItemCall.t()
+          | Impl.t()
+          | Function.t()
+          | Struct.t()
+          | Enum.t()
 
   @type stmt ::
           Let.t()
@@ -33,37 +115,37 @@ defmodule RustQ.Rust.AST do
 
   @typedoc false
   @type expr ::
-          RustQ.Rust.AST.Var.t()
-          | RustQ.Rust.AST.Path.t()
-          | RustQ.Rust.AST.Field.t()
-          | RustQ.Rust.AST.Index.t()
-          | RustQ.Rust.AST.Range.t()
-          | RustQ.Rust.AST.Cast.t()
-          | RustQ.Rust.AST.UnaryOp.t()
-          | RustQ.Rust.AST.PathCall.t()
-          | RustQ.Rust.AST.MethodCall.t()
-          | RustQ.Rust.AST.StructLiteral.t()
-          | RustQ.Rust.AST.LocalCall.t()
-          | RustQ.Rust.AST.Ref.t()
-          | RustQ.Rust.AST.Try.t()
-          | RustQ.Rust.AST.Tuple.t()
-          | RustQ.Rust.AST.VecLiteral.t()
-          | RustQ.Rust.AST.ArrayLiteral.t()
-          | RustQ.Rust.AST.Closure.t()
-          | RustQ.Rust.AST.Literal.t()
-          | RustQ.Rust.AST.ByteString.t()
-          | RustQ.Rust.AST.EscapeExpr.t()
-          | RustQ.Rust.AST.TokenMacro.t()
-          | RustQ.Rust.AST.MacroCall.t()
-          | RustQ.Rust.AST.AtomValue.t()
-          | RustQ.Rust.AST.None.t()
-          | RustQ.Rust.AST.Some.t()
-          | RustQ.Rust.AST.Ok.t()
-          | RustQ.Rust.AST.Err.t()
-          | RustQ.Rust.AST.NifRaiseAtom.t()
-          | RustQ.Rust.AST.Match.t()
-          | RustQ.Rust.AST.If.t()
-          | RustQ.Rust.AST.BinaryOp.t()
+          Var.t()
+          | Path.t()
+          | Field.t()
+          | Index.t()
+          | Range.t()
+          | Cast.t()
+          | UnaryOp.t()
+          | PathCall.t()
+          | MethodCall.t()
+          | StructLiteral.t()
+          | LocalCall.t()
+          | Ref.t()
+          | Try.t()
+          | Tuple.t()
+          | VecLiteral.t()
+          | ArrayLiteral.t()
+          | Closure.t()
+          | Literal.t()
+          | ByteString.t()
+          | EscapeExpr.t()
+          | TokenMacro.t()
+          | MacroCall.t()
+          | AtomValue.t()
+          | None.t()
+          | Some.t()
+          | Ok.t()
+          | Err.t()
+          | NifRaiseAtom.t()
+          | Match.t()
+          | If.t()
+          | BinaryOp.t()
 
   @type type ::
           TypePath.t()
@@ -115,10 +197,7 @@ defmodule RustQ.Rust.AST do
   )
 
   defnode(Module, :item, [:name, items: [], vis: nil],
-    type:
-      quote(
-        do: %__MODULE__{name: atom(), items: [RustQ.Rust.AST.item()], vis: RustQ.Rust.AST.vis()}
-      )
+    type: quote(do: %__MODULE__{name: atom(), items: [AST.item()], vis: AST.vis()})
   )
 
   defnode(Const, :item, [:name, :type, :expr, vis: nil],
@@ -126,9 +205,9 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: RustQ.Rust.AST.type() | String.t(),
-          expr: RustQ.Rust.AST.expr(),
-          vis: RustQ.Rust.AST.vis()
+          type: AST.type() | String.t(),
+          expr: AST.expr(),
+          vis: AST.vis()
         }
       )
   )
@@ -138,10 +217,10 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: RustQ.Rust.AST.type() | String.t(),
-          expr: RustQ.Rust.AST.expr(),
+          type: AST.type() | String.t(),
+          expr: AST.expr(),
           mutable: boolean(),
-          vis: RustQ.Rust.AST.vis()
+          vis: AST.vis()
         }
       )
   )
@@ -151,8 +230,8 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: RustQ.Rust.AST.type() | String.t(),
-          vis: RustQ.Rust.AST.vis()
+          type: AST.type() | String.t(),
+          vis: AST.vis()
         }
       )
   )
@@ -163,7 +242,7 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          path: RustQ.Rust.AST.Path.t(),
+          path: Path.t(),
           args: [atom() | String.t() | {atom() | String.t(), String.t()}]
         }
       )
@@ -173,10 +252,10 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          target: RustQ.Rust.AST.type() | String.t(),
-          trait: RustQ.Rust.AST.Path.t() | RustQ.Rust.AST.type() | String.t() | nil,
-          items: [RustQ.Rust.AST.item()],
-          attrs: [RustQ.Rust.AST.Attribute.t()],
+          target: AST.type() | String.t(),
+          trait: Path.t() | AST.type() | String.t() | nil,
+          items: [AST.item()],
+          attrs: [Attribute.t()],
           lifetimes: [atom()]
         }
       )
@@ -187,7 +266,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: RustQ.Rust.AST.type() | String.t() | nil,
+          type: AST.type() | String.t() | nil,
           receiver: boolean(),
           mutable: boolean()
         }
@@ -202,12 +281,12 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          args: [RustQ.Rust.AST.FunctionArg.t()],
-          returns: RustQ.Rust.AST.type() | String.t(),
-          body: [RustQ.Rust.AST.stmt()],
+          args: [FunctionArg.t()],
+          returns: AST.type() | String.t(),
+          body: [AST.stmt()],
           lifetime: atom() | nil,
-          vis: RustQ.Rust.AST.vis(),
-          attrs: [RustQ.Rust.AST.Attribute.t()]
+          vis: AST.vis(),
+          attrs: [Attribute.t()]
         }
       )
   )
@@ -221,18 +300,17 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          fields: [RustQ.Rust.AST.StructField.t()],
-          vis: RustQ.Rust.AST.vis(),
-          derive: [RustQ.Rust.AST.Derive.t() | atom()],
+          fields: [StructField.t()],
+          vis: AST.vis(),
+          derive: [Derive.t() | atom()],
           lifetime: atom() | nil,
-          attrs: [RustQ.Rust.AST.Attribute.t()]
+          attrs: [Attribute.t()]
         }
       )
   )
 
   defnode(StructField, :field, [:name, :type, vis: nil],
-    type:
-      quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type(), vis: RustQ.Rust.AST.vis()})
+    type: quote(do: %__MODULE__{name: atom(), type: AST.type(), vis: AST.vis()})
   )
 
   defnode(Enum, :item, [:name, variants: [], vis: nil, derive: [], attrs: []],
@@ -240,16 +318,16 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          variants: [RustQ.Rust.AST.EnumVariant.t()],
-          vis: RustQ.Rust.AST.vis(),
-          derive: [RustQ.Rust.AST.Derive.t() | atom()],
-          attrs: [RustQ.Rust.AST.Attribute.t()]
+          variants: [EnumVariant.t()],
+          vis: AST.vis(),
+          derive: [Derive.t() | atom()],
+          attrs: [Attribute.t()]
         }
       )
   )
 
   defnode(EnumVariant, :field, [:name, tuple: []],
-    type: quote(do: %__MODULE__{name: atom(), tuple: [RustQ.Rust.AST.type()]})
+    type: quote(do: %__MODULE__{name: atom(), tuple: [AST.type()]})
   )
 
   defnode(TypePath, :type, [:parts, lifetimes: [], generics: []],
@@ -258,34 +336,29 @@ defmodule RustQ.Rust.AST do
         do: %__MODULE__{
           parts: [atom() | String.t()],
           lifetimes: [atom()],
-          generics: [RustQ.Rust.AST.type()]
+          generics: [AST.type()]
         }
       )
   )
 
   defnode(TypeRef, :type, [:inner, mutable: false, lifetime: nil],
-    type:
-      quote(
-        do: %__MODULE__{inner: RustQ.Rust.AST.type(), mutable: boolean(), lifetime: atom() | nil}
-      )
+    type: quote(do: %__MODULE__{inner: AST.type(), mutable: boolean(), lifetime: atom() | nil})
   )
 
-  defnode(TypeOption, :type, [:inner], type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()}))
+  defnode(TypeOption, :type, [:inner], type: quote(do: %__MODULE__{inner: AST.type()}))
 
   defnode(TypeResult, :type, [:ok, :error],
-    type: quote(do: %__MODULE__{ok: RustQ.Rust.AST.type(), error: RustQ.Rust.AST.type()})
+    type: quote(do: %__MODULE__{ok: AST.type(), error: AST.type()})
   )
 
-  defnode(TypeNifResult, :type, [:inner],
-    type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()})
-  )
+  defnode(TypeNifResult, :type, [:inner], type: quote(do: %__MODULE__{inner: AST.type()}))
 
-  defnode(TypeVec, :type, [:inner], type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()}))
+  defnode(TypeVec, :type, [:inner], type: quote(do: %__MODULE__{inner: AST.type()}))
 
-  defnode(TypeSlice, :type, [:inner], type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type()}))
+  defnode(TypeSlice, :type, [:inner], type: quote(do: %__MODULE__{inner: AST.type()}))
 
   defnode(TypeArray, :type, [:inner, :size],
-    type: quote(do: %__MODULE__{inner: RustQ.Rust.AST.type(), size: String.t() | integer()})
+    type: quote(do: %__MODULE__{inner: AST.type(), size: String.t() | integer()})
   )
 
   defnode(TypeUnit, :type, [], type: quote(do: %__MODULE__{}))
@@ -294,10 +367,10 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          pattern: RustQ.Rust.AST.pat(),
-          expr: RustQ.Rust.AST.expr(),
+          pattern: AST.pat(),
+          expr: AST.expr(),
           mutable: boolean(),
-          type: RustQ.Rust.AST.type() | String.t() | nil
+          type: AST.type() | String.t() | nil
         }
       )
   )
@@ -306,31 +379,31 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          pattern: RustQ.Rust.AST.pat(),
-          expr: RustQ.Rust.AST.expr(),
-          else: [RustQ.Rust.AST.stmt()]
+          pattern: AST.pat(),
+          expr: AST.expr(),
+          else: [AST.stmt()]
         }
       )
   )
 
   defnode(Assign, :stmt, [:target, :expr],
-    type: quote(do: %__MODULE__{target: RustQ.Rust.AST.expr(), expr: RustQ.Rust.AST.expr()})
+    type: quote(do: %__MODULE__{target: AST.expr(), expr: AST.expr()})
   )
 
-  defnode(ExprStmt, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+  defnode(ExprStmt, :stmt, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
-  defnode(Return, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+  defnode(Return, :stmt, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
-  defnode(EarlyReturn, :stmt, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+  defnode(EarlyReturn, :stmt, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
   defnode(IfLet, :stmt, [:pattern, :expr, then: [], else: []],
     type:
       quote(
         do: %__MODULE__{
-          pattern: RustQ.Rust.AST.pat(),
-          expr: RustQ.Rust.AST.expr(),
-          then: [RustQ.Rust.AST.stmt()],
-          else: [RustQ.Rust.AST.stmt()]
+          pattern: AST.pat(),
+          expr: AST.expr(),
+          then: [AST.stmt()],
+          else: [AST.stmt()]
         }
       )
   )
@@ -339,9 +412,9 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          pattern: RustQ.Rust.AST.pat(),
-          expr: RustQ.Rust.AST.expr(),
-          body: [RustQ.Rust.AST.stmt()]
+          pattern: AST.pat(),
+          expr: AST.expr(),
+          body: [AST.stmt()]
         }
       )
   )
@@ -351,38 +424,38 @@ defmodule RustQ.Rust.AST do
   defnode(Path, :expr, [:parts], type: quote(do: %__MODULE__{parts: [atom() | String.t()]}))
 
   defnode(Field, :expr, [:receiver, :field],
-    type: quote(do: %__MODULE__{receiver: RustQ.Rust.AST.expr(), field: atom() | integer()})
+    type: quote(do: %__MODULE__{receiver: AST.expr(), field: atom() | integer()})
   )
 
   defnode(Index, :expr, [:receiver, :index],
-    type: quote(do: %__MODULE__{receiver: RustQ.Rust.AST.expr(), index: RustQ.Rust.AST.expr()})
+    type: quote(do: %__MODULE__{receiver: AST.expr(), index: AST.expr()})
   )
 
   defnode(Range, :expr, [:start, :stop],
     type:
       quote(
         do: %__MODULE__{
-          start: RustQ.Rust.AST.expr() | nil,
-          stop: RustQ.Rust.AST.expr() | nil
+          start: AST.expr() | nil,
+          stop: AST.expr() | nil
         }
       )
   )
 
   defnode(Cast, :expr, [:expr, :type],
-    type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr(), type: RustQ.Rust.AST.type()})
+    type: quote(do: %__MODULE__{expr: AST.expr(), type: AST.type()})
   )
 
   defnode(UnaryOp, :expr, [:op, :expr],
-    type: quote(do: %__MODULE__{op: atom(), expr: RustQ.Rust.AST.expr()})
+    type: quote(do: %__MODULE__{op: atom(), expr: AST.expr()})
   )
 
   defnode(PathCall, :expr, [:path, args: [], generics: []],
     type:
       quote(
         do: %__MODULE__{
-          path: RustQ.Rust.AST.Path.t(),
-          args: [RustQ.Rust.AST.expr()],
-          generics: [RustQ.Rust.AST.type()]
+          path: Path.t(),
+          args: [AST.expr()],
+          generics: [AST.type()]
         }
       )
   )
@@ -391,43 +464,36 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          receiver: RustQ.Rust.AST.expr(),
+          receiver: AST.expr(),
           method: atom(),
-          args: [RustQ.Rust.AST.expr()],
-          generics: [RustQ.Rust.AST.type()]
+          args: [AST.expr()],
+          generics: [AST.type()]
         }
       )
   )
 
   defnode(StructLiteral, :expr, [:path, fields: []],
-    type:
-      quote(
-        do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), fields: [{atom(), RustQ.Rust.AST.expr()}]}
-      )
+    type: quote(do: %__MODULE__{path: Path.t(), fields: [{atom(), AST.expr()}]})
   )
 
   defnode(LocalCall, :expr, [:name, args: []],
-    type: quote(do: %__MODULE__{name: atom(), args: [RustQ.Rust.AST.expr()]})
+    type: quote(do: %__MODULE__{name: atom(), args: [AST.expr()]})
   )
 
   defnode(Ref, :expr, [:expr, mutable: false],
-    type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr(), mutable: boolean()})
+    type: quote(do: %__MODULE__{expr: AST.expr(), mutable: boolean()})
   )
 
-  defnode(Try, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+  defnode(Try, :expr, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
-  defnode(Tuple, :expr, [:values], type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]}))
+  defnode(Tuple, :expr, [:values], type: quote(do: %__MODULE__{values: [AST.expr()]}))
 
-  defnode(VecLiteral, :expr, [:values],
-    type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]})
-  )
+  defnode(VecLiteral, :expr, [:values], type: quote(do: %__MODULE__{values: [AST.expr()]}))
 
-  defnode(ArrayLiteral, :expr, [:values],
-    type: quote(do: %__MODULE__{values: [RustQ.Rust.AST.expr()]})
-  )
+  defnode(ArrayLiteral, :expr, [:values], type: quote(do: %__MODULE__{values: [AST.expr()]}))
 
   defnode(Closure, :expr, [:args, :body],
-    type: quote(do: %__MODULE__{args: [atom()], body: RustQ.Rust.AST.expr()})
+    type: quote(do: %__MODULE__{args: [atom()], body: AST.expr()})
   )
 
   defnode(Literal, :expr, [:value],
@@ -439,11 +505,11 @@ defmodule RustQ.Rust.AST do
   defnode(EscapeExpr, :expr, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
   defnode(TokenMacro, :expr, [:path, :tokens],
-    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), tokens: String.t()})
+    type: quote(do: %__MODULE__{path: Path.t(), tokens: String.t()})
   )
 
   defnode(MacroCall, :expr, [:path, args: []],
-    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), args: [RustQ.Rust.AST.expr()]})
+    type: quote(do: %__MODULE__{path: Path.t(), args: [AST.expr()]})
   )
 
   defnode(AtomValue, :expr, [:name, module: [:atoms]],
@@ -452,25 +518,25 @@ defmodule RustQ.Rust.AST do
 
   defnode(None, :expr, [], type: quote(do: %__MODULE__{}))
 
-  defnode(Some, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+  defnode(Some, :expr, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
-  defnode(Ok, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr() | nil}))
+  defnode(Ok, :expr, [:expr], type: quote(do: %__MODULE__{expr: AST.expr() | nil}))
 
-  defnode(Err, :expr, [:expr], type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr()}))
+  defnode(Err, :expr, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
   defnode(NifRaiseAtom, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
   defnode(Match, :expr, [:expr, arms: []],
-    type: quote(do: %__MODULE__{expr: RustQ.Rust.AST.expr(), arms: [RustQ.Rust.AST.Arm.t()]})
+    type: quote(do: %__MODULE__{expr: AST.expr(), arms: [Arm.t()]})
   )
 
   defnode(If, :expr, [:condition, then: [], else: []],
     type:
       quote(
         do: %__MODULE__{
-          condition: RustQ.Rust.AST.expr(),
-          then: [RustQ.Rust.AST.stmt()],
-          else: [RustQ.Rust.AST.stmt()]
+          condition: AST.expr(),
+          then: [AST.stmt()],
+          else: [AST.stmt()]
         }
       )
   )
@@ -479,15 +545,15 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          left: RustQ.Rust.AST.expr(),
+          left: AST.expr(),
           op: :eq | :ne | :lt | :lte | :gt | :gte | :add | :sub | :mul | :div | :and | :or,
-          right: RustQ.Rust.AST.expr()
+          right: AST.expr()
         }
       )
   )
 
   defnode(Arm, :field, [:pattern, body: []],
-    type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat(), body: [RustQ.Rust.AST.stmt()]})
+    type: quote(do: %__MODULE__{pattern: AST.pat(), body: [AST.stmt()]})
   )
 
   defnode(PatVar, :pat, [:name, mutable: false],
@@ -496,35 +562,30 @@ defmodule RustQ.Rust.AST do
 
   defnode(PatWildcard, :pat, [], type: quote(do: %__MODULE__{}))
 
-  defnode(PatPath, :pat, [:path], type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t()}))
+  defnode(PatPath, :pat, [:path], type: quote(do: %__MODULE__{path: Path.t()}))
 
   defnode(PatLiteral, :pat, [:value], type: quote(do: %__MODULE__{value: String.t() | atom()}))
 
   defnode(PatNone, :pat, [], type: quote(do: %__MODULE__{}))
 
-  defnode(PatSome, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
+  defnode(PatSome, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: AST.pat()}))
 
   defnode(PatAtomGuard, :pat, [:name, module: [:atoms]],
     type: quote(do: %__MODULE__{name: atom(), module: [atom() | String.t()]})
   )
 
-  defnode(PatTuple, :pat, [:patterns],
-    type: quote(do: %__MODULE__{patterns: [RustQ.Rust.AST.pat()]})
-  )
+  defnode(PatTuple, :pat, [:patterns], type: quote(do: %__MODULE__{patterns: [AST.pat()]}))
 
-  defnode(PatOk, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
+  defnode(PatOk, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: AST.pat()}))
 
-  defnode(PatErr, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: RustQ.Rust.AST.pat()}))
+  defnode(PatErr, :pat, [:pattern], type: quote(do: %__MODULE__{pattern: AST.pat()}))
 
   defnode(PatPathTuple, :pat, [:path, patterns: []],
-    type: quote(do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), patterns: [RustQ.Rust.AST.pat()]})
+    type: quote(do: %__MODULE__{path: Path.t(), patterns: [AST.pat()]})
   )
 
   defnode(PatStruct, :pat, [:path, fields: []],
-    type:
-      quote(
-        do: %__MODULE__{path: RustQ.Rust.AST.Path.t(), fields: [{atom(), RustQ.Rust.AST.pat()}]}
-      )
+    type: quote(do: %__MODULE__{path: Path.t(), fields: [{atom(), AST.pat()}]})
   )
 
   def type_node?(term), do: category_node?(term, :type)

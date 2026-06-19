@@ -1,6 +1,8 @@
 defmodule RustQ.Rust.AST.Schema do
   @moduledoc false
 
+  alias RustQ.Rust.AST
+
   defmodule Node do
     @moduledoc false
     defstruct [:name, :module, :rust_const, :rust_module, :category, fields: []]
@@ -17,7 +19,7 @@ defmodule RustQ.Rust.AST.Schema do
 
   @spec nodes() :: [Node.t()]
   def nodes do
-    RustQ.Rust.AST.__rustq_ast_modules__()
+    AST.__rustq_ast_modules__()
     |> Enum.map(&node!/1)
   end
 
@@ -76,19 +78,11 @@ defmodule RustQ.Rust.AST.Schema do
   end
 
   defp name(module) do
-    module
-    |> Module.split()
-    |> List.last()
-    |> Macro.underscore()
-    |> String.to_atom()
+    RustQ.Atom.identifier!(Macro.underscore(List.last(Module.split(module))))
   end
 
   defp rust_const(module) do
-    module
-    |> name()
-    |> Atom.to_string()
-    |> String.upcase()
-    |> String.to_atom()
+    RustQ.Atom.identifier!(String.upcase(Atom.to_string(name(module))))
   end
 
   defp rust_module(module), do: Atom.to_string(module)

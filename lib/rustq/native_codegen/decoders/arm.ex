@@ -3,7 +3,7 @@ defmodule RustQ.NativeCodegen.Decoders.Arm do
 
   use RustQ.NativeCodegen.DefrustModule
 
-  @spec decode_arm(term()) :: R.nif_result(Arm.t())
+  @spec decode_arm(term()) :: R.nif_result(R.path(:Arm))
   defrust decode_arm(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Arm"))
     pat_term = unwrap!(required_field(term, "pattern"))

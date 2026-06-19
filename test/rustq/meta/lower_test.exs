@@ -16,20 +16,24 @@ end
 defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.NativeCodegen.Decoders
+  alias RustQ.NativeCodegen.Helpers
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.{Attribute, ExprStmt, Function, FunctionArg, MethodCall}
 
   test "defrust consumes idiomatic Rust-facing attributes" do
-    assert %RustQ.Rust.AST.Function{attrs: attrs} =
-             RustQ.Meta.AttrCase.__rustq_asts__()
+    assert %Function{attrs: attrs} =
+             AttrCase.__rustq_asts__()
              |> Enum.find(&(&1.name == :render))
 
     assert [
-             %RustQ.Rust.AST.Attribute{path: [:rustler, :nif], args: [schedule: "DirtyCpu"]},
-             %RustQ.Rust.AST.Attribute{path: [:allow], args: [:dead_code]}
+             %Attribute{path: [:rustler, :nif], args: [schedule: "DirtyCpu"]},
+             %Attribute{path: [:allow], args: [:dead_code]}
            ] = attrs
 
-    source = RustQ.Meta.AttrCase.__rustq_source__()
+    source = AttrCase.__rustq_source__()
     assert source =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
     assert source =~ "#[allow(dead_code)]"
   end
@@ -37,17 +41,17 @@ defmodule RustQ.Meta.LowerTest do
   test "generated ASTs are retained before fragment validation" do
     [draw_save, decode_mode, draw_rect, maybe_save | _] = Generated.__rustq_asts__()
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :draw_save,
-             args: [%RustQ.Rust.AST.FunctionArg{name: :canvas, type: %RustQ.Rust.AST.TypeRef{}}]
+             args: [%FunctionArg{name: :canvas, type: %RustQ.Rust.AST.TypeRef{}}]
            } = draw_save
 
     assert %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}} = hd(decode_mode.body)
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              args: [
                _canvas_arg,
-               %RustQ.Rust.AST.FunctionArg{name: :opts, type: %RustQ.Rust.AST.TypePath{}},
+               %FunctionArg{name: :opts, type: %RustQ.Rust.AST.TypePath{}},
                _raw_opts_arg
              ]
            } = draw_rect
@@ -131,26 +135,26 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "dogfooded native helpers lower binary operators and Rust string types" do
-    helpers = RustQ.NativeCodegen.Helpers.__rustq_asts__()
+    helpers = Helpers.__rustq_asts__()
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :required_field,
              body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.MethodCall{method: :map_get}}]
            } = Enum.find(helpers, &(&1.name == :required_field))
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :optional_map_get,
              body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.Match{}}]
            } = Enum.find(helpers, &(&1.name == :optional_map_get))
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :atom_key,
              args: [
-               %RustQ.Rust.AST.FunctionArg{
+               %FunctionArg{
                  name: :term,
                  type: %RustQ.Rust.AST.TypePath{parts: [:Term], lifetimes: [:a]}
                },
-               %RustQ.Rust.AST.FunctionArg{
+               %FunctionArg{
                  name: :key,
                  type: %RustQ.Rust.AST.TypeRef{inner: %RustQ.Rust.AST.TypePath{parts: [:str]}}
                }
@@ -160,7 +164,7 @@ defmodule RustQ.Meta.LowerTest do
              }
            } = Enum.find(helpers, &(&1.name == :atom_key))
 
-    assert %RustQ.Rust.AST.Function{name: :optional_atom_key, body: optional_body} =
+    assert %Function{name: :optional_atom_key, body: optional_body} =
              Enum.find(helpers, &(&1.name == :optional_atom_key))
 
     assert Enum.any?(
@@ -168,7 +172,7 @@ defmodule RustQ.Meta.LowerTest do
              &match?(%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{}}, &1)
            )
 
-    assert %RustQ.Rust.AST.Function{name: :is_nil, body: body} =
+    assert %Function{name: :is_nil, body: body} =
              Enum.find(helpers, &(&1.name == :is_nil))
 
     assert [
@@ -178,7 +182,7 @@ defmodule RustQ.Meta.LowerTest do
            ] =
              body
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :expect_struct,
              body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{else: else_body}}]
            } =
@@ -197,16 +201,16 @@ defmodule RustQ.Meta.LowerTest do
     draw_rect = Enum.find(Generated.__rustq_asts__(), &(&1.name == :draw_rect))
 
     decode_expr_ref =
-      Enum.find(RustQ.NativeCodegen.Decoders.asts(), &(&1.name == :decode_expr_ref))
+      Enum.find(Decoders.asts(), &(&1.name == :decode_expr_ref))
 
     assert Enum.any?(
              draw_rect.body,
-             &match?(%RustQ.Rust.AST.ExprStmt{expr: %RustQ.Rust.AST.MethodCall{}}, &1)
+             &match?(%ExprStmt{expr: %MethodCall{}}, &1)
            )
 
     assert inspect(draw_rect) =~ "RustQ.Rust.AST.Ref"
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              body: [
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Let{},
@@ -223,7 +227,7 @@ defmodule RustQ.Meta.LowerTest do
   test "nested branches use expected return type wrapping" do
     asts = Generated.__rustq_asts__()
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :nested_option,
              body: [
                %RustQ.Rust.AST.Return{
@@ -252,7 +256,7 @@ defmodule RustQ.Meta.LowerTest do
            ] =
              else_body
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :nested_result,
              body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{then: result_then}}]
            } = Enum.find(asts, &(&1.name == :nested_result))
@@ -272,7 +276,7 @@ defmodule RustQ.Meta.LowerTest do
              }
            ] = result_then
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :nested_nif_result,
              body: [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{else: nif_else}}]
            } = Enum.find(asts, &(&1.name == :nested_nif_result))
@@ -285,9 +289,9 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "dogfooded decoder wrappers lower Super calls and Rust constructors" do
-    decoders = RustQ.NativeCodegen.Decoders.asts()
+    decoders = Decoders.asts()
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :decode_expr_try,
              body: [
                %RustQ.Rust.AST.Let{},
@@ -299,7 +303,7 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_expr_try))
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :decode_pat_some,
              body: [
                %RustQ.Rust.AST.Let{},
@@ -311,7 +315,7 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_pat_some))
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :decode_stmt_return,
              body: [
                %RustQ.Rust.AST.Let{},
@@ -325,7 +329,7 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_stmt_return))
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :decode_expr_ok,
              body: [
                %RustQ.Rust.AST.Let{},
@@ -340,7 +344,7 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_expr_ok))
 
-    assert %RustQ.Rust.AST.Function{
+    assert %Function{
              name: :decode_expr_none,
              body: [
                %RustQ.Rust.AST.Return{

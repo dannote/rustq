@@ -7,12 +7,14 @@ defmodule RustQ.Spec do
   helpers.
   """
 
+  alias RustQ.Meta.Type
+
   @doc "Lowers a typespec type form to `RustQ.Meta.Type` metadata."
-  @spec type(term(), map()) :: RustQ.Meta.Type.t()
+  @spec type(term(), map()) :: Type.t()
   def type(spec, aliases \\ %{}) do
     spec
     |> normalize()
-    |> RustQ.Meta.Type.parse(aliases)
+    |> Type.parse(aliases)
   end
 
   @doc "Builds type aliases from quoted or BEAM abstract type declarations."
@@ -20,12 +22,12 @@ defmodule RustQ.Spec do
   def aliases(types) do
     types
     |> Enum.map(&normalize_type_decl/1)
-    |> RustQ.Meta.Type.type_aliases()
+    |> Type.type_aliases()
   end
 
   @doc "Extracts aliases, function specs, and def argument names from a source path or quoted module AST."
   @spec declarations(Path.t() | Macro.t()) :: %{
-          aliases: %{optional({atom(), non_neg_integer()}) => RustQ.Meta.Type.t()},
+          aliases: %{optional({atom(), non_neg_integer()}) => Type.t()},
           specs: [{atom(), [Macro.t()]}],
           defs: %{optional(atom()) => [atom()]}
         }
@@ -143,7 +145,7 @@ defmodule RustQ.Spec do
   defp module_ast(module) when is_atom(module) do
     module
     |> Module.split()
-    |> Enum.map(&String.to_atom/1)
+    |> Enum.map(&RustQ.Atom.identifier!/1)
     |> then(&{:__aliases__, [], &1})
   end
 end

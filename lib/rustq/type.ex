@@ -93,36 +93,91 @@ defmodule RustQ.Type do
   @typedoc "Enum intent marker for domain-specific descriptor resolution."
   @type enum(name) :: atom() | {name}
 
+  @spec atom() :: no_return()
   def atom, do: type_only!()
+
+  @spec bool() :: no_return()
   def bool, do: type_only!()
+
+  @spec f32() :: no_return()
   def f32, do: type_only!()
+
+  @spec f64() :: no_return()
   def f64, do: type_only!()
+
+  @spec i8() :: no_return()
   def i8, do: type_only!()
+
+  @spec i16() :: no_return()
   def i16, do: type_only!()
+
+  @spec i32() :: no_return()
   def i32, do: type_only!()
+
+  @spec i64() :: no_return()
   def i64, do: type_only!()
+
+  @spec isize() :: no_return()
   def isize, do: type_only!()
+
+  @spec str() :: no_return()
   def str, do: type_only!()
+
+  @spec term() :: no_return()
   def term, do: type_only!()
+
+  @spec u8() :: no_return()
   def u8, do: type_only!()
+
+  @spec u16() :: no_return()
   def u16, do: type_only!()
+
+  @spec u32() :: no_return()
   def u32, do: type_only!()
+
+  @spec u64() :: no_return()
   def u64, do: type_only!()
+
+  @spec usize() :: no_return()
   def usize, do: type_only!()
+
+  @spec unit() :: no_return()
   def unit, do: type_only!()
 
+  @spec path(term()) :: no_return()
   def path(_parts), do: type_only!()
+
+  @spec path(term(), term()) :: no_return()
   def path(_parts, _opts), do: type_only!()
+
+  @spec lifetime(term()) :: no_return()
   def lifetime(_name), do: type_only!()
+
+  @spec slice(term()) :: no_return()
   def slice(_type), do: type_only!()
+
+  @spec raw(term()) :: no_return()
   def raw(_name), do: type_only!()
+
+  @spec enum(term()) :: no_return()
   def enum(_name), do: type_only!()
 
+  @spec ref(term()) :: no_return()
   def ref(_type), do: type_only!()
+
+  @spec mut_ref(term()) :: no_return()
   def mut_ref(_type), do: type_only!()
+
+  @spec option(term()) :: no_return()
   def option(_type), do: type_only!()
+
+  @spec vec(term()) :: no_return()
   def vec(_type), do: type_only!()
+
+  @spec result(term(), term()) :: no_return()
   def result(_ok, _error), do: type_only!()
+
+  @spec nif_result(term()) :: no_return()
   def nif_result(_type), do: type_only!()
 
   defp type_only! do

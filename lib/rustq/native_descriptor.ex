@@ -6,11 +6,16 @@ defmodule RustQ.NativeDescriptor do
   metadata and, when available, a web source link derived from Cargo metadata.
   """
 
+  alias RustQ.NativeRef
+  alias RustQ.Syn.Index
+  alias RustQ.Syn.Method
+  alias RustQ.Syn.Type
+
   defstruct [:ref, :method, :source_url]
 
   @type t :: %__MODULE__{
-          ref: RustQ.NativeRef.t(),
-          method: RustQ.Syn.Method.t(),
+          ref: NativeRef.t(),
+          method: Method.t(),
           source_url: String.t() | nil
         }
 
@@ -23,11 +28,11 @@ defmodule RustQ.NativeDescriptor do
   @type expected_return :: {:ref, String.t()} | {:path, String.t()} | :none | :any
 
   @doc "Resolves a native method reference through a `RustQ.Syn.Index`."
-  @spec resolve!(RustQ.Syn.Index.t(), RustQ.NativeRef.t()) :: t()
-  def resolve!(%RustQ.Syn.Index{} = index, %RustQ.NativeRef{} = ref) do
+  @spec resolve!(Index.t(), NativeRef.t()) :: t()
+  def resolve!(%Index{} = index, %NativeRef{} = ref) do
     validate_package!(index, ref)
 
-    method = RustQ.Syn.Index.method!(index, ref.target, ref.member)
+    method = Index.method!(index, ref.target, ref.member)
 
     %__MODULE__{
       ref: ref,
@@ -37,8 +42,8 @@ defmodule RustQ.NativeDescriptor do
   end
 
   @doc "Resolves a native method reference and validates its argument/return shape."
-  @spec resolve!(RustQ.Syn.Index.t(), RustQ.NativeRef.t(), keyword()) :: t()
-  def resolve!(%RustQ.Syn.Index{} = index, %RustQ.NativeRef{} = ref, opts) when is_list(opts) do
+  @spec resolve!(Index.t(), NativeRef.t(), keyword()) :: t()
+  def resolve!(%Index{} = index, %NativeRef{} = ref, opts) when is_list(opts) do
     index
     |> resolve!(ref)
     |> assert_shape!(opts)
@@ -54,7 +59,7 @@ defmodule RustQ.NativeDescriptor do
     assert_args_match!(descriptor, expected_args)
 
     unless return_matches?(method.returns_ast, expected_returns) do
-      raise "unexpected native return for #{RustQ.NativeRef.format(descriptor.ref)}: #{inspect(method.returns_ast)}"
+      raise "unexpected native return for #{NativeRef.format(descriptor.ref)}: #{inspect(method.returns_ast)}"
     end
 
     descriptor
@@ -68,38 +73,38 @@ defmodule RustQ.NativeDescriptor do
     unless length(actual) == length(expected_args) and
              Enum.zip(actual, expected_args)
              |> Enum.all?(fn {type, expected} -> type_matches?(type, expected) end) do
-      raise "unexpected native args for #{RustQ.NativeRef.format(descriptor.ref)}: #{inspect(descriptor.method.args)}"
+      raise "unexpected native args for #{NativeRef.format(descriptor.ref)}: #{inspect(descriptor.method.args)}"
     end
   end
 
-  defp validate_package!(%RustQ.Syn.Index{package: nil}, _ref), do: :ok
-  defp validate_package!(_index, %RustQ.NativeRef{package: nil}), do: :ok
+  defp validate_package!(%Index{package: nil}, _ref), do: :ok
+  defp validate_package!(_index, %NativeRef{package: nil}), do: :ok
 
-  defp validate_package!(%RustQ.Syn.Index{package: %{name: name}}, %RustQ.NativeRef{package: name}),
-       do: :ok
+  defp validate_package!(%Index{package: %{name: name}}, %NativeRef{package: name}),
+    do: :ok
 
-  defp validate_package!(%RustQ.Syn.Index{package: package}, %RustQ.NativeRef{} = ref) do
+  defp validate_package!(%Index{package: package}, %NativeRef{} = ref) do
     raise ArgumentError,
           "native ref package #{inspect(ref.package)} does not match indexed package #{inspect(package.name)}"
   end
 
   defp source_url(nil, _method), do: nil
 
-  defp source_url(package, %RustQ.Syn.Method{source_path: path, source_line: line})
+  defp source_url(package, %Method{source_path: path, source_line: line})
        when is_binary(path) and is_integer(line),
        do: RustQ.Cargo.source_link(package, path, line)
 
   defp source_url(_package, _method), do: nil
 
   defp type_matches?(_type, :any), do: true
-  defp type_matches?(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}}, :self_ref), do: true
-  defp type_matches?(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}}, {:ref, "Self"}), do: true
-  defp type_matches?(type, {:ref, name}), do: RustQ.Syn.Type.ref_to?(type, name)
+  defp type_matches?(%Type.Ref{inner: %Type.Self{}}, :self_ref), do: true
+  defp type_matches?(%Type.Ref{inner: %Type.Self{}}, {:ref, "Self"}), do: true
+  defp type_matches?(type, {:ref, name}), do: Type.ref_to?(type, name)
 
   defp type_matches?(type, {:impl_trait, trait, args}),
-    do: RustQ.Syn.Type.impl_trait?(type, trait, args)
+    do: Type.impl_trait?(type, trait, args)
 
-  defp type_matches?(type, {:path, name}), do: RustQ.Syn.Type.path?(type, name)
+  defp type_matches?(type, {:path, name}), do: Type.path?(type, name)
   defp type_matches?(_type, _expected), do: false
 
   defp return_matches?(_type, :any), do: true

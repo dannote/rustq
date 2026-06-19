@@ -20,7 +20,7 @@ defmodule RustQ.Rustler.Resource do
   end
 
   defp resource_struct_ast(name, fields) do
-    I.struct String.to_atom(to_string(name)) do
+    I.struct RustQ.Atom.identifier!(to_string(name)) do
       Enum.map(fields, fn {field_name, type} -> field(field_name, type, vis: :pub) end)
     end
   end
@@ -68,7 +68,7 @@ defmodule RustQ.Rustler.Resource do
   defp resource_decode_ast(name, function_name) do
     resource_type = resource_arc_type(name)
 
-    function String.to_atom(to_string(function_name)),
+    function RustQ.Atom.identifier!(to_string(function_name)),
       lifetime: :a,
       args: [term: A.type_path(:Term, lifetimes: [:a])],
       returns: %AST.TypeNifResult{inner: resource_type} do
@@ -79,7 +79,7 @@ defmodule RustQ.Rustler.Resource do
   defp resource_handle_decode_ast(name, function_name, field) do
     resource_type = resource_arc_type(name)
 
-    function String.to_atom(to_string(function_name)),
+    function RustQ.Atom.identifier!(to_string(function_name)),
       lifetime: :a,
       args: [term: A.type_path(:Term, lifetimes: [:a])],
       returns: %AST.TypeNifResult{inner: resource_type} do

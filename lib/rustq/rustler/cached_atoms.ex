@@ -14,7 +14,7 @@ defmodule RustQ.Rustler.CachedAtoms do
   require I
 
   @spec cached_atom(R.path(:Env), R.ref(R.raw(:"OnceLock<Atom>")), R.ref(R.path(:str))) ::
-          R.atom()
+          atom()
   defrust cached_atom(env, cell, name) do
     deref(cell.get_or_init(fn -> Atom.from_term(name.encode(env)).unwrap() end))
   end
@@ -42,14 +42,18 @@ defmodule RustQ.Rustler.CachedAtoms do
 
     [
       Rust.ast_item(
-        static(String.to_atom(static_name), "OnceLock<Atom>", A.path_call([:OnceLock, :new]))
+        static(
+          RustQ.Atom.identifier!(static_name),
+          "OnceLock<Atom>",
+          A.path_call([:OnceLock, :new])
+        )
       ),
       Rust.ast_item(
-        function String.to_atom("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
+        function RustQ.Atom.identifier!("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
           A.return(
             A.call(:cached_atom, [
               A.var(:env),
-              A.ref(A.var(String.to_atom(static_name))),
+              A.ref(A.var(RustQ.Atom.identifier!(static_name))),
               A.lit(value)
             ])
           )

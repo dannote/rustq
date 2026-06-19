@@ -3,7 +3,7 @@ defmodule RustQ.NativeCodegen.ModuleHelpers do
 
   use RustQ.NativeCodegen.DefrustModule
 
-  @spec atom(Env.t(), R.str()) :: R.nif_result(Atom.t())
+  @spec atom(R.path(:Env), R.str()) :: R.nif_result(R.path(:Atom))
   defrust atom(env, name) do
     Atom.from_str(env, name)
   end

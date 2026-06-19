@@ -2,6 +2,7 @@ defmodule RustQ.RustTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "builds module, const, and type alias items" do
@@ -20,7 +21,7 @@ defmodule RustQ.RustTest do
   end
 
   test "converts Rust AST items to fragments" do
-    item = RustQ.Rust.AST.Builder.const(:ANSWER, :i32, RustQ.Rust.AST.Builder.lit(42))
+    item = A.const(:ANSWER, :i32, A.lit(42))
 
     assert Rust.ast_item(item) |> Rust.to_fragment() == "const ANSWER: i32 = 42;"
   end

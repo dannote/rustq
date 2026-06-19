@@ -1,6 +1,10 @@
 defmodule RustQ.NativeEnumDescriptorTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.NativeEnumDescriptor
+  alias RustQ.Syn.Enum, as: SynEnum
+  alias RustQ.Syn.Index
+
   test "resolves native enums through Syn indexes" do
     path =
       Path.join(
@@ -14,14 +18,14 @@ defmodule RustQ.NativeEnumDescriptorTest do
     pub enum ClipOp { Intersect, Difference }
     """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
-    assert %RustQ.NativeEnumDescriptor{
+    assert %NativeEnumDescriptor{
              name: "ClipOp",
              package: nil,
-             enum: %RustQ.Syn.Enum{variants: ["Intersect", "Difference"]},
+             enum: %SynEnum{variants: ["Intersect", "Difference"]},
              source_url: nil
-           } = RustQ.NativeEnumDescriptor.resolve!(index, "ClipOp")
+           } = NativeEnumDescriptor.resolve!(index, "ClipOp")
   after
     if path = Process.get(:path), do: File.rm(path)
   end

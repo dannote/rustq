@@ -1,22 +1,53 @@
 defmodule RustQ.NativeCodegen.GeneratedASTTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.Rust.AST
+  alias RustQ.NativeCodegen
+  alias RustQ.NativeCodegen.Decoders
+  alias RustQ.NativeCodegen.Decoders.Item, as: ItemDecoders
+  alias RustQ.NativeCodegen.Decoders.Type, as: TypeDecoders
+  alias RustQ.NativeCodegen.Dispatch
+  alias RustQ.NativeCodegen.Modules
+
+  alias RustQ.Rust.AST.Schema
+
+  alias RustQ.Rust.AST.{
+    Closure,
+    ExprStmt,
+    Function,
+    FunctionArg,
+    If,
+    Let,
+    MacroItemCall,
+    Match,
+    MethodCall,
+    Module,
+    Ok,
+    Path,
+    PathCall,
+    PatVar,
+    Return,
+    Try,
+    TypeNifResult,
+    TypePath,
+    TypeRef,
+    Var,
+    VecLiteral
+  }
 
   test "generates parseable AST support" do
-    source = RustQ.NativeCodegen.generated_ast_support()
+    source = NativeCodegen.generated_ast_support()
 
     assert {:ok, _template} = RustQ.parse(source, "generated_ast.rs")
   end
 
   test "generated modules are AST-backed" do
-    modules = RustQ.NativeCodegen.Modules.asts()
+    modules = Modules.asts()
 
-    assert %AST.Module{name: :atoms, items: [%AST.MacroItemCall{}], vis: :crate} =
-             Enum.find(modules, &match?(%AST.Module{name: :atoms}, &1))
+    assert %Module{name: :atoms, items: [%MacroItemCall{}], vis: :crate} =
+             Enum.find(modules, &match?(%Module{name: :atoms}, &1))
 
-    assert %AST.Module{name: :ast_modules, items: constants, vis: :crate} =
-             Enum.find(modules, &match?(%AST.Module{name: :ast_modules}, &1))
+    assert %Module{name: :ast_modules, items: constants, vis: :crate} =
+             Enum.find(modules, &match?(%Module{name: :ast_modules}, &1))
 
     constant_names = constants |> Enum.map(& &1.name) |> MapSet.new()
     assert MapSet.member?(constant_names, :FUNCTION)
@@ -27,22 +58,22 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     refute MapSet.member?(constant_names, :STRUCT_FIELD)
     refute MapSet.member?(constant_names, :ENUM_VARIANT)
 
-    assert %AST.Function{
+    assert %Function{
              name: :atom,
              vis: :crate,
              args: [
-               %AST.FunctionArg{name: :env, type: %AST.TypePath{parts: [:Env]}},
-               %AST.FunctionArg{
+               %FunctionArg{name: :env, type: %TypePath{parts: [:Env]}},
+               %FunctionArg{
                  name: :name,
-                 type: %AST.TypeRef{inner: %AST.TypePath{parts: [:str]}}
+                 type: %TypeRef{inner: %TypePath{parts: [:str]}}
                }
              ],
-             returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [:Atom]}}
-           } = Enum.find(List.flatten(modules), &match?(%AST.Function{name: :atom}, &1))
+             returns: %TypeNifResult{inner: %TypePath{parts: [:Atom]}}
+           } = Enum.find(List.flatten(modules), &match?(%Function{name: :atom}, &1))
   end
 
   test "dispatch functions are AST-backed" do
-    dispatch = RustQ.NativeCodegen.Dispatch.asts()
+    dispatch = Dispatch.asts()
     names = dispatch |> Enum.map(& &1.name) |> MapSet.new()
 
     assert MapSet.subset?(
@@ -57,22 +88,22 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
            )
 
     for function <- dispatch do
-      assert %AST.Function{body: [%AST.Return{expr: %AST.Match{}}]} = function
+      assert %Function{body: [%Return{expr: %Match{}}]} = function
     end
   end
 
   test "type ref decoder delegates only the syn ref construction boundary" do
-    assert %AST.Function{body: body} =
-             RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
+    assert %Function{body: body} =
+             TypeDecoders.__rustq_asts__()
              |> Enum.find(&(&1.name == :decode_type_ref))
 
-    assert %AST.Return{
-             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_type_ref]}}
+    assert %Return{
+             expr: %PathCall{path: %Path{parts: [:super, :parse_type_ref]}}
            } = List.last(body)
   end
 
   test "type container decoders use generic type construction" do
-    decoders = RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
+    decoders = TypeDecoders.__rustq_asts__()
 
     for name <- [
           :decode_type_option,
@@ -80,111 +111,111 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
           :decode_type_nif_result,
           :decode_type_vec
         ] do
-      assert %AST.Function{body: body} = Enum.find(decoders, &(&1.name == name))
+      assert %Function{body: body} = Enum.find(decoders, &(&1.name == name))
 
-      assert %AST.Return{
-               expr: %AST.PathCall{
-                 path: %AST.Path{parts: [:super, :parse_type_generic]},
-                 args: [_path, %AST.VecLiteral{}]
+      assert %Return{
+               expr: %PathCall{
+                 path: %Path{parts: [:super, :parse_type_generic]},
+                 args: [_path, %VecLiteral{}]
                }
              } = List.last(body)
     end
   end
 
   test "dogfooded type helpers cover path and lifetime list boundaries" do
-    type_decoders = RustQ.NativeCodegen.Decoders.Type.__rustq_asts__()
+    type_decoders = TypeDecoders.__rustq_asts__()
 
-    assert %AST.Function{name: :path_parts, body: path_body} =
+    assert %Function{name: :path_parts, body: path_body} =
              Enum.find(type_decoders, &(&1.name == :path_parts))
 
-    assert %AST.Let{
-             expr: %AST.Try{
-               expr: %AST.PathCall{path: %AST.Path{parts: [:super, :decode_string_list]}}
+    assert %Let{
+             expr: %Try{
+               expr: %PathCall{path: %Path{parts: [:super, :decode_string_list]}}
              }
            } =
              hd(path_body)
 
-    assert %AST.Return{expr: %AST.Ok{expr: %AST.MethodCall{method: :join}}} = List.last(path_body)
+    assert %Return{expr: %Ok{expr: %MethodCall{method: :join}}} = List.last(path_body)
 
-    assert %AST.Function{name: :decode_lifetime_list, body: lifetime_body} =
+    assert %Function{name: :decode_lifetime_list, body: lifetime_body} =
              Enum.find(type_decoders, &(&1.name == :decode_lifetime_list))
 
     assert [
-             %AST.Return{
-               expr: %AST.PathCall{path: %AST.Path{parts: [:super, :decode_string_list]}}
+             %Return{
+               expr: %PathCall{path: %Path{parts: [:super, :decode_string_list]}}
              }
            ] =
              lifetime_body
   end
 
   test "dogfooded derive decoder uses iterator lowering" do
-    item_decoders = RustQ.NativeCodegen.Decoders.Item.__rustq_asts__()
+    item_decoders = ItemDecoders.__rustq_asts__()
 
-    assert %AST.Function{name: :decode_derive_path_list, body: body} =
+    assert %Function{name: :decode_derive_path_list, body: body} =
              Enum.find(item_decoders, &(&1.name == :decode_derive_path_list))
 
-    assert %AST.Return{
-             expr: %AST.MethodCall{
+    assert %Return{
+             expr: %MethodCall{
                method: :collect,
-               receiver: %AST.MethodCall{
+               receiver: %MethodCall{
                  method: :map,
-                 args: [%AST.Closure{args: [:derive_path]}]
+                 args: [%Closure{args: [:derive_path]}]
                }
              }
            } = List.last(body)
   end
 
   test "dogfooded item decoders expose structural AST boundaries" do
-    item_decoders = RustQ.NativeCodegen.Decoders.Item.__rustq_asts__()
+    item_decoders = ItemDecoders.__rustq_asts__()
 
-    assert %AST.Function{name: :decode_ast_function, body: function_body} =
+    assert %Function{name: :decode_ast_function, body: function_body} =
              Enum.find(item_decoders, &(&1.name == :decode_ast_function))
 
-    assert %AST.ExprStmt{expr: %AST.Try{}} = hd(function_body)
-    assert %AST.Let{pattern: %AST.PatVar{name: :args}} = Enum.at(function_body, 3)
+    assert %ExprStmt{expr: %Try{}} = hd(function_body)
+    assert %Let{pattern: %PatVar{name: :args}} = Enum.at(function_body, 3)
 
-    assert %AST.Return{
-             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_item_function_args]}}
+    assert %Return{
+             expr: %PathCall{path: %Path{parts: [:super, :parse_item_function_args]}}
            } = List.last(function_body)
 
-    assert %AST.Function{name: :decode_function_arg, body: arg_body} =
+    assert %Function{name: :decode_function_arg, body: arg_body} =
              Enum.find(item_decoders, &(&1.name == :decode_function_arg))
 
-    assert %AST.ExprStmt{expr: %AST.Try{}} = hd(arg_body)
+    assert %ExprStmt{expr: %Try{}} = hd(arg_body)
 
-    assert %AST.Return{
-             expr: %AST.If{
-               condition: %AST.Var{name: :receiver},
+    assert %Return{
+             expr: %If{
+               condition: %Var{name: :receiver},
                then: [
-                 %AST.Return{
-                   expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_function_receiver]}}
+                 %Return{
+                   expr: %PathCall{path: %Path{parts: [:super, :parse_function_receiver]}}
                  }
                ],
                else: else_body
              }
            } = List.last(arg_body)
 
-    assert %AST.Return{
-             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_function_arg]}}
+    assert %Return{
+             expr: %PathCall{path: %Path{parts: [:super, :parse_function_arg]}}
            } = List.last(else_body)
   end
 
   test "dogfooded decoder modules cover generated decoder categories" do
     decoder_names =
-      RustQ.NativeCodegen.Decoders.asts()
+      Decoders.asts()
       |> Enum.map(& &1.name)
       |> MapSet.new()
 
     expected_expr_decoders =
-      RustQ.Rust.AST.Schema.nodes(:expr)
+      Schema.nodes(:expr)
       |> Enum.map(&String.to_atom("decode_expr_#{&1.name}"))
 
     expected_stmt_decoders =
-      RustQ.Rust.AST.Schema.nodes(:stmt)
+      Schema.nodes(:stmt)
       |> Enum.map(&String.to_atom("decode_stmt_#{&1.name}"))
 
     expected_pat_decoders =
-      RustQ.Rust.AST.Schema.nodes(:pat)
+      Schema.nodes(:pat)
       |> Enum.reject(&(&1.name == :pat_atom_guard))
       |> Enum.map(&String.to_atom("decode_#{&1.name}"))
 

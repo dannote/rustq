@@ -19,6 +19,7 @@ defmodule RustQ.Meta.Type do
   """
 
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
 
   defguardp is_ast_tuple(tuple)
             when tuple_size(tuple) == 3 and is_atom(elem(tuple, 0)) and is_list(elem(tuple, 1)) and
@@ -365,7 +366,7 @@ defmodule RustQ.Meta.Type do
   end
 
   defp spec_path_part!(part) when is_atom(part), do: part
-  defp spec_path_part!(part) when is_binary(part), do: String.to_atom(part)
+  defp spec_path_part!(part) when is_binary(part), do: RustQ.Atom.identifier!(part)
 
   defp spec_path_part!(other) do
     raise ArgumentError,
@@ -418,7 +419,7 @@ defmodule RustQ.Meta.Type do
   defp external_type_generics(arg, aliases), do: [parse(arg, aliases).ast]
 
   defp rust_module_part(part) when is_atom(part),
-    do: part |> Atom.to_string() |> Macro.underscore() |> String.to_atom()
+    do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
 
   defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
 
@@ -464,8 +465,14 @@ defmodule RustQ.Meta.Type do
     end)
   end
 
-  defp union_members({:|, _, [left, right]}), do: union_members(left) ++ union_members(right)
-  defp union_members(other), do: [other]
+  defp union_members(ast), do: collect_union_members(ast, [])
+
+  defp collect_union_members({:|, _, [left, right]}, acc) do
+    acc = collect_union_members(right, acc)
+    collect_union_members(left, acc)
+  end
+
+  defp collect_union_members(other, acc), do: [other | acc]
 
   defp atom_union?(ast), do: ast |> union_members() |> Enum.all?(&is_atom/1)
 
@@ -503,7 +510,7 @@ defmodule RustQ.Meta.Type do
     {type, _aliases} = parse_alias_type({name, [], args}, raw, aliases)
     type.kind == :struct
   rescue
-    _error -> false
+    _error in [ArgumentError, FunctionClauseError] -> false
   end
 
   defp tagged_tuple?(_other, _raw, _aliases), do: false
@@ -516,7 +523,7 @@ defmodule RustQ.Meta.Type do
 
   defp tuple_variant({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
     {type, aliases} = parse_alias_type({name, [], args}, raw, aliases)
-    {{String.to_atom(type.meta.rust_name), [type]}, aliases}
+    {{RustQ.Atom.identifier!(type.meta.rust_name), [type]}, aliases}
   end
 
   defp result_members(ast) do
@@ -532,7 +539,7 @@ defmodule RustQ.Meta.Type do
     %__MODULE__{
       kind: kind,
       ast: ast,
-      rust: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary(),
+      rust: ast |> Render.render_type() |> IO.iodata_to_binary(),
       meta: meta
     }
   end

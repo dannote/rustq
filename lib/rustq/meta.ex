@@ -47,6 +47,7 @@ defmodule RustQ.Meta do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.PatternBuilder, as: P
+  alias RustQ.Rust.AST.Render
 
   require A
 
@@ -113,7 +114,7 @@ defmodule RustQ.Meta do
     type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
 
     function_source =
-      Enum.map_join(rust_items, "\n\n", &RustQ.Rust.AST.Render.render_item/1)
+      Enum.map_join(rust_items, "\n\n", &Render.render_item/1)
 
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
@@ -172,7 +173,7 @@ defmodule RustQ.Meta do
   defp alias_parts!(atom) when is_atom(atom) do
     atom
     |> Module.split()
-    |> Enum.map(&String.to_atom/1)
+    |> Enum.map(&RustQ.Atom.identifier!/1)
   end
 
   defp alias_parts!(other) do
@@ -233,7 +234,7 @@ defmodule RustQ.Meta do
   defp rust_ast_type(type_ast) do
     %Type{
       kind: rust_ast_type_kind(type_ast),
-      rust: type_ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary(),
+      rust: type_ast |> Render.render_type() |> IO.iodata_to_binary(),
       ast: type_ast
     }
   end
@@ -398,7 +399,7 @@ defmodule RustQ.Meta do
   defp validate_item_ast(%AST.Enum{} = item), do: validate_ast_item(item)
 
   defp validate_ast_item(item) do
-    RustQ.parse_fragment!(:item, RustQ.Rust.AST.Render.render_item(item))
+    RustQ.parse_fragment!(:item, Render.render_item(item))
   end
 
   defp build_type_asts(type_aliases) do
@@ -413,17 +414,17 @@ defmodule RustQ.Meta do
          meta: %{variants: variants, elixir_name: elixir_name}
        }) do
     enum = %AST.Enum{
-      name: String.to_atom(rust_name),
+      name: RustQ.Atom.identifier!(rust_name),
       vis: :pub,
       derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
       variants:
         variants
         |> Enum.map(&rust_variant/1)
-        |> Enum.map(&%AST.EnumVariant{name: String.to_atom(&1)})
+        |> Enum.map(&%AST.EnumVariant{name: RustQ.Atom.identifier!(&1)})
     }
 
     decoder = %AST.Function{
-      name: String.to_atom("decode_#{elixir_name}_atom"),
+      name: RustQ.Atom.identifier!("decode_#{elixir_name}_atom"),
       vis: :pub,
       args: [%AST.FunctionArg{name: :value, type: "Atom"}],
       returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
@@ -450,20 +451,20 @@ defmodule RustQ.Meta do
          meta: %{elixir_name: elixir_name, variants: variants}
        }) do
     enum = %AST.Enum{
-      name: String.to_atom(rust_name),
+      name: RustQ.Atom.identifier!(rust_name),
       vis: :pub,
       derive: [:Clone, :Debug],
       variants:
         Enum.map(variants, fn {tag, types} ->
           %AST.EnumVariant{
-            name: tag |> rust_variant() |> String.to_atom(),
+            name: tag |> rust_variant() |> RustQ.Atom.identifier!(),
             tuple: Enum.map(types, & &1.ast)
           }
         end)
     }
 
     decoder = %AST.Function{
-      name: String.to_atom("decode_#{elixir_name}"),
+      name: RustQ.Atom.identifier!("decode_#{elixir_name}"),
       vis: :pub,
       args: [%AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}],
       returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
@@ -480,7 +481,7 @@ defmodule RustQ.Meta do
         do: :a
 
     struct = %AST.Struct{
-      name: String.to_atom(rust_name),
+      name: RustQ.Atom.identifier!(rust_name),
       vis: :pub,
       derive: [:Clone, :Debug],
       lifetime: lifetime,
@@ -488,7 +489,7 @@ defmodule RustQ.Meta do
     }
 
     decoder = %AST.Function{
-      name: String.to_atom("decode_#{Macro.underscore(rust_name)}"),
+      name: RustQ.Atom.identifier!("decode_#{Macro.underscore(rust_name)}"),
       vis: :pub,
       args: [%AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}],
       returns: %AST.TypeNifResult{
@@ -541,7 +542,9 @@ defmodule RustQ.Meta do
             A.arm P.lit("Elixir.#{variant_name}") do
               A.return do
                 A.method(
-                  A.call(String.to_atom("decode_#{Macro.underscore(variant_name)}"), [:term]),
+                  A.call(RustQ.Atom.identifier!("decode_#{Macro.underscore(variant_name)}"), [
+                    :term
+                  ]),
                   :map,
                   [A.path([rust_name, rust_variant(tag)])]
                 )

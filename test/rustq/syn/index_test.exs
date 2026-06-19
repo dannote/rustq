@@ -1,29 +1,36 @@
 defmodule RustQ.Syn.IndexTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Cargo.Package
+  alias RustQ.Syn.Enum, as: SynEnum
+  alias RustQ.Syn.Index
+  alias RustQ.Syn.Type
+  alias RustQ.Syn.TypeAlias
+  alias RustQ.Syn.Use, as: SynUse
+
   test "builds package-aware indexes from Cargo metadata" do
     index =
-      RustQ.Syn.Index.from_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
+      Index.from_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
 
-    assert %RustQ.Cargo.Package{name: "rustq_nif"} = index.package
+    assert %Package{name: "rustq_nif"} = index.package
     assert map_size(index.files) > 0
   end
 
   test "caches package indexes" do
-    RustQ.Syn.Index.clear_cached_package("rustq_nif",
+    Index.clear_cached_package("rustq_nif",
       manifest_path: "native/rustq_nif/Cargo.toml"
     )
 
     first =
-      RustQ.Syn.Index.cached_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
+      Index.cached_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
 
     second =
-      RustQ.Syn.Index.cached_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
+      Index.cached_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
 
     assert first == second
-    assert %RustQ.Cargo.Package{name: "rustq_nif"} = first.package
+    assert %Package{name: "rustq_nif"} = first.package
   after
-    RustQ.Syn.Index.clear_cached_package("rustq_nif",
+    Index.clear_cached_package("rustq_nif",
       manifest_path: "native/rustq_nif/Cargo.toml"
     )
   end
@@ -34,14 +41,14 @@ defmodule RustQ.Syn.IndexTest do
       pub enum ClipOp { Intersect, Difference }
       """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
-    assert [%RustQ.Syn.Enum{name: "ClipOp"}] = RustQ.Syn.Index.enums(index)
+    assert [%SynEnum{name: "ClipOp"}] = Index.enums(index)
 
-    assert {:ok, %RustQ.Syn.Enum{variants: ["Intersect", "Difference"]}} =
-             RustQ.Syn.Index.enum(index, "ClipOp")
+    assert {:ok, %SynEnum{variants: ["Intersect", "Difference"]}} =
+             Index.enum(index, "ClipOp")
 
-    assert %RustQ.Syn.Enum{name: "ClipOp"} = RustQ.Syn.Index.enum!(index, "ClipOp")
+    assert %SynEnum{name: "ClipOp"} = Index.enum!(index, "ClipOp")
   end
 
   test "indexes use aliases by alias" do
@@ -51,23 +58,23 @@ defmodule RustQ.Syn.IndexTest do
       use crate::Paint;
       """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
     assert [
-             %RustQ.Syn.Use{
+             %SynUse{
                path: "sb::SkPaint_Cap",
                segments: ["sb", "SkPaint_Cap"],
                alias: "Cap",
                visibility: :public,
                source_path: ^path
              },
-             %RustQ.Syn.Use{path: "crate::Paint", alias: "Paint", visibility: :private}
-           ] = RustQ.Syn.Index.uses(index)
+             %SynUse{path: "crate::Paint", alias: "Paint", visibility: :private}
+           ] = Index.uses(index)
 
-    assert {:ok, %RustQ.Syn.Use{path: "sb::SkPaint_Cap"}} =
-             RustQ.Syn.Index.use_alias(index, "Cap")
+    assert {:ok, %SynUse{path: "sb::SkPaint_Cap"}} =
+             Index.use_alias(index, "Cap")
 
-    assert %RustQ.Syn.Use{alias: "Cap"} = RustQ.Syn.Index.use_alias!(index, "Cap")
+    assert %SynUse{alias: "Cap"} = Index.use_alias!(index, "Cap")
   after
     if path = Process.get(:path), do: File.rm(path)
   end
@@ -78,17 +85,17 @@ defmodule RustQ.Syn.IndexTest do
       pub use blend_mode::*;
       """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
     assert [
-             %RustQ.Syn.Use{
+             %SynUse{
                path: "blend_mode",
                segments: ["blend_mode"],
                alias: nil,
                glob?: true,
                visibility: :public
              }
-           ] = RustQ.Syn.Index.uses(index)
+           ] = Index.uses(index)
   after
     if path = Process.get(:path), do: File.rm(path)
   end
@@ -100,22 +107,22 @@ defmodule RustQ.Syn.IndexTest do
       type Local = crate::Private;
       """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
     assert [
-             %RustQ.Syn.TypeAlias{
+             %TypeAlias{
                name: "PathOp",
                visibility: :public,
                type: "skia_bindings :: SkPathOp",
                source_path: ^path
              },
-             %RustQ.Syn.TypeAlias{name: "Local", visibility: :private}
-           ] = RustQ.Syn.Index.type_aliases(index)
+             %TypeAlias{name: "Local", visibility: :private}
+           ] = Index.type_aliases(index)
 
-    assert {:ok, %RustQ.Syn.TypeAlias{name: "PathOp"}} =
-             RustQ.Syn.Index.type_alias(index, "PathOp")
+    assert {:ok, %TypeAlias{name: "PathOp"}} =
+             Index.type_alias(index, "PathOp")
 
-    assert %RustQ.Syn.TypeAlias{name: "PathOp"} = RustQ.Syn.Index.type_alias!(index, "PathOp")
+    assert %TypeAlias{name: "PathOp"} = Index.type_alias!(index, "PathOp")
   after
     if path = Process.get(:path), do: File.rm(path)
   end
@@ -127,11 +134,11 @@ defmodule RustQ.Syn.IndexTest do
       type PrivateOp = skia_bindings::SkPrivateOp;
       """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
-    assert {:ok, "PathOp"} = RustQ.Syn.Index.public_type_name(index, "SkPathOp")
-    assert "PathOp" = RustQ.Syn.Index.public_type_name!(index, "SkPathOp")
-    assert :error = RustQ.Syn.Index.public_type_name(index, "SkPrivateOp")
+    assert {:ok, "PathOp"} = Index.public_type_name(index, "SkPathOp")
+    assert "PathOp" = Index.public_type_name!(index, "SkPathOp")
+    assert :error = Index.public_type_name(index, "SkPrivateOp")
   after
     if path = Process.get(:path), do: File.rm(path)
   end
@@ -148,9 +155,9 @@ defmodule RustQ.Syn.IndexTest do
     File.write!(paint_path, "pub use sb::SkPaint_Cap as Cap;\n")
     File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
 
-    index = RustQ.Syn.Index.from_paths([paint_path, core_path])
+    index = Index.from_paths([paint_path, core_path])
 
-    assert {:ok, "PaintCap"} = RustQ.Syn.Index.public_type_name(index, "SkPaint_Cap")
+    assert {:ok, "PaintCap"} = Index.public_type_name(index, "SkPaint_Cap")
   after
     for path <- Process.get(:paths, []), do: File.rm(path)
   end
@@ -169,9 +176,9 @@ defmodule RustQ.Syn.IndexTest do
     File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
     File.write!(lib_path, "pub use core::PaintCap as PublicPaintCap;\n")
 
-    index = RustQ.Syn.Index.from_paths([paint_path, core_path, lib_path])
+    index = Index.from_paths([paint_path, core_path, lib_path])
 
-    assert {:ok, "PublicPaintCap"} = RustQ.Syn.Index.public_type_name(index, "SkPaint_Cap")
+    assert {:ok, "PublicPaintCap"} = Index.public_type_name(index, "SkPaint_Cap")
   after
     for path <- Process.get(:paths, []), do: File.rm(path)
   end
@@ -195,13 +202,13 @@ defmodule RustQ.Syn.IndexTest do
     }
     """)
 
-    index = RustQ.Syn.Index.from_paths([path])
+    index = Index.from_paths([path])
 
     assert %RustQ.Syn.Method{name: "draw_rect", source_path: ^path, source_line: 2} =
-             RustQ.Syn.Index.method!(index, "Canvas", "draw_rect")
+             Index.method!(index, "Canvas", "draw_rect")
 
-    assert {:ok, %RustQ.Syn.Method{name: "op"}} = RustQ.Syn.Index.method(index, "Path", "op")
-    assert :error = RustQ.Syn.Index.method(index, "Canvas", "missing")
+    assert {:ok, %RustQ.Syn.Method{name: "op"}} = Index.method(index, "Path", "op")
+    assert :error = Index.method(index, "Canvas", "missing")
   after
     if path = Process.get(:path), do: File.rm(path)
   end
@@ -218,9 +225,9 @@ defmodule RustQ.Syn.IndexTest do
 
     [self_arg, rect_arg, paint_arg] = method.args
 
-    assert %RustQ.Syn.Type.Ref{} = self_arg.type_ast
-    assert RustQ.Syn.Type.impl_trait?(rect_arg.type_ast, "AsRef", ["Rect"])
-    assert RustQ.Syn.Type.ref_to?(paint_arg.type_ast, "Paint")
+    assert %Type.Ref{} = self_arg.type_ast
+    assert Type.impl_trait?(rect_arg.type_ast, "AsRef", ["Rect"])
+    assert Type.ref_to?(paint_arg.type_ast, "Paint")
   end
 
   defp write_source!(source) do

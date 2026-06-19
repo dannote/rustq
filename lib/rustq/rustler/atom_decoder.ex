@@ -36,7 +36,7 @@ defmodule RustQ.Rustler.AtomDecoder do
   end
 
   defp atom_arms(cases, atoms, unknown) do
-    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&String.to_atom/1)
+    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&RustQ.Atom.identifier!/1)
 
     Enum.map(cases, fn {atom, value} ->
       %AST.Arm{
@@ -50,7 +50,7 @@ defmodule RustQ.Rustler.AtomDecoder do
   end
 
   defp ident_atom(value) when is_atom(value), do: value
-  defp ident_atom(value) when is_binary(value), do: String.to_atom(value)
+  defp ident_atom(value) when is_binary(value), do: RustQ.Atom.identifier!(value)
 
   defp rust_value_expr(%{__struct__: _module} = value) do
     if AST.expr_node?(value), do: value, else: value |> Rust.type() |> A.path()

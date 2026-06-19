@@ -3,6 +3,7 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
 
   defmodule Context do
     @moduledoc false
@@ -29,7 +30,7 @@ defmodule RustQ.Meta.Lower do
   def function_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     body_ast
     |> quoted_body(return_type, vars, opts)
-    |> Enum.map_join("\n", &RustQ.Rust.AST.Render.render_stmt/1)
+    |> Enum.map_join("\n", &Render.render_stmt/1)
   end
 
   defp lower_block(expressions, %Context{} = context) do
@@ -132,7 +133,7 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_if(condition, branches, %Context{} = context) do
     then_body = Keyword.fetch!(branches, :do)
-    else_body = Keyword.get(branches, :else, nil)
+    else_body = Keyword.get(branches, :else)
 
     %AST.If{
       condition: lower_expr(condition),
@@ -551,10 +552,7 @@ defmodule RustQ.Meta.Lower do
   defp macro_call_name?(name), do: name |> Atom.to_string() |> String.ends_with?("!")
 
   defp macro_call_part(name) do
-    name
-    |> Atom.to_string()
-    |> String.trim_trailing("!")
-    |> String.to_atom()
+    RustQ.Atom.identifier!(String.trim_trailing(Atom.to_string(name), "!"))
   end
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
@@ -628,7 +626,7 @@ defmodule RustQ.Meta.Lower do
 
   defp semantic_expr(nil), do: raw_expr("None")
 
-  defp semantic_expr(other), do: raw_expr(RustQ.Rust.AST.Render.render_expr(lower_expr(other)))
+  defp semantic_expr(other), do: raw_expr(Render.render_expr(lower_expr(other)))
 
   defp semantic_pat({:ident, _, [name]}), do: raw_pat(semantic_interpolation(name))
   defp semantic_pat({:mut_ident, _, [name]}), do: raw_pat("mut #{semantic_interpolation(name)}")
@@ -666,7 +664,7 @@ defmodule RustQ.Meta.Lower do
   defp semantic_interpolation({name, _, context}) when is_atom(name) and is_atom(context),
     do: "##{name}"
 
-  defp semantic_interpolation(other), do: RustQ.Rust.AST.Render.render_expr(lower_expr(other))
+  defp semantic_interpolation(other), do: Render.render_expr(lower_expr(other))
 
   defp semantic_ident({name, _, context}) when is_atom(name) and is_atom(context), do: "##{name}"
   defp semantic_ident(name) when is_atom(name), do: Atom.to_string(name)
@@ -913,18 +911,24 @@ defmodule RustQ.Meta.Lower do
   defp rust_constructor_alias?({:__aliases__, _, [module]}) when module in [:Stmt], do: true
   defp rust_constructor_alias?(_other), do: false
 
-  defp rust_variant(name), do: name |> Atom.to_string() |> Macro.camelize() |> String.to_atom()
+  defp rust_variant(name), do: RustQ.Atom.identifier!(Macro.camelize(Atom.to_string(name)))
 
   defp alias_parts({:__aliases__, _, parts}),
     do: mapped_alias_parts(parts)
 
   defp alias_path_parts(ast), do: ast |> raw_alias_path_parts() |> mapped_alias_parts()
 
-  defp raw_alias_path_parts({:__aliases__, _, parts}), do: parts
+  defp raw_alias_path_parts(ast), do: raw_alias_path_parts(ast, [])
 
-  defp raw_alias_path_parts({{:., _, [receiver, field]}, meta, []}) do
+  defp raw_alias_path_parts({:__aliases__, _, parts}, acc) do
+    parts
+    |> Enum.reverse()
+    |> Enum.reduce(acc, &[&1 | &2])
+  end
+
+  defp raw_alias_path_parts({{:., _, [receiver, field]}, meta, []}, acc) do
     if Keyword.get(meta, :no_parens, false) do
-      raw_alias_path_parts(receiver) ++ [field]
+      raw_alias_path_parts(receiver, [field | acc])
     else
       raise ArgumentError, "unsupported alias path"
     end
@@ -964,7 +968,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp rust_module_part(part),
-    do: part |> Atom.to_string() |> Macro.underscore() |> String.to_atom()
+    do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
 
   defp with_rust_modules(rust_modules, fun) do
     key = {__MODULE__, :rust_modules}

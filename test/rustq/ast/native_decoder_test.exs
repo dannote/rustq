@@ -6,16 +6,20 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
   alias RustQ.Native
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.Function
   alias RustQ.Rust.AST.PatternBuilder, as: P
+  alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.AST.Schema
+  alias RustQ.Rust.AST.TypePath
 
   require A
 
   test "strict native AST mode does not fall back silently" do
-    invalid = %AST.Function{name: :bad, args: [], returns: %AST.TypePath{parts: []}, body: []}
+    invalid = %Function{name: :bad, args: [], returns: %TypePath{parts: []}, body: []}
 
     Application.put_env(:rustq, :strict_native_ast, true)
 
-    assert_raise ArgumentError, fn -> RustQ.Rust.AST.Render.render_function(invalid) end
+    assert_raise ArgumentError, fn -> Render.render_function(invalid) end
   after
     Application.delete_env(:rustq, :strict_native_ast)
   end
@@ -24,7 +28,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     samples = RustQ.ASTSamples.all()
 
     assert MapSet.new(Map.keys(samples)) ==
-             RustQ.Rust.AST.Schema.nodes() |> Enum.map(& &1.name) |> MapSet.new()
+             Schema.nodes() |> Enum.map(& &1.name) |> MapSet.new()
 
     for {name, ast} <- samples do
       source = Native.render_ast(ast)

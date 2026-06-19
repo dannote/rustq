@@ -110,7 +110,7 @@ defmodule RustQ.Rust.AST.Render do
       try do
         RustQ.Native.render_ast(item)
       rescue
-        _error -> fallback.(item)
+        _error in [ArgumentError, FunctionClauseError, RuntimeError] -> fallback.(item)
       catch
         :exit, _reason -> fallback.(item)
       end
@@ -353,8 +353,10 @@ defmodule RustQ.Rust.AST.Render do
     base = Elixir.Enum.map_join(parts, "::", &to_string/1)
 
     generic_args =
-      (lifetimes |> Elixir.Enum.map(&["'", to_string(&1)])) ++
-        (generics |> Elixir.Enum.map(&render_type/1))
+      Elixir.Enum.concat(
+        Elixir.Enum.map(lifetimes, &["'", to_string(&1)]),
+        Elixir.Enum.map(generics, &render_type/1)
+      )
 
     case generic_args do
       [] -> base

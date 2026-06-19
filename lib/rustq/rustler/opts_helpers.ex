@@ -79,7 +79,7 @@ defmodule RustQ.Rustler.OptsHelpers do
   end
 
   @spec opt_bool_option(R.slice({R.path(:Atom), term()}), R.path(:Atom)) ::
-          R.nif_result(R.option(R.bool()))
+          R.nif_result(R.option(boolean()))
   defrust opt_bool_option(opts, key) do
     case opt_term(opts, key) do
       {:some, term} -> {:ok, some(decode_as!(term, R.bool()))}

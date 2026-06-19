@@ -116,7 +116,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
 
   defp type_decoder_path(name), do: [:super, type_decoder(name)]
 
-  defp type_decoder(name), do: String.to_atom("decode_#{name}")
+  defp type_decoder(name), do: RustQ.Atom.identifier!("decode_#{name}")
 
   defp decode_ast_pat_item do
     function :decode_ast_pat,
@@ -164,7 +164,7 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp pat_decoder_path(name),
     do: raise(ArgumentError, "missing pattern decoder for #{inspect(name)}")
 
-  defp pat_decoder(name), do: String.to_atom("decode_#{name}")
+  defp pat_decoder(name), do: RustQ.Atom.identifier!("decode_#{name}")
 
   defp decode_ast_stmt_item do
     function :decode_ast_stmt,
@@ -264,5 +264,5 @@ defmodule RustQ.NativeCodegen.Dispatch do
   defp expr_decoder_path(name),
     do: raise(ArgumentError, "missing expression decoder for #{inspect(name)}")
 
-  defp expr_decoder(name), do: String.to_atom("decode_expr_#{name}")
+  defp expr_decoder(name), do: RustQ.Atom.identifier!("decode_expr_#{name}")
 end

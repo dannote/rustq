@@ -17,6 +17,8 @@ defmodule RustQ.Rust do
   repetitive edges: fields, function signatures, attributes, type aliases, and
   simple declarations.
   """
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.Block
   alias RustQ.Rust.Const
   alias RustQ.Rust.EnumDecl
@@ -29,7 +31,7 @@ defmodule RustQ.Rust do
   alias RustQ.Rust.TypeAlias
   alias RustQ.Rust.Use
 
-  @type rust_type :: atom() | String.t() | tuple() | [atom() | String.t()]
+  @type rust_type :: atom() | String.t() | tuple() | [atom() | String.t()] | struct()
 
   @spec unquote(:use)(term(), keyword()) :: Use.t()
   def unquote(:use)(path, opts \\ []) do
@@ -139,7 +141,7 @@ defmodule RustQ.Rust do
   def unquote(:item)(code), do: %Fragment{kind: :item, code: code}
 
   @spec ast_item(term()) :: Fragment.t()
-  def ast_item(ast), do: item(RustQ.Rust.AST.Render.render_item(ast))
+  def ast_item(ast), do: item(Render.render_item(ast))
 
   @spec ast_items([term()]) :: [Fragment.t()]
   def ast_items(asts), do: Enum.map(asts, &ast_item/1)
@@ -477,9 +479,9 @@ defmodule RustQ.Rust do
 
   @spec type(rust_type()) :: String.t()
   def type(%{__struct__: _module} = value) do
-    if RustQ.Rust.AST.type_node?(value) do
+    if AST.type_node?(value) do
       value
-      |> RustQ.Rust.AST.Render.render_type()
+      |> Render.render_type()
       |> IO.iodata_to_binary()
     else
       raise ArgumentError, "expected Rust type, got: #{inspect(value)}"

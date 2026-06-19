@@ -6,27 +6,30 @@ defmodule RustQ.NativeEnumDescriptor do
   metadata and, when available, a web source link derived from Cargo metadata.
   """
 
+  alias RustQ.Syn.Enum, as: SynEnum
+  alias RustQ.Syn.Index
+
   defstruct [:package, :name, :enum, :source_url]
 
   @type t :: %__MODULE__{
           package: String.t() | nil,
           name: String.t(),
-          enum: RustQ.Syn.Enum.t(),
+          enum: SynEnum.t(),
           source_url: String.t() | nil
         }
 
   @doc "Returns descriptor variants as `{atom_name, rust_variant}` pairs."
   @spec variants(t()) :: [{atom(), String.t()}]
-  def variants(%__MODULE__{enum: %RustQ.Syn.Enum{variants: variants}}) do
-    Enum.map(variants, &{String.to_atom(Macro.underscore(&1)), &1})
+  def variants(%__MODULE__{enum: %SynEnum{variants: variants}}) do
+    Enum.map(variants, &{RustQ.Atom.identifier!(Macro.underscore(&1)), &1})
   end
 
   @doc "Resolves a native enum through a `RustQ.Syn.Index`."
-  @spec resolve!(RustQ.Syn.Index.t(), String.t(), keyword()) :: t()
-  def resolve!(%RustQ.Syn.Index{} = index, name, opts \\ []) when is_binary(name) do
+  @spec resolve!(Index.t(), String.t(), keyword()) :: t()
+  def resolve!(%Index{} = index, name, opts \\ []) when is_binary(name) do
     package_name = Keyword.get(opts, :package)
     validate_package!(index, package_name)
-    enum = RustQ.Syn.Index.enum!(index, name)
+    enum = Index.enum!(index, name)
 
     %__MODULE__{
       package: package_name || package_name(index.package),
@@ -36,12 +39,12 @@ defmodule RustQ.NativeEnumDescriptor do
     }
   end
 
-  defp validate_package!(%RustQ.Syn.Index{package: nil}, _package_name), do: :ok
+  defp validate_package!(%Index{package: nil}, _package_name), do: :ok
   defp validate_package!(_index, nil), do: :ok
 
-  defp validate_package!(%RustQ.Syn.Index{package: %{name: name}}, name), do: :ok
+  defp validate_package!(%Index{package: %{name: name}}, name), do: :ok
 
-  defp validate_package!(%RustQ.Syn.Index{package: package}, package_name) do
+  defp validate_package!(%Index{package: package}, package_name) do
     raise ArgumentError,
           "native enum package #{inspect(package_name)} does not match indexed package #{inspect(package.name)}"
   end

@@ -1,10 +1,12 @@
 defmodule RustQ.Rustler.OptsDecoder do
   @moduledoc false
 
+  alias RustQ.Meta.Type
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Rustler.Decode
 
   import RustQ.Rust.AST.ItemBuilder, only: [field: 3, function: 3]
 
@@ -26,7 +28,7 @@ defmodule RustQ.Rustler.OptsDecoder do
   end
 
   defp struct_ast(name, fields, phantom?, lifetime) do
-    I.struct String.to_atom(to_string(name)), vis: :pub, lifetime: lifetime do
+    I.struct RustQ.Atom.identifier!(to_string(name)), vis: :pub, lifetime: lifetime do
       fields(fields, phantom?, lifetime)
     end
   end
@@ -34,7 +36,7 @@ defmodule RustQ.Rustler.OptsDecoder do
   defp decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg) do
     struct_type = A.type_path(name, lifetimes: List.wrap(lifetime))
 
-    function String.to_atom(to_string(function_name)),
+    function RustQ.Atom.identifier!(to_string(function_name)),
       vis: :pub,
       lifetime: lifetime,
       args: [opts: opts_arg_type(opts_arg)],
@@ -49,7 +51,7 @@ defmodule RustQ.Rustler.OptsDecoder do
   defp normalize_field(name, spec) do
     type = Keyword.fetch!(spec, :type)
 
-    if match?(%RustQ.Meta.Type{}, type) and not Keyword.has_key?(spec, :decode) do
+    if match?(%Type{}, type) and not Keyword.has_key?(spec, :decode) do
       required? = Keyword.get(spec, :required, false)
       [type: boundary_type(type, required?), decode: boundary_decode(type, name, required?)]
     else
@@ -57,27 +59,27 @@ defmodule RustQ.Rustler.OptsDecoder do
     end
   end
 
-  defp boundary_type(%RustQ.Meta.Type{} = type, true), do: boundary_inner_type(type)
+  defp boundary_type(%Type{} = type, true), do: boundary_inner_type(type)
 
-  defp boundary_type(%RustQ.Meta.Type{} = type, false),
+  defp boundary_type(%Type{} = type, false),
     do: %AST.TypeOption{inner: boundary_inner_type(type)}
 
-  defp boundary_inner_type(%RustQ.Meta.Type{} = type) do
-    case RustQ.Meta.Type.category(type) do
+  defp boundary_inner_type(%Type{} = type) do
+    case Type.category(type) do
       category when category in [:atom, :enum] -> A.type_path(:Atom)
       category when category in [:number, :integer, :boolean, :string] -> type.ast
       _category -> A.type_path(:Term, lifetimes: [:a])
     end
   end
 
-  defp boundary_decode(%RustQ.Meta.Type{kind: :f32}, name, true),
-    do: RustQ.Rustler.Decode.opt_decode(:opt_f32, :opts, name)
+  defp boundary_decode(%Type{kind: :f32}, name, true),
+    do: Decode.opt_decode(:opt_f32, :opts, name)
 
-  defp boundary_decode(%RustQ.Meta.Type{kind: :f32}, name, false),
-    do: RustQ.Rustler.Decode.opt_decode(:opt_f32_option, :opts, name)
+  defp boundary_decode(%Type{kind: :f32}, name, false),
+    do: Decode.opt_decode(:opt_f32_option, :opts, name)
 
-  defp boundary_decode(%RustQ.Meta.Type{} = type, name, required?) do
-    case RustQ.Meta.Type.category(type) do
+  defp boundary_decode(%Type{} = type, name, required?) do
+    case Type.category(type) do
       :boolean ->
         helper_decode(:opt_bool_option, name, required?)
 
@@ -85,7 +87,7 @@ defmodule RustQ.Rustler.OptsDecoder do
         helper_decode(:opt_atom_option, name, required?)
 
       :term when required? ->
-        RustQ.Rustler.Decode.required_term(:opts, name)
+        Decode.required_term(:opts, name)
 
       :term ->
         A.call(:opt_term, [:opts, A.atom(name)])
@@ -94,7 +96,7 @@ defmodule RustQ.Rustler.OptsDecoder do
         term_decode(type.ast, name, required?)
 
       _category when required? ->
-        RustQ.Rustler.Decode.required_term(:opts, name)
+        Decode.required_term(:opts, name)
 
       _category ->
         A.call(:opt_term, [:opts, A.atom(name)])
@@ -102,16 +104,16 @@ defmodule RustQ.Rustler.OptsDecoder do
   end
 
   defp helper_decode(helper, name, true),
-    do: RustQ.Rustler.Decode.required_opt_decode(helper, :opts, name)
+    do: Decode.required_opt_decode(helper, :opts, name)
 
   defp helper_decode(helper, name, false),
-    do: RustQ.Rustler.Decode.opt_decode(helper, :opts, name)
+    do: Decode.opt_decode(helper, :opts, name)
 
   defp term_decode(type, name, true),
-    do: RustQ.Rustler.Decode.required_term_decode(:opts, name, type)
+    do: Decode.required_term_decode(:opts, name, type)
 
   defp term_decode(type, name, false),
-    do: RustQ.Rustler.Decode.optional_term_decode(:opts, name, type)
+    do: Decode.optional_term_decode(:opts, name, type)
 
   defp opts_arg_type("opts: " <> type), do: type
   defp opts_arg_type(type), do: type

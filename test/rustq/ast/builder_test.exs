@@ -1,7 +1,20 @@
 defmodule RustQ.Rust.AST.BuilderTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.{
+    Arm,
+    Err,
+    Function,
+    Let,
+    Match,
+    Path,
+    PatVar,
+    PatWildcard,
+    Render,
+    Return,
+    TypePath
+  }
+
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.PatternBuilder, as: P
   alias RustQ.Rust.AST.TypeBuilder, as: T
@@ -9,7 +22,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
   require A
 
   test "builds ergonomic function argument and Rustler type nodes" do
-    function = %AST.Function{
+    function = %Function{
       name: :typed,
       lifetime: :a,
       args: [
@@ -22,7 +35,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       body: [A.return(A.ok())]
     }
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+    source = Render.render_function(function)
 
     assert source =~ "fn typed<'a>("
     assert source =~ "canvas: &skia_safe::Canvas"
@@ -39,19 +52,19 @@ defmodule RustQ.Rust.AST.BuilderTest do
   end
 
   test "splits Rust path strings into type and expression path parts" do
-    assert %AST.TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
-    assert RustQ.Rust.AST.Render.render_type(T.path("paint::Cap")) == "paint::Cap"
+    assert %TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
+    assert Render.render_type(T.path("paint::Cap")) == "paint::Cap"
 
-    assert %AST.Path{parts: ["paint", "Cap", "Butt"]} = A.path("paint::Cap::Butt")
-    assert RustQ.Rust.AST.Render.render_expr(A.path("paint::Cap::Butt")) == "paint::Cap::Butt"
+    assert %Path{parts: ["paint", "Cap", "Butt"]} = A.path("paint::Cap::Butt")
+    assert Render.render_expr(A.path("paint::Cap::Butt")) == "paint::Cap::Butt"
   end
 
   test "renders Rust keywords in paths as raw identifiers" do
-    assert RustQ.Rust.AST.Render.render_expr(A.path([:atoms, :type])) == "atoms::r#type"
+    assert Render.render_expr(A.path([:atoms, :type])) == "atoms::r#type"
   end
 
   test "renders token macro expressions through native AST" do
-    function = %AST.Function{
+    function = %Function{
       name: :pat_none,
       args: [],
       returns: "NifResult<Pat>",
@@ -61,11 +74,11 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    assert RustQ.Rust.AST.Render.render_function(function) =~ "parse_pat(quote!(None))"
+    assert Render.render_function(function) =~ "parse_pat(quote!(None))"
   end
 
   test "renders function receiver arguments" do
-    function = %AST.Function{
+    function = %Function{
       name: :encode,
       lifetime: :a,
       args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
@@ -73,7 +86,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       body: [A.return(A.var(:term))]
     }
 
-    assert RustQ.Rust.AST.Render.render_function(function) =~
+    assert Render.render_function(function) =~
              "fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a>"
   end
 
@@ -83,7 +96,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         trait: A.type_path([:rustler, :Decoder], lifetimes: [:a]),
         lifetimes: [:a],
         items: [
-          %AST.Function{
+          %Function{
             name: :decode,
             args: [A.arg(:term, A.type_path(:Term, lifetimes: [:a]))],
             returns: A.type_path(:Self),
@@ -92,13 +105,13 @@ defmodule RustQ.Rust.AST.BuilderTest do
         ]
       )
 
-    assert RustQ.Rust.AST.Render.render_impl(impl) =~
+    assert Render.render_impl(impl) =~
              "impl<'a> rustler::Decoder<'a> for Content"
   end
 
   test "renders item-level Rust AST nodes through native AST" do
     source =
-      RustQ.Rust.AST.Render.render_file([
+      Render.render_file([
         A.use([:quote, :quote]),
         A.use({[:rustler], [:Atom, :Env]}),
         A.module(
@@ -119,48 +132,48 @@ defmodule RustQ.Rust.AST.BuilderTest do
   end
 
   test "builds tuple expressions" do
-    function = %AST.Function{
+    function = %Function{
       name: :pair,
       args: [],
       returns: "(i32, i32)",
       body: [A.return(A.tuple([1, 2]))]
     }
 
-    assert RustQ.Rust.AST.Render.render_function(function) =~ "(1i64, 2i64)"
+    assert Render.render_function(function) =~ "(1i64, 2i64)"
   end
 
   test "renders numeric literal match patterns" do
-    function = %AST.Function{
+    function = %Function{
       name: :compact,
       args: [A.arg(:id, :i64)],
       returns: "NifResult<Atom>",
       body: [
         A.return_stmt(
           A.match_expr(A.var(:id), [
-            %AST.Arm{pattern: P.lit(1), body: [A.return_stmt(A.ok(A.atom(:clear)))]},
+            %Arm{pattern: P.lit(1), body: [A.return_stmt(A.ok(A.atom(:clear)))]},
             A.badarg_arm()
           ])
         )
       ]
     }
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+    source = Render.render_function(function)
 
     assert source =~ "1 =>"
     assert source =~ "Ok(atoms::clear())"
   end
 
   test "builds semantic badarg helpers" do
-    assert %AST.Path{parts: [:rustler, :Error, :BadArg]} = A.badarg()
+    assert %Path{parts: [:rustler, :Error, :BadArg]} = A.badarg()
 
-    assert %AST.Return{expr: %AST.Err{expr: %AST.Path{parts: [:rustler, :Error, :BadArg]}}} =
+    assert %Return{expr: %Err{expr: %Path{parts: [:rustler, :Error, :BadArg]}}} =
              A.return_badarg()
 
-    assert %AST.Arm{pattern: %AST.PatWildcard{}, body: [%AST.Return{}]} = A.badarg_arm()
+    assert %Arm{pattern: %PatWildcard{}, body: [%Return{}]} = A.badarg_arm()
   end
 
   test "renders if and binary operators through native AST" do
-    function = %AST.Function{
+    function = %Function{
       name: :expect,
       args: [left: "bool", right: "bool"],
       returns: "NifResult<()>",
@@ -176,7 +189,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    source = RustQ.Rust.AST.Render.render_function(function)
+    source = Render.render_function(function)
 
     assert source =~ "if left && right == true"
     assert source =~ "Ok(())"
@@ -208,10 +221,10 @@ defmodule RustQ.Rust.AST.BuilderTest do
       end
 
     assert [
-             %AST.Let{pattern: %AST.PatVar{name: :struct_name}},
-             %AST.Return{expr: %AST.Match{arms: [%AST.Arm{}, %AST.Arm{}]}}
+             %Let{pattern: %PatVar{name: :struct_name}},
+             %Return{expr: %Match{arms: [%Arm{}, %Arm{}]}}
            ] = body
   end
 
-  defp render_type(type), do: type |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
+  defp render_type(type), do: type |> Render.render_type() |> IO.iodata_to_binary()
 end

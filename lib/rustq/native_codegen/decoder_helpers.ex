@@ -3,17 +3,17 @@ defmodule RustQ.NativeCodegen.DecoderHelpers do
 
   use RustQ.NativeCodegen.DefrustModule
 
-  @spec required_expr(term(), R.str()) :: R.nif_result(Expr.t())
+  @spec required_expr(term(), R.str()) :: R.nif_result(R.path(:Expr))
   defrust required_expr(term, key) do
     Super.decode_expr(unwrap!(required_field(term, key)))
   end
 
-  @spec required_expr_list(term(), R.str()) :: R.nif_result(R.vec(Expr.t()))
+  @spec required_expr_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Expr)))
   defrust required_expr_list(term, key) do
     Super.decode_expr_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_type(term(), R.str()) :: R.nif_result(Type.t())
+  @spec required_type(term(), R.str()) :: R.nif_result(R.path(:Type))
   defrust required_type(term, key) do
     Super.decode_type(unwrap!(required_field(term, key)))
   end
@@ -28,47 +28,47 @@ defmodule RustQ.NativeCodegen.DecoderHelpers do
     Super.decode_string_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_type_list(term(), R.str()) :: R.nif_result(R.vec(Type.t()))
+  @spec required_type_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Type)))
   defrust required_type_list(term, key) do
     Super.decode_type_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_pat(term(), R.str()) :: R.nif_result(Pat.t())
+  @spec required_pat(term(), R.str()) :: R.nif_result(R.path(:Pat))
   defrust required_pat(term, key) do
     Super.decode_pat(unwrap!(required_field(term, key)))
   end
 
-  @spec required_pat_list(term(), R.str()) :: R.nif_result(R.vec(Pat.t()))
+  @spec required_pat_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Pat)))
   defrust required_pat_list(term, key) do
     Super.decode_pat_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_arm_list(term(), R.str()) :: R.nif_result(R.vec(Arm.t()))
+  @spec required_arm_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Arm)))
   defrust required_arm_list(term, key) do
     Super.decode_arm_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_stmt_list(term(), R.str()) :: R.nif_result(R.vec(Stmt.t()))
+  @spec required_stmt_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Stmt)))
   defrust required_stmt_list(term, key) do
     Super.decode_stmt_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_item_list(term(), R.str()) :: R.nif_result(R.vec(Item.t()))
+  @spec required_item_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Item)))
   defrust required_item_list(term, key) do
     Super.decode_item_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_function_arg_list(term(), R.str()) :: R.nif_result(R.vec(FnArg.t()))
+  @spec required_function_arg_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:FnArg)))
   defrust required_function_arg_list(term, key) do
     Super.decode_function_arg_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_struct_field_list(term(), R.str()) :: R.nif_result(R.vec(Field.t()))
+  @spec required_struct_field_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Field)))
   defrust required_struct_field_list(term, key) do
     Super.decode_struct_field_list(unwrap!(required_field(term, key)))
   end
 
-  @spec required_enum_variant_list(term(), R.str()) :: R.nif_result(R.vec(Variant.t()))
+  @spec required_enum_variant_list(term(), R.str()) :: R.nif_result(R.vec(R.path(:Variant)))
   defrust required_enum_variant_list(term, key) do
     Super.decode_enum_variant_list(unwrap!(required_field(term, key)))
   end
