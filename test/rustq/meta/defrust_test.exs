@@ -300,6 +300,27 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "atoms::args()"
   end
 
+  test "lowers simple for comprehensions to Rust for loops" do
+    defmodule ForComprehensionCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec push_pairs(R.vec({String.t(), R.u32()})) :: R.nif_result(R.unit())
+      defrust push_pairs(pairs) do
+        for {name, count} <- pairs do
+          push_pair(name, count)
+        end
+
+        :ok
+      end
+    end
+
+    source = ForComprehensionCase.__rustq_source__()
+
+    assert source =~ "for (name, count) in pairs"
+    assert source =~ "push_pair(name, count);"
+  end
+
   test "builds typed Rustler decode expressions from defrust valid Elixir" do
     defmodule DecodeTermsCase do
       use RustQ.Meta

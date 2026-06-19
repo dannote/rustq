@@ -68,6 +68,17 @@ defmodule RustQ.Meta.Lower do
     %AST.ExprStmt{expr: lower_if(condition, branches, context)}
   end
 
+  defp lower_statement(
+         {:for, _, [{:<-, _, [pattern, expression]}, [do: body]]},
+         %Context{} = context
+       ) do
+    %AST.For{
+      pattern: lower_binding_pattern(pattern),
+      expr: lower_expr(expression),
+      body: lower_clause_body(body, context)
+    }
+  end
+
   defp lower_statement(:ok, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
   defp lower_statement(nil, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
   defp lower_statement(expression, %Context{}), do: %AST.ExprStmt{expr: lower_expr(expression)}
@@ -171,6 +182,12 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_binding_pattern({name, _, context}) when is_atom(name) and is_atom(context),
     do: %AST.PatVar{name: name}
+
+  defp lower_binding_pattern({:{}, _, values}),
+    do: %AST.PatTuple{patterns: Enum.map(values, &lower_binding_pattern/1)}
+
+  defp lower_binding_pattern({left, right}),
+    do: %AST.PatTuple{patterns: Enum.map([left, right], &lower_binding_pattern/1)}
 
   defp lower_binding_pattern(other) do
     raise ArgumentError, "unsupported defrust binding pattern: #{Macro.to_string(other)}"
@@ -690,6 +707,14 @@ defmodule RustQ.Meta.Lower do
 
   defp mark_mutable_lets(%AST.EarlyReturn{} = stmt, mutable_vars),
     do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
+
+  defp mark_mutable_lets(%AST.For{} = stmt, mutable_vars) do
+    %{
+      stmt
+      | expr: mark_mutable_expr(stmt.expr, mutable_vars),
+        body: Enum.map(stmt.body, &mark_mutable_lets(&1, mutable_vars))
+    }
+  end
 
   defp mark_mutable_expr(%AST.Match{} = match, mutable_vars) do
     arms =
