@@ -337,6 +337,29 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "term.decode::<Vec<Term<'a>>>()?"
   end
 
+  test "builds typed Rustler decode result probes from defrust valid Elixir" do
+    defmodule DecodeResultProbeCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec probe(term()) :: R.nif_result(R.unit())
+      defrust probe(term) do
+        case decode_as(term, {R.i64(), R.f64()}) do
+          {:ok, {op, value}} -> handle(op, value)
+          {:error, _reason} -> :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = DecodeResultProbeCase.__rustq_source__()
+
+    assert source =~ "match term.decode::<(i64, f64)>()"
+    assert source =~ "Ok((op, value)) =>"
+    assert source =~ "Err(_reason) =>"
+  end
+
   test "native AST renderer emits Rust through syn" do
     [draw_save | _] = Generated.__rustq_asts__()
 

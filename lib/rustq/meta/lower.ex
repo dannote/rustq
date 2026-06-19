@@ -246,6 +246,10 @@ defmodule RustQ.Meta.Lower do
     %AST.PatTuple{patterns: Enum.map(values, &lower_tuple_pattern/1)}
   end
 
+  defp lower_match_pattern({left, right}, _case_type) do
+    %AST.PatTuple{patterns: Enum.map([left, right], &lower_tuple_pattern/1)}
+  end
+
   defp lower_match_pattern(other, _case_type) do
     raise ArgumentError, "unsupported defrust match pattern: #{Macro.to_string(other)}"
   end
@@ -295,14 +299,10 @@ defmodule RustQ.Meta.Lower do
     do: %AST.Cast{expr: lower_expr(expression), type: RustQ.Spec.type(type).ast}
 
   defp lower_expr({:decode_as!, _, [expression, type_ast]}),
-    do: %AST.Try{
-      expr: %AST.MethodCall{
-        receiver: lower_expr(expression),
-        method: :decode,
-        args: [],
-        generics: [RustQ.Spec.type(type_ast).ast]
-      }
-    }
+    do: %AST.Try{expr: decode_as_expr(expression, type_ast)}
+
+  defp lower_expr({:decode_as, _, [expression, type_ast]}),
+    do: decode_as_expr(expression, type_ast)
 
   defp lower_expr({:ref, _, [expression]}), do: %AST.Ref{expr: lower_expr(expression)}
 
@@ -454,6 +454,15 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr(other) do
     raise ArgumentError, "unsupported defrust expression: #{Macro.to_string(other)}"
+  end
+
+  defp decode_as_expr(expression, type_ast) do
+    %AST.MethodCall{
+      receiver: lower_expr(expression),
+      method: :decode,
+      args: [],
+      generics: [RustQ.Spec.type(type_ast).ast]
+    }
   end
 
   defp lower_pipe(left, right) do
