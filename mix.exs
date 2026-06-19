@@ -11,6 +11,7 @@ defmodule RustQ.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       description: "Rust templates and quasiquoting for Elixir",
+      compilers: [:rustq_native] ++ Mix.compilers(),
       aliases: aliases(),
       package: package(),
       docs: docs(),
@@ -114,5 +115,34 @@ defmodule RustQ.MixProject do
       source_ref: "v#{@version}",
       source_url: @source_url
     ]
+  end
+end
+
+defmodule Mix.Tasks.Compile.RustqNative do
+  @moduledoc false
+
+  use Mix.Task.Compiler
+
+  @impl true
+  def run(_args) do
+    if File.exists?(native_artifact_path()) do
+      {:noop, []}
+    else
+      Rustler.Compiler.compile_crate(:rustq, [crate: "rustq_nif"], [])
+      {:ok, []}
+    end
+  end
+
+  defp native_artifact_path do
+    Mix.Project.app_path()
+    |> Path.join(["priv", "native", "rustq_nif#{library_extension()}"])
+  end
+
+  defp library_extension do
+    case :os.type() do
+      {:win32, _} -> ".dll"
+      {:unix, :darwin} -> ".dylib"
+      {:unix, _} -> ".so"
+    end
   end
 end
