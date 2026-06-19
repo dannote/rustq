@@ -169,14 +169,15 @@ defmodule RustQ.Rust.AST do
       )
   )
 
-  defnode(Impl, :item, [:target, trait: nil, items: [], attrs: []],
+  defnode(Impl, :item, [:target, trait: nil, items: [], attrs: [], lifetimes: []],
     type:
       quote(
         do: %__MODULE__{
           target: RustQ.Rust.AST.type() | String.t(),
-          trait: RustQ.Rust.AST.Path.t() | nil,
+          trait: RustQ.Rust.AST.Path.t() | RustQ.Rust.AST.type() | String.t() | nil,
           items: [RustQ.Rust.AST.item()],
-          attrs: [RustQ.Rust.AST.Attribute.t()]
+          attrs: [RustQ.Rust.AST.Attribute.t()],
+          lifetimes: [atom()]
         }
       )
   )

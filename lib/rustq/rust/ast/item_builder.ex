@@ -31,8 +31,10 @@ defmodule RustQ.Rust.AST.ItemBuilder do
       %AST.Impl{
         target: unquote(target),
         trait:
-          Keyword.get(unquote(opts), :trait) && A.expr_path(Keyword.fetch!(unquote(opts), :trait)),
+          Keyword.get(unquote(opts), :trait) &&
+            A.trait_path(Keyword.fetch!(unquote(opts), :trait)),
         attrs: Keyword.get(unquote(opts), :attrs, []),
+        lifetimes: List.wrap(Keyword.get(unquote(opts), :lifetimes, [])),
         items: A.flatten(unquote(block_values(body)))
       }
     end

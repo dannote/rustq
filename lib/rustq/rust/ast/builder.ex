@@ -95,9 +95,10 @@ defmodule RustQ.Rust.AST.Builder do
   def impl(target, opts \\ []) do
     %AST.Impl{
       target: target,
-      trait: Keyword.get(opts, :trait) && expr_path(Keyword.fetch!(opts, :trait)),
+      trait: Keyword.get(opts, :trait) && trait_path(Keyword.fetch!(opts, :trait)),
       items: flatten(Keyword.get(opts, :items, [])),
-      attrs: Keyword.get(opts, :attrs, [])
+      attrs: Keyword.get(opts, :attrs, []),
+      lifetimes: List.wrap(Keyword.get(opts, :lifetimes, []))
     }
   end
 
@@ -299,6 +300,12 @@ defmodule RustQ.Rust.AST.Builder do
 
   defp maybe_expr(nil), do: nil
   defp maybe_expr(value), do: expr(value)
+
+  def trait_path(%AST.TypePath{} = path), do: path
+  def trait_path(%AST.Path{} = path), do: path
+  def trait_path(path) when is_binary(path), do: path
+  def trait_path(parts) when is_list(parts), do: path(parts)
+  def trait_path(part), do: path(part)
 
   def expr_path(%AST.Path{} = path), do: path
   def expr_path(parts) when is_list(parts), do: path(parts)

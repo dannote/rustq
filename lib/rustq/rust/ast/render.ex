@@ -196,11 +196,16 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_impl(%Impl{} = impl) do
     items = impl.items |> Elixir.Enum.map(&render_impl_item/1) |> Elixir.Enum.join("\n")
-    trait = if impl.trait, do: [render_expr(impl.trait), " for "], else: []
+    trait = if impl.trait, do: [render_trait(impl.trait), " for "], else: []
+
+    lifetimes =
+      if impl.lifetimes == [], do: [], else: ["<", render_lifetimes(impl.lifetimes), ">"]
 
     [
       render_attrs(impl.attrs),
-      "impl ",
+      "impl",
+      lifetimes,
+      " ",
       trait,
       render_type(impl.target),
       " {\n",
@@ -266,6 +271,16 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_function_arg({name, type}) do
     "#{name}: #{render_type(type)}"
+  end
+
+  defp render_trait(%Path{} = trait), do: render_expr(trait)
+  defp render_trait(trait) when is_binary(trait), do: trait
+  defp render_trait(trait), do: render_type(trait)
+
+  defp render_lifetimes(lifetimes) do
+    lifetimes
+    |> Elixir.Enum.map(&["'", to_string(&1)])
+    |> Elixir.Enum.intersperse(", ")
   end
 
   def render_struct(%Struct{} = struct) do

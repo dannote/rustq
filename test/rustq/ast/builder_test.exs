@@ -64,6 +64,25 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert RustQ.Rust.AST.Render.render_function(function) =~ "parse_pat(quote!(None))"
   end
 
+  test "renders lifetime-bearing impl blocks" do
+    impl =
+      A.impl(A.type_path(:Content),
+        trait: A.type_path([:rustler, :Decoder], lifetimes: [:a]),
+        lifetimes: [:a],
+        items: [
+          %AST.Function{
+            name: :decode,
+            args: [A.arg(:term, A.type_path(:Term, lifetimes: [:a]))],
+            returns: A.type_path(:Self),
+            body: [A.return(A.var(:todo))]
+          }
+        ]
+      )
+
+    assert RustQ.Rust.AST.Render.render_impl(impl) =~
+             "impl<'a> rustler::Decoder<'a> for Content"
+  end
+
   test "renders item-level Rust AST nodes through native AST" do
     source =
       RustQ.Rust.AST.Render.render_file([
