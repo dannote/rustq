@@ -56,6 +56,7 @@ defmodule RustQ.Syn.IndexTest do
     assert [
              %RustQ.Syn.Use{
                path: "sb::SkPaint_Cap",
+               segments: ["sb", "SkPaint_Cap"],
                alias: "Cap",
                visibility: :public,
                source_path: ^path

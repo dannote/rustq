@@ -184,10 +184,11 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
             )
                 .encode(env),
         ),
-        Item::Use(item) => use_alias(&item.tree).map(|(path, alias)| {
+        Item::Use(item) => use_alias(&item.tree).map(|(path, segments, alias)| {
             (
                 "use",
                 path,
+                segments,
                 alias,
                 visibility(&item.vis),
                 line(item.use_token.span),
@@ -211,8 +212,8 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
     }
 }
 
-fn use_alias(tree: &UseTree) -> Option<(String, String)> {
-    fn walk(tree: &UseTree, prefix: Vec<String>) -> Option<(String, String)> {
+fn use_alias(tree: &UseTree) -> Option<(String, Vec<String>, String)> {
+    fn walk(tree: &UseTree, prefix: Vec<String>) -> Option<(String, Vec<String>, String)> {
         match tree {
             UseTree::Path(path) => {
                 let mut prefix = prefix;
@@ -222,12 +223,12 @@ fn use_alias(tree: &UseTree) -> Option<(String, String)> {
             UseTree::Rename(rename) => {
                 let mut path = prefix;
                 path.push(rename.ident.to_string());
-                Some((path.join("::"), rename.rename.to_string()))
+                Some((path.join("::"), path, rename.rename.to_string()))
             }
             UseTree::Name(name) => {
                 let mut path = prefix;
                 path.push(name.ident.to_string());
-                Some((path.join("::"), name.ident.to_string()))
+                Some((path.join("::"), path, name.ident.to_string()))
             }
             _ => None,
         }
