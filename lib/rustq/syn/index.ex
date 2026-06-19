@@ -123,6 +123,23 @@ defmodule RustQ.Syn.Index do
     end
   end
 
+  @doc "Finds the public Rust type name that aliases a target Rust type name."
+  @spec public_type_name(t(), String.t()) :: {:ok, String.t()} | :error
+  def public_type_name(%__MODULE__{} = index, target) when is_binary(target) do
+    with {:ok, alias} <- target_alias(index, target) do
+      {:ok, root_reexport_name(index, alias) || alias_name(alias)}
+    end
+  end
+
+  @doc "Finds the public Rust type name that aliases a target Rust type name, raising if missing."
+  @spec public_type_name!(t(), String.t()) :: String.t()
+  def public_type_name!(%__MODULE__{} = index, target) when is_binary(target) do
+    case public_type_name(index, target) do
+      {:ok, name} -> name
+      :error -> raise "cannot find public Rust type name for #{target}"
+    end
+  end
+
   @doc "Fetches an enum by name."
   @spec enum(t(), String.t()) :: {:ok, RustQ.Syn.Enum.t()} | :error
   def enum(%__MODULE__{} = index, name) when is_binary(name) do
@@ -181,6 +198,62 @@ defmodule RustQ.Syn.Index do
       {:ok, method} -> method
       :error -> raise "cannot find Rust method #{target}::#{name}"
     end
+  end
+
+  defp target_alias(index, target) do
+    case Enum.find(public_aliases(index), &alias_targets?(&1, target)) do
+      nil -> :error
+      alias -> {:ok, alias}
+    end
+  end
+
+  defp public_aliases(index) do
+    index
+    |> aliases()
+    |> Enum.filter(&(&1.visibility == :public))
+  end
+
+  defp aliases(index), do: uses(index) ++ type_aliases(index)
+
+  defp alias_targets?(%RustQ.Syn.Use{segments: segments}, target),
+    do: List.last(segments) == target
+
+  defp alias_targets?(%RustQ.Syn.TypeAlias{type_ast: type}, target),
+    do: RustQ.Syn.Type.path?(type, target)
+
+  defp root_reexport_name(index, alias) do
+    alias_module = source_module(index, alias.source_path)
+    alias_segments = [alias_module, alias_name(alias)]
+
+    index
+    |> uses()
+    |> Enum.find_value(fn
+      %RustQ.Syn.Use{visibility: :public, segments: ^alias_segments, alias: name} -> name
+      _use -> nil
+    end)
+  end
+
+  defp alias_name(%RustQ.Syn.Use{alias: alias}), do: alias
+  defp alias_name(%RustQ.Syn.TypeAlias{name: name}), do: name
+
+  defp source_module(
+         %__MODULE__{package: %RustQ.Cargo.Package{manifest_path: manifest_path}},
+         path
+       )
+       when is_binary(path) do
+    source_module_from_root(Path.dirname(manifest_path), path)
+  end
+
+  defp source_module(_index, path) when is_binary(path),
+    do: path |> Path.rootname() |> Path.basename()
+
+  defp source_module_from_root(source_root, path)
+       when is_binary(source_root) and is_binary(path) do
+    path
+    |> Path.relative_to(source_root)
+    |> Path.rootname()
+    |> Path.split()
+    |> List.last()
   end
 
   defp attach_source_path(%RustQ.Syn.File{items: items} = file, path) do

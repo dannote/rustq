@@ -99,6 +99,41 @@ defmodule RustQ.Syn.IndexTest do
     if path = Process.get(:path), do: File.rm(path)
   end
 
+  test "finds public type names for aliased Rust types" do
+    path =
+      write_source!("""
+      pub type PathOp = skia_bindings::SkPathOp;
+      type PrivateOp = skia_bindings::SkPrivateOp;
+      """)
+
+    index = RustQ.Syn.Index.from_paths([path])
+
+    assert {:ok, "PathOp"} = RustQ.Syn.Index.public_type_name(index, "SkPathOp")
+    assert "PathOp" = RustQ.Syn.Index.public_type_name!(index, "SkPathOp")
+    assert :error = RustQ.Syn.Index.public_type_name(index, "SkPrivateOp")
+  after
+    if path = Process.get(:path), do: File.rm(path)
+  end
+
+  test "prefers public root reexports for aliased Rust types" do
+    dir =
+      Path.join(System.tmp_dir!(), "rustq_syn_index_test_#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(dir)
+    paint_path = Path.join(dir, "paint.rs")
+    core_path = Path.join(dir, "core.rs")
+    Process.put(:paths, [paint_path, core_path])
+
+    File.write!(paint_path, "pub use sb::SkPaint_Cap as Cap;\n")
+    File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
+
+    index = RustQ.Syn.Index.from_paths([paint_path, core_path])
+
+    assert {:ok, "PaintCap"} = RustQ.Syn.Index.public_type_name(index, "SkPaint_Cap")
+  after
+    for path <- Process.get(:paths, []), do: File.rm(path)
+  end
+
   test "indexes impl methods by target" do
     path =
       Path.join(
