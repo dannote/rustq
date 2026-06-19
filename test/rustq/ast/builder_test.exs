@@ -93,6 +93,27 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert RustQ.Rust.AST.Render.render_function(function) =~ "(1i64, 2i64)"
   end
 
+  test "renders numeric literal match patterns" do
+    function = %AST.Function{
+      name: :compact,
+      args: [A.arg(:id, :i64)],
+      returns: "NifResult<Atom>",
+      body: [
+        A.return_stmt(
+          A.match_expr(A.var(:id), [
+            %AST.Arm{pattern: P.lit(1), body: [A.return_stmt(A.ok(A.atom(:clear)))]},
+            A.badarg_arm()
+          ])
+        )
+      ]
+    }
+
+    source = RustQ.Rust.AST.Render.render_function(function)
+
+    assert source =~ "1 =>"
+    assert source =~ "Ok(atoms::clear())"
+  end
+
   test "builds semantic badarg helpers" do
     assert %AST.Path{parts: [:rustler, :Error, :BadArg]} = A.badarg()
 

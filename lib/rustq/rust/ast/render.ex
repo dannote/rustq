@@ -537,6 +537,10 @@ defmodule RustQ.Rust.AST.Render do
   def render_pattern(%PatWildcard{}), do: "_"
   def render_pattern(%PatPath{path: path}), do: render_expr(path)
   def render_pattern(%PatLiteral{value: value}) when is_binary(value), do: inspect(value)
+
+  def render_pattern(%PatLiteral{value: value}) when is_integer(value),
+    do: Integer.to_string(value)
+
   def render_pattern(%PatLiteral{value: value}) when is_atom(value), do: Atom.to_string(value)
   def render_pattern(%PatNone{}), do: "None"
   def render_pattern(%PatSome{pattern: pattern}), do: ["Some(", render_pattern(pattern), ")"]
