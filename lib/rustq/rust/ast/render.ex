@@ -588,7 +588,24 @@ defmodule RustQ.Rust.AST.Render do
   defp render_generics(generics),
     do: ["::<", generics |> Elixir.Enum.map(&render_type/1) |> Elixir.Enum.intersperse(", "), ">"]
 
+  @rust_keywords MapSet.new(~w[
+                   as async await break const continue crate dyn else enum extern false fn for if impl
+                   in let loop match mod move mut pub ref return self Self static struct super trait true
+                   type unsafe use where while
+                 ]a)
+
   defp render_path_part(nil), do: "nil"
+
+  defp render_path_part(part) when is_atom(part) do
+    name = Atom.to_string(part)
+
+    if MapSet.member?(@rust_keywords, part) do
+      "r#" <> name
+    else
+      name
+    end
+  end
+
   defp render_path_part(part), do: to_string(part)
 
   defp render_binary_op(:eq), do: "=="

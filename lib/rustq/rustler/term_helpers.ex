@@ -1,7 +1,6 @@
 defmodule RustQ.Rustler.TermHelpers do
   @moduledoc false
 
-  use RustQ.Sigil
   use RustQ.Meta
 
   alias RustQ.Rust
@@ -21,27 +20,7 @@ defmodule RustQ.Rustler.TermHelpers do
     :type_str
   ]
 
-  @rusty_names [:get, :is_nil, :opt, :str_val, :bool_val, :f64_val, :list_val]
-
-  @templates %{
-    type_atom: ~R"""
-    fn type_atom(term: Term) -> Option<rustler::Atom> {
-        get(term, __rq_type_key!()).and_then(|t| t.decode::<rustler::Atom>().ok())
-    }
-    """,
-    type_eq: ~R"""
-    fn type_eq(term: Term, expected: rustler::Atom) -> bool {
-        type_atom(term) == Some(expected)
-    }
-    """,
-    type_str: ~R"""
-    fn type_str(term: Term) -> String {
-        get(term, __rq_type_key!())
-            .and_then(|t| t.atom_to_string().ok())
-            .unwrap_or_else(|| "<no type>".into())
-    }
-    """
-  }
+  @rusty_names @names
 
   @spec get(term(), R.path({:rustler, :Atom})) :: R.option(term())
   defrust get(term, key) do
@@ -146,30 +125,52 @@ defmodule RustQ.Rustler.TermHelpers do
     end
   end
 
+  @spec type_atom(term()) :: R.option(R.path({:rustler, :Atom}))
+  defrust type_atom(term) do
+    case get(term, Atoms.type()) do
+      {:some, value} ->
+        case decode_as(value, R.path({:rustler, :Atom})) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> nil
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec type_eq(term(), R.path({:rustler, :Atom})) :: R.bool()
+  defrust type_eq(term, expected) do
+    type_atom(term) == some(expected)
+  end
+
+  @spec type_str(term()) :: String.t()
+  defrust type_str(term) do
+    case type_atom(term) do
+      {:some, atom} ->
+        case atom.atom_to_string() do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> String.from("<no type>")
+        end
+
+      :none ->
+        String.from("<no type>")
+    end
+  end
+
   @spec build(keyword()) :: [Rust.Fragment.t()]
   def build(opts \\ []) do
-    type_key = Keyword.get(opts, :type_key, "atoms::r#type()")
-
     opts
     |> names()
-    |> Enum.map(&helper_item(&1, type_key))
+    |> Enum.map(&helper_item/1)
   end
 
   defp names(opts), do: HelperSelection.names(opts, @names)
 
-  defp helper_item(name, _type_key) when name in @rusty_names do
+  defp helper_item(name) when name in @rusty_names do
     __rustq_asts__()
     |> Enum.find(&(&1.name == name))
     |> RustQ.Rust.AST.Render.render_item()
     |> Rust.item()
   end
-
-  defp helper_item(name, type_key) do
-    name
-    |> template!()
-    |> RustQ.render!("rustler_term_helper.rs", bind: [type_key: Rust.expr(type_key)])
-    |> Rust.item()
-  end
-
-  defp template!(name), do: Map.fetch!(@templates, name)
 end

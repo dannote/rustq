@@ -248,7 +248,7 @@ defmodule RustQ.RustlerTest do
     assert code =~ "fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
     assert code =~ "fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
     assert code =~ "fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String"
-    assert code =~ "get(term, a::r#type())"
+    assert code =~ "get(term, atoms::r#type())"
   end
 
   test "builds term decoders" do

@@ -46,6 +46,10 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert RustQ.Rust.AST.Render.render_expr(A.path("paint::Cap::Butt")) == "paint::Cap::Butt"
   end
 
+  test "renders Rust keywords in paths as raw identifiers" do
+    assert RustQ.Rust.AST.Render.render_expr(A.path([:atoms, :type])) == "atoms::r#type"
+  end
+
   test "renders token macro expressions through native AST" do
     function = %AST.Function{
       name: :pat_none,
