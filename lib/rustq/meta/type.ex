@@ -339,9 +339,15 @@ defmodule RustQ.Meta.Type do
 
   defp spec_path!({:__block__, _, [parts]}, opts), do: spec_path!(parts, opts)
 
+  defp spec_path!({:{}, _, parts}, opts), do: spec_path_tuple!(parts, opts)
+
   defp spec_path!(parts, opts) when is_tuple(parts) do
+    parts |> Tuple.to_list() |> spec_path_tuple!(opts)
+  end
+
+  defp spec_path_tuple!(parts, opts) do
     %AST.TypePath{
-      parts: parts |> Tuple.to_list() |> Enum.map(&spec_path_part!/1),
+      parts: Enum.map(parts, &spec_path_part!/1),
       lifetimes: spec_path_lifetimes!(opts)
     }
   end

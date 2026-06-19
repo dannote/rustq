@@ -47,6 +47,9 @@ defmodule RustQ.Meta.TypeTest do
   test "keeps explicit Rust path marker as a low-level escape hatch" do
     assert RustQ.Spec.type(quote(do: R.path({:generated_opts, :OvalOpts}, R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"
+
+    assert RustQ.Spec.type(quote(do: R.path({:skia_safe, :path_1d_path_effect, :Style}))).rust ==
+             "skia_safe::path_1d_path_effect::Style"
   end
 
   test "keeps external Elixir origin metadata" do
