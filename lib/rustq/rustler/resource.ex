@@ -66,9 +66,7 @@ defmodule RustQ.Rustler.Resource do
     field = Keyword.get(opts, :handle_field, "ref")
 
     Rust.item(
-      RustQ.Rust.AST.Render.render_item(
-        resource_handle_decode_ast(name, function_name, field)
-      )
+      RustQ.Rust.AST.Render.render_item(resource_handle_decode_ast(name, function_name, field))
     )
   end
 
@@ -117,6 +115,8 @@ defmodule RustQ.Rustler.Resource do
 
   @spec init(atom() | String.t()) :: Rust.Fragment.t()
   def init(name) do
-    Rust.item("rustler::resource!(#{name}, env);")
+    Rust.item(
+      RustQ.Rust.AST.Render.render_item(A.macro_item_call([:rustler, :resource], [name, :env]))
+    )
   end
 end

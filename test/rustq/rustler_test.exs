@@ -381,7 +381,8 @@ defmodule RustQ.RustlerTest do
     assert code =~
              "fn decode_document_resource<'a>(term: Term<'a>) -> NifResult<ResourceArc<Document>>"
 
-    assert code =~ "rustler::resource!(Document, env);"
+    assert code =~ "rustler::resource! {"
+    assert code =~ "Document, env,"
   end
 
   test "builds resource boilerplate" do
