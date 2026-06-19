@@ -13,7 +13,7 @@ defmodule RustQ.NativeCodegen.Decoders.Stmt do
   @spec decode_stmt_expr_stmt(term()) :: R.nif_result(R.path(:Stmt))
   defrust decode_stmt_expr_stmt(term) do
     expr = unwrap!(required_expr(term, "expr"))
-    stmt!(expr)
+    Super.parse_expr_stmt(expr)
   end
 
   @spec decode_stmt_return(term()) :: R.nif_result(R.path(:Stmt))

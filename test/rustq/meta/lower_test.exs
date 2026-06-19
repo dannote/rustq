@@ -197,7 +197,7 @@ defmodule RustQ.Meta.LowerTest do
            ] = else_body
   end
 
-  test "ordinary syntax lowers to RustQ AST while explicit expr helpers target syn" do
+  test "ordinary syntax lowers to RustQ AST while native decoders use structural helpers" do
     draw_rect = Enum.find(Generated.__rustq_asts__(), &(&1.name == :draw_rect))
 
     decode_expr_ref =
@@ -214,14 +214,13 @@ defmodule RustQ.Meta.LowerTest do
              body: [
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Let{},
-               %RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.If{then: then_body, else: else_body}}
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.PathCall{path: %RustQ.Rust.AST.Path{parts: ref_parts}}
+               }
              ]
            } = decode_expr_ref
 
-    assert [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.PathCall{path: then_path}}] = then_body
-    assert [%RustQ.Rust.AST.Return{expr: %RustQ.Rust.AST.PathCall{path: else_path}}] = else_body
-    assert then_path.parts == [:super, "parse_syn::<Expr>"]
-    assert else_path.parts == [:super, "parse_syn::<Expr>"]
+    assert ref_parts == [:super, :parse_ref_expr]
   end
 
   test "nested branches use expected return type wrapping" do
@@ -297,7 +296,7 @@ defmodule RustQ.Meta.LowerTest do
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, "parse_syn::<Expr>"]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_try_expr]}
                  }
                }
              ]
@@ -309,7 +308,7 @@ defmodule RustQ.Meta.LowerTest do
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, "parse_syn::<Pat>"]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_some_pat]}
                  }
                }
              ]
@@ -334,11 +333,8 @@ defmodule RustQ.Meta.LowerTest do
              body: [
                %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
-                 expr: %RustQ.Rust.AST.Match{
-                   arms: [
-                     %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatNone{}},
-                     %RustQ.Rust.AST.Arm{pattern: %RustQ.Rust.AST.PatSome{}}
-                   ]
+                 expr: %RustQ.Rust.AST.PathCall{
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_ok_expr]}
                  }
                }
              ]
@@ -349,7 +345,7 @@ defmodule RustQ.Meta.LowerTest do
              body: [
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
-                   path: %RustQ.Rust.AST.Path{parts: [:super, "parse_syn::<Expr>"]}
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_none_expr]}
                  }
                }
              ]

@@ -302,6 +302,101 @@ pub(crate) fn decode_expr(term: Term) -> NifResult<Expr> {
 }
 
 // syn parser helpers used as explicit Rusty-Elixir primitive boundaries.
+pub(crate) fn parse_ident_expr(ident: proc_macro2::Ident) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(#ident))
+}
+
+pub(crate) fn parse_ref_expr(expr: Expr, mutable: bool) -> NifResult<Expr> {
+    if mutable {
+        parse_syn::<Expr>(quote!(&mut #expr))
+    } else {
+        parse_syn::<Expr>(quote!(&#expr))
+    }
+}
+
+pub(crate) fn parse_struct_literal_expr(
+    path: Expr,
+    fields: Vec<NamedField<Expr>>,
+) -> NifResult<Expr> {
+    let Expr::Path(path) = path else {
+        return Err(rustler::Error::BadArg);
+    };
+
+    parse_syn::<Expr>(quote!(#path { #(#fields),* }))
+}
+
+pub(crate) fn parse_raise_atom_expr(name: String) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(rustler::Error::RaiseAtom(#name)))
+}
+
+pub(crate) fn parse_binary_expr(left: Expr, op: String, right: Expr) -> NifResult<Expr> {
+    match op.as_str() {
+        "eq" => parse_syn::<Expr>(quote!(#left == #right)),
+        "ne" => parse_syn::<Expr>(quote!(#left != #right)),
+        "lt" => parse_syn::<Expr>(quote!(#left < #right)),
+        "lte" => parse_syn::<Expr>(quote!(#left <= #right)),
+        "gt" => parse_syn::<Expr>(quote!(#left > #right)),
+        "gte" => parse_syn::<Expr>(quote!(#left >= #right)),
+        "add" => parse_syn::<Expr>(quote!(#left + #right)),
+        "sub" => parse_syn::<Expr>(quote!(#left - #right)),
+        "mul" => parse_syn::<Expr>(quote!(#left * #right)),
+        "div" => parse_syn::<Expr>(quote!(#left / #right)),
+        "and" => parse_syn::<Expr>(quote!(#left && #right)),
+        "or" => parse_syn::<Expr>(quote!(#left || #right)),
+        "shr" => parse_syn::<Expr>(quote!(#left >> #right)),
+        "bitand" => parse_syn::<Expr>(quote!(#left & #right)),
+        _ => Err(rustler::Error::BadArg),
+    }
+}
+
+pub(crate) fn parse_match_expr(expr: Expr, arms: Vec<Arm>) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(match #expr { #(#arms)* }))
+}
+
+pub(crate) fn parse_tuple_expr(values: Vec<Expr>) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!((#(#values),*)))
+}
+
+pub(crate) fn parse_vec_expr(values: Vec<Expr>) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(vec![#(#values),*]))
+}
+
+pub(crate) fn parse_closure_expr(args: Vec<proc_macro2::Ident>, body: Expr) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(|#(#args),*| #body))
+}
+
+pub(crate) fn parse_macro_call_expr(path: syn::Path, args: Vec<Expr>) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(#path!(#(#args),*)))
+}
+
+pub(crate) fn parse_ok_expr(expr: Option<Expr>) -> NifResult<Expr> {
+    if let Some(expr) = expr {
+        parse_syn::<Expr>(quote!(Ok(#expr)))
+    } else {
+        parse_syn::<Expr>(quote!(Ok(())))
+    }
+}
+
+pub(crate) fn parse_none_expr(_term: Term) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(None))
+}
+
+pub(crate) fn parse_some_expr(expr: Expr) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(Some(#expr)))
+}
+
+pub(crate) fn parse_err_expr(expr: Expr) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(Err(#expr)))
+}
+
+pub(crate) fn parse_try_expr(expr: Expr) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(#expr?))
+}
+
+pub(crate) fn parse_expr_stmt(expr: Expr) -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(#expr;))
+}
+
 pub(crate) fn parse_path_call_expr(
     path: syn::Path,
     args: Vec<Expr>,
@@ -492,6 +587,50 @@ fn decode_literal_term(term: Term) -> NifResult<LiteralTerm> {
         return Ok(LiteralTerm::Atom(term.atom_to_string()?));
     }
     Err(rustler::Error::BadArg)
+}
+
+pub(crate) fn parse_var_pat(ident: proc_macro2::Ident, mutable: bool) -> NifResult<Pat> {
+    if mutable {
+        parse_syn::<Pat>(quote!(mut #ident))
+    } else {
+        parse_syn::<Pat>(quote!(#ident))
+    }
+}
+
+pub(crate) fn parse_wildcard_pat(_term: Term) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(_))
+}
+
+pub(crate) fn parse_none_pat(_term: Term) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(None))
+}
+
+pub(crate) fn parse_path_pat(path: syn::Path) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(#path))
+}
+
+pub(crate) fn parse_some_pat(pat: Pat) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(Some(#pat)))
+}
+
+pub(crate) fn parse_ok_pat(pat: Pat) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(Ok(#pat)))
+}
+
+pub(crate) fn parse_err_pat(pat: Pat) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(Err(#pat)))
+}
+
+pub(crate) fn parse_tuple_pat(patterns: Vec<Pat>) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!((#(#patterns),*)))
+}
+
+pub(crate) fn parse_path_tuple_pat(path: syn::Path, patterns: Vec<Pat>) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(#path(#(#patterns),*)))
+}
+
+pub(crate) fn parse_struct_pat(path: syn::Path, fields: Vec<NamedField<Pat>>) -> NifResult<Pat> {
+    parse_syn::<Pat>(quote!(#path { #(#fields),* }))
 }
 
 pub(crate) fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {

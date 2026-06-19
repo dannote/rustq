@@ -11,7 +11,6 @@ defmodule RustQ.NativeCodegen do
 
   def generated_ast_support do
     [
-      A.use([:quote, :quote]),
       A.use({[:rustler], [:Atom, :Env, :NifResult, :Term]}),
       A.use(
         {[:syn],
