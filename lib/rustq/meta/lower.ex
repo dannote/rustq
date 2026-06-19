@@ -712,6 +712,9 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
+  defp mark_mutable_lets(%AST.Let{} = let, mutable_vars),
+    do: %{let | expr: mark_mutable_expr(let.expr, mutable_vars)}
+
   defp mark_mutable_lets(%AST.Assign{} = stmt, mutable_vars),
     do: %{
       stmt

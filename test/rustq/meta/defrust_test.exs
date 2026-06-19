@@ -355,6 +355,23 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "push_pair(name, count);"
   end
 
+  test "keeps tuple pattern lets through mutability inference" do
+    defmodule TupleLetCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec pair(term()) :: R.nif_result(R.unit())
+      defrust pair(term) do
+        {left, right} = decode_as!(term, {R.u8(), R.u8()})
+        use_pair(left, right)
+        :ok
+      end
+    end
+
+    source = TupleLetCase.__rustq_source__()
+    assert source =~ "let (left, right) = term.decode::<(u8, u8)>()?;"
+  end
+
   test "marks assign bang targets as mutable lets" do
     defmodule AssignBangMutationCase do
       use RustQ.Meta
