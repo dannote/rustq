@@ -198,7 +198,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
   defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
 
-  defp lower_match_pattern(value, _case_type) when is_binary(value),
+  defp lower_match_pattern(value, _case_type) when is_binary(value) or is_integer(value),
     do: %AST.PatLiteral{value: value}
 
   defp lower_match_pattern({:ok, pattern}, _case_type),

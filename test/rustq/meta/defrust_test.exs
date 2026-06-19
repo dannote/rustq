@@ -337,6 +337,29 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "term.decode::<Vec<Term<'a>>>()?"
   end
 
+  test "lowers integer match patterns from defrust valid Elixir" do
+    defmodule IntegerMatchCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode(R.i64()) :: R.nif_result(R.unit())
+      defrust decode(op) do
+        case op do
+          1 -> draw_move()
+          2 -> draw_line()
+          _ -> :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = IntegerMatchCase.__rustq_source__()
+
+    assert source =~ "1 =>"
+    assert source =~ "2 =>"
+  end
+
   test "lowers Rust tuple field access from defrust valid Elixir" do
     defmodule TupleFieldCase do
       use RustQ.Meta
