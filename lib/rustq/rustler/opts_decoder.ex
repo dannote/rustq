@@ -19,14 +19,10 @@ defmodule RustQ.Rustler.OptsDecoder do
     opts_arg = Keyword.get(opts, :opts_arg, "opts: &[(Atom, Term#{lifetime_generics(lifetime)})]")
     phantom? = Keyword.get(opts, :phantom, lifetime != nil)
 
-    [
-      Rust.item(RustQ.Rust.AST.Render.render_item(struct_ast(name, fields, phantom?, lifetime))),
-      Rust.item(
-        RustQ.Rust.AST.Render.render_item(
-          decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg)
-        )
-      )
-    ]
+    Rust.ast_items([
+      struct_ast(name, fields, phantom?, lifetime),
+      decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg)
+    ])
   end
 
   defp struct_ast(name, fields, phantom?, lifetime) do

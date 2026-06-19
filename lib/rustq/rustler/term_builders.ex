@@ -4,6 +4,7 @@ defmodule RustQ.Rustler.TermBuilders do
   use RustQ.Meta
 
   alias RustQ.Rust
+  alias RustQ.Rustler.HelperSelection
   alias RustQ.Type, as: R
 
   @names [:map_from_terms, :struct_from_terms]
@@ -35,13 +36,9 @@ defmodule RustQ.Rustler.TermBuilders do
   @spec build(keyword()) :: [Rust.Fragment.t()]
   def build(opts \\ []) do
     opts
-    |> Keyword.get(:include, @names)
-    |> include_names()
+    |> HelperSelection.names(@names)
     |> Enum.map(&rusty_item/1)
   end
-
-  defp include_names(:all), do: @names
-  defp include_names(names), do: List.wrap(names)
 
   defp rusty_item(name) do
     function_name = Map.fetch!(@function_names, name)

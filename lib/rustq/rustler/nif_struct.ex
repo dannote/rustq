@@ -23,9 +23,7 @@ defmodule RustQ.Rustler.NifStruct do
         struct_fields(Keyword.get(opts, :fields, []), Keyword.get(opts, :field_vis, :pub))
       end
 
-    ast
-    |> RustQ.Rust.AST.Render.render_item()
-    |> Rust.item()
+    Rust.ast_item(ast)
   end
 
   defp struct_fields(fields, default_vis) do

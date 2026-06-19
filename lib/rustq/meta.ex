@@ -146,8 +146,7 @@ defmodule RustQ.Meta do
   def defrust_item(module, name) when is_atom(module) and is_atom(name) do
     module
     |> defrust_ast!(name)
-    |> RustQ.Rust.AST.Render.render_item()
-    |> Rust.item()
+    |> Rust.ast_item()
   end
 
   @doc false

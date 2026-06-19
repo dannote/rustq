@@ -41,10 +41,10 @@ defmodule RustQ.Rustler.CachedAtoms do
     static_name = static_name(name)
 
     [
-      rust_item(
+      Rust.ast_item(
         static(String.to_atom(static_name), "OnceLock<Atom>", A.path_call([:OnceLock, :new]))
       ),
-      rust_item(
+      Rust.ast_item(
         function String.to_atom("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
           A.return(
             A.call(:cached_atom, [
@@ -63,8 +63,6 @@ defmodule RustQ.Rustler.CachedAtoms do
 
   defp atom_spec({name, value}) when (is_atom(name) or is_binary(name)) and is_binary(value),
     do: {name, value}
-
-  defp rust_item(ast), do: Rust.item(RustQ.Rust.AST.Render.render_item(ast))
 
   defp static_name(name) do
     name

@@ -16,10 +16,7 @@ defmodule RustQ.Rustler.Resource do
     struct_item = resource_struct_ast(name, Keyword.get(opts, :fields, []))
     impl_item = resource_impl_ast(name)
 
-    [
-      Rust.item(RustQ.Rust.AST.Render.render_item(struct_item)),
-      Rust.item(RustQ.Rust.AST.Render.render_item(impl_item))
-    ]
+    Rust.ast_items([struct_item, impl_item])
   end
 
   defp resource_struct_ast(name, fields) do
@@ -55,7 +52,7 @@ defmodule RustQ.Rustler.Resource do
   def decode(name, opts \\ []) do
     function_name = Keyword.get(opts, :fn, "decode_#{Macro.underscore(to_string(name))}_resource")
 
-    Rust.item(RustQ.Rust.AST.Render.render_item(resource_decode_ast(name, function_name)))
+    Rust.ast_item(resource_decode_ast(name, function_name))
   end
 
   @spec handle_decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
@@ -65,9 +62,7 @@ defmodule RustQ.Rustler.Resource do
 
     field = Keyword.get(opts, :handle_field, "ref")
 
-    Rust.item(
-      RustQ.Rust.AST.Render.render_item(resource_handle_decode_ast(name, function_name, field))
-    )
+    Rust.ast_item(resource_handle_decode_ast(name, function_name, field))
   end
 
   defp resource_decode_ast(name, function_name) do
@@ -115,8 +110,6 @@ defmodule RustQ.Rustler.Resource do
 
   @spec init(atom() | String.t()) :: Rust.Fragment.t()
   def init(name) do
-    Rust.item(
-      RustQ.Rust.AST.Render.render_item(A.macro_item_call([:rustler, :resource], [name, :env]))
-    )
+    Rust.ast_item(A.macro_item_call([:rustler, :resource], [name, :env]))
   end
 end

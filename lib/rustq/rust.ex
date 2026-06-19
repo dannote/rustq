@@ -138,6 +138,12 @@ defmodule RustQ.Rust do
   @spec unquote(:item)(iodata()) :: Fragment.t()
   def unquote(:item)(code), do: %Fragment{kind: :item, code: code}
 
+  @spec ast_item(term()) :: Fragment.t()
+  def ast_item(ast), do: item(RustQ.Rust.AST.Render.render_item(ast))
+
+  @spec ast_items([term()]) :: [Fragment.t()]
+  def ast_items(asts), do: Enum.map(asts, &ast_item/1)
+
   @spec impl_item(iodata()) :: Fragment.t()
   def impl_item(code), do: %Fragment{kind: :impl_item, code: code}
 

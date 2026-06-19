@@ -19,6 +19,12 @@ defmodule RustQ.RustTest do
     assert code =~ ~s|pub const TABLE: &str = "users";|
   end
 
+  test "converts Rust AST items to fragments" do
+    item = RustQ.Rust.AST.Builder.const(:ANSWER, :i32, RustQ.Rust.AST.Builder.lit(42))
+
+    assert Rust.ast_item(item) |> Rust.to_fragment() == "const ANSWER: i32 = 42;"
+  end
+
   test "builds ergonomic generic and lifetime types" do
     assert Rust.type(:Term, lifetime: :a) == "Term<'a>"
     assert Rust.type(:Decoder, lifetime: :_) == "Decoder<'_>"
