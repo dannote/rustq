@@ -134,6 +134,27 @@ defmodule RustQ.Syn.IndexTest do
     for path <- Process.get(:paths, []), do: File.rm(path)
   end
 
+  test "follows public reexport chains for aliased Rust types" do
+    dir =
+      Path.join(System.tmp_dir!(), "rustq_syn_index_test_#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(dir)
+    paint_path = Path.join(dir, "paint.rs")
+    core_path = Path.join(dir, "core.rs")
+    lib_path = Path.join(dir, "lib.rs")
+    Process.put(:paths, [paint_path, core_path, lib_path])
+
+    File.write!(paint_path, "pub use sb::SkPaint_Cap as Cap;\n")
+    File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
+    File.write!(lib_path, "pub use core::PaintCap as PublicPaintCap;\n")
+
+    index = RustQ.Syn.Index.from_paths([paint_path, core_path, lib_path])
+
+    assert {:ok, "PublicPaintCap"} = RustQ.Syn.Index.public_type_name(index, "SkPaint_Cap")
+  after
+    for path <- Process.get(:paths, []), do: File.rm(path)
+  end
+
   test "indexes impl methods by target" do
     path =
       Path.join(

@@ -127,7 +127,7 @@ defmodule RustQ.Syn.Index do
   @spec public_type_name(t(), String.t()) :: {:ok, String.t()} | :error
   def public_type_name(%__MODULE__{} = index, target) when is_binary(target) do
     with {:ok, alias} <- target_alias(index, target) do
-      {:ok, root_reexport_name(index, alias) || alias_name(alias)}
+      {:ok, public_alias_name(index, alias)}
     end
   end
 
@@ -221,17 +221,35 @@ defmodule RustQ.Syn.Index do
   defp alias_targets?(%RustQ.Syn.TypeAlias{type_ast: type}, target),
     do: RustQ.Syn.Type.path?(type, target)
 
-  defp root_reexport_name(index, alias) do
-    alias_module = source_module(index, alias.source_path)
-    alias_segments = [alias_module, alias_name(alias)]
+  defp public_alias_name(index, alias),
+    do: public_alias_name(index, alias_ref(index, alias), MapSet.new())
 
+  defp public_alias_name(index, alias_ref, seen) do
+    if MapSet.member?(seen, alias_ref) do
+      elem(alias_ref, 1)
+    else
+      seen = MapSet.put(seen, alias_ref)
+
+      case public_reexport(index, alias_ref) do
+        nil -> elem(alias_ref, 1)
+        reexport -> public_alias_name(index, alias_ref(index, reexport), seen)
+      end
+    end
+  end
+
+  defp public_reexport(index, {_module, name} = alias_ref) do
     index
     |> uses()
-    |> Enum.find_value(fn
-      %RustQ.Syn.Use{visibility: :public, segments: ^alias_segments, alias: name} -> name
-      _use -> nil
+    |> Enum.find(fn
+      %RustQ.Syn.Use{visibility: :public, segments: segments, alias: alias_name} ->
+        segments == Tuple.to_list(alias_ref) and alias_name != name
+
+      _use ->
+        false
     end)
   end
+
+  defp alias_ref(index, alias), do: {source_module(index, alias.source_path), alias_name(alias)}
 
   defp alias_name(%RustQ.Syn.Use{alias: alias}), do: alias
   defp alias_name(%RustQ.Syn.TypeAlias{name: name}), do: name
