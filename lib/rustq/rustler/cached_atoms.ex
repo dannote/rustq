@@ -1,9 +1,10 @@
 defmodule RustQ.Rustler.CachedAtoms do
   @moduledoc false
 
-  use RustQ.Sigil
+  use RustQ.Meta
 
   alias RustQ.Rust
+  alias RustQ.Type, as: R
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
 
@@ -12,11 +13,11 @@ defmodule RustQ.Rustler.CachedAtoms do
   require A
   require I
 
-  @helpers_template ~R"""
-  fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom {
-      *cell.get_or_init(|| Atom::from_term(name.encode(env)).unwrap())
-  }
-  """
+  @spec cached_atom(R.path(:Env), R.ref(R.raw(:"OnceLock<Atom>")), R.ref(R.path(:str))) ::
+          R.atom()
+  defrust cached_atom(env, cell, name) do
+    deref(cell.get_or_init(fn -> Atom.from_term(name.encode(env)).unwrap() end))
+  end
 
   @spec build([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
           Rust.Fragment.t()
@@ -28,7 +29,7 @@ defmodule RustQ.Rustler.CachedAtoms do
 
     helper_items =
       if include_helpers? do
-        [Rust.item(RustQ.render!(@helpers_template, "rustler_cached_atom_helpers.rs"))]
+        [rust_item(Enum.find(__rustq_asts__(), &(&1.name == :cached_atom)))]
       else
         []
       end

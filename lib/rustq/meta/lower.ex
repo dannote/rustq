@@ -331,7 +331,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
-  defp lower_expr({:fn, _, [{:->, _, [[arg], body]}]}), do: lower_closure(arg, body)
+  defp lower_expr({:fn, _, [{:->, _, [args, body]}]}), do: lower_closure_args(args, body)
 
   defp lower_expr({{:., _, [{:__aliases__, _, [:Enum]}, :map]}, _, [collection, mapper]}),
     do: lower_enum_map(collection, mapper)
@@ -518,11 +518,11 @@ defmodule RustQ.Meta.Lower do
   defp operator_op(:*), do: :mul
   defp operator_op(:/), do: :div
 
-  defp lower_enum_map(collection, {:fn, _, [{:->, _, [[arg], body]}]}) do
+  defp lower_enum_map(collection, {:fn, _, [{:->, _, [args, body]}]}) do
     collection
     |> lower_expr()
     |> method_chain(:into_iter)
-    |> method_chain(:map, [lower_closure(arg, body)])
+    |> method_chain(:map, [lower_closure_args(args, body)])
     |> method_chain(:collect)
   end
 
@@ -530,12 +530,17 @@ defmodule RustQ.Meta.Lower do
     raise ArgumentError, "unsupported Enum.map mapper in defrust: #{Macro.to_string(other)}"
   end
 
-  defp lower_closure({name, _, context}, body) when is_atom(name) and is_atom(context),
-    do: %AST.Closure{args: [name], body: lower_expr(closure_body_expr(body))}
+  defp lower_closure_args(args, body) when is_list(args),
+    do: %AST.Closure{
+      args: Enum.map(args, &closure_arg!/1),
+      body: lower_expr(closure_body_expr(body))
+    }
 
-  defp lower_closure(other, _body) do
+  defp closure_arg!({name, _, context}) when is_atom(name) and is_atom(context), do: name
+
+  defp closure_arg!(other) do
     raise ArgumentError,
-          "unsupported Enum.map closure argument in defrust: #{Macro.to_string(other)}"
+          "unsupported defrust closure argument: #{Macro.to_string(other)}"
   end
 
   defp closure_body_expr([expression]), do: expression

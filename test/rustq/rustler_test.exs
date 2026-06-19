@@ -163,7 +163,7 @@ defmodule RustQ.RustlerTest do
         splice: [items: RustQ.Rustler.cached_atoms([:ok, {:node_changes, "nodeChanges"}])]
       )
 
-    assert code =~ "fn cached_atom(env: Env, cell: &'static OnceLock<Atom>, name: &str) -> Atom"
+    assert code =~ "fn cached_atom(env: Env, cell: &OnceLock<Atom>, name: &str) -> Atom"
     assert code =~ "static OK_ATOM: OnceLock<Atom> = OnceLock::new();"
     assert code =~ "fn ok_atom(env: Env) -> Atom"
     assert code =~ ~S/cached_atom(env, &NODE_CHANGES_ATOM, "nodeChanges")/

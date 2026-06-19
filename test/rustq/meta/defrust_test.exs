@@ -132,6 +132,21 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
   end
 
+  test "defrust lowers zero-arity closures" do
+    defmodule ZeroArityClosureCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec value() :: R.i64()
+      defrust value() do
+        get_or_init(fn -> 42 end)
+      end
+    end
+
+    source = ZeroArityClosureCase.__rustq_source__()
+    assert source =~ "get_or_init(|| 42i64)"
+  end
+
   test "defrust lowers arrays and indexed assignment" do
     defmodule ArrayIndexCase do
       use RustQ.Meta
