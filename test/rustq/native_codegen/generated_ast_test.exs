@@ -153,8 +153,20 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     assert %AST.ExprStmt{expr: %AST.Try{}} = hd(arg_body)
 
     assert %AST.Return{
-             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_function_arg]}}
+             expr: %AST.If{
+               condition: %AST.Var{name: :receiver},
+               then: [
+                 %AST.Return{
+                   expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_function_receiver]}}
+                 }
+               ],
+               else: else_body
+             }
            } = List.last(arg_body)
+
+    assert %AST.Return{
+             expr: %AST.PathCall{path: %AST.Path{parts: [:super, :parse_function_arg]}}
+           } = List.last(else_body)
   end
 
   test "dogfooded decoder modules cover generated decoder categories" do

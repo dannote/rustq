@@ -139,6 +139,14 @@ defmodule RustQ.Rust.AST.Builder do
   def arg(name, type) when is_binary(type), do: %AST.FunctionArg{name: name, type: type}
   def arg(name, type), do: %AST.FunctionArg{name: name, type: type(type)}
 
+  def receiver(opts \\ []),
+    do: %AST.FunctionArg{
+      name: :self,
+      type: nil,
+      receiver: true,
+      mutable: Keyword.get(opts, :mut, false)
+    }
+
   def type(value), do: RustQ.Rust.AST.TypeBuilder.type(value)
 
   def var(name) when is_atom(name), do: %AST.Var{name: name}

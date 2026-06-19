@@ -182,8 +182,16 @@ defmodule RustQ.Rust.AST do
       )
   )
 
-  defnode(FunctionArg, :field, [:name, :type],
-    type: quote(do: %__MODULE__{name: atom(), type: RustQ.Rust.AST.type() | String.t()})
+  defnode(FunctionArg, :field, [:name, :type, receiver: false, mutable: false],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          type: RustQ.Rust.AST.type() | String.t() | nil,
+          receiver: boolean(),
+          mutable: boolean()
+        }
+      )
   )
 
   defnode(

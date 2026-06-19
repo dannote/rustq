@@ -189,6 +189,14 @@ pub(crate) fn parse_function_arg(name: syn::Ident, ty: Type) -> NifResult<FnArg>
     parse_syn(quote!(#name: #ty))
 }
 
+pub(crate) fn parse_function_receiver(mutable: bool) -> NifResult<FnArg> {
+    if mutable {
+        parse_syn(quote!(&mut self))
+    } else {
+        parse_syn(quote!(&self))
+    }
+}
+
 pub(crate) fn parse_struct_field(
     name: syn::Ident,
     ty: Type,

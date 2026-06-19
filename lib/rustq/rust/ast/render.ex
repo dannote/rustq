@@ -265,6 +265,9 @@ defmodule RustQ.Rust.AST.Render do
   defp render_attr_value(value) when is_binary(value), do: inspect(value)
   defp render_attr_value(value), do: to_string(value)
 
+  def render_function_arg(%FunctionArg{receiver: true, mutable: false}), do: "&self"
+  def render_function_arg(%FunctionArg{receiver: true, mutable: true}), do: "&mut self"
+
   def render_function_arg(%FunctionArg{name: name, type: type}) do
     "#{name}: #{render_type(type)}"
   end

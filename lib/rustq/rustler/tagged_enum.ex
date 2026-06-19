@@ -1,24 +1,12 @@
 defmodule RustQ.Rustler.TaggedEnum do
   @moduledoc false
 
-  use RustQ.Sigil
-
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.PatternBuilder, as: P
 
   require A
-
-  @encoder_template ~R"""
-  impl rustler::Encoder for __rq_Enum {
-      fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a> {
-          match self {
-              __rq_arms => unreachable!(),
-          }
-      }
-  }
-  """
 
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts) do
@@ -57,12 +45,13 @@ defmodule RustQ.Rustler.TaggedEnum do
   end
 
   defp encoder(name, variants) do
-    Rust.item(
-      RustQ.render!(@encoder_template, "rustler_tagged_enum_encoder.rs",
-        bind: [Enum: name],
-        splice: [arms: Enum.map(variants, &encode_arm(name, &1))]
+    impl =
+      A.impl(A.type_path(name),
+        trait: A.type_path([:rustler, :Encoder]),
+        items: [encoder_function(name, variants)]
       )
-    )
+
+    Rust.ast_item(impl)
   end
 
   defp variant({variant, opts}) do
@@ -112,8 +101,21 @@ defmodule RustQ.Rustler.TaggedEnum do
     }
   end
 
+  defp encoder_function(enum_name, variants) do
+    %AST.Function{
+      name: :encode,
+      lifetime: :a,
+      args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
+      returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
+      body: [A.return(A.match_expr(A.var(:self), Enum.map(variants, &encode_arm(enum_name, &1))))]
+    }
+  end
+
   defp encode_arm(enum_name, {variant, _opts}) do
-    Rust.arm("#{enum_name}::#{variant}(value)", "value.encode(env)")
+    %AST.Arm{
+      pattern: P.path_tuple([enum_name, variant], [:value]),
+      body: [A.return(A.method(:value, :encode, [:env]))]
+    }
   end
 
   defp unknown_arm(unknown) do

@@ -136,9 +136,16 @@ defmodule RustQ.NativeCodegen.Decoders.Item do
   @spec decode_function_arg(term()) :: R.nif_result(FnArg.t())
   defrust decode_function_arg(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.FunctionArg"))
-    name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
-    ty = unwrap!(required_type(term, "type"))
-    Super.parse_function_arg(name, ty)
+    receiver = unwrap!(decode_as(unwrap!(required_field(term, "receiver")), R.bool()))
+    mutable = unwrap!(decode_as(unwrap!(required_field(term, "mutable")), R.bool()))
+
+    if receiver do
+      Super.parse_function_receiver(mutable)
+    else
+      name = Super.format_ident_value(unwrap!(atom_key(term, "name")))
+      ty = unwrap!(required_type(term, "type"))
+      Super.parse_function_arg(name, ty)
+    end
   end
 
   @spec decode_struct_field(term()) :: R.nif_result(Field.t())

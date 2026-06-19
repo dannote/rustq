@@ -410,9 +410,15 @@ pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {
 
 pub(crate) fn decode_function_arg<'a>(term: Term<'a>) -> NifResult<FnArg> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.FunctionArg")?;
-    let name = super::format_ident_value(atom_key(term, "name")?);
-    let ty = required_type(term, "type")?;
-    super::parse_function_arg(name, ty)
+    let receiver = required_field(term, "receiver")?.decode::<bool>()?;
+    let mutable = required_field(term, "mutable")?.decode::<bool>()?;
+    if receiver {
+        super::parse_function_receiver(mutable)
+    } else {
+        let name = super::format_ident_value(atom_key(term, "name")?);
+        let ty = required_type(term, "type")?;
+        super::parse_function_arg(name, ty)
+    }
 }
 
 pub(crate) fn decode_struct_field<'a>(term: Term<'a>) -> NifResult<Field> {

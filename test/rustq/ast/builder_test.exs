@@ -64,6 +64,19 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert RustQ.Rust.AST.Render.render_function(function) =~ "parse_pat(quote!(None))"
   end
 
+  test "renders function receiver arguments" do
+    function = %AST.Function{
+      name: :encode,
+      lifetime: :a,
+      args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
+      returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
+      body: [A.return(A.var(:term))]
+    }
+
+    assert RustQ.Rust.AST.Render.render_function(function) =~
+             "fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a>"
+  end
+
   test "renders lifetime-bearing impl blocks" do
     impl =
       A.impl(A.type_path(:Content),
