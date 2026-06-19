@@ -181,6 +181,20 @@ low-level escape hatches for cases not yet covered by semantic helpers.
 RustQ dogfoods this layer in `RustQ.NativeCodegen.Decoders.*` to generate much of
 its own native AST decoder support.
 
+For RustQ-owned helper modules that expose `defrust` functions for codegen,
+`RustQ.Meta.item(module, name)`, `items(module, names)`, and `ast!(module, name)`
+provide the internal bridge from a compiled `defrust` function to a reusable Rust
+fragment or AST node:
+
+```elixir
+RustQ.Meta.item(MyApp.Native.Generated, :save)
+RustQ.Meta.items(MyApp.Native.Generated, [:save, :restore])
+RustQ.Meta.ast!(MyApp.Native.Generated, :save)
+```
+
+These helpers are intentionally small; they are for reusing RustQ-generated Rust
+items without adding a binding-level framework.
+
 ### Advanced: RustQ-owned modules with `defrustmod`
 
 `defrustmod` is for RustQ-owned Rust module structure. Use the block form when
@@ -424,6 +438,37 @@ items = [
 Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
 `Rust.expr/1`, and `Rust.arm/1` when hand-written Rust is clearer than a
 builder.
+
+When codegen already has a `RustQ.Rust.AST` item, use `Rust.ast_item/1` or
+`Rust.ast_items/1` as the standard AST-to-fragment bridge instead of rendering
+AST items by hand:
+
+```elixir
+alias RustQ.Rust
+alias RustQ.Rust.AST.Builder, as: A
+
+Rust.ast_item(A.const(:ANSWER, :i32, A.lit(42)))
+```
+
+For structural Rust item generation, prefer the AST builders directly. They
+cover Rustler-friendly shapes such as lifetime-bearing impl blocks and receiver
+arguments:
+
+```elixir
+A.impl(A.type_path(:Content),
+  lifetimes: [:a],
+  trait: A.type_path([:rustler, :Decoder], lifetimes: [:a]),
+  items: [decode_function]
+)
+
+%RustQ.Rust.AST.Function{
+  name: :encode,
+  lifetime: :a,
+  args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
+  returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
+  body: [A.return(A.method(:value, :encode, [:env]))]
+}
+```
 
 ## Rustler helpers
 
