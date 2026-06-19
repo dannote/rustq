@@ -1,10 +1,12 @@
 defmodule RustQ.Rustler.OptsHelpers do
   @moduledoc false
 
+  use RustQ.Meta
   use RustQ.Sigil
 
   alias RustQ.Rust
   alias RustQ.Rustler.HelperSelection
+  alias RustQ.Type, as: R
 
   @names [
     :decode_opts,
@@ -17,23 +19,9 @@ defmodule RustQ.Rustler.OptsHelpers do
     :opt_atom_option
   ]
 
+  @rusty_names @names -- [:opt_f32]
+
   @templates %{
-    decode_opts: ~R"""
-    fn decode_opts<'a>(term: Term<'a>) -> NifResult<Vec<(Atom, Term<'a>)>> {
-        term.map_get(__rq_key!())?.decode::<Vec<(Atom, Term<'a>)>>()
-    }
-    """,
-    decode_args: ~R"""
-    fn decode_args<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>> {
-        term.map_get(__rq_args_key!())?.decode::<Vec<Term<'a>>>()
-    }
-    """,
-    opt_term: ~R"""
-    fn opt_term<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> Option<Term<'a>> {
-        opts.iter()
-            .find_map(|(atom, term)| if *atom == key { Some(*term) } else { None })
-    }
-    """,
     opt_f32: ~R"""
     fn opt_f32<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<f32> {
         opt_f32_default(opts, key, f32::NAN).and_then(|value| {
@@ -44,57 +32,87 @@ defmodule RustQ.Rustler.OptsHelpers do
             }
         })
     }
-    """,
-    opt_f32_option: ~R"""
-    fn opt_f32_option<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<Option<f32>> {
-        match opt_term(opts, key) {
-            Some(term) => Ok(Some(term.decode::<f64>()? as f32)),
-            None => Ok(None),
-        }
-    }
-    """,
-    opt_f32_default: ~R"""
-    fn opt_f32_default<'a>(opts: &[(Atom, Term<'a>)], key: Atom, default: f32) -> NifResult<f32> {
-        match opt_term(opts, key) {
-            Some(term) => Ok(term.decode::<f64>()? as f32),
-            None => Ok(default),
-        }
-    }
-    """,
-    opt_bool_option: ~R"""
-    fn opt_bool_option<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<Option<bool>> {
-        match opt_term(opts, key) {
-            Some(term) => Ok(Some(term.decode::<bool>()?)),
-            None => Ok(None),
-        }
-    }
-    """,
-    opt_atom_option: ~R"""
-    fn opt_atom_option<'a>(opts: &[(Atom, Term<'a>)], key: Atom) -> NifResult<Option<Atom>> {
-        match opt_term(opts, key) {
-            Some(term) => Ok(Some(term.decode::<Atom>()?)),
-            None => Ok(None),
-        }
-    }
     """
   }
+
+  @spec decode_opts(term()) :: R.nif_result(R.vec({R.path(:Atom), term()}))
+  defrust decode_opts(term) do
+    decode_as(unwrap!(term.map_get(Atoms.opts())), R.vec({R.path(:Atom), term()}))
+  end
+
+  @spec decode_args(term()) :: R.nif_result(R.vec(term()))
+  defrust decode_args(term) do
+    decode_as(unwrap!(term.map_get(Atoms.args())), R.vec(term()))
+  end
+
+  @spec opt_term(R.slice({R.path(:Atom), term()}), R.path(:Atom)) :: R.option(term())
+  defrust opt_term(opts, key) do
+    for {atom, term} <- opts.iter() do
+      if deref(atom) == key do
+        return!(deref(term))
+      end
+    end
+
+    nil
+  end
+
+  @spec opt_f32_option(R.slice({R.path(:Atom), term()}), R.path(:Atom)) ::
+          R.nif_result(R.option(R.f32()))
+  defrust opt_f32_option(opts, key) do
+    case opt_term(opts, key) do
+      {:some, term} -> {:ok, cast(decode_as!(term, R.f64()), :f32)}
+      :none -> {:ok, nil}
+    end
+  end
+
+  @spec opt_f32_default(R.slice({R.path(:Atom), term()}), R.path(:Atom), R.f32()) ::
+          R.nif_result(R.f32())
+  defrust opt_f32_default(opts, key, default) do
+    case opt_term(opts, key) do
+      {:some, term} -> {:ok, cast(decode_as!(term, R.f64()), :f32)}
+      :none -> {:ok, default}
+    end
+  end
+
+  @spec opt_bool_option(R.slice({R.path(:Atom), term()}), R.path(:Atom)) ::
+          R.nif_result(R.option(R.bool()))
+  defrust opt_bool_option(opts, key) do
+    case opt_term(opts, key) do
+      {:some, term} -> {:ok, decode_as!(term, R.bool())}
+      :none -> {:ok, nil}
+    end
+  end
+
+  @spec opt_atom_option(R.slice({R.path(:Atom), term()}), R.path(:Atom)) ::
+          R.nif_result(R.option(R.path(:Atom)))
+  defrust opt_atom_option(opts, key) do
+    case opt_term(opts, key) do
+      {:some, term} -> {:ok, decode_as!(term, R.path(:Atom))}
+      :none -> {:ok, nil}
+    end
+  end
 
   @spec build(keyword()) :: [Rust.Fragment.t()]
   def build(opts \\ []) do
     opts
     |> names()
-    |> Enum.map(fn name ->
-      @templates
-      |> Map.fetch!(name)
-      |> RustQ.render!("rustler_opts_helper.rs",
-        bind: [
-          key: Rust.expr(Keyword.get(opts, :key, "atoms::opts()")),
-          args_key: Rust.expr(Keyword.get(opts, :args_key, "atoms::args()"))
-        ]
-      )
-      |> Rust.item()
-    end)
+    |> Enum.map(&helper_item/1)
+  end
+
+  defp helper_item(name) when name in @rusty_names do
+    __rustq_asts__()
+    |> Enum.find(&(&1.name == name))
+    |> RustQ.Rust.AST.Render.render_item()
+    |> Rust.item()
+  end
+
+  defp helper_item(name) do
+    name
+    |> template!()
+    |> RustQ.render!("rustler_opts_helper.rs")
+    |> Rust.item()
   end
 
   defp names(opts), do: HelperSelection.names(opts, @names)
+  defp template!(name), do: Map.fetch!(@templates, name)
 end
