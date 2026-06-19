@@ -157,7 +157,10 @@ fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
                 "function",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
-                (line(item.sig.ident.span()), item.sig.to_token_stream().to_string()),
+                (
+                    line(item.sig.ident.span()),
+                    item.sig.to_token_stream().to_string(),
+                ),
                 docs(&item.attrs),
                 item.sig
                     .inputs
@@ -226,7 +229,12 @@ fn use_alias(tree: &UseTree) -> Option<(String, Vec<String>, Option<String>, boo
             UseTree::Rename(rename) => {
                 let mut path = prefix;
                 path.push(rename.ident.to_string());
-                Some((path.join("::"), path, Some(rename.rename.to_string()), false))
+                Some((
+                    path.join("::"),
+                    path,
+                    Some(rename.rename.to_string()),
+                    false,
+                ))
             }
             UseTree::Name(name) => {
                 let mut path = prefix;
@@ -248,7 +256,10 @@ fn impl_method_term<'a>(env: Env<'a>, item: ImplItem) -> Option<Term<'a>> {
                 "method",
                 item.sig.ident.to_string(),
                 visibility(&item.vis),
-                (line(item.sig.ident.span()), item.sig.to_token_stream().to_string()),
+                (
+                    line(item.sig.ident.span()),
+                    item.sig.to_token_stream().to_string(),
+                ),
                 docs(&item.attrs),
                 item.sig
                     .inputs

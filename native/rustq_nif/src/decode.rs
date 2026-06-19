@@ -494,16 +494,6 @@ pub(crate) fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
     decode_list(term, decode_expr)
 }
 
-pub(crate) fn decode_optional_path_field(term: Term, field: &str) -> NifResult<Option<syn::Path>> {
-    let value = term.map_get(atom(term.get_env(), field)?)?;
-
-    if is_nil(value)? {
-        Ok(None)
-    } else {
-        Ok(Some(parse_ast_path(value)?))
-    }
-}
-
 pub(crate) fn decode_ident_list(term: Term) -> NifResult<Vec<proc_macro2::Ident>> {
     decode_string_list(term).map(|names| {
         names

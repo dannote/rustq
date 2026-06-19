@@ -320,10 +320,11 @@ pub(crate) fn decode_ast_module<'a>(term: Term<'a>) -> NifResult<ItemMod> {
 pub(crate) fn decode_ast_impl<'a>(term: Term<'a>) -> NifResult<ItemImpl> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Impl")?;
     let target = required_type(term, "target")?;
-    let trait_path = super::decode_optional_path_field(term, "trait")?;
+    let trait_path = super::decode_optional_type_field(term, "trait")?;
     let impl_items = required_item_list(term, "items")?;
     let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
-    super::parse_item_impl(target, trait_path, impl_items, attrs)
+    let lifetimes = decode_lifetime_list(required_field(term, "lifetimes")?)?;
+    super::parse_item_impl(target, trait_path, impl_items, attrs, lifetimes)
 }
 
 pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {

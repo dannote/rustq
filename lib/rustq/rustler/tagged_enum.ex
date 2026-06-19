@@ -4,21 +4,11 @@ defmodule RustQ.Rustler.TaggedEnum do
   use RustQ.Sigil
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
 
-  @decoder_template ~R"""
-  impl<'a> rustler::Decoder<'a> for __rq_Enum {
-      fn decode(term: rustler::Term<'a>) -> rustler::NifResult<Self> {
-          use rustler::Decoder;
-          let env = term.get_env();
-          let module: rustler::Atom = term.map_get(__rq_tag!())?.decode()?;
-          let name_str = module.to_term(env).atom_to_string()?;
-
-          match name_str.as_str() {
-              __rq_arms => unreachable!(),
-          }
-      }
-  }
-  """
+  require A
 
   @encoder_template ~R"""
   impl rustler::Encoder for __rq_Enum {
@@ -56,12 +46,14 @@ defmodule RustQ.Rustler.TaggedEnum do
   end
 
   defp decoder(name, variants, tag, unknown) do
-    Rust.item(
-      RustQ.render!(@decoder_template, "rustler_tagged_enum_decoder.rs",
-        bind: [Enum: name, tag: Rust.expr(tag)],
-        splice: [arms: Enum.map(variants, &decode_arm(name, &1)) ++ [unknown_arm(unknown)]]
+    impl =
+      A.impl(A.type_path(name),
+        lifetimes: [:a],
+        trait: A.type_path([:rustler, :Decoder], lifetimes: [:a]),
+        items: [decoder_function(name, variants, tag, unknown)]
       )
-    )
+
+    Rust.ast_item(impl)
   end
 
   defp encoder(name, variants) do
@@ -77,13 +69,47 @@ defmodule RustQ.Rustler.TaggedEnum do
     {variant, [tuple: [Keyword.fetch!(opts, :type)]]}
   end
 
+  defp decoder_function(enum_name, variants, tag, unknown) do
+    %AST.Function{
+      name: :decode,
+      args: [A.arg(:term, A.type_path([:rustler, :Term], lifetimes: [:a]))],
+      returns: A.type_path([:rustler, :NifResult], generics: [A.type_path(:Self)]),
+      body: [
+        A.let(:env, A.method(:term, :get_env)),
+        A.let(
+          :module,
+          A.try(A.method(A.try(A.method(:term, :map_get, [A.escape_expr(tag)])), :decode)),
+          type: A.type_path([:rustler, :Atom])
+        ),
+        A.let(
+          :name_str,
+          A.try(A.method(A.method(:module, :to_term, [:env]), :atom_to_string))
+        ),
+        A.return(
+          A.match_expr(
+            A.method(:name_str, :as_str),
+            Enum.map(variants, &decode_arm(enum_name, &1)) ++ [unknown_arm(unknown)]
+          )
+        )
+      ]
+    }
+  end
+
   defp decode_arm(enum_name, {variant, opts}) do
     module = Keyword.fetch!(opts, :module)
 
-    Rust.arm(
-      inspect(module),
-      "Ok(#{enum_name}::#{variant}(Decoder::decode(term)?))"
-    )
+    %AST.Arm{
+      pattern: P.lit(module),
+      body: [
+        A.return(
+          A.ok(
+            A.path_call([enum_name, variant], [
+              A.try(A.path_call([:rustler, :Decoder, :decode], [:term]))
+            ])
+          )
+        )
+      ]
+    }
   end
 
   defp encode_arm(enum_name, {variant, _opts}) do
@@ -91,6 +117,11 @@ defmodule RustQ.Rustler.TaggedEnum do
   end
 
   defp unknown_arm(unknown) do
-    Rust.arm("_", ~s|Err(rustler::Error::RaiseAtom("#{unknown}"))|)
+    %AST.Arm{
+      pattern: P.wildcard(),
+      body: [
+        A.return(A.err(A.path_call([:rustler, :Error, :RaiseAtom], [A.lit(to_string(unknown))])))
+      ]
+    }
   end
 end

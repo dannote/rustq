@@ -36,9 +36,10 @@ pub(crate) fn parse_item_module(
 
 pub(crate) fn parse_item_impl(
     target: Type,
-    trait_path: Option<syn::Path>,
+    trait_path: Option<Type>,
     items: Vec<Item>,
     attrs: Vec<syn::Attribute>,
+    lifetimes: Vec<String>,
 ) -> NifResult<syn::ItemImpl> {
     let item_tokens = items
         .into_iter()
@@ -48,10 +49,22 @@ pub(crate) fn parse_item_impl(
         })
         .collect::<Vec<_>>();
 
-    if let Some(trait_path) = trait_path {
-        parse_syn(quote!(#(#attrs)* impl #trait_path for #target { #(#item_tokens)* }))
-    } else {
-        parse_syn(quote!(#(#attrs)* impl #target { #(#item_tokens)* }))
+    let lifetime_tokens = lifetimes
+        .into_iter()
+        .map(|name| syn::Lifetime::new(&format!("'{}", name), proc_macro2::Span::call_site()))
+        .collect::<Vec<_>>();
+
+    match (trait_path, lifetime_tokens.is_empty()) {
+        (Some(trait_path), true) => {
+            parse_syn(quote!(#(#attrs)* impl #trait_path for #target { #(#item_tokens)* }))
+        }
+        (Some(trait_path), false) => parse_syn(
+            quote!(#(#attrs)* impl<#(#lifetime_tokens),*> #trait_path for #target { #(#item_tokens)* }),
+        ),
+        (None, true) => parse_syn(quote!(#(#attrs)* impl #target { #(#item_tokens)* })),
+        (None, false) => {
+            parse_syn(quote!(#(#attrs)* impl<#(#lifetime_tokens),*> #target { #(#item_tokens)* }))
+        }
     }
 }
 

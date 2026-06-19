@@ -233,7 +233,8 @@ defmodule RustQ.RustlerTest do
     assert code =~ "pub enum ExContent"
     assert code =~ "Text(ExText)"
     assert code =~ "impl<'a> rustler::Decoder<'a> for ExContent"
-    assert code =~ ~S/"Elixir.Folio.Content.Text" => Ok(ExContent::Text(Decoder::decode(term)?))/
+    assert code =~ ~S/"Elixir.Folio.Content.Text"/
+    assert code =~ "Ok(ExContent::Text(rustler::Decoder::decode(term)?))"
     assert code =~ "impl rustler::Encoder for ExContent"
     assert code =~ "ExContent::Text(value) => value.encode(env)"
   end

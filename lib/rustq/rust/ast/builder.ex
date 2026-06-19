@@ -302,10 +302,9 @@ defmodule RustQ.Rust.AST.Builder do
   defp maybe_expr(value), do: expr(value)
 
   def trait_path(%AST.TypePath{} = path), do: path
-  def trait_path(%AST.Path{} = path), do: path
-  def trait_path(path) when is_binary(path), do: path
-  def trait_path(parts) when is_list(parts), do: path(parts)
-  def trait_path(part), do: path(part)
+  def trait_path(path) when is_binary(path), do: type_path(path)
+  def trait_path(parts) when is_list(parts), do: type_path(parts)
+  def trait_path(part), do: type_path(part)
 
   def expr_path(%AST.Path{} = path), do: path
   def expr_path(parts) when is_list(parts), do: path(parts)
