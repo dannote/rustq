@@ -66,11 +66,17 @@ defmodule RustQ.Rustler.AtomDecoder do
   defp ident_atom(value) when is_atom(value), do: value
   defp ident_atom(value) when is_binary(value), do: String.to_atom(value)
 
+  defp rust_value_expr(%{__struct__: _module} = value) do
+    if AST.expr_node?(value), do: value, else: value |> Rust.type() |> A.path()
+  end
+
   defp rust_value_expr(value), do: value |> Rust.type() |> A.path()
 
   defp descriptor_cases(%RustQ.NativeEnumDescriptor{} = descriptor, returns) do
+    return_parts = returns |> Rust.type() |> A.path_parts()
+
     Enum.map(RustQ.NativeEnumDescriptor.variants(descriptor), fn {atom, variant} ->
-      {atom, "#{Rust.type(returns)}::#{variant}"}
+      {atom, A.path(return_parts ++ [variant])}
     end)
   end
 
