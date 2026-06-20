@@ -71,14 +71,53 @@ defmodule RustQ.Meta.AST do
     }
   end
 
-  def build_ast({call_ast, body_ast}, specs, type_aliases, rust_modules, env),
-    do: build_ast({call_ast, body_ast, [], nil}, specs, type_aliases, rust_modules, env)
+  def build_ast(definition, specs, type_aliases, rust_modules, env, external_callables \\ [])
 
-  def build_ast({call_ast, body_ast, attrs}, specs, type_aliases, rust_modules, env),
-    do: build_ast({call_ast, body_ast, attrs, nil}, specs, type_aliases, rust_modules, env)
+  def build_ast({call_ast, body_ast}, specs, type_aliases, rust_modules, env, external_callables),
+    do:
+      build_ast(
+        {call_ast, body_ast, [], nil},
+        specs,
+        type_aliases,
+        rust_modules,
+        env,
+        external_callables
+      )
 
-  def build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules, env) do
-    do_build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules, env)
+  def build_ast(
+        {call_ast, body_ast, attrs},
+        specs,
+        type_aliases,
+        rust_modules,
+        env,
+        external_callables
+      ),
+      do:
+        build_ast(
+          {call_ast, body_ast, attrs, nil},
+          specs,
+          type_aliases,
+          rust_modules,
+          env,
+          external_callables
+        )
+
+  def build_ast(
+        {call_ast, body_ast, attrs, rust_module},
+        specs,
+        type_aliases,
+        rust_modules,
+        env,
+        external_callables
+      ) do
+    do_build_ast(
+      {call_ast, body_ast, attrs, rust_module},
+      specs,
+      type_aliases,
+      rust_modules,
+      env,
+      external_callables
+    )
   rescue
     error in Diagnostic.Error ->
       raise_defrust_diagnostic(call_ast, body_ast, error.diagnostic)
@@ -138,7 +177,8 @@ defmodule RustQ.Meta.AST do
          specs,
          type_aliases,
          rust_modules,
-         env
+         env,
+         external_callables
        ) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
@@ -153,7 +193,7 @@ defmodule RustQ.Meta.AST do
     body =
       Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
         rust_modules: rust_modules,
-        callables: spec_callables(specs, type_aliases)
+        callables: spec_callables(specs, type_aliases) ++ external_callables
       )
 
     lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
@@ -373,6 +413,10 @@ defmodule RustQ.Meta.AST do
   defp arg_name!(other) do
     raise ArgumentError, "unsupported defrust argument: #{Macro.to_string(other)}"
   end
+
+  @doc false
+  @spec callables_from_specs([term()], map()) :: [Callable.t()]
+  def callables_from_specs(specs, type_aliases), do: spec_callables(specs, type_aliases)
 
   defp spec_callables(specs, type_aliases) do
     Enum.flat_map(specs, fn

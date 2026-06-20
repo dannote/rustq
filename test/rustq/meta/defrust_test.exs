@@ -76,6 +76,97 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "local_callable_propagation.rs")
   end
 
+  defmodule SynSourceDomain do
+    defmacro __using__(_opts) do
+      quote do
+        use RustQ.Meta, rust_sources: ["test/fixtures/external_callables.rs"]
+      end
+    end
+  end
+
+  test "defrust can use Syn-derived external callable metadata" do
+    defmodule SynExternalCallableCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/external_callables.rs"]
+
+      alias RustQ.Type, as: R
+
+      @spec decode_color(R.term()) :: R.nif_result(R.path(:Color))
+      defrust decode_color(term) do
+        color = decode_as!(term, R.u32())
+        {:ok, Color.from_argb(255, 0, 0, color)}
+      end
+
+      @spec draw(R.term(), R.slice({R.atom(), R.term()})) :: R.nif_result(R.unit())
+      defrust draw(term, opts) do
+        unwrap!(stroke_paint(decode_color(term), 1.0, opts))
+        :ok
+      end
+    end
+
+    source = SynExternalCallableCase.__rustq_source__()
+
+    assert source =~ "stroke_paint(decode_color(term)?, 1.0, opts)?;"
+    assert RustQ.valid?(source, "syn_external_callable.rs")
+  end
+
+  test "defrust can use callable metadata from other RustQ modules" do
+    defmodule CallableProducerCase do
+      use RustQ.Meta
+
+      alias RustQ.Type, as: R
+
+      @spec decode_color(R.term()) :: R.nif_result(R.path(:Color))
+      defrust decode_color(term) do
+        color = decode_as!(term, R.u32())
+        {:ok, Color.from_argb(255, 0, 0, color)}
+      end
+    end
+
+    defmodule CallableConsumerCase do
+      use RustQ.Meta,
+        rust_sources: ["test/fixtures/external_callables.rs"],
+        callable_modules: [CallableProducerCase]
+
+      alias RustQ.Type, as: R
+
+      @spec draw(R.term(), R.slice({R.atom(), R.term()})) :: R.nif_result(R.unit())
+      defrust draw(term, opts) do
+        unwrap!(stroke_paint(decode_color(term), 1.0, opts))
+        :ok
+      end
+    end
+
+    source = CallableConsumerCase.__rustq_source__()
+
+    assert source =~ "stroke_paint(decode_color(term)?, 1.0, opts)?;"
+    assert RustQ.valid?(source, "module_callable_consumer.rs")
+  end
+
+  test "defrust can use Syn-derived external callable metadata through wrapper macros" do
+    defmodule SynExternalCallableWrapperCase do
+      use SynSourceDomain
+
+      alias RustQ.Type, as: R
+
+      @spec decode_color(R.term()) :: R.nif_result(R.path(:Color))
+      defrust decode_color(term) do
+        color = decode_as!(term, R.u32())
+        {:ok, Color.from_argb(255, 0, 0, color)}
+      end
+
+      @spec draw(R.term(), R.slice({R.atom(), R.term()})) :: R.nif_result(R.unit())
+      defrust draw(term, opts) do
+        unwrap!(stroke_paint(decode_color(term), 1.0, opts))
+        :ok
+      end
+    end
+
+    source = SynExternalCallableWrapperCase.__rustq_source__()
+
+    assert source =~ "stroke_paint(decode_color(term)?, 1.0, opts)?;"
+    assert RustQ.valid?(source, "syn_external_callable_wrapper.rs")
+  end
+
   test "defrust build failures include boundary diagnostic context" do
     error =
       assert_raise Diagnostic.Error, fn ->

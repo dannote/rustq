@@ -41,18 +41,33 @@ defmodule RustQ.Meta do
   normal way to reference project-owned Rust modules or types.
   """
 
+  alias RustQ.Binding.Callable
   alias RustQ.Meta.AST
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
   alias RustQ.Rust
   alias RustQ.Rust.AST.Render
+  alias RustQ.Syn
 
-  defmacro __using__(_opts) do
+  @doc false
+  defmacro __using__(opts) do
+    rust_sources = Keyword.get(opts, :rust_sources, [])
+
+    callable_modules =
+      opts
+      |> Keyword.get(:callable_modules, [])
+      |> List.wrap()
+      |> Enum.map(&Macro.expand(&1, __CALLER__))
+
     quote do
       import RustQ.Meta
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_rust_sources, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_callable_modules, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_current_rust_mod, accumulate: false)
+      @rustq_rust_sources unquote(Macro.escape(List.wrap(rust_sources)))
+      @rustq_callable_modules unquote(Macro.escape(List.wrap(callable_modules)))
       Module.register_attribute(__MODULE__, :nif, accumulate: false)
       Module.register_attribute(__MODULE__, :allow, accumulate: true)
       @before_compile RustQ.Meta
@@ -99,7 +114,16 @@ defmodule RustQ.Meta do
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
     rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
 
-    built_asts = Enum.map(defs, &AST.build_ast(&1, specs, type_aliases, rust_modules, env))
+    local_callables = AST.callables_from_specs(specs, type_aliases)
+    external_callables = external_callables(env.module)
+    callables = local_callables ++ external_callables
+
+    built_asts =
+      Enum.map(
+        defs,
+        &AST.build_ast(&1, specs, type_aliases, rust_modules, env, external_callables)
+      )
+
     asts = Enum.map(built_asts, & &1.ast)
     type_asts = AST.build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &Validate.item_ast/1)
@@ -131,8 +155,47 @@ defmodule RustQ.Meta do
       def __rustq_items__, do: unquote(Macro.escape(items))
 
       @doc false
+      def __rustq_callables__, do: unquote(Macro.escape(callables))
+
+      @doc false
       def __rustq_source__, do: unquote(source)
     end
+  end
+
+  defp external_callables(module) do
+    rust_source_callables_for_module(module) ++ callable_module_callables(module)
+  end
+
+  defp rust_source_callables_for_module(module) do
+    module
+    |> Module.get_attribute(:rustq_rust_sources)
+    |> List.wrap()
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.flat_map(&rust_source_callables/1)
+  end
+
+  defp callable_module_callables(module) do
+    module
+    |> Module.get_attribute(:rustq_callable_modules)
+    |> List.wrap()
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.flat_map(fn callable_module ->
+      if Code.ensure_loaded?(callable_module) and
+           function_exported?(callable_module, :__rustq_callables__, 0) do
+        callable_module.__rustq_callables__()
+      else
+        []
+      end
+    end)
+  end
+
+  defp rust_source_callables(path) do
+    path
+    |> Syn.parse_file!()
+    |> Syn.functions()
+    |> Enum.map(&Callable.from_syn_function/1)
   end
 
   defp rust_module_mapping!(alias_ast, opts) do
