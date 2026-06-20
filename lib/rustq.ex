@@ -18,11 +18,8 @@ defmodule RustQ do
   files.
   """
 
+  alias RustQ.Error
   alias RustQ.Template
-
-  defmodule Error do
-    defexception [:message, :errors]
-  end
 
   @type source :: iodata()
 
@@ -37,7 +34,7 @@ defmodule RustQ do
 
     case RustQ.Native.parse(source) do
       :ok -> {:ok, %Template{source: source, filename: filename}}
-      {:error, errors} -> {:error, normalize_errors(errors, filename)}
+      {:error, errors} -> {:error, Template.normalize_errors(errors, filename)}
     end
   end
 
@@ -74,7 +71,7 @@ defmodule RustQ do
   @spec from_file(Path.t(), keyword()) :: {:ok, Template.t()} | {:error, [map()] | File.posix()}
   def from_file(path, opts \\ []) do
     with {:ok, source} <- File.read(path),
-         {:ok, source} <- expand_includes(source, path, opts) do
+         {:ok, source} <- Template.expand_includes(source, path, opts) do
       parse(source, path)
     end
   end
@@ -104,7 +101,7 @@ defmodule RustQ do
   @spec render_file(Path.t(), keyword()) :: {:ok, String.t()} | {:error, [map()] | File.posix()}
   def render_file(path, opts \\ []) do
     with {:ok, source} <- File.read(path),
-         {:ok, source} <- expand_includes(source, path, opts) do
+         {:ok, source} <- Template.expand_includes(source, path, opts) do
       render(source, path, opts)
     end
   end
@@ -212,11 +209,11 @@ defmodule RustQ do
          ) do
       {:ok, code} ->
         code
-        |> with_preamble(opts)
-        |> maybe_rustfmt(opts, template.filename)
+        |> Template.with_preamble(opts)
+        |> Template.maybe_rustfmt(opts, template.filename)
 
       {:error, errors} when is_list(errors) ->
-        {:error, normalize_errors(errors, template.filename)}
+        {:error, Template.normalize_errors(errors, template.filename)}
 
       {:error, message} ->
         {:error, [%{message: message, filename: template.filename}]}
@@ -248,7 +245,7 @@ defmodule RustQ do
   """
   @spec render(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
   def render(source, filename, opts \\ []) do
-    with {:ok, source} <- maybe_expand_includes(source, filename, opts),
+    with {:ok, source} <- Template.maybe_expand_includes(source, filename, opts),
          {:ok, template} <- parse(source, filename) do
       template = bind(template, Keyword.get(opts, :bind, []))
 
@@ -270,166 +267,6 @@ defmodule RustQ do
       {:error, errors} ->
         raise Error, message: "RustQ render error: #{inspect(errors)}", errors: errors
     end
-  end
-
-  defp maybe_expand_includes(source, filename, opts) do
-    if Keyword.has_key?(opts, :include_dir) do
-      expand_includes(source, filename, opts)
-    else
-      {:ok, IO.iodata_to_binary(source)}
-    end
-  end
-
-  defp expand_includes(source, filename, opts) do
-    include_dir = Keyword.get(opts, :include_dir, Path.dirname(filename))
-
-    source
-    |> IO.iodata_to_binary()
-    |> expand_includes_from(filename, include_dir, [Path.expand(filename)])
-  end
-
-  @include_pattern ~r/__rq_include!\(\s*"([^"]+)"\s*\)\s*;/
-
-  defp expand_includes_from(source, filename, include_dir, stack) do
-    case Regex.run(@include_pattern, source, return: :index) do
-      nil ->
-        {:ok, source}
-
-      [{start, length}, {_path_start, _path_length}] ->
-        expand_next_include(source, filename, include_dir, stack, start, length)
-    end
-  end
-
-  defp expand_next_include(source, filename, include_dir, stack, start, length) do
-    [_matched, relative_path] = Regex.run(@include_pattern, binary_part(source, start, length))
-    include_path = Path.expand(relative_path, include_dir)
-
-    if include_path in stack do
-      include_error(filename, "cyclic RustQ include: #{include_path}", stack ++ [include_path])
-    else
-      replace_include(source, filename, include_dir, stack, start, length, include_path)
-    end
-  end
-
-  defp replace_include(source, filename, include_dir, stack, start, length, include_path) do
-    with {:ok, included} <- read_include(include_path, filename),
-         {:ok, expanded} <-
-           expand_includes_from(
-             included,
-             include_path,
-             Path.dirname(include_path),
-             stack ++ [include_path]
-           ) do
-      source =
-        binary_part(source, 0, start) <>
-          expanded <>
-          binary_part(source, start + length, byte_size(source) - start - length)
-
-      expand_includes_from(source, filename, include_dir, stack)
-    end
-  end
-
-  defp read_include(path, filename) do
-    case File.read(path) do
-      {:ok, source} ->
-        {:ok, source}
-
-      {:error, reason} ->
-        include_error(
-          filename,
-          "cannot read RustQ include #{path}: #{:file.format_error(reason)}",
-          [Path.expand(filename), path]
-        )
-    end
-  end
-
-  defp include_error(filename, message, include_stack) do
-    {:error,
-     [
-       %{
-         type: :include_error,
-         context: :include,
-         message: message,
-         filename: filename,
-         include_stack: Enum.map(include_stack, &Path.expand/1)
-       }
-     ]}
-  end
-
-  defp with_preamble(code, opts) do
-    case Keyword.get(opts, :preamble, "") do
-      nil -> code
-      "" -> code
-      preamble -> IO.iodata_to_binary([preamble, code])
-    end
-  end
-
-  defp maybe_rustfmt(code, opts, filename) do
-    case Keyword.get(opts, :rustfmt, false) do
-      false ->
-        {:ok, code}
-
-      true ->
-        rustfmt(code, filename, "rustfmt")
-
-      command when is_binary(command) ->
-        rustfmt(code, filename, command)
-    end
-  end
-
-  defp rustfmt_temp_path(filename) do
-    extension =
-      filename
-      |> Path.extname()
-      |> case do
-        "" -> ".rs"
-        extension -> extension
-      end
-
-    Path.join(
-      System.tmp_dir!(),
-      "rustq-rustfmt-#{System.unique_integer([:positive])}#{extension}"
-    )
-  end
-
-  defp rustfmt(code, filename, command) do
-    path = rustfmt_temp_path(filename)
-    File.write!(path, code)
-
-    case System.cmd(command, ["--emit", "stdout", "--quiet", path], stderr_to_stdout: true) do
-      {formatted, 0} ->
-        File.rm(path)
-        {:ok, formatted}
-
-      {output, status} ->
-        File.rm(path)
-
-        {:error,
-         [
-           %{
-             type: :rustfmt_error,
-             context: :rustfmt,
-             message: "#{command} failed",
-             filename: filename,
-             command: command,
-             status: status,
-             output: output
-           }
-         ]}
-    end
-  rescue
-    error in ErlangError ->
-      {:error,
-       [
-         %{
-           type: :rustfmt_error,
-           context: :rustfmt,
-           message: "cannot run #{command}",
-           filename: filename,
-           command: command,
-           reason: error.original
-         }
-       ]}
   end
 
   defp validate_fragment(:item, code),
@@ -487,25 +324,6 @@ defmodule RustQ do
       {:ok, _code} -> :ok
       {:error, errors} -> {:error, errors}
     end
-  end
-
-  defp normalize_errors(errors, filename) do
-    Enum.map(errors, fn error ->
-      error
-      |> Map.update(:type, nil, &string_to_atom/1)
-      |> Map.update(:context, nil, &string_to_atom/1)
-      |> Map.update(:name, nil, &string_to_atom/1)
-      |> Map.put(:filename, filename)
-    end)
-  end
-
-  defp string_to_atom(nil), do: nil
-  defp string_to_atom(value) when is_atom(value), do: value
-
-  defp string_to_atom(value) when is_binary(value) do
-    String.to_existing_atom(value)
-  rescue
-    ArgumentError -> value
   end
 
   defp native_bindings(bindings) do
