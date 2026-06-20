@@ -1,6 +1,8 @@
 defmodule RustQ.Rust.AST.Render do
   @moduledoc false
 
+  alias RustQ.Diagnostic
+
   alias RustQ.Rust.AST.{
     Arm,
     ArrayLiteral,
@@ -104,7 +106,18 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_function(%Function{} = function), do: render_item(function)
 
-  defp render_native(item), do: RustQ.Native.render_ast(item)
+  defp render_native(item) do
+    RustQ.Native.render_ast(item)
+  rescue
+    error in [ArgumentError, RuntimeError] ->
+      Diagnostic.render(
+        :native_render_failed,
+        item,
+        "native AST rendering failed for #{inspect(item.__struct__)}: #{Exception.message(error)}",
+        details: %{ast_module: item.__struct__, cause: error},
+        snippet: inspect(item, pretty: true, limit: 20)
+      )
+  end
 
   def render_use(%Use{parts: parts}) when is_list(parts),
     do: ["use ", Elixir.Enum.map_join(parts, "::", &to_string/1), ";"]

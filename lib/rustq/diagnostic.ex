@@ -51,6 +51,18 @@ defmodule RustQ.Diagnostic do
         )
   end
 
+  @spec render(atom(), term(), String.t()) :: no_return()
+  @spec render(atom(), term(), String.t(), keyword()) :: no_return()
+  def render(kind, node, message, opts \\ []) do
+    raise Error,
+      diagnostic:
+        new(:render, kind, node, message,
+          suggestion: Keyword.get(opts, :suggestion),
+          details: Keyword.get(opts, :details, %{}),
+          snippet: Keyword.get(opts, :snippet)
+        )
+  end
+
   @spec new(atom(), atom(), Macro.t() | nil, String.t(), keyword()) :: t()
   def new(phase, kind, node, message, opts \\ []) do
     snippet = Keyword.get(opts, :snippet) || snippet(node)

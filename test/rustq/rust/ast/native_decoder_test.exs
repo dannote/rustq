@@ -3,6 +3,7 @@ Code.require_file("../../../support/rustq_ast_samples.ex", __DIR__)
 defmodule RustQ.Rust.AST.NativeDecoderTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Diagnostic
   alias RustQ.Native
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
@@ -14,10 +15,18 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   require A
 
-  test "native AST rendering does not fall back silently" do
+  test "native AST rendering failures raise structured diagnostics" do
     invalid = %Function{name: :bad, args: [], returns: %TypePath{parts: []}, body: []}
 
-    assert_raise ArgumentError, fn -> Render.render_function(invalid) end
+    error = assert_raise Diagnostic.Error, fn -> Render.render_function(invalid) end
+    diagnostic = error.diagnostic
+
+    assert diagnostic.phase == :render
+    assert diagnostic.kind == :native_render_failed
+    assert diagnostic.details.ast_module == Function
+    assert %ArgumentError{} = diagnostic.details.cause
+    assert diagnostic.message =~ "native AST rendering failed"
+    assert diagnostic.snippet =~ "%RustQ.Rust.AST.Function"
   end
 
   test "behavioral examples cover every current AST schema node" do
