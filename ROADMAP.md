@@ -14,15 +14,15 @@ and the skia dogfood (`../skia_ex`).
   stable-but-legacy.
 - **Lowering is genuinely AST-native** for the mainstream constructs: 77
   `defnode`s across items/stmts/exprs/types/pats, real structs emitted by
-  `Meta.Lower`, native rendering through `RustQ.Native.render_ast` with a
-  `strict_native_ast` switch.
+  `Meta.Lower`, and mandatory native rendering through `RustQ.Native.render_ast`.
 - **Skia proves the dogfood.** `Skia.Codegen.Rusty.*` author drawing semantics
   in `defrust` + ordinary `quote`/`unquote` with **zero** `expr!`/`pat!`/`stmt!`/
   `arm!`/`raw_*` escapes in semantic bodies. ~3.3k of 4k native lines are
   generated; CI gates on `mix rustq.gen --check`. The ownership boundary (Skia
   owns semantics, RustQ owns lowering) holds in practice.
-- **Discipline is codified** in `AGENTS.md` and lightly enforced by
-  `architecture_test.exs`.
+- **Discipline is codified** in `AGENTS.md`; architecture enforcement belongs in
+  Reach/ExDNA/Credo/custom linting or schema-driven behavioral tests, not ad hoc
+  ExUnit source-grep tests.
 
 ## Gaps (evidence → fix)
 
@@ -36,7 +36,7 @@ and the skia dogfood (`../skia_ex`).
 | F | Mutability/lifetime inference is heuristic; lifetimes come only from `R.lifetime(:a)` in specs, never inferred in bodies. | `lower.ex:790–845` | Wave 3 |
 | G | No crate-level manifest. `rustq.exs` is file-list-oriented; skia hand-rolls 19 targets via `generated_targets/0`. | `skia/codegen.ex:11–60` | Wave 4 |
 | H | Diagnostics are bare `ArgumentError`s. No spans, no offending-node reporting. | `lower.ex` raises | Wave 2 |
-| I | No strict-native dogfood gate. Architecture test only forbids a few string patterns. | `architecture_test.exs` | Wave 1 |
+| I | No native-render dogfood gate across RustQ + skia proving every lowered body renders through native AST without fallback. | `RustQ.Native.render_ast/1` is mandatory in RustQ; skia still needs an explicit cross-project gate | Wave 1 / skia follow-up |
 | **J** | **`unwrap!` noise.** ~190 uses in skia; the macro name is semantically wrong (`unwrap`/`unwrap()` means *panic* in both Rust and Elixir, but it generates `?` = *propagate*), and the `?` it spells is fully derivable from the called function's `@spec` return type vs the expected type at the call position. Author is forced to restate type information the compiler already has. | `grep -r unwrap! skia`; every decode helper has a `Result`/`Option` `@spec` | **Wave 3** |
 
 ## The headline insight: type-driven propagation inference
@@ -114,10 +114,13 @@ round-trips and silent fallbacks. Cheap, high-confidence.
    building, no `parse_syn` round-trip for shapes that already have AST nodes.
    Keep `raw_expr!`/`raw_pat!`/`raw_stmt!`/`raw_arm!` as the *only* token-level
    escape, funneled through `parse_syn::<T>(quote!(...))`. Closes gap A.
-2. **Make `strict_native_ast` the default in `mix ci`** (and skia's CI alias),
-   opt-out for local dev. Closes gap B.
-3. **Strict-native dogfood gate test.** Lower every `defrust` body in repo +
-   skia and assert zero Elixir-render fallback paths fire. Closes gap I.
+2. **Require native AST rendering.** No `strict_native_ast` mode and no silent
+   fallback: AST item rendering must go through `RustQ.Native.render_ast/1`.
+   Closes gap B.
+3. **Native-render dogfood gate in skia.** Lower every `defrust` body in skia and
+   assert generated Rust stays native-renderable. Do this through real project CI
+   or architecture linting, not an ad hoc ExUnit source-grep policy test. Closes
+   gap I.
 
 > Note: the originally-proposed "rename `unwrap!` → `propagate!`" and "`let!`
 > lowering" items are **superseded** by Wave 3 type-driven propagation

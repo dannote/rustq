@@ -42,6 +42,11 @@ Preferred order:
    - Funnel token-only semantic escapes through generic primitives such as `parse_syn::<T>(quote!(...))` rather than one helper per shape.
    - Every new `RustQ.Rust.AST.Schema` node must get behavioral native rendering coverage.
 
+8. **Architecture enforcement belongs in architecture tooling**
+   - Do not add bespoke ExUnit "architecture tests" that grep source files or enforce policy with ad hoc string checks. That is the most stupid way to enforce architecture in this project.
+   - Use real architecture/linting tools such as Reach/ExDNA/Credo/custom lint rules, or encode invariants in schema-driven behavioral tests that prove actual functionality.
+   - Unit tests should verify behavior and generated output, not act as a pile of fragile policy regexes.
+
 Before writing generated Rust as a string, ask:
 
 > Can this be valid Elixir, `defrust`, or `RustQ.Rust.AST.Builder` instead?
