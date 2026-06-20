@@ -3,6 +3,7 @@ defmodule RustQ.Rustler.Opts do
 
   use RustQ.Meta
 
+  alias RustQ.Meta.Ast, as: MetaAst
   alias RustQ.Meta.Type
   alias RustQ.Rust
   alias RustQ.Rust.AST
@@ -127,7 +128,7 @@ defmodule RustQ.Rustler.Opts do
     ])
   end
 
-  defp helper_item(name) when name in @rusty_names, do: RustQ.Meta.item(__MODULE__, name)
+  defp helper_item(name) when name in @rusty_names, do: MetaAst.item(__MODULE__, name)
 
   defp helper_names(opts), do: HelperSelection.names(opts, @helper_names)
 

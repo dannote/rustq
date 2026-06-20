@@ -3,6 +3,7 @@ defmodule RustQ.Rustler.Atom do
 
   use RustQ.Meta
 
+  alias RustQ.Meta.Ast, as: MetaAst
   alias RustQ.Native.EnumDescriptor
   alias RustQ.Rust
   alias RustQ.Rust.AST
@@ -84,7 +85,7 @@ defmodule RustQ.Rustler.Atom do
 
     helper_items =
       if include_helpers? do
-        [RustQ.Meta.item(__MODULE__, :cached_atom)]
+        [MetaAst.item(__MODULE__, :cached_atom)]
       else
         []
       end
