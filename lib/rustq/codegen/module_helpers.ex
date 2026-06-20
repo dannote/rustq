@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.ModuleHelpers do
-  @moduledoc false
+  @moduledoc """
+  Rust helper functions for constructing generated native Rust modules.
+  """
 
   use RustQ.Codegen.DefrustModule
 

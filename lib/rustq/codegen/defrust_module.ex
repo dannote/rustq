@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.DefrustModule do
-  @moduledoc false
+  @moduledoc """
+  Compile-time bridge for modules that define native support helpers with `defrust`.
+  """
 
   defmacro __using__(_opts) do
     quote do

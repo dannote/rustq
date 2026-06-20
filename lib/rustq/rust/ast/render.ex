@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.AST.Render do
-  @moduledoc false
+  @moduledoc """
+  Renders RustQ AST nodes through the native Rust renderer.
+  """
 
   alias RustQ.Diagnostic
 

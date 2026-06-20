@@ -1,5 +1,7 @@
 defmodule RustQ.Rust.AST.ItemBuilder do
-  @moduledoc false
+  @moduledoc """
+  Macro helpers for constructing Rust item AST nodes with Elixir block syntax.
+  """
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A

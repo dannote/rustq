@@ -1,5 +1,7 @@
 defmodule RustQ.Meta.Lower do
-  @moduledoc false
+  @moduledoc """
+  Lowers Rusty-Elixir quoted expressions into RustQ AST nodes.
+  """
 
   alias RustQ.Diagnostic
   alias RustQ.Meta.Type
@@ -7,7 +9,9 @@ defmodule RustQ.Meta.Lower do
   alias RustQ.Rust.AST.Render
 
   defmodule Context do
-    @moduledoc false
+    @moduledoc """
+    Tracks return type, variables, aliases, and position while lowering a body.
+    """
     defstruct [:return_type, vars: %{}, position: :return, rust_modules: %{}]
   end
 

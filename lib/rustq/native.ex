@@ -1,5 +1,7 @@
 defmodule RustQ.Native do
-  @moduledoc false
+  @moduledoc """
+  Rustler NIF boundary for parsing, rendering, and decoding Rust syntax.
+  """
 
   use Rustler, otp_app: :rustq, crate: "rustq_nif"
 

@@ -16,7 +16,9 @@ defmodule RustQ.Diagnostic do
         }
 
   defmodule Error do
-    @moduledoc false
+    @moduledoc """
+    Exception wrapper carrying a structured `RustQ.Diagnostic` value.
+    """
 
     defexception [:diagnostic, :message]
 

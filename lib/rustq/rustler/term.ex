@@ -1,9 +1,11 @@
 defmodule RustQ.Rustler.Term do
-  @moduledoc false
+  @moduledoc """
+  Generates Rustler `Term<'a>` builders, decoders, and map access helpers.
+  """
 
   use RustQ.Meta
 
-  alias RustQ.Meta.Ast, as: MetaAst
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
@@ -214,11 +216,11 @@ defmodule RustQ.Rustler.Term do
 
   defp builder_item(name) do
     function_name = Map.fetch!(@builder_function_names, name)
-    MetaAst.item(__MODULE__, function_name)
+    MetaAST.item(__MODULE__, function_name)
   end
 
   defp helper_item(name) when name in @rusty_helper_names,
-    do: MetaAst.item(__MODULE__, name)
+    do: MetaAST.item(__MODULE__, name)
 
   defp struct_ast(name, fields, lifetime) do
     I.struct ident_atom(name), lifetime: lifetime do

@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.Decoders.Pat do
-  @moduledoc false
+  @moduledoc """
+  Emits native decoder helpers for Rust patterns.
+  """
 
   use RustQ.Codegen.DefrustModule
 

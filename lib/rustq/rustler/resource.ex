@@ -1,5 +1,7 @@
 defmodule RustQ.Rustler.Resource do
-  @moduledoc false
+  @moduledoc """
+  Generates Rustler resource structs, handles, decoders, and initialization helpers.
+  """
 
   alias RustQ.Rust
   alias RustQ.Rust.AST

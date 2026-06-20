@@ -1,5 +1,7 @@
 defmodule RustQ.Atom do
-  @moduledoc false
+  @moduledoc """
+  Utilities for converting Elixir names into valid Rust identifiers and atoms.
+  """
 
   @max_identifier_bytes 128
   @identifier_regex ~r/^[A-Za-z_][A-Za-z0-9_]*$/

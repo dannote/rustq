@@ -1,5 +1,7 @@
 defmodule RustQ.Rustler.TaggedEnum do
-  @moduledoc false
+  @moduledoc """
+  Generates Rust enums decoded from tagged Elixir struct or map terms.
+  """
 
   alias RustQ.Rust
   alias RustQ.Rust.AST

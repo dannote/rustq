@@ -1,10 +1,14 @@
 defmodule RustQ.Rust.AST.Schema do
-  @moduledoc false
+  @moduledoc """
+  Runtime schema view over RustQ AST node modules and their Rust decoder names.
+  """
 
   alias RustQ.Rust.AST
 
   defmodule Node do
-    @moduledoc false
+    @moduledoc """
+    Describes one RustQ AST node module, category, fields, and native decoder mapping.
+    """
     defstruct [:name, :module, :rust_const, :rust_module, :category, fields: []]
 
     @type t :: %__MODULE__{

@@ -1,5 +1,7 @@
 defmodule RustQ.Meta.Decoder do
-  @moduledoc false
+  @moduledoc """
+  Builds decoder AST fragments for Rust types derived from Elixir type aliases.
+  """
 
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST

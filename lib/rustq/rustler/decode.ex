@@ -1,5 +1,7 @@
 defmodule RustQ.Rustler.Decode do
-  @moduledoc false
+  @moduledoc """
+  AST helpers for composing Rustler term decoding expressions.
+  """
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A

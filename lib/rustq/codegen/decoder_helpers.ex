@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.DecoderHelpers do
-  @moduledoc false
+  @moduledoc """
+  Shared Rust helper functions used by generated AST decoders.
+  """
 
   use RustQ.Codegen.DefrustModule
 

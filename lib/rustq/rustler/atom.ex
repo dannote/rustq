@@ -1,9 +1,11 @@
 defmodule RustQ.Rustler.Atom do
-  @moduledoc false
+  @moduledoc """
+  Generates Rustler atom declarations, decoders, dispatchers, and cached atom helpers.
+  """
 
   use RustQ.Meta
 
-  alias RustQ.Meta.Ast, as: MetaAst
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Native.EnumDescriptor
   alias RustQ.Rust
   alias RustQ.Rust.AST
@@ -85,7 +87,7 @@ defmodule RustQ.Rustler.Atom do
 
     helper_items =
       if include_helpers? do
-        [MetaAst.item(__MODULE__, :cached_atom)]
+        [MetaAST.item(__MODULE__, :cached_atom)]
       else
         []
       end

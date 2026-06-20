@@ -1,9 +1,13 @@
 defmodule RustQ.Rust.Syntax do
-  @moduledoc false
+  @moduledoc """
+  Struct modules used by the `RustQ.Rust` string/iodata builder layer.
+  """
 end
 
 defmodule RustQ.Rust.Block do
-  @moduledoc false
+  @moduledoc """
+  Represents a Rust block body assembled from statement or expression fragments.
+  """
 
   defstruct lines: []
 

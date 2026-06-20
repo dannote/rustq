@@ -1,5 +1,7 @@
-defmodule RustQ.Meta.Ast do
-  @moduledoc false
+defmodule RustQ.Meta.AST do
+  @moduledoc """
+  Builds RustQ AST items from `defrust` metadata and explicit quoted bodies.
+  """
 
   alias RustQ.Diagnostic
   alias RustQ.Meta.Decoder

@@ -1,5 +1,7 @@
 defmodule Mix.Tasks.Rustq.Templates.Check do
-  @moduledoc false
+  @moduledoc """
+  Verifies that RustQ template fixtures still compile against the generated Rust support code.
+  """
 
   use Mix.Task
 

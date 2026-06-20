@@ -1,5 +1,7 @@
 defmodule RustQ.Rustler.Nif do
-  @moduledoc false
+  @moduledoc """
+  Generates Rustler NIF exports, NifStruct declarations, and raw NIF_TERM builders.
+  """
 
   use RustQ.Sigil
 

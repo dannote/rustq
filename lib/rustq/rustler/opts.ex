@@ -1,9 +1,11 @@
 defmodule RustQ.Rustler.Opts do
-  @moduledoc false
+  @moduledoc """
+  Generates Rustler keyword/options structs, decoders, and option helper functions.
+  """
 
   use RustQ.Meta
 
-  alias RustQ.Meta.Ast, as: MetaAst
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.Type
   alias RustQ.Rust
   alias RustQ.Rust.AST
@@ -128,7 +130,7 @@ defmodule RustQ.Rustler.Opts do
     ])
   end
 
-  defp helper_item(name) when name in @rusty_names, do: MetaAst.item(__MODULE__, name)
+  defp helper_item(name) when name in @rusty_names, do: MetaAST.item(__MODULE__, name)
 
   defp helper_names(opts), do: HelperSelection.names(opts, @helper_names)
 

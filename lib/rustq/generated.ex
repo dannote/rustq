@@ -14,7 +14,9 @@ defmodule RustQ.Generated do
   Pass `check: true` to compare without writing, which is useful in CI.
   """
   defmodule StaleError do
-    @moduledoc false
+    @moduledoc """
+    Raised when generated files differ from the contents produced by the manifest.
+    """
 
     defexception [:paths, command: "mix rustq.gen"]
 

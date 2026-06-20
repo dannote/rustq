@@ -1,22 +1,30 @@
 defmodule RustQ.Meta.GeneratedCase do
-  @moduledoc false
+  @moduledoc """
+  Test fixture module exercising `RustQ.Meta` type and function generation.
+  """
 
   use RustQ.Meta
 
   alias RustQ.Type, as: R
 
   defmodule Click do
-    @moduledoc false
+    @moduledoc """
+    Fixture struct for click-event type lowering tests.
+    """
     defstruct [:name]
   end
 
   defmodule Resize do
-    @moduledoc false
+    @moduledoc """
+    Fixture struct for resize-event type lowering tests.
+    """
     defstruct [:width, :height]
   end
 
   defmodule Scroll do
-    @moduledoc false
+    @moduledoc """
+    Fixture struct for scroll-event type lowering tests.
+    """
     defstruct [:dx, :dy]
   end
 

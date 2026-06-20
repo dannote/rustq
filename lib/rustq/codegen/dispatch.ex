@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.Dispatch do
-  @moduledoc false
+  @moduledoc """
+  Generates native dispatch functions for RustQ AST node decoding and rendering.
+  """
 
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.PatternBuilder, as: P

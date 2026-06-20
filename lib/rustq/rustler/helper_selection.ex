@@ -1,5 +1,7 @@
 defmodule RustQ.Rustler.HelperSelection do
-  @moduledoc false
+  @moduledoc """
+  Selects named Rustler helper functions from include/exclude options.
+  """
 
   @spec names(keyword(), [atom()]) :: [atom()]
   def names(opts, default_names) do

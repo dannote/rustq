@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.Decoders.Expr do
-  @moduledoc false
+  @moduledoc """
+  Emits native decoder helpers for Rust expressions.
+  """
 
   use RustQ.Codegen.DefrustModule
 

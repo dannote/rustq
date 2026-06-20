@@ -1,13 +1,13 @@
 defmodule RustQ.Meta.QuotedTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.Meta.Ast, as: MetaAst
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "quoted accepts explicit Rust AST types" do
     function =
-      MetaAst.quoted(:draw_translate_impl,
+      MetaAST.quoted(:draw_translate_impl,
         args: [
           canvas: T.ref([:skia_safe, :Canvas]),
           opts: T.path([:generated_opts, :TranslateOpts], lifetimes: [:a]),
@@ -33,7 +33,7 @@ defmodule RustQ.Meta.QuotedTest do
 
   test "quoted maps configured Rust module alias calls" do
     function =
-      MetaAst.quoted(:atom_call,
+      MetaAST.quoted(:atom_call,
         args: [],
         returns: quote(do: RustQ.Type.nif_result(atom())),
         rust_modules: %{[:Atoms] => [:atoms]},

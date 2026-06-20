@@ -1,5 +1,7 @@
 defmodule RustQ.ASTSamples do
-  @moduledoc false
+  @moduledoc """
+  Behavioral sample AST nodes used by schema and native rendering tests.
+  """
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A

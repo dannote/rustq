@@ -17,7 +17,7 @@ defmodule RustQ.Meta do
   external Rust paths should normally be expressed as ordinary remote types such
   as `GeneratedOpts.OvalOpts.t(R.lifetime(:a))`; use `RustQ.Type` markers such
   as `R.ref/1`, `R.nif_result/1`, `R.unit/0`, `R.slice/1`, and `R.lifetime/1`
-  only where Elixir typespecs need Rust-specific precision. `RustQ.Meta.Ast.quoted/2`
+  only where Elixir typespecs need Rust-specific precision. `RustQ.Meta.AST.quoted/2`
   is a low-level bridge for internal generators that already hold RustQ AST
   signature metadata; it is not the intended authoring surface.
 
@@ -41,7 +41,7 @@ defmodule RustQ.Meta do
   normal way to reference project-owned Rust modules or types.
   """
 
-  alias RustQ.Meta.Ast
+  alias RustQ.Meta.AST
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
   alias RustQ.Rust
@@ -99,11 +99,11 @@ defmodule RustQ.Meta do
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
     rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
 
-    built_asts = Enum.map(defs, &Ast.build_ast(&1, specs, type_aliases, rust_modules, env))
+    built_asts = Enum.map(defs, &AST.build_ast(&1, specs, type_aliases, rust_modules, env))
     asts = Enum.map(built_asts, & &1.ast)
-    type_asts = Ast.build_type_asts(type_aliases)
+    type_asts = AST.build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &Validate.item_ast/1)
-    rust_items = Ast.group_module_asts(built_asts)
+    rust_items = AST.group_module_asts(built_asts)
     rendered_items = Enum.map(rust_items, &Validate.item_ast/1)
     items = type_items ++ rendered_items
 

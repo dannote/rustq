@@ -4,7 +4,7 @@ defmodule RustQ.Meta.DefrustTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Diagnostic
-  alias RustQ.Meta.Ast, as: MetaAst
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Rust.AST
 
@@ -162,12 +162,12 @@ defmodule RustQ.Meta.DefrustTest do
   end
 
   test "Meta returns rendered items" do
-    item = MetaAst.item(RustQ.Meta.GeneratedCase, :draw_save)
+    item = MetaAST.item(RustQ.Meta.GeneratedCase, :draw_save)
 
     assert RustQ.Rust.to_fragment(item) =~ "fn draw_save"
 
     assert_raise ArgumentError, fn ->
-      MetaAst.item(RustQ.Meta.GeneratedCase, :missing)
+      MetaAST.item(RustQ.Meta.GeneratedCase, :missing)
     end
   end
 

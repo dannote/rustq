@@ -1,5 +1,7 @@
 defmodule RustQ.Codegen.Decoders.Stmt do
-  @moduledoc false
+  @moduledoc """
+  Emits native decoder helpers for Rust statements.
+  """
 
   use RustQ.Codegen.DefrustModule
 

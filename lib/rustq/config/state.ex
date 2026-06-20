@@ -1,5 +1,7 @@
 defmodule RustQ.Config.State do
-  @moduledoc false
+  @moduledoc """
+  Process-local state and rendering helpers used by the `RustQ.Config` DSL.
+  """
 
   def start, do: Process.put(:rustq_config_targets, [])
   def delete, do: Process.delete(:rustq_config_targets)
