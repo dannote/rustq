@@ -44,6 +44,38 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
+  test "defrust uses module specs as callable metadata for propagation inference" do
+    defmodule LocalCallablePropagationCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode(atom()) :: R.nif_result(R.u32())
+      defrust decode(atom) do
+        case atom do
+          :ok -> {:ok, 1}
+          _ -> {:error, :badarg}
+        end
+      end
+
+      @spec consume(R.u32()) :: R.nif_result(R.unit())
+      defrust consume(value) do
+        _copy = value
+        :ok
+      end
+
+      @spec argument(atom()) :: R.nif_result(R.unit())
+      defrust argument(atom) do
+        consume(decode(atom))
+        :ok
+      end
+    end
+
+    source = LocalCallablePropagationCase.__rustq_source__()
+
+    assert source =~ "consume(decode(atom)?)"
+    assert RustQ.valid?(source, "local_callable_propagation.rs")
+  end
+
   test "defrust build failures include boundary diagnostic context" do
     error =
       assert_raise Diagnostic.Error, fn ->

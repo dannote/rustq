@@ -3,6 +3,7 @@ defmodule RustQ.Meta.AST do
   Builds RustQ AST items from `defrust` metadata and explicit quoted bodies.
   """
 
+  alias RustQ.Binding.Callable
   alias RustQ.Diagnostic
   alias RustQ.Meta.Decoder
   alias RustQ.Meta.Lower
@@ -151,7 +152,8 @@ defmodule RustQ.Meta.AST do
 
     body =
       Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
-        rust_modules: rust_modules
+        rust_modules: rust_modules,
+        callables: spec_callables(specs, type_aliases)
       )
 
     lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
@@ -370,6 +372,31 @@ defmodule RustQ.Meta.AST do
 
   defp arg_name!(other) do
     raise ArgumentError, "unsupported defrust argument: #{Macro.to_string(other)}"
+  end
+
+  defp spec_callables(specs, type_aliases) do
+    Enum.flat_map(specs, fn
+      {:spec, {:"::", _, [{name, _, args}, return]}, _location} when is_atom(name) ->
+        case parse_callable_spec(name, args, return, type_aliases) do
+          {:ok, callable} -> [callable]
+          :error -> []
+        end
+
+      _other ->
+        []
+    end)
+  end
+
+  defp parse_callable_spec(name, args, return, type_aliases) do
+    {:ok,
+     Callable.from_spec(
+       name,
+       Enum.map(args, &Type.parse(&1, type_aliases)),
+       Type.parse(return, type_aliases)
+     )}
+  rescue
+    ArgumentError -> :error
+    FunctionClauseError -> :error
   end
 
   defp find_spec!(specs, name, arity, type_aliases) do

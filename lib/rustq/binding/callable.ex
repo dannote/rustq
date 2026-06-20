@@ -45,6 +45,21 @@ defmodule RustQ.Binding.Callable do
           syn: Syn.Function.t() | Syn.Method.t() | nil
         }
 
+  @doc "Builds callable metadata from a RustQ `@spec`."
+  @spec from_spec(atom(), [Type.t()], Type.t()) :: t()
+  def from_spec(name, args, %Type{} = returns) when is_atom(name) and is_list(args) do
+    %__MODULE__{
+      name: Atom.to_string(name),
+      kind: :function,
+      args:
+        Enum.with_index(args, fn %Type{} = type, index ->
+          %{name: "arg#{index}", type: type, syn: nil}
+        end),
+      returns: returns,
+      syn: nil
+    }
+  end
+
   @doc "Builds callable metadata from a parsed Rust free function."
   @spec from_syn_function(Syn.Function.t()) :: t()
   def from_syn_function(%Syn.Function{} = function) do
