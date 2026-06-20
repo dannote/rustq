@@ -23,7 +23,7 @@ defmodule RustQ.Binding.CallableTest do
              kind: :function,
              target: nil,
              args: [%{name: "term", type: %Type{kind: :term, rust: "Term"}}],
-             returns: %Type{kind: :type, rust: "NifResult<Foo>"}
+             returns: %Type{kind: :nif_result, rust: "NifResult<Foo>"}
            } = Callable.from_syn_function(function)
   end
 

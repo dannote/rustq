@@ -65,6 +65,33 @@ defmodule RustQ.Meta.Type do
 
   def external?(%__MODULE__{}, _module, _type), do: false
 
+  @doc "Returns true for wrapper types that can propagate with Rust `?`."
+  @spec propagates?(t()) :: boolean()
+  def propagates?(%__MODULE__{kind: kind}) when kind in [:result, :nif_result, :option], do: true
+  def propagates?(%__MODULE__{}), do: false
+
+  @doc "Returns the success/inner type of `Result`, `NifResult`, or `Option` wrappers."
+  @spec inner(t()) :: t() | nil
+  def inner(%__MODULE__{kind: :option, meta: %{inner: %__MODULE__{} = inner}}), do: inner
+  def inner(%__MODULE__{kind: :result, meta: %{ok: %__MODULE__{} = ok}}), do: ok
+  def inner(%__MODULE__{kind: :nif_result, meta: %{inner: %__MODULE__{} = inner}}), do: inner
+  def inner(%__MODULE__{kind: :option, ast: %AST.TypeOption{inner: inner}}), do: ast_type(inner)
+  def inner(%__MODULE__{kind: :result, ast: %AST.TypeResult{ok: ok}}), do: ast_type(ok)
+
+  def inner(%__MODULE__{kind: :nif_result, ast: %AST.TypeNifResult{inner: inner}}),
+    do: ast_type(inner)
+
+  def inner(%__MODULE__{}), do: nil
+
+  @doc "Returns true when two lowered types render to the same Rust type."
+  @spec compatible?(t() | nil, t() | nil) :: boolean()
+  def compatible?(%__MODULE__{rust: rust}, %__MODULE__{rust: rust}), do: true
+
+  def compatible?(%__MODULE__{} = left, %__MODULE__{} = right),
+    do: render_type(left.ast) == render_type(right.ast)
+
+  def compatible?(_left, _right), do: false
+
   @doc """
   Converts structured `RustQ.Syn.Type` metadata into a RustQ meta type.
 
@@ -120,12 +147,7 @@ defmodule RustQ.Meta.Type do
     args = Enum.map(args, &from_syn/1)
     parts = path_segments(segments, name)
 
-    ast = %AST.TypePath{
-      parts: Enum.map(parts, &RustQ.Atom.identifier!/1),
-      generics: Enum.map(args, & &1.ast)
-    }
-
-    type(path_kind(parts), ast, %{syn_name: name, syn_segments: parts, args: args})
+    from_syn_path_parts(parts, name, args)
   end
 
   defp path_segments([], name), do: [name]
@@ -137,6 +159,24 @@ defmodule RustQ.Meta.Type do
   defp path_kind(["Atom"]), do: :atom
   defp path_kind(["Term"]), do: :term
   defp path_kind(_parts), do: :type
+
+  defp from_syn_path_parts(["NifResult"], name, [inner]) do
+    type(:nif_result, %AST.TypeNifResult{inner: inner.ast}, %{
+      syn_name: name,
+      syn_segments: ["NifResult"],
+      args: [inner],
+      inner: inner
+    })
+  end
+
+  defp from_syn_path_parts(parts, name, args) do
+    ast = %AST.TypePath{
+      parts: Enum.map(parts, &RustQ.Atom.identifier!/1),
+      generics: Enum.map(args, & &1.ast)
+    }
+
+    type(path_kind(parts), ast, %{syn_name: name, syn_segments: parts, args: args})
+  end
 
   defp ref_kind(true), do: :mut_ref
   defp ref_kind(false), do: :ref
@@ -499,6 +539,20 @@ defmodule RustQ.Meta.Type do
     do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
 
   defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
+
+  defp ast_type(ast), do: type(ast_type_kind(ast), ast)
+
+  defp ast_type_kind(%AST.TypeNifResult{}), do: :nif_result
+  defp ast_type_kind(%AST.TypeResult{}), do: :result
+  defp ast_type_kind(%AST.TypeOption{}), do: :option
+  defp ast_type_kind(%AST.TypePath{parts: [kind]}) when kind in @number_kinds, do: kind
+  defp ast_type_kind(%AST.TypePath{parts: [kind]}) when kind in @integer_kinds, do: kind
+  defp ast_type_kind(%AST.TypePath{parts: [:bool]}), do: :bool
+  defp ast_type_kind(%AST.TypePath{parts: [:Atom]}), do: :atom
+  defp ast_type_kind(%AST.TypePath{parts: [:Term]}), do: :term
+  defp ast_type_kind(_ast), do: :type
+
+  defp render_type(ast), do: ast |> Render.render_type() |> IO.iodata_to_binary()
 
   defp tuple_type(tuple_types) do
     rendered = Enum.map_join(tuple_types, ", ", & &1.rust)

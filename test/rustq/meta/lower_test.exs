@@ -27,6 +27,98 @@ defmodule RustQ.Meta.LowerTest do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.{Attribute, ExprStmt, Function, FunctionArg, MethodCall}
 
+  test "infers return-position propagation from callable metadata" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(quote(do: maybe_path()), path_type, %{},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path}
+        ]
+      )
+
+    assert [
+             %AST.Return{
+               expr: %AST.Try{expr: %AST.LocalCall{name: :maybe_path, args: []}}
+             }
+           ] =
+             statements
+  end
+
+  test "infers return-position propagation for remote callable metadata" do
+    mode_type = %Type{kind: :type, rust: "Mode", ast: %AST.TypePath{parts: [:Mode]}}
+
+    result_mode = %Type{
+      kind: :result,
+      rust: "Result<Mode, Error>",
+      ast: %AST.TypeResult{ok: mode_type.ast, error: %AST.TypePath{parts: [:Error]}},
+      meta: %{ok: mode_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote(do: Generated.decode_mode(atom)),
+        mode_type,
+        %{atom: %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}},
+        callables: [
+          %Callable{
+            name: "decode_mode",
+            kind: :function,
+            target: "Generated",
+            args: [
+              %{
+                name: "atom",
+                type: %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}},
+                syn: nil
+              }
+            ],
+            returns: result_mode
+          }
+        ]
+      )
+
+    assert [
+             %AST.Return{
+               expr: %AST.Try{
+                 expr: %AST.PathCall{path: %AST.Path{parts: [:Generated, :decode_mode]}}
+               }
+             }
+           ] =
+             statements
+  end
+
+  test "does not infer propagation when expected type is still the wrapper" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(quote(do: maybe_path()), option_path, %{},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path}
+        ]
+      )
+
+    assert [
+             %AST.Return{
+               expr: %AST.Some{expr: %AST.LocalCall{name: :maybe_path, args: []}}
+             }
+           ] =
+             statements
+  end
+
   test "looks up callable return types from metadata" do
     return_type = %Type{
       kind: :option,

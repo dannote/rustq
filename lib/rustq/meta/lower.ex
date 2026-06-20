@@ -139,10 +139,36 @@ defmodule RustQ.Meta.Lower do
   defp lower_return_expr({:error, value}, %Type{kind: :result}),
     do: %AST.Err{expr: lower_expr(value)}
 
-  defp lower_return_expr(expression, %Type{kind: :option}),
-    do: %AST.Some{expr: lower_expr(expression)}
+  defp lower_return_expr(expression, %Type{kind: :option} = return_type) do
+    if infer_propagation?(expression, return_type) do
+      %AST.Try{expr: lower_expr(expression)}
+    else
+      %AST.Some{expr: lower_expr(expression)}
+    end
+  end
+
+  defp lower_return_expr(expression, %Type{} = return_type) do
+    if infer_propagation?(expression, return_type) do
+      %AST.Try{expr: lower_expr(expression)}
+    else
+      lower_expr(expression)
+    end
+  end
 
   defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
+
+  defp infer_propagation?(expression, %Type{} = expected_type) do
+    case callable_return_type(expression) do
+      %Type{} = call_type ->
+        Type.propagates?(call_type) and
+          call_type
+          |> Type.inner()
+          |> Type.compatible?(expected_type)
+
+      _unknown_or_plain ->
+        false
+    end
+  end
 
   defp lower_case(expression, clauses, %Context{} = context) do
     case_type =

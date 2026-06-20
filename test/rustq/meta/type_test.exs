@@ -97,6 +97,14 @@ defmodule RustQ.Meta.TypeTest do
                inner: %SynType.Path{code: "Rect", name: "Rect", segments: ["Rect"]}
              })
 
+    assert %Type{kind: :nif_result, rust: "NifResult<Foo>", meta: %{inner: %Type{rust: "Foo"}}} =
+             Type.from_syn(%SynType.Path{
+               code: "NifResult<Foo>",
+               name: "NifResult",
+               segments: ["NifResult"],
+               args: [%SynType.Path{code: "Foo", name: "Foo", segments: ["Foo"]}]
+             })
+
     assert %Type{kind: :result, rust: "Result<Image, Error>"} =
              Type.from_syn(%SynType.Result{
                code: "Result<Image, Error>",
