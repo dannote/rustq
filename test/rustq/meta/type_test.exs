@@ -4,6 +4,7 @@ defmodule RustQ.Meta.TypeTest do
   alias RustQ.Meta.Type
   alias RustQ.Some.External
   alias RustQ.Spec
+  alias RustQ.Syn.Type, as: SynType
 
   test "maps fitting built-in Elixir types to Rust/Rustler types" do
     assert RustQ.Spec.type(quote(do: atom())).rust == "Atom"
@@ -64,6 +65,70 @@ defmodule RustQ.Meta.TypeTest do
              rust: "skia_safe::Canvas::borrowed",
              meta: %{elixir_module: SkiaSafe.Canvas, elixir_type: :borrowed, elixir_args: []}
            } = RustQ.Spec.type(quote(do: SkiaSafe.Canvas.borrowed()))
+  end
+
+  test "converts Syn type metadata to RustQ meta types" do
+    assert %Type{kind: :f32, rust: "f32"} =
+             Type.from_syn(%SynType.Path{code: "f32", name: "f32", segments: ["f32"]})
+
+    assert %Type{kind: :type, rust: "skia_safe::Canvas"} =
+             Type.from_syn(%SynType.Path{
+               code: "skia_safe::Canvas",
+               name: "Canvas",
+               segments: ["skia_safe", "Canvas"]
+             })
+
+    assert %Type{kind: :ref, rust: "&Paint", meta: %{inner: %Type{rust: "Paint"}}} =
+             Type.from_syn(%SynType.Ref{
+               code: "&Paint",
+               inner: %SynType.Path{code: "Paint", name: "Paint", segments: ["Paint"]}
+             })
+
+    assert %Type{kind: :mut_ref, rust: "&mut Path"} =
+             Type.from_syn(%SynType.Ref{
+               code: "&mut Path",
+               mutable: true,
+               inner: %SynType.Path{code: "Path", name: "Path", segments: ["Path"]}
+             })
+
+    assert %Type{kind: :option, rust: "Option<Rect>"} =
+             Type.from_syn(%SynType.Option{
+               code: "Option<Rect>",
+               inner: %SynType.Path{code: "Rect", name: "Rect", segments: ["Rect"]}
+             })
+
+    assert %Type{kind: :result, rust: "Result<Image, Error>"} =
+             Type.from_syn(%SynType.Result{
+               code: "Result<Image, Error>",
+               ok: %SynType.Path{code: "Image", name: "Image", segments: ["Image"]},
+               error: %SynType.Path{code: "Error", name: "Error", segments: ["Error"]}
+             })
+
+    assert %Type{kind: :tuple, rust: "(f32, f32)", meta: %{elements: [%Type{}, %Type{}]}} =
+             Type.from_syn(%SynType.Tuple{
+               code: "(f32, f32)",
+               elems: [
+                 %SynType.Path{code: "f32", name: "f32", segments: ["f32"]},
+                 %SynType.Path{code: "f32", name: "f32", segments: ["f32"]}
+               ]
+             })
+
+    assert %Type{kind: :slice, rust: "[u8]"} =
+             Type.from_syn(%SynType.Slice{
+               code: "[u8]",
+               inner: %SynType.Path{code: "u8", name: "u8", segments: ["u8"]}
+             })
+
+    assert %Type{kind: :array, rust: "[u8; 4]"} =
+             Type.from_syn(%SynType.Array{
+               code: "[u8; 4]",
+               inner: %SynType.Path{code: "u8", name: "u8", segments: ["u8"]}
+             })
+  end
+
+  test "Spec exposes Syn type conversion" do
+    assert %Type{kind: :bool, rust: "bool"} =
+             Spec.from_syn(%SynType.Path{code: "bool", name: "bool", segments: ["bool"]})
   end
 
   test "keeps external t aliases as direct Rust identifiers" do

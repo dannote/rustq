@@ -17,6 +17,10 @@ defmodule RustQ.Spec do
     |> Type.parse(aliases)
   end
 
+  @doc "Converts structured `RustQ.Syn.Type` metadata into `RustQ.Meta.Type` metadata."
+  @spec from_syn(RustQ.Syn.type()) :: Type.t()
+  def from_syn(type), do: Type.from_syn(type)
+
   @doc "Builds type aliases from quoted or BEAM abstract type declarations."
   @spec aliases([term()]) :: map()
   def aliases(types) do

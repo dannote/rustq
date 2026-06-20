@@ -20,6 +20,7 @@ defmodule RustQ.Meta.Type do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
+  alias RustQ.Syn.Type, as: SynType
 
   defguardp is_ast_tuple(tuple)
             when tuple_size(tuple) == 3 and is_atom(elem(tuple, 0)) and is_list(elem(tuple, 1)) and
@@ -63,6 +64,82 @@ defmodule RustQ.Meta.Type do
     do: true
 
   def external?(%__MODULE__{}, _module, _type), do: false
+
+  @doc """
+  Converts structured `RustQ.Syn.Type` metadata into a RustQ meta type.
+
+  This is the first bridge from upstream Rust signatures into Rusty-Elixir type
+  metadata. It preserves structured wrappers such as refs, options, results,
+  slices, and paths, while falling back to `TypeRaw` for Syn shapes that do not
+  yet expose enough structure to rebuild a richer RustQ AST node.
+  """
+  @spec from_syn(RustQ.Syn.type()) :: t()
+  def from_syn(%SynType.Path{} = path), do: from_syn_path(path)
+
+  def from_syn(%SynType.Ref{inner: inner, mutable: mutable}) do
+    inner = from_syn(inner)
+    type(ref_kind(mutable), %AST.TypeRef{inner: inner.ast, mutable: mutable}, %{inner: inner})
+  end
+
+  def from_syn(%SynType.Option{inner: inner}) do
+    inner = from_syn(inner)
+    type(:option, %AST.TypeOption{inner: inner.ast}, %{inner: inner})
+  end
+
+  def from_syn(%SynType.Result{ok: ok, error: error}) do
+    ok = from_syn(ok)
+    error = from_syn(error)
+    type(:result, %AST.TypeResult{ok: ok.ast, error: error.ast}, %{ok: ok, error: error})
+  end
+
+  def from_syn(%SynType.Tuple{elems: elems}) do
+    elems
+    |> Enum.map(&from_syn/1)
+    |> tuple_type()
+  end
+
+  def from_syn(%SynType.Slice{inner: inner}) do
+    inner = from_syn(inner)
+    type(:slice, %AST.TypeSlice{inner: inner.ast}, %{inner: inner})
+  end
+
+  def from_syn(%SynType.Array{code: code, inner: inner}) do
+    inner = from_syn(inner)
+    type(:array, %AST.TypeRaw{source: code}, %{inner: inner})
+  end
+
+  def from_syn(%SynType.Self{code: code}), do: type(:type, %AST.TypeRaw{source: code})
+  def from_syn(%SynType.Raw{code: code}), do: type(:type, %AST.TypeRaw{source: code})
+
+  def from_syn(%SynType.ImplTrait{code: code, traits: traits}) do
+    trait_types = Enum.map(traits, &from_syn/1)
+    type(:impl_trait, %AST.TypeRaw{source: code}, %{traits: trait_types})
+  end
+
+  defp from_syn_path(%SynType.Path{name: name, segments: segments, args: args}) do
+    args = Enum.map(args, &from_syn/1)
+    parts = path_segments(segments, name)
+
+    ast = %AST.TypePath{
+      parts: Enum.map(parts, &RustQ.Atom.identifier!/1),
+      generics: Enum.map(args, & &1.ast)
+    }
+
+    type(path_kind(parts), ast, %{syn_name: name, syn_segments: parts, args: args})
+  end
+
+  defp path_segments([], name), do: [name]
+  defp path_segments(segments, _name), do: segments
+
+  defp path_kind([kind]) when kind in ~w(f32 f64 bool i8 i16 i32 i64 isize u8 u16 u32 u64 usize),
+    do: String.to_existing_atom(kind)
+
+  defp path_kind(["Atom"]), do: :atom
+  defp path_kind(["Term"]), do: :term
+  defp path_kind(_parts), do: :type
+
+  defp ref_kind(true), do: :mut_ref
+  defp ref_kind(false), do: :ref
 
   @doc false
   @spec parse(Macro.t(), map()) :: t()

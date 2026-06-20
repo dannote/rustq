@@ -8,13 +8,18 @@ and the skia dogfood (`../skia_ex`).
 
 ## Where we are
 
-- **Two authoring surfaces, one strategic direction.** `defrust` Rusty Elixir
-  (`@spec`/`@type` + ordinary macros + bodies → `RustQ.Rust.AST` → native NIF
-  render) is the direction. Templates/`~R`/builders/`RustQ.Rustler.Schema` are
-  stable-but-legacy.
-- **Lowering is genuinely AST-native** for the mainstream constructs: 77
-  `defnode`s across items/stmts/exprs/types/pats, real structs emitted by
-  `Meta.Lower`, and mandatory native rendering through `RustQ.Native.render_ast`.
+- **Wave 1 is complete.** Semantic helpers lower through real RustQ AST,
+  native AST rendering is mandatory, `strict_native_ast` is gone, and Skia has
+  been validated against `semantic-escapes-ast` after the namespace cleanup.
+- **Wave 2 is mostly complete.** Schema/native decoder/render coherence is
+  tested from `AST.Schema.nodes()`, rendering/build/lowering failures now raise
+  structured diagnostics, and tests mirror the source layout. The remaining Wave
+  2 gap is a full golden lowering corpus.
+- **Module structure has been cleaned up beyond the original roadmap.**
+  `NativeCodegen` is now `Codegen`, external Rust metadata lives under
+  `RustQ.Native.*`, Rustler helper modules are concept-oriented, `RustQ.Meta` is
+  split into focused submodules, config state lives in `RustQ.Config.State`, and
+  every module has real documentation instead of `@moduledoc false`.
 - **Skia proves the dogfood.** `Skia.Codegen.Rusty.*` author drawing semantics
   in `defrust` + ordinary `quote`/`unquote` with **zero** `expr!`/`pat!`/`stmt!`/
   `arm!`/`raw_*` escapes in semantic bodies. ~3.3k of 4k native lines are
@@ -108,19 +113,15 @@ Metric: target **~0 explicit propagation operators in skia** after migration.
 Goal: remove the ways the "AST-native" story is quietly undermined by string
 round-trips and silent fallbacks. Cheap, high-confidence.
 
-1. **Collapse `semantic_expr`/`semantic_pat` into direct AST lowering.** Make
-   `expr!`/`pat!`/`stmt!`/`arm!` pure Rusty-Elixir convenience wrappers that
-   reuse the same `lower_expr` clauses — no `raw_expr("Ok(#{...})")` string
-   building, no `parse_syn` round-trip for shapes that already have AST nodes.
-   Keep `raw_expr!`/`raw_pat!`/`raw_stmt!`/`raw_arm!` as the *only* token-level
-   escape, funneled through `parse_syn::<T>(quote!(...))`. Closes gap A.
-2. **Require native AST rendering.** No `strict_native_ast` mode and no silent
-   fallback: AST item rendering must go through `RustQ.Native.render_ast/1`.
+1. **Collapse `semantic_expr`/`semantic_pat` into direct AST lowering.** ✅ Done.
+   `expr!`/`pat!`/`stmt!`/`arm!` reuse direct lowering; only `raw_*` remains as a
+   token-level escape hatch. Closes gap A.
+2. **Require native AST rendering.** ✅ Done. No `strict_native_ast` mode and no
+   silent fallback: AST item rendering goes through `RustQ.Native.render_ast/1`.
    Closes gap B.
-3. **Native-render dogfood gate in skia.** Lower every `defrust` body in skia and
-   assert generated Rust stays native-renderable. Do this through real project CI
-   or architecture linting, not an ad hoc ExUnit source-grep policy test. Closes
-   gap I.
+3. **Native-render dogfood gate in skia.** ✅ Done via cross-project validation
+   on `rustq-semantic-escapes-validation`; Skia has been migrated to the new
+   namespaces and validated against latest `semantic-escapes-ast`. Closes gap I.
 
 > Note: the originally-proposed "rename `unwrap!` → `propagate!`" and "`let!`
 > lowering" items are **superseded** by Wave 3 type-driven propagation
@@ -130,17 +131,16 @@ round-trips and silent fallbacks. Cheap, high-confidence.
 
 Goal: make adding a node safe by construction; make failures legible.
 
-4. **Schema ↔ renderer ↔ decoder ↔ lowering coherence test.** For every
-   `defnode`, assert: (a) Elixir `render_*` clause exists, (b) native decoder
-   branch exists, (c) `Meta.Lower` has a lowering clause or explicitly defers to
-   raw. Generate from `AST.Schema.nodes()` so a new node can't ship half-wired.
-   Closes gap C.
-5. **Lowering golden corpus.** `test/corpus/*.exs` → expected `.rs`, covering
-   every documented construct; CI diffs rendered output. Turns anecdotal
+4. **Schema ↔ renderer ↔ decoder ↔ lowering coherence test.** ✅ Mostly done.
+   Coherence is derived from `AST.Schema.nodes()` for samples, schema fields,
+   native dispatch coverage, and decoder coverage. Closes the practical half-wired
+   node risk in gap C.
+5. **Lowering golden corpus.** ❌ Remaining. `test/corpus/*.exs` → expected `.rs`,
+   covering every documented construct; CI diffs rendered output. Turns anecdotal
    completeness into a measured surface. Closes gap E.
-6. **Structured diagnostics.** Replace `ArgumentError` raises with a
-   `RustQ.Diagnostic` carrying the offending Elixir AST node, span, and
-   suggested construct. Closes gap H.
+6. **Structured diagnostics.** ✅ Done for lowerer unsupported forms, defrust
+   build failures, and native render failures with `RustQ.Diagnostic`. Closes
+   gap H for the current failure paths.
 
 ## Wave 3 — `Syn`-driven bindings & type-driven lowering (the new power)
 
@@ -152,9 +152,11 @@ ones; and Rusty Elixir reads as clean as the Rust it emits.
    arg decode, return wrap) instead of forcing hand-authoring. A wrapper project
    declares "expose `Canvas::draw_rect`" and gets the `defrust` shell for free,
    filling only the semantic body. Closes gap D.
-8. **Round-trip `Syn` ↔ `defrust` type specs.** Map `Syn.Type` ↔ `RustQ.Type`
-   bidirectionally so specs can be *derived* from upstream Rust signatures, with
-   manual override where Rusty semantics differ. Prerequisite for item 9; closes
+8. **Round-trip `Syn` ↔ `defrust` type specs.** 🟡 Started. `RustQ.Meta.Type.from_syn/1`
+   and `RustQ.Spec.from_syn/1` now map structured `Syn.Type` metadata into
+   `RustQ.Meta.Type` for common path/ref/option/result/tuple/slice/array/raw
+   shapes. Remaining work: reverse mapping, richer lifetime/generic fidelity,
+   and method-signature-level spec derivation. Prerequisite for item 9; closes
    gap D fully.
 9. **Type-driven propagation inference (headline).** Infer `?` from
    called-function return type vs expected type at call position. Drop
