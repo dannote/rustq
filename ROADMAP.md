@@ -165,8 +165,12 @@ ones; and Rusty Elixir reads as clean as the Rust it emits.
    callable argument positions for local, remote, and typed receiver method calls
    when callable metadata says the nested call returns
    `Result<T, E>`/`NifResult<T>`/`Option<T>` and the expected type is `T`.
-   Remaining work: broader local type propagation and Skia migration. Closes gap
-   J.
+   Remaining work: broader local type propagation, project-wide/raw Rust helper
+   callable metadata, external native method/function callable metadata, and Skia
+   migration. Skia dogfood showed that raw helpers such as `stroke_paint` and
+   external calls such as `Paint::set_*`/`ImageFilters::*` still require explicit
+   `unwrap!` until their argument signatures are available to lowering. Closes
+   gap J.
    Metric: ~0 explicit propagation operators in skia post-migration.
 10. **Light borrow/`mut` model.** Carry lifetime/`mut` intent from `Syn` arg
     types into lowered bindings instead of pure heuristics. Not full borrowck —
