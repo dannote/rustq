@@ -16,6 +16,7 @@ end
 defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Diagnostic
   alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Meta.Lower
@@ -75,6 +76,50 @@ defmodule RustQ.Meta.LowerTest do
                ]
              }
            } = hd(maybe_save.body)
+  end
+
+  test "unsupported lowerer patterns raise structured diagnostics" do
+    binding_diagnostic =
+      try do
+        Lower.quoted_body(
+          quote do
+            %{value: value} = term
+            :ok
+          end,
+          nil
+        )
+
+        flunk("expected diagnostic")
+      rescue
+        error in Diagnostic.Error -> error.diagnostic
+      end
+
+    assert binding_diagnostic.phase == :lower
+    assert binding_diagnostic.kind == :unsupported_binding_pattern
+    assert binding_diagnostic.snippet == "%{value: value}"
+    assert binding_diagnostic.message =~ "unsupported defrust binding pattern"
+    assert binding_diagnostic.suggestion =~ "variable or tuple pattern"
+
+    match_diagnostic =
+      try do
+        Lower.quoted_body(
+          quote do
+            case term do
+              %{value: value} -> value
+            end
+          end,
+          nil
+        )
+
+        flunk("expected diagnostic")
+      rescue
+        error in Diagnostic.Error -> error.diagnostic
+      end
+
+    assert match_diagnostic.phase == :lower
+    assert match_diagnostic.kind == :unsupported_match_pattern
+    assert match_diagnostic.snippet == "%{value: value}"
+    assert match_diagnostic.message =~ "unsupported defrust match pattern"
   end
 
   test "non-raw semantic helpers lower directly to AST nodes" do

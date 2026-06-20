@@ -1,6 +1,7 @@
 defmodule RustQ.Meta.Lower do
   @moduledoc false
 
+  alias RustQ.Diagnostic
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
@@ -190,7 +191,12 @@ defmodule RustQ.Meta.Lower do
     do: %AST.PatTuple{patterns: Enum.map([left, right], &lower_binding_pattern/1)}
 
   defp lower_binding_pattern(other) do
-    raise ArgumentError, "unsupported defrust binding pattern: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_binding_pattern,
+      other,
+      "unsupported defrust binding pattern",
+      suggestion: "Use a variable or tuple pattern."
+    )
   end
 
   defp lower_match_pattern(nil, %Type{kind: :option}), do: %AST.PatNone{}
@@ -251,7 +257,13 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_match_pattern(other, _case_type) do
-    raise ArgumentError, "unsupported defrust match pattern: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_match_pattern,
+      other,
+      "unsupported defrust match pattern",
+      suggestion:
+        "Use a variable, tuple, option/result pattern, atom, literal, or supported struct pattern."
+    )
   end
 
   defp lower_tuple_pattern({name, _, context}) when is_atom(name) and is_atom(context),
@@ -483,7 +495,13 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr(atom) when is_atom(atom), do: %AST.AtomValue{name: atom}
 
   defp lower_expr(other) do
-    raise ArgumentError, "unsupported defrust expression: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_expression,
+      other,
+      "unsupported defrust expression",
+      suggestion:
+        "Use ordinary Rusty-Elixir forms, add a lowering clause, or use raw_expr! as an explicit escape hatch."
+    )
   end
 
   defp decode_as_expr(expression, type_ast) do
@@ -512,7 +530,12 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_pipe_call(_receiver, other) do
-    raise ArgumentError, "unsupported defrust pipeline step: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_pipeline_step,
+      other,
+      "unsupported defrust pipeline step",
+      suggestion: "Pipe into a method call, cast/1, or add an explicit lowering clause."
+    )
   end
 
   defp operator_op(:+), do: :add
@@ -529,7 +552,12 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_enum_map(_collection, other) do
-    raise ArgumentError, "unsupported Enum.map mapper in defrust: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_enum_map_mapper,
+      other,
+      "unsupported Enum.map mapper in defrust",
+      suggestion: "Use an anonymous function mapper, e.g. Enum.map(values, fn value -> ... end)."
+    )
   end
 
   defp lower_closure_args(args, body) when is_list(args),
@@ -541,8 +569,12 @@ defmodule RustQ.Meta.Lower do
   defp closure_arg!({name, _, context}) when is_atom(name) and is_atom(context), do: name
 
   defp closure_arg!(other) do
-    raise ArgumentError,
-          "unsupported defrust closure argument: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_closure_argument,
+      other,
+      "unsupported defrust closure argument",
+      suggestion: "Use a plain variable as the closure argument."
+    )
   end
 
   defp closure_body_expr([expression]), do: expression
@@ -609,8 +641,15 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr_path(expression) do
     case lower_expr(expression) do
-      %AST.Path{} = path -> path
-      other -> raise ArgumentError, "expected Rust path, got: #{inspect(other)}"
+      %AST.Path{} = path ->
+        path
+
+      other ->
+        Diagnostic.lower(
+          :expected_rust_path,
+          expression,
+          "expected Rust path, got: #{inspect(other)}"
+        )
     end
   end
 
@@ -618,7 +657,7 @@ defmodule RustQ.Meta.Lower do
   defp semantic_atom!({name, _, context}) when is_atom(name) and is_atom(context), do: name
 
   defp semantic_atom!(other) do
-    raise ArgumentError, "expected atom identifier, got: #{Macro.to_string(other)}"
+    Diagnostic.lower(:expected_atom_identifier, other, "expected atom identifier")
   end
 
   defp parse_syn(type, tokens) do
@@ -632,7 +671,12 @@ defmodule RustQ.Meta.Lower do
     do: %AST.TokenMacro{path: %AST.Path{parts: [:quote]}, tokens: tokens}
 
   defp quote_tokens(other) do
-    raise ArgumentError, "unsupported quote tokens: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_quote_tokens,
+      other,
+      "unsupported quote tokens",
+      suggestion: "Pass a literal binary token string to raw_expr!/raw_pat!/raw_stmt!/raw_arm!."
+    )
   end
 
   defp lower_struct_literal_path(path), do: lower_expr(path)
@@ -645,7 +689,12 @@ defmodule RustQ.Meta.Lower do
   defp lower_token_macro_path({:__aliases__, _, parts}), do: %AST.Path{parts: parts}
 
   defp lower_token_macro_path(other) do
-    raise ArgumentError, "unsupported token_macro path: #{Macro.to_string(other)}"
+    Diagnostic.lower(
+      :unsupported_token_macro_path,
+      other,
+      "unsupported token_macro path",
+      suggestion: "Use an atom or alias as the token macro path."
+    )
   end
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
@@ -853,11 +902,11 @@ defmodule RustQ.Meta.Lower do
     |> Enum.reduce(acc, &[&1 | &2])
   end
 
-  defp raw_alias_path_parts({{:., _, [receiver, field]}, meta, []}, acc) do
+  defp raw_alias_path_parts({{:., _, [receiver, field]}, meta, []} = ast, acc) do
     if Keyword.get(meta, :no_parens, false) do
       raw_alias_path_parts(receiver, [field | acc])
     else
-      raise ArgumentError, "unsupported alias path"
+      Diagnostic.lower(:unsupported_alias_path, ast, "unsupported alias path")
     end
   end
 
