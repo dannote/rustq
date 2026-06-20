@@ -109,6 +109,33 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "syn_external_callable.rs")
   end
 
+  test "defrust can use Syn-derived external method metadata" do
+    defmodule SynExternalMethodCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/external_methods.rs"]
+
+      alias RustQ.Type, as: R
+
+      @spec decode_blend_mode(R.atom()) :: R.nif_result(R.path(:BlendMode))
+      defrust decode_blend_mode(atom) do
+        case atom do
+          :src_over -> {:ok, BlendMode.SrcOver}
+          _ -> {:error, :badarg}
+        end
+      end
+
+      @spec apply(R.mut_ref(Paint.t()), R.atom()) :: R.nif_result(R.unit())
+      defrust apply(paint, atom) do
+        paint.set_blend_mode(decode_blend_mode(atom))
+        :ok
+      end
+    end
+
+    source = SynExternalMethodCase.__rustq_source__()
+
+    assert source =~ "paint.set_blend_mode(decode_blend_mode(atom)?);"
+    assert RustQ.valid?(source, "syn_external_method.rs")
+  end
+
   test "defrust can use callable metadata from other RustQ modules" do
     defmodule CallableProducerCase do
       use RustQ.Meta

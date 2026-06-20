@@ -52,6 +52,7 @@ defmodule RustQ.Meta do
   @doc false
   defmacro __using__(opts) do
     rust_sources = Keyword.get(opts, :rust_sources, [])
+    rust_packages = Keyword.get(opts, :rust_packages, [])
 
     callable_modules =
       opts
@@ -64,9 +65,11 @@ defmodule RustQ.Meta do
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_rust_sources, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_rust_packages, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_callable_modules, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_current_rust_mod, accumulate: false)
       @rustq_rust_sources unquote(Macro.escape(List.wrap(rust_sources)))
+      @rustq_rust_packages unquote(Macro.escape(List.wrap(rust_packages)))
       @rustq_callable_modules unquote(Macro.escape(List.wrap(callable_modules)))
       Module.register_attribute(__MODULE__, :nif, accumulate: false)
       Module.register_attribute(__MODULE__, :allow, accumulate: true)
@@ -163,7 +166,9 @@ defmodule RustQ.Meta do
   end
 
   defp external_callables(module) do
-    rust_source_callables_for_module(module) ++ callable_module_callables(module)
+    rust_source_callables_for_module(module) ++
+      rust_package_callables_for_module(module) ++
+      callable_module_callables(module)
   end
 
   defp rust_source_callables_for_module(module) do
@@ -192,10 +197,34 @@ defmodule RustQ.Meta do
   end
 
   defp rust_source_callables(path) do
-    path
-    |> Syn.parse_file!()
-    |> Syn.functions()
-    |> Enum.map(&Callable.from_syn_function/1)
+    file = Syn.parse_file!(path)
+
+    function_callables = file |> Syn.functions() |> Enum.map(&Callable.from_syn_function/1)
+    method_callables = file |> Syn.impls() |> Enum.flat_map(&impl_callables/1)
+
+    function_callables ++ method_callables
+  end
+
+  defp rust_package_callables_for_module(module) do
+    module
+    |> Module.get_attribute(:rustq_rust_packages)
+    |> List.wrap()
+    |> List.flatten()
+    |> Enum.flat_map(&rust_package_callables/1)
+  end
+
+  defp rust_package_callables({package, opts}) when is_binary(package) and is_list(opts) do
+    package
+    |> Syn.Index.cached_package(opts)
+    |> Syn.Index.impls()
+    |> Enum.flat_map(&impl_callables/1)
+  end
+
+  defp rust_package_callables(package) when is_binary(package),
+    do: rust_package_callables({package, []})
+
+  defp impl_callables(%Syn.Impl{} = impl) do
+    Enum.map(impl.methods, &Callable.from_syn_method(&1, target: impl.target))
   end
 
   defp rust_module_mapping!(alias_ast, opts) do

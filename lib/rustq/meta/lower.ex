@@ -613,6 +613,13 @@ defmodule RustQ.Meta.Lower do
     BindingIndex.argument_types(current_callables(), target, function, arity)
   end
 
+  defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
+       when kind in [:ref, :mut_ref],
+       do: callable_target_from_type(inner)
+
+  defp callable_target_from_type(%Type{kind: kind, rust: rust}) when kind in [:ref, :mut_ref],
+    do: rust |> String.trim_leading("&") |> String.trim_leading("mut ") |> String.trim()
+
   defp callable_target_from_type(%Type{rust: rust}) when is_binary(rust), do: rust
   defp callable_target_from_type(_type), do: nil
 
