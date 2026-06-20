@@ -149,9 +149,11 @@ ones; and Rusty Elixir reads as clean as the Rust it emits.
 
 7. **`RustQ.Binding` adapter layer.** 🟡 Started. `RustQ.Binding.Callable`
    normalizes `RustQ.Syn.Function`, `RustQ.Syn.Method`, and
-   `RustQ.Native.Descriptor` into lookup-friendly callable metadata with
-   `RustQ.Meta.Type` args/returns. Remaining work: generate Rusty-Elixir-shaped
-   lowering targets and wrappers from these callables. Closes gap D.
+   `RustQ.Native.Descriptor` into callable metadata with `RustQ.Meta.Type`
+   args/returns. `RustQ.Binding.Index` now provides local/target-qualified
+   return-type lookup, and `RustQ.Meta.Lower` accepts callable metadata through
+   its context. Remaining work: generate Rusty-Elixir-shaped lowering targets
+   and wrappers from these callables. Closes gap D.
 8. **Round-trip `Syn` ↔ `defrust` type specs.** 🟡 Started. `RustQ.Meta.Type.from_syn/1`
    and `RustQ.Spec.from_syn/1` now map structured `Syn.Type` metadata into
    `RustQ.Meta.Type` for common path/ref/option/result/tuple/slice/array/raw

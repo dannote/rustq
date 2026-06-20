@@ -16,14 +16,43 @@ end
 defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Binding.Callable
   alias RustQ.Codegen.Decoders
   alias RustQ.Codegen.Helpers
   alias RustQ.Diagnostic
   alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Meta.Lower
+  alias RustQ.Meta.Type
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.{Attribute, ExprStmt, Function, FunctionArg, MethodCall}
+
+  test "looks up callable return types from metadata" do
+    return_type = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeRaw{source: "Option<Path>"}
+    }
+
+    callables = [
+      %Callable{name: "maybe_path", kind: :function, args: [], returns: return_type},
+      %Callable{
+        name: "draw_rect",
+        kind: :method,
+        target: "Canvas",
+        args: [self_arg(), rect_arg()],
+        returns: return_type
+      }
+    ]
+
+    assert Lower.callable_return_type(quote(do: maybe_path()), callables: callables) ==
+             return_type
+
+    assert Lower.callable_return_type(quote(do: Canvas.draw_rect(rect)), callables: callables) ==
+             return_type
+
+    assert Lower.callable_return_type(quote(do: missing()), callables: callables) == nil
+  end
 
   test "defrust consumes idiomatic Rust-facing attributes" do
     assert %Function{attrs: attrs} =
@@ -426,4 +455,18 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_expr_none))
   end
+
+  defp self_arg,
+    do: %{
+      name: "self",
+      type: %Type{kind: :ref, rust: "&Self", ast: %AST.TypeRaw{source: "&Self"}},
+      syn: nil
+    }
+
+  defp rect_arg,
+    do: %{
+      name: "rect",
+      type: %Type{kind: :type, rust: "Rect", ast: %AST.TypeRaw{source: "Rect"}},
+      syn: nil
+    }
 end

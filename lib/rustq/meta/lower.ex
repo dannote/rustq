@@ -3,6 +3,7 @@ defmodule RustQ.Meta.Lower do
   Lowers Rusty-Elixir quoted expressions into RustQ AST nodes.
   """
 
+  alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
@@ -10,9 +11,15 @@ defmodule RustQ.Meta.Lower do
 
   defmodule Context do
     @moduledoc """
-    Tracks return type, variables, aliases, and position while lowering a body.
+    Tracks return type, variables, aliases, callable metadata, and position while lowering a body.
     """
-    defstruct [:return_type, vars: %{}, position: :return, rust_modules: %{}]
+    defstruct [
+      :return_type,
+      vars: %{},
+      position: :return,
+      rust_modules: %{},
+      callables: %BindingIndex{}
+    ]
   end
 
   @spec quoted_body(Macro.t(), Type.t(), map(), keyword()) :: [struct()]
@@ -20,10 +27,11 @@ defmodule RustQ.Meta.Lower do
     context = %Context{
       return_type: return_type,
       vars: vars,
-      rust_modules: Keyword.get(opts, :rust_modules, %{})
+      rust_modules: Keyword.get(opts, :rust_modules, %{}),
+      callables: BindingIndex.new(Keyword.get(opts, :callables))
     }
 
-    with_rust_modules(context.rust_modules, fn ->
+    with_lowering_context(context, fn ->
       body_ast
       |> block_expressions()
       |> lower_block(context)
@@ -36,6 +44,25 @@ defmodule RustQ.Meta.Lower do
     body_ast
     |> quoted_body(return_type, vars, opts)
     |> Enum.map_join("\n", &Render.render_stmt/1)
+  end
+
+  @doc """
+  Looks up the known return type for a local or remote call AST.
+
+  This is a lowering-time query over the callable metadata supplied through the
+  `:callables` option. It is intentionally side-effect-free and does not alter
+  lowering yet; type-driven propagation inference will use this lookup to decide
+  when a call returning `Result`/`Option`/`NifResult` should lower with Rust `?`.
+  """
+  @spec callable_return_type(Macro.t(), keyword()) :: Type.t() | nil
+  def callable_return_type(call_ast, opts \\ []) do
+    callables =
+      case Keyword.fetch(opts, :callables) do
+        {:ok, callables} -> BindingIndex.new(callables)
+        :error -> current_callables()
+      end
+
+    callable_return_type_from_index(call_ast, callables)
   end
 
   defp lower_block(expressions, %Context{} = context) do
@@ -950,10 +977,47 @@ defmodule RustQ.Meta.Lower do
   defp rust_module_part(part),
     do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
 
-  defp with_rust_modules(rust_modules, fun) do
-    key = {__MODULE__, :rust_modules}
+  defp callable_return_type_from_index({name, _meta, args}, %BindingIndex{} = callables)
+       when is_atom(name) and is_list(args) do
+    BindingIndex.return_type(callables, nil, name, length(args))
+  end
+
+  defp callable_return_type_from_index(
+         {{:., _, [{:__aliases__, _, parts}, function]}, _meta, args},
+         %BindingIndex{} = callables
+       )
+       when is_atom(function) and is_list(args) do
+    arity = length(args)
+
+    parts
+    |> callable_target_candidates()
+    |> Enum.find_value(&BindingIndex.return_type(callables, &1, function, arity))
+  end
+
+  defp callable_return_type_from_index(_call_ast, %BindingIndex{}), do: nil
+
+  defp callable_target_candidates(parts) do
+    mapped = mapped_alias_parts(parts)
+
+    [
+      Enum.map_join(mapped, "::", &to_string/1),
+      mapped |> List.last() |> to_string(),
+      Enum.map_join(parts, "::", &to_string/1),
+      parts |> List.last() |> to_string()
+    ]
+    |> Enum.uniq()
+  end
+
+  defp with_lowering_context(%Context{} = context, fun) do
+    with_process_value(:rust_modules, context.rust_modules, fn ->
+      with_process_value(:callables, context.callables, fun)
+    end)
+  end
+
+  defp with_process_value(name, value, fun) do
+    key = {__MODULE__, name}
     previous = Process.get(key)
-    Process.put(key, rust_modules)
+    Process.put(key, value)
 
     try do
       fun.()
@@ -967,4 +1031,5 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp current_rust_modules, do: Process.get({__MODULE__, :rust_modules}, %{})
+  defp current_callables, do: Process.get({__MODULE__, :callables}, %BindingIndex{})
 end
