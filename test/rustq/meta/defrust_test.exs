@@ -3,6 +3,7 @@ Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
 defmodule RustQ.Meta.DefrustTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Diagnostic
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Rust.AST
 
@@ -40,6 +41,33 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Event::Resize(Resize { width: width, height: height }) =>"
 
     assert RustQ.valid?(source, "generated_defrust.rs")
+  end
+
+  test "defrust build failures include boundary diagnostic context" do
+    error =
+      assert_raise Diagnostic.Error, fn ->
+        defmodule InvalidDefrustBoundaryCase do
+          use RustQ.Meta
+          alias RustQ.Type, as: R
+
+          @spec invalid(term()) :: R.nif_result(R.unit())
+          defrust invalid(term) do
+            %{value: value} = term
+            value
+          end
+        end
+      end
+
+    diagnostic = error.diagnostic
+
+    assert diagnostic.phase == :defrust
+    assert diagnostic.kind == :build_failed
+    assert diagnostic.snippet =~ "%{value: value} = term"
+    assert diagnostic.details.function == :invalid
+    assert diagnostic.details.arity == 1
+
+    assert %Diagnostic{phase: :lower, kind: :unsupported_binding_pattern} =
+             diagnostic.details.cause
   end
 
   test "builds a function AST from defrust valid Elixir" do

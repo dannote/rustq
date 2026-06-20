@@ -41,6 +41,7 @@ defmodule RustQ.Meta do
   normal way to reference project-owned Rust modules or types.
   """
 
+  alias RustQ.Diagnostic
   alias RustQ.Meta.Lower
   alias RustQ.Meta.Type
   alias RustQ.Rust
@@ -272,6 +273,22 @@ defmodule RustQ.Meta do
     do: build_ast({call_ast, body_ast, attrs, nil}, specs, type_aliases, rust_modules, env)
 
   defp build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules, env) do
+    do_build_ast({call_ast, body_ast, attrs, rust_module}, specs, type_aliases, rust_modules, env)
+  rescue
+    error in Diagnostic.Error ->
+      raise_defrust_diagnostic(call_ast, body_ast, error.diagnostic)
+
+    error in [ArgumentError, FunctionClauseError] ->
+      raise_defrust_diagnostic(call_ast, body_ast, error)
+  end
+
+  defp do_build_ast(
+         {call_ast, body_ast, attrs, rust_module},
+         specs,
+         type_aliases,
+         rust_modules,
+         env
+       ) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
@@ -300,6 +317,23 @@ defmodule RustQ.Meta do
 
     %{ast: ast, rust_module: rust_module}
   end
+
+  @spec raise_defrust_diagnostic(Macro.t(), Macro.t(), Exception.t() | Diagnostic.t()) ::
+          no_return()
+  defp raise_defrust_diagnostic(call_ast, body_ast, cause) do
+    {name, _meta, arg_asts} = call_ast
+    arity = length(arg_asts || [])
+
+    Diagnostic.defrust(
+      :build_failed,
+      body_ast,
+      "failed to build defrust #{name}/#{arity}: #{diagnostic_cause_message(cause)}",
+      details: %{function: name, arity: arity, cause: cause}
+    )
+  end
+
+  defp diagnostic_cause_message(%Diagnostic{} = diagnostic), do: diagnostic.message
+  defp diagnostic_cause_message(error), do: Exception.message(error)
 
   defp expand_body_macros(body_ast, env) do
     body_ast

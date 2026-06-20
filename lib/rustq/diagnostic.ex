@@ -3,7 +3,7 @@ defmodule RustQ.Diagnostic do
   Structured RustQ diagnostic data for lowering/rendering failures.
   """
 
-  defstruct [:phase, :kind, :node, :snippet, :suggestion, :message]
+  defstruct [:phase, :kind, :node, :snippet, :suggestion, :details, :message]
 
   @type t :: %__MODULE__{
           phase: atom(),
@@ -11,6 +11,7 @@ defmodule RustQ.Diagnostic do
           node: Macro.t() | nil,
           snippet: String.t() | nil,
           suggestion: String.t() | nil,
+          details: map(),
           message: String.t()
         }
 
@@ -32,13 +33,29 @@ defmodule RustQ.Diagnostic do
   @spec lower(atom(), Macro.t(), String.t(), keyword()) :: no_return()
   def lower(kind, node, message, opts \\ []) do
     raise Error,
-      diagnostic: new(:lower, kind, node, message, suggestion: Keyword.get(opts, :suggestion))
+      diagnostic:
+        new(:lower, kind, node, message,
+          suggestion: Keyword.get(opts, :suggestion),
+          details: Keyword.get(opts, :details, %{})
+        )
+  end
+
+  @spec defrust(atom(), Macro.t(), String.t()) :: no_return()
+  @spec defrust(atom(), Macro.t(), String.t(), keyword()) :: no_return()
+  def defrust(kind, node, message, opts \\ []) do
+    raise Error,
+      diagnostic:
+        new(:defrust, kind, node, message,
+          suggestion: Keyword.get(opts, :suggestion),
+          details: Keyword.get(opts, :details, %{})
+        )
   end
 
   @spec new(atom(), atom(), Macro.t() | nil, String.t(), keyword()) :: t()
   def new(phase, kind, node, message, opts \\ []) do
     snippet = Keyword.get(opts, :snippet) || snippet(node)
     suggestion = Keyword.get(opts, :suggestion)
+    details = Keyword.get(opts, :details, %{})
 
     %__MODULE__{
       phase: phase,
@@ -46,6 +63,7 @@ defmodule RustQ.Diagnostic do
       node: node,
       snippet: snippet,
       suggestion: suggestion,
+      details: details,
       message: format_message(phase, kind, message, snippet, suggestion)
     }
   end
