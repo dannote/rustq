@@ -24,6 +24,7 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
     Ok,
     Path,
     PathCall,
+    PatPath,
     PatVar,
     Return,
     Try,
@@ -72,23 +73,34 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
            } = Enum.find(List.flatten(modules), &match?(%Function{name: :atom}, &1))
   end
 
-  test "dispatch functions are AST-backed" do
+  test "dispatch functions cover every externally decodable schema node" do
     dispatch = Dispatch.asts()
     names = dispatch |> Enum.map(& &1.name) |> MapSet.new()
 
-    assert MapSet.subset?(
-             MapSet.new([
-               :decode_ast_item,
-               :decode_ast_type,
-               :decode_ast_pat,
-               :decode_ast_stmt,
-               :decode_ast_expr
-             ]),
-             names
-           )
+    expected_dispatch = %{
+      item: :decode_ast_item,
+      type: :decode_ast_type,
+      pat: :decode_ast_pat,
+      stmt: :decode_ast_stmt,
+      expr: :decode_ast_expr
+    }
 
-    for function <- dispatch do
-      assert %Function{body: [%Return{expr: %Match{}}]} = function
+    assert MapSet.subset?(MapSet.new(Map.values(expected_dispatch)), names)
+
+    for {category, function_name} <- expected_dispatch do
+      assert %Function{body: [%Return{expr: %Match{arms: arms}}]} =
+               Enum.find(dispatch, &(&1.name == function_name))
+
+      actual_consts = dispatch_constants(arms)
+
+      expected_consts =
+        category
+        |> Schema.nodes()
+        |> Enum.map(& &1.rust_const)
+        |> MapSet.new()
+
+      assert actual_consts == expected_consts,
+             "#{function_name} dispatch does not match #{category} schema nodes"
     end
   end
 
@@ -219,29 +231,14 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
       |> Enum.reject(&(&1.name == :pat_atom_guard))
       |> Enum.map(&String.to_atom("decode_#{&1.name}"))
 
-    expected_type_decoders = [
-      :decode_type_path,
-      :decode_type_unit,
-      :decode_type_option,
-      :decode_type_result,
-      :decode_type_nif_result,
-      :decode_type_vec
-    ]
+    expected_type_decoders =
+      Schema.nodes(:type)
+      |> Enum.map(&String.to_atom("decode_#{&1.name}"))
 
-    expected_item_decoders = [
-      :decode_ast_use,
-      :decode_ast_module,
-      :decode_ast_const,
-      :decode_ast_static,
-      :decode_ast_function,
-      :decode_ast_struct,
-      :decode_ast_macro_item,
-      :decode_ast_macro_item_call,
-      :decode_ast_enum,
-      :decode_function_arg,
-      :decode_struct_field,
-      :decode_enum_variant
-    ]
+    expected_item_decoders =
+      Schema.nodes(:item)
+      |> Enum.map(&String.to_atom("decode_ast_#{&1.name}"))
+      |> Kernel.++([:decode_function_arg, :decode_struct_field, :decode_enum_variant])
 
     for decoder <-
           expected_item_decoders ++
@@ -249,5 +246,14 @@ defmodule RustQ.NativeCodegen.GeneratedASTTest do
             expected_expr_decoders ++ expected_stmt_decoders ++ expected_pat_decoders do
       assert MapSet.member?(decoder_names, decoder), "missing dogfooded decoder #{decoder}"
     end
+  end
+
+  defp dispatch_constants(arms) do
+    arms
+    |> Enum.flat_map(fn
+      %{pattern: %PatPath{path: %Path{parts: [:ast_modules, rust_const]}}} -> [rust_const]
+      _badarg_arm -> []
+    end)
+    |> MapSet.new()
   end
 end
