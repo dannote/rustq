@@ -90,7 +90,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
     assert use_source =~ "use std::fmt;"
     assert module_source =~ "pub(crate) mod generated"
-    assert module_source =~ "const ANSWER: u32 = 42i64;"
+    assert module_source =~ "const ANSWER: u32 = 42;"
     assert macro_source =~ "type Alias = u32;"
     assert const_source =~ "pub(crate) const LIMIT: Option<&'a str> = None;"
     assert struct_source =~ "pub struct Holder<'a>"

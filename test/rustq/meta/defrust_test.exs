@@ -182,7 +182,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     source = ZeroArityClosureCase.__rustq_source__()
-    assert source =~ "get_or_init(|| 42i64)"
+    assert source =~ "get_or_init(|| 42)"
   end
 
   test "defrust lowers arrays and indexed assignment" do
@@ -200,7 +200,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     source = ArrayIndexCase.__rustq_source__()
-    assert source =~ "let mut values = [0i64 as u8, 0i64 as u8];"
+    assert source =~ "let mut values = [0 as u8, 0 as u8];"
     assert source =~ "values[index] = value;"
   end
 
@@ -234,7 +234,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     source = BitwiseHelperCase.__rustq_source__()
-    assert source =~ "(rgba >> 24i64 & 255i64) as u8"
+    assert source =~ "(rgba >> 24 & 255) as u8"
   end
 
   test "defrust lowers arithmetic operators" do

@@ -139,7 +139,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       body: [A.return(A.tuple([1, 2]))]
     }
 
-    assert Render.render_function(function) =~ "(1i64, 2i64)"
+    assert Render.render_function(function) =~ "(1, 2)"
   end
 
   test "renders numeric literal match patterns" do

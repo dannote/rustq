@@ -695,7 +695,7 @@ pub(crate) fn decode_literal_expr(term: Term) -> NifResult<Expr> {
     match decode_literal_term(term)? {
         LiteralTerm::Bool(true) => parse_syn::<Expr>(quote!(true)),
         LiteralTerm::Bool(false) => parse_syn::<Expr>(quote!(false)),
-        LiteralTerm::I64(value) => parse_syn::<Expr>(quote!(#value)),
+        LiteralTerm::I64(value) => parse_expr(value.to_string()),
         LiteralTerm::F64(value) => parse_expr(format_float_literal(value)),
         LiteralTerm::String(value) => parse_syn::<Expr>(quote!(#value)),
         LiteralTerm::Atom(_) => Err(rustler::Error::BadArg),

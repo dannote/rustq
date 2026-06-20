@@ -23,7 +23,7 @@ defmodule RustQ.RustTest do
   test "converts Rust AST items to fragments" do
     item = A.const(:ANSWER, :i32, A.lit(42))
 
-    assert Rust.ast_item(item) |> Rust.to_fragment() == "const ANSWER: i32 = 42i64;\n"
+    assert Rust.ast_item(item) |> Rust.to_fragment() == "const ANSWER: i32 = 42;\n"
   end
 
   test "builds ergonomic generic and lifetime types" do
