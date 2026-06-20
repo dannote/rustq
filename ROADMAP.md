@@ -161,10 +161,11 @@ ones; and Rusty Elixir reads as clean as the Rust it emits.
    and method-signature-level spec derivation. Prerequisite for item 9; closes
    gap D fully.
 9. **Type-driven propagation inference (headline).** 🟡 Started. The lowerer now
-   infers Rust `?` in return position for local/remote calls when callable
-   metadata says the call returns `Result<T, E>`/`NifResult<T>`/`Option<T>` and
-   the expected return type is `T`. Remaining work: assignment RHS and argument
-   positions, richer expected-type propagation, and Skia migration. Closes gap J.
+   infers Rust `?` in return position and typed assignment/let RHS positions for
+   local/remote calls when callable metadata says the call returns
+   `Result<T, E>`/`NifResult<T>`/`Option<T>` and the expected type is `T`.
+   Remaining work: argument positions, broader local type propagation, and Skia
+   migration. Closes gap J.
    Metric: ~0 explicit propagation operators in skia post-migration.
 10. **Light borrow/`mut` model.** Carry lifetime/`mut` intent from `Syn` arg
     types into lowered bindings instead of pure heuristics. Not full borrowck —

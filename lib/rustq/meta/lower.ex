@@ -80,16 +80,18 @@ defmodule RustQ.Meta.Lower do
   defp block_expressions({:__block__, _, expressions}), do: expressions
   defp block_expressions(expression), do: [expression]
 
-  defp lower_statement({:assign!, _, [target, expression]}, %Context{}) do
-    %AST.Assign{target: lower_expr(target), expr: lower_expr(expression)}
+  defp lower_statement({:assign!, _, [target, expression]}, %Context{} = context) do
+    expected_type = infer_expr_type(target, context.vars)
+    %AST.Assign{target: lower_expr(target), expr: lower_expr(expression, expected_type)}
   end
 
   defp lower_statement({:return!, _, [expression]}, %Context{return_type: return_type}) do
     %AST.EarlyReturn{expr: lower_return_expr(expression, return_type)}
   end
 
-  defp lower_statement({:=, _, [pattern, expression]}, %Context{}) do
-    %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression)}
+  defp lower_statement({:=, _, [pattern, expression]}, %Context{} = context) do
+    expected_type = infer_pattern_type(pattern, context.vars)
+    %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression, expected_type)}
   end
 
   defp lower_statement({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
@@ -156,6 +158,16 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
+
+  defp lower_expr(expression, %Type{} = expected_type) do
+    if infer_propagation?(expression, expected_type) do
+      %AST.Try{expr: lower_expr(expression)}
+    else
+      lower_expr(expression)
+    end
+  end
+
+  defp lower_expr(expression, _expected_type), do: lower_expr(expression)
 
   defp infer_propagation?(expression, %Type{} = expected_type) do
     case callable_return_type(expression) do
@@ -753,6 +765,11 @@ defmodule RustQ.Meta.Lower do
       suggestion: "Use an atom or alias as the token macro path."
     )
   end
+
+  defp infer_pattern_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
+    do: Map.get(vars, name)
+
+  defp infer_pattern_type(_pattern, _vars), do: nil
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)

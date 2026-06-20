@@ -94,6 +94,102 @@ defmodule RustQ.Meta.LowerTest do
              statements
   end
 
+  test "infers let RHS propagation when pattern type is known" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          value = maybe_path()
+          :ok
+        end,
+        unit_type(),
+        %{value: path_type},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path}
+        ]
+      )
+
+    assert [
+             %AST.Let{
+               pattern: %AST.PatVar{name: :value},
+               expr: %AST.Try{expr: %AST.LocalCall{name: :maybe_path}}
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
+  test "infers assignment RHS propagation when target type is known" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          assign!(value, maybe_path())
+          :ok
+        end,
+        unit_type(),
+        %{value: path_type},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path}
+        ]
+      )
+
+    assert [
+             %AST.Assign{
+               target: %AST.Var{name: :value},
+               expr: %AST.Try{expr: %AST.LocalCall{name: :maybe_path}}
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
+  test "does not infer propagation for let RHS when pattern type is unknown" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          value = maybe_path()
+          :ok
+        end,
+        unit_type(),
+        %{},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path}
+        ]
+      )
+
+    assert [
+             %AST.Let{
+               pattern: %AST.PatVar{name: :value},
+               expr: %AST.LocalCall{name: :maybe_path}
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "does not infer propagation when expected type is still the wrapper" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 
@@ -547,6 +643,8 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_expr_none))
   end
+
+  defp unit_type, do: %Type{kind: :unit, rust: "()", ast: %AST.TypeUnit{}}
 
   defp self_arg,
     do: %{
