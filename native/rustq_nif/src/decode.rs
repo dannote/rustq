@@ -415,7 +415,7 @@ pub(crate) fn parse_method_call_expr(
     args: Vec<Expr>,
     generics: Vec<Type>,
 ) -> NifResult<Expr> {
-    if matches!(receiver, Expr::Binary(_)) {
+    if method_receiver_needs_grouping(&receiver) {
         if generics.is_empty() {
             parse_syn::<Expr>(quote!((#receiver).#method(#(#args),*)))
         } else {
@@ -426,6 +426,10 @@ pub(crate) fn parse_method_call_expr(
     } else {
         parse_syn::<Expr>(quote!(#receiver.#method::<#(#generics),*>(#(#args),*)))
     }
+}
+
+fn method_receiver_needs_grouping(receiver: &Expr) -> bool {
+    matches!(receiver, Expr::Binary(_) | Expr::Cast(_))
 }
 
 pub(crate) fn parse_field_expr(receiver: Expr, field: Term) -> NifResult<Expr> {

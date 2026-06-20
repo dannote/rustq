@@ -127,6 +127,11 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
             A.stmt(%AST.Field{receiver: A.var(:opts), field: :fill})
             A.stmt(A.path_call([:Rect, :from_xywh], [:x, :y, :width, :height]))
             A.stmt(A.method(:canvas, :draw_rect, [A.ref(:rect), A.mut_ref(:paint)]))
+
+            A.stmt(
+              A.method(%AST.Cast{expr: A.var(:value), type: A.type_path(:f32)}, :to_ne_bytes)
+            )
+
             A.return(A.ok())
           end
       })
@@ -134,6 +139,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ "opts.fill;"
     assert source =~ "Rect::from_xywh(x, y, width, height);"
     assert source =~ "canvas.draw_rect(&rect, &mut paint);"
+    assert source =~ "(value as f32).to_ne_bytes();"
   end
 
   test "native decoder renders mutable and typed let statements" do
