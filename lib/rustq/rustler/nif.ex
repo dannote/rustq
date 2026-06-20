@@ -1,0 +1,208 @@
+defmodule RustQ.Rustler.Nif do
+  @moduledoc false
+
+  use RustQ.Sigil
+
+  alias RustQ.Rust
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
+
+  import RustQ.Rust.AST.ItemBuilder, only: [field: 3]
+  import RustQ.Rust.AST.ItemBuilder
+
+  require A
+  require I
+  require RustQ.Rust.AST.ItemBuilder
+
+  @type spec :: {atom() | String.t(), keyword()}
+
+  @nif_term_builder_names [:map_from_nif_terms, :struct_from_nif_terms]
+
+  @nif_term_builder_templates %{
+    map_from_nif_terms: ~R"""
+    fn make_map_from_nif_terms<'a>(
+        env: Env<'a>,
+        pairs: &[(rustler::wrapper::NIF_TERM, rustler::wrapper::NIF_TERM)],
+    ) -> NifResult<Term<'a>> {
+        let mut map = unsafe { rustler::wrapper::map::map_new(env.as_c_arg()) };
+
+        for (key, value) in pairs {
+            map = unsafe { rustler::wrapper::map::map_put(env.as_c_arg(), map, *key, *value) }
+                .ok_or(rustler::Error::BadArg)?;
+        }
+
+        Ok(unsafe { Term::new(env, map) })
+    }
+    """,
+    struct_from_nif_terms: ~R"""
+    fn make_struct_from_nif_terms<'a>(
+        env: Env<'a>,
+        keys: &[rustler::wrapper::NIF_TERM],
+        values: &[rustler::wrapper::NIF_TERM],
+    ) -> NifResult<Term<'a>> {
+        if keys.len() != values.len() {
+            return Err(rustler::Error::BadArg);
+        }
+
+        let mut map = unsafe { rustler::wrapper::map::map_new(env.as_c_arg()) };
+
+        for (key, value) in keys.iter().zip(values.iter()) {
+            map = unsafe { rustler::wrapper::map::map_put(env.as_c_arg(), map, *key, *value) }
+                .ok_or(rustler::Error::BadArg)?;
+        }
+
+        Ok(unsafe { Term::new(env, map) })
+    }
+    """
+  }
+
+  @spec struct(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
+  def struct(name, module, opts \\ []) do
+    ast =
+      I.struct RustQ.Atom.identifier!(to_string(name)),
+        vis: Keyword.get(opts, :vis, :pub),
+        derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
+        attrs: [
+          A.attr_value(:module, module_name(module))
+          | normalize_attrs(Keyword.get(opts, :attrs, []))
+        ] do
+        struct_fields(Keyword.get(opts, :fields, []), Keyword.get(opts, :field_vis, :pub))
+      end
+
+    Rust.ast_item(ast)
+  end
+
+  @spec exports([spec()]) :: [Rust.Function.t()]
+  def exports(specs) do
+    Enum.map(specs, fn {name, opts} -> wrapper(name, opts) end)
+  end
+
+  @spec export(atom() | String.t(), keyword()) :: Rust.Function.t()
+  def export(name, opts), do: wrapper(name, opts)
+
+  @spec term_builders(keyword()) :: [Rust.Fragment.t()]
+  def term_builders(opts \\ []) do
+    opts
+    |> Keyword.get(:include, @nif_term_builder_names)
+    |> include_names()
+    |> Enum.map(
+      &Rust.item(RustQ.render!(nif_term_builder_template!(&1), "rustler_nif_term_builder.rs"))
+    )
+  end
+
+  @doc false
+  @spec nif_attr(keyword()) :: String.t()
+  def nif_attr(opts) do
+    case Keyword.get(opts, :schedule) do
+      nil -> "rustler::nif"
+      :dirty_cpu -> ~s|rustler::nif(schedule = "DirtyCpu")|
+      :dirty_io -> ~s|rustler::nif(schedule = "DirtyIo")|
+      value when is_binary(value) -> ~s|rustler::nif(schedule = "#{value}")|
+    end
+  end
+
+  defp struct_fields(fields, default_vis) do
+    Enum.map(fields, fn
+      %RustQ.Rust.Field{} = rust_field ->
+        field(RustQ.Atom.identifier!(to_string(rust_field.name)), rust_field.type,
+          vis: rust_field.vis
+        )
+
+      {field_name, type} ->
+        field(field_name, type, vis: default_vis)
+    end)
+  end
+
+  defp normalize_attrs(attrs), do: Enum.map(attrs, &normalize_attr/1)
+  defp normalize_attr(%AST.Attribute{} = attr), do: attr
+
+  defp normalize_attr(attr) when is_list(attr),
+    do: attr |> IO.iodata_to_binary() |> normalize_attr()
+
+  defp normalize_attr(attr) when is_binary(attr) do
+    cond do
+      String.contains?(attr, " = ") ->
+        [path, value] = String.split(attr, " = ", parts: 2)
+        A.attr_value(RustQ.Atom.identifier!(path), String.trim(value, ~s|"|))
+
+      String.ends_with?(attr, ")") and String.contains?(attr, "(") ->
+        [path, args] = String.split(String.trim_trailing(attr, ")"), "(", parts: 2)
+
+        args =
+          args
+          |> String.split(",", trim: true)
+          |> Enum.map(&String.trim/1)
+          |> Enum.map(&RustQ.Atom.identifier!/1)
+
+        A.attr(RustQ.Atom.identifier!(path), args)
+
+      true ->
+        A.attr(RustQ.Atom.identifier!(attr))
+    end
+  end
+
+  defp wrapper(name, opts) do
+    args = Keyword.get(opts, :args, [])
+    impl = Keyword.get(opts, :impl, "#{name}_impl")
+    call_args = args |> Keyword.keys() |> Enum.map_join(", ", &to_string/1)
+
+    if ast_compatible?(opts) do
+      ast =
+        function RustQ.Atom.identifier!(to_string(name)),
+          args: args,
+          returns: Keyword.fetch!(opts, :returns),
+          lifetime: Keyword.get(opts, :lifetime),
+          vis: Keyword.get(opts, :vis),
+          attrs: [nif_attribute(opts)] do
+          A.return(A.call(RustQ.Atom.identifier!(to_string(impl)), Keyword.keys(args)))
+        end
+
+      Rust.ast_item(ast)
+    else
+      name
+      |> Rust.fn(
+        args: args,
+        returns: Keyword.get(opts, :returns),
+        lifetime: Keyword.get(opts, :lifetime),
+        lifetimes: Keyword.get(opts, :lifetimes, []),
+        generics: Keyword.get(opts, :generics, []),
+        where: Keyword.get(opts, :where, []),
+        body: "#{impl}(#{call_args})",
+        vis: Keyword.get(opts, :vis)
+      )
+      |> Rust.attr(nif_attr(opts))
+    end
+  end
+
+  defp ast_compatible?(opts) do
+    impl = Keyword.get(opts, :impl)
+
+    Keyword.has_key?(opts, :returns) and Keyword.get(opts, :lifetimes, []) == [] and
+      Keyword.get(opts, :generics, []) == [] and Keyword.get(opts, :where, []) == [] and
+      (is_nil(impl) or simple_ident?(impl))
+  end
+
+  defp simple_ident?(value) do
+    value
+    |> to_string()
+    |> String.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/)
+  end
+
+  defp nif_attribute(opts) do
+    case Keyword.get(opts, :schedule) do
+      nil -> A.nif_attr()
+      :dirty_cpu -> A.nif_attr(schedule: "DirtyCpu")
+      :dirty_io -> A.nif_attr(schedule: "DirtyIo")
+      value when is_binary(value) -> A.nif_attr(schedule: value)
+    end
+  end
+
+  defp include_names(:all), do: @nif_term_builder_names
+  defp include_names(names), do: List.wrap(names)
+
+  defp nif_term_builder_template!(name), do: Map.fetch!(@nif_term_builder_templates, name)
+
+  defp module_name(module) when is_atom(module), do: Atom.to_string(module)
+  defp module_name(module) when is_binary(module), do: module
+end

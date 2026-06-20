@@ -16,12 +16,12 @@ end
 defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Codegen.Decoders
+  alias RustQ.Codegen.Helpers
   alias RustQ.Diagnostic
   alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Meta.Lower
-  alias RustQ.NativeCodegen.Decoders
-  alias RustQ.NativeCodegen.Helpers
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.{Attribute, ExprStmt, Function, FunctionArg, MethodCall}
 

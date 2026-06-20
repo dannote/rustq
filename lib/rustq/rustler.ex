@@ -13,21 +13,13 @@ defmodule RustQ.Rustler do
   alias RustQ.Rust
 
   alias RustQ.Rustler.{
-    AtomDecoder,
-    AtomDispatch,
-    Atoms,
-    CachedAtoms,
-    NifStruct,
-    NifTermBuilders,
-    NifWrappers,
-    OptsDecoder,
-    OptsHelpers,
+    Atom,
+    Nif,
+    Opts,
     Resource,
     Schema,
     TaggedEnum,
-    TermBuilders,
-    TermDecoder,
-    TermHelpers
+    Term
   }
 
   @doc """
@@ -44,7 +36,7 @@ defmodule RustQ.Rustler do
       body: Keyword.get(opts, :body, ""),
       vis: Keyword.get(opts, :vis)
     )
-    |> Rust.attr(NifWrappers.nif_attr(opts))
+    |> Rust.attr(Nif.nif_attr(opts))
   end
 
   @doc """
@@ -66,19 +58,19 @@ defmodule RustQ.Rustler do
   export. Pass `:impl` to override the implementation function name.
   """
   @spec nif_exports([{atom() | String.t(), keyword()}]) :: [Rust.Function.t()]
-  def nif_exports(specs), do: NifWrappers.build(specs)
+  def nif_exports(specs), do: Nif.exports(specs)
 
   @doc """
   Builds a single exported Rustler NIF function.
   """
   @spec nif_export(atom() | String.t(), keyword()) :: Rust.Function.t()
-  def nif_export(name, opts), do: NifWrappers.build(name, opts)
+  def nif_export(name, opts), do: Nif.export(name, opts)
 
   @doc """
   Builds the `rustler::init!` declaration for an Elixir module.
   """
   @spec init(module() | String.t()) :: Rust.Fragment.t()
-  def init(module) when is_atom(module), do: init(Atom.to_string(module))
+  def init(module) when is_atom(module), do: init(Elixir.Atom.to_string(module))
   def init(module) when is_binary(module), do: Rust.item(~s|rustler::init!("#{module}");|)
 
   @doc """
@@ -86,7 +78,7 @@ defmodule RustQ.Rustler do
   """
   @spec atoms([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) ::
           Rust.Fragment.t()
-  def atoms(atoms, opts \\ []), do: Atoms.build(atoms, opts)
+  def atoms(atoms, opts \\ []), do: Atom.declaration(atoms, opts)
 
   @doc """
   Builds a decoder from Rustler atoms into a Rust enum/value type.
@@ -101,7 +93,7 @@ defmodule RustQ.Rustler do
   to override the atoms module, and `:unknown` to override the fallback branch.
   """
   @spec atom_decoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
-  def atom_decoder(name, opts), do: AtomDecoder.build(name, opts)
+  def atom_decoder(name, opts), do: Atom.decoder(name, opts)
 
   @doc """
   Builds a function that dispatches on an atom expression.
@@ -117,7 +109,7 @@ defmodule RustQ.Rustler do
   dispatch, AST node dispatch, or any other Rustler atom switch.
   """
   @spec atom_dispatch(atom() | String.t(), keyword()) :: Rust.Function.t()
-  def atom_dispatch(name, opts), do: AtomDispatch.build(name, opts)
+  def atom_dispatch(name, opts), do: Atom.dispatch(name, opts)
 
   @doc """
   Builds keyword/options helper functions over `&[(Atom, Term<'a>)]`.
@@ -133,7 +125,7 @@ defmodule RustQ.Rustler do
   default; pass `:args_key` to use a different map key expression.
   """
   @spec opts_helpers(keyword()) :: [Rust.Fragment.t()]
-  def opts_helpers(opts \\ []), do: OptsHelpers.build(opts)
+  def opts_helpers(opts \\ []), do: Opts.helpers(opts)
 
   @doc """
   Builds cached atom helper functions backed by `OnceLock<Atom>`.
@@ -141,13 +133,13 @@ defmodule RustQ.Rustler do
   @spec cached_atoms([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
           Rust.Fragment.t()
         ]
-  def cached_atoms(atoms, opts \\ []), do: CachedAtoms.build(atoms, opts)
+  def cached_atoms(atoms, opts \\ []), do: Atom.cached(atoms, opts)
 
   @doc """
   Builds a Rust struct deriving `NifStruct` for an Elixir struct module.
   """
   @spec nif_struct(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
-  def nif_struct(name, module, opts \\ []), do: NifStruct.build(name, module, opts)
+  def nif_struct(name, module, opts \\ []), do: Nif.struct(name, module, opts)
 
   @doc """
   Returns Rust items for a `RustQ.Rustler.Schema` schema.
@@ -169,25 +161,25 @@ defmodule RustQ.Rustler do
   available.
   """
   @spec nif_term_builders(keyword()) :: [Rust.Fragment.t()]
-  def nif_term_builders(opts \\ []), do: NifTermBuilders.build(opts)
+  def nif_term_builders(opts \\ []), do: Nif.term_builders(opts)
 
   @doc """
   Builds safe `Term<'a>` map/struct helpers.
   """
   @spec term_builders(keyword()) :: [Rust.Fragment.t()]
-  def term_builders(opts \\ []), do: TermBuilders.build(opts)
+  def term_builders(opts \\ []), do: Term.builders(opts)
 
   @doc """
   Builds a decoder function from a Rustler map term into a Rust struct.
   """
   @spec term_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
-  def term_decoder(name, opts), do: TermDecoder.build(name, opts)
+  def term_decoder(name, opts), do: Term.decoder(name, opts)
 
   @doc """
   Builds common map/term helper functions used by generated decoders.
   """
   @spec term_helpers(keyword()) :: [Rust.Fragment.t()]
-  def term_helpers(opts \\ []), do: TermHelpers.build(opts)
+  def term_helpers(opts \\ []), do: Term.helpers(opts)
 
   @doc """
   Builds a Rustler resource struct and resource registration helpers.
@@ -255,5 +247,5 @@ defmodule RustQ.Rustler do
   explicit `:decode` expression is supplied.
   """
   @spec opts_decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
-  def opts_decoder(name, opts), do: OptsDecoder.build(name, opts)
+  def opts_decoder(name, opts), do: Opts.decoder(name, opts)
 end

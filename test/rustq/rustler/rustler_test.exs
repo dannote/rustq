@@ -74,7 +74,7 @@ defmodule RustQ.RustlerTest do
   end
 
   test "builds atom decoders from native enum descriptors" do
-    descriptor = %RustQ.NativeEnumDescriptor{
+    descriptor = %RustQ.Native.EnumDescriptor{
       name: "SkClipOp",
       enum: %RustQ.Syn.Enum{name: "SkClipOp", variants: ["Difference", "Intersect"]}
     }

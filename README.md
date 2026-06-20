@@ -178,7 +178,7 @@ generic `syn` parsing/assembly, or collection glue.
 Raw token escapes (`raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`) are explicit
 low-level escape hatches for cases not yet covered by semantic helpers.
 
-RustQ dogfoods this layer in `RustQ.NativeCodegen.Decoders.*` to generate much of
+RustQ dogfoods this layer in `RustQ.Codegen.Decoders.*` to generate much of
 its own native AST decoder support.
 
 For RustQ-owned helper modules that expose `defrust` functions for codegen,
