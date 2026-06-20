@@ -13,6 +13,7 @@ defmodule RustQ.Binding.IndexTest do
 
     assert Index.get(index, nil, :decode, 1) == callable
     assert Index.return_type(index, nil, "decode", 1) == return
+    assert Index.argument_types(index, nil, "decode", 1) == [type(:type, "Term")]
     assert Index.return_type(index, nil, "decode", 2) == nil
   end
 
@@ -32,6 +33,7 @@ defmodule RustQ.Binding.IndexTest do
     assert Index.get(index, "Canvas", "draw_rect", 2) == callable
     assert Index.get(index, "Canvas", "draw_rect", 1) == callable
     assert Index.return_type(index, :Canvas, :draw_rect, 1) == return
+    assert Index.argument_types(index, :Canvas, :draw_rect, 1) == [type(:type, "Term")]
   end
 
   defp arg(name), do: %{name: name, type: type(:type, "Term"), syn: nil}

@@ -514,23 +514,37 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expr({{:., _meta, [receiver, function]}, _, args}) do
-    args = Enum.map(args, &lower_expr/1)
-
     cond do
       super_alias_ast?(receiver) ->
-        %AST.PathCall{path: %AST.Path{parts: [:super, function]}, args: args}
+        %AST.PathCall{
+          path: %AST.Path{parts: [:super, function]},
+          args: lower_call_args(nil, function, args)
+        }
 
       rust_constructor_alias?(receiver) ->
+        path = alias_parts(receiver) ++ [rust_variant(function)]
+
         %AST.PathCall{
-          path: %AST.Path{parts: alias_parts(receiver) ++ [rust_variant(function)]},
-          args: args
+          path: %AST.Path{parts: path},
+          args: lower_path_call_args(path, function, args)
         }
 
       alias_ast?(receiver) ->
-        %AST.PathCall{path: %AST.Path{parts: alias_parts(receiver) ++ [function]}, args: args}
+        path = alias_parts(receiver) ++ [function]
+
+        %AST.PathCall{
+          path: %AST.Path{parts: path},
+          args: lower_path_call_args(path, function, args)
+        }
 
       true ->
-        %AST.MethodCall{receiver: lower_expr(receiver), method: function, args: args}
+        target = receiver |> infer_expr_type(current_vars()) |> callable_target_from_type()
+
+        %AST.MethodCall{
+          receiver: lower_expr(receiver),
+          method: function,
+          args: lower_call_args(target, function, args)
+        }
     end
   end
 
@@ -546,7 +560,7 @@ defmodule RustQ.Meta.Lower do
         args: Enum.map(args, &lower_expr/1)
       }
     else
-      %AST.LocalCall{name: name, args: Enum.map(args, &lower_expr/1)}
+      %AST.LocalCall{name: name, args: lower_call_args(nil, name, args)}
     end
   end
 
@@ -572,6 +586,35 @@ defmodule RustQ.Meta.Lower do
         "Use ordinary Rusty-Elixir forms, add a lowering clause, or use raw_expr! as an explicit escape hatch."
     )
   end
+
+  defp lower_path_call_args(path, function, args) do
+    path
+    |> Enum.drop(-1)
+    |> callable_target_candidates()
+    |> Enum.find_value(&callable_argument_types(&1, function, length(args)))
+    |> lower_call_args(args)
+  end
+
+  defp lower_call_args(target, function, args) do
+    target
+    |> callable_argument_types(function, length(args))
+    |> lower_call_args(args)
+  end
+
+  defp lower_call_args(nil, args), do: Enum.map(args, &lower_expr/1)
+
+  defp lower_call_args(expected_types, args) when is_list(expected_types) do
+    args
+    |> Enum.zip(expected_types)
+    |> Enum.map(fn {arg, expected_type} -> lower_expr(arg, expected_type) end)
+  end
+
+  defp callable_argument_types(target, function, arity) do
+    BindingIndex.argument_types(current_callables(), target, function, arity)
+  end
+
+  defp callable_target_from_type(%Type{rust: rust}) when is_binary(rust), do: rust
+  defp callable_target_from_type(_type), do: nil
 
   defp decode_as_expr(expression, type_ast) do
     %AST.MethodCall{
@@ -1053,7 +1096,9 @@ defmodule RustQ.Meta.Lower do
 
   defp with_lowering_context(%Context{} = context, fun) do
     with_process_value(:rust_modules, context.rust_modules, fn ->
-      with_process_value(:callables, context.callables, fun)
+      with_process_value(:callables, context.callables, fn ->
+        with_process_value(:vars, context.vars, fun)
+      end)
     end)
   end
 
@@ -1075,4 +1120,5 @@ defmodule RustQ.Meta.Lower do
 
   defp current_rust_modules, do: Process.get({__MODULE__, :rust_modules}, %{})
   defp current_callables, do: Process.get({__MODULE__, :callables}, %BindingIndex{})
+  defp current_vars, do: Process.get({__MODULE__, :vars}, %{})
 end

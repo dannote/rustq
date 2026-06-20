@@ -190,6 +190,177 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers local call argument propagation from callable arg types" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          draw_path(maybe_path())
+          :ok
+        end,
+        unit_type(),
+        %{},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path},
+          %Callable{
+            name: "draw_path",
+            kind: :function,
+            args: [%{name: "path", type: path_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{
+                 name: :draw_path,
+                 args: [%AST.Try{expr: %AST.LocalCall{name: :maybe_path}}]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
+  test "infers remote call argument propagation from callable arg types" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    result_path = %Type{
+      kind: :result,
+      rust: "Result<Path, Error>",
+      ast: %AST.TypeResult{ok: path_type.ast, error: %AST.TypePath{parts: [:Error]}},
+      meta: %{ok: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          Generated.draw_path(Generated.decode_path(term))
+          :ok
+        end,
+        unit_type(),
+        %{term: %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}},
+        callables: [
+          %Callable{
+            name: "decode_path",
+            kind: :function,
+            target: "Generated",
+            args: [
+              %{
+                name: "term",
+                type: %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}},
+                syn: nil
+              }
+            ],
+            returns: result_path
+          },
+          %Callable{
+            name: "draw_path",
+            kind: :function,
+            target: "Generated",
+            args: [%{name: "path", type: path_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.PathCall{
+                 path: %AST.Path{parts: [:Generated, :draw_path]},
+                 args: [
+                   %AST.Try{
+                     expr: %AST.PathCall{path: %AST.Path{parts: [:Generated, :decode_path]}}
+                   }
+                 ]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
+  test "infers method call argument propagation from typed receiver metadata" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+    canvas_type = %Type{kind: :type, rust: "Canvas", ast: %AST.TypePath{parts: [:Canvas]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          canvas.draw_path(maybe_path())
+          :ok
+        end,
+        unit_type(),
+        %{canvas: canvas_type},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path},
+          %Callable{
+            name: "draw_path",
+            kind: :method,
+            target: "Canvas",
+            args: [self_arg(), %{name: "path", type: path_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.MethodCall{
+                 receiver: %AST.Var{name: :canvas},
+                 method: :draw_path,
+                 args: [%AST.Try{expr: %AST.LocalCall{name: :maybe_path}}]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
+  test "does not infer argument propagation without callee metadata" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          draw_path(maybe_path())
+          :ok
+        end,
+        unit_type(),
+        %{},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path}
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{name: :draw_path, args: [%AST.LocalCall{name: :maybe_path}]}
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "does not infer propagation when expected type is still the wrapper" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 

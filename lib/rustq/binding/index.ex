@@ -61,6 +61,16 @@ defmodule RustQ.Binding.Index do
     end
   end
 
+  @doc "Returns expected argument types for a callable lookup."
+  @spec argument_types(t(), String.t() | atom() | nil, String.t() | atom(), non_neg_integer()) ::
+          [Type.t()] | nil
+  def argument_types(%__MODULE__{} = index, target, name, arity) do
+    case get(index, target, name, arity) do
+      %Callable{} = callable -> argument_types_for_arity(callable, arity)
+      nil -> nil
+    end
+  end
+
   defp callable_keys(%Callable{name: name, target: target, args: args}) do
     rust_arity = length(args)
 
@@ -72,6 +82,15 @@ defmodule RustQ.Binding.Index do
       keys
     end
     |> Enum.uniq()
+  end
+
+  defp argument_types_for_arity(%Callable{args: args}, arity) when length(args) == arity,
+    do: Enum.map(args, & &1.type)
+
+  defp argument_types_for_arity(%Callable{args: [_receiver | args]} = callable, arity) do
+    if receiver_arg?(List.first(callable.args)) and length(args) == arity do
+      Enum.map(args, & &1.type)
+    end
   end
 
   defp receiver_arg?(%{name: "self"}), do: true
