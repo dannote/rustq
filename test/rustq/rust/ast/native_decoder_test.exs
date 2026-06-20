@@ -1,4 +1,4 @@
-Code.require_file("../../support/rustq_ast_samples.ex", __DIR__)
+Code.require_file("../../../support/rustq_ast_samples.ex", __DIR__)
 
 defmodule RustQ.Rust.AST.NativeDecoderTest do
   use ExUnit.Case, async: true

@@ -1,4 +1,4 @@
-defmodule RustQ.Config.GeneratedTest do
+defmodule RustQ.GeneratedTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Generated
