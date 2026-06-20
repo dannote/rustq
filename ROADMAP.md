@@ -147,11 +147,11 @@ Goal: make adding a node safe by construction; make failures legible.
 Goal: RustQ becomes compelling for *wrapping* crates, not just *authoring* new
 ones; and Rusty Elixir reads as clean as the Rust it emits.
 
-7. **`RustQ.Binding` adapter layer.** Given a `RustQ.Syn.Method`/`Syn.Enum`/
-   `Syn.Struct`, generate a Rusty-Elixir-shaped lowering target (call signature,
-   arg decode, return wrap) instead of forcing hand-authoring. A wrapper project
-   declares "expose `Canvas::draw_rect`" and gets the `defrust` shell for free,
-   filling only the semantic body. Closes gap D.
+7. **`RustQ.Binding` adapter layer.** 🟡 Started. `RustQ.Binding.Callable`
+   normalizes `RustQ.Syn.Function`, `RustQ.Syn.Method`, and
+   `RustQ.Native.Descriptor` into lookup-friendly callable metadata with
+   `RustQ.Meta.Type` args/returns. Remaining work: generate Rusty-Elixir-shaped
+   lowering targets and wrappers from these callables. Closes gap D.
 8. **Round-trip `Syn` ↔ `defrust` type specs.** 🟡 Started. `RustQ.Meta.Type.from_syn/1`
    and `RustQ.Spec.from_syn/1` now map structured `Syn.Type` metadata into
    `RustQ.Meta.Type` for common path/ref/option/result/tuple/slice/array/raw
