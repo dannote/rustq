@@ -42,6 +42,7 @@ defmodule RustQ.Meta do
   """
 
   alias RustQ.Binding.Callable
+  alias RustQ.Diagnostic
   alias RustQ.Meta.AST
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
@@ -193,15 +194,23 @@ defmodule RustQ.Meta do
     case Code.ensure_compiled(module) do
       {:module, ^module} ->
         unless function_exported?(module, :__rustq_callables__, 0) do
-          raise ArgumentError,
-                "configured RustQ callable module #{inspect(module)} does not expose __rustq_callables__/0"
+          Diagnostic.defrust(
+            :invalid_callable_module,
+            module,
+            "configured RustQ callable module does not expose __rustq_callables__/0",
+            details: %{module: module}
+          )
         end
 
         module.__rustq_callables__()
 
       {:error, reason} ->
-        raise ArgumentError,
-              "configured RustQ callable module #{inspect(module)} could not be compiled: #{inspect(reason)}"
+        Diagnostic.defrust(
+          :callable_module_compile_failed,
+          module,
+          "configured RustQ callable module could not be compiled",
+          details: %{module: module, reason: reason}
+        )
     end
   end
 

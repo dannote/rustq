@@ -195,17 +195,21 @@ defmodule RustQ.Meta.DefrustTest do
   end
 
   test "configured callable modules must expose callable metadata" do
-    assert_raise ArgumentError, ~r/does not expose __rustq_callables__\/0/, fn ->
-      defmodule InvalidCallableModuleConfigCase do
-        use RustQ.Meta, callable_modules: [String]
-        alias RustQ.Type, as: R
+    error =
+      assert_raise Diagnostic.Error, fn ->
+        defmodule InvalidCallableModuleConfigCase do
+          use RustQ.Meta, callable_modules: [String]
+          alias RustQ.Type, as: R
 
-        @spec run() :: R.nif_result(R.unit())
-        defrust run do
-          :ok
+          @spec run() :: R.nif_result(R.unit())
+          defrust run do
+            :ok
+          end
         end
       end
-    end
+
+    assert %Diagnostic{phase: :defrust, kind: :invalid_callable_module} = error.diagnostic
+    assert error.diagnostic.details.module == String
   end
 
   test "defrust build failures include boundary diagnostic context" do
