@@ -209,6 +209,16 @@ defmodule RustQ.Binding.Source do
 
     case :persistent_term.get(cache_key, :missing) do
       :missing ->
+        single_flight(cache_key, fn -> fill_callables_cache(cache_key, fun) end)
+
+      callables ->
+        callables
+    end
+  end
+
+  defp fill_callables_cache(cache_key, fun) do
+    case :persistent_term.get(cache_key, :missing) do
+      :missing ->
         callables = fun.()
         :persistent_term.put(cache_key, callables)
         callables
@@ -216,5 +226,9 @@ defmodule RustQ.Binding.Source do
       callables ->
         callables
     end
+  end
+
+  defp single_flight(cache_key, fun) do
+    :global.trans({{__MODULE__, :cache_fill, cache_key}, self()}, fun, [node()], :infinity)
   end
 end
