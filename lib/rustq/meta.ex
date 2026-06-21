@@ -190,16 +190,19 @@ defmodule RustQ.Meta do
   end
 
   defp callable_module_callables!(module) when is_atom(module) do
-    unless Code.ensure_loaded?(module) do
-      raise ArgumentError, "configured RustQ callable module #{inspect(module)} is not loaded"
-    end
+    case Code.ensure_compiled(module) do
+      {:module, ^module} ->
+        unless function_exported?(module, :__rustq_callables__, 0) do
+          raise ArgumentError,
+                "configured RustQ callable module #{inspect(module)} does not expose __rustq_callables__/0"
+        end
 
-    unless function_exported?(module, :__rustq_callables__, 0) do
-      raise ArgumentError,
-            "configured RustQ callable module #{inspect(module)} does not expose __rustq_callables__/0"
-    end
+        module.__rustq_callables__()
 
-    module.__rustq_callables__()
+      {:error, reason} ->
+        raise ArgumentError,
+              "configured RustQ callable module #{inspect(module)} could not be compiled: #{inspect(reason)}"
+    end
   end
 
   defp rust_source_callables(path) do
