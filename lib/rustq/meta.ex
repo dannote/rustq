@@ -178,7 +178,7 @@ defmodule RustQ.Meta do
     |> List.wrap()
     |> List.flatten()
     |> Enum.uniq()
-    |> Enum.flat_map(&rust_source_callables/1)
+    |> Enum.flat_map(&cached_rust_source_callables/1)
   end
 
   defp callable_module_callables(module) do
@@ -187,8 +187,11 @@ defmodule RustQ.Meta do
     |> List.wrap()
     |> List.flatten()
     |> Enum.uniq()
-    |> Enum.flat_map(&callable_module_callables!/1)
+    |> Enum.flat_map(&cached_callable_module_callables/1)
   end
+
+  defp cached_callable_module_callables(module),
+    do: cached_callables({:callable_module, module}, fn -> callable_module_callables!(module) end)
 
   defp callable_module_callables!(module) when is_atom(module) do
     case Code.ensure_compiled(module) do
@@ -214,8 +217,28 @@ defmodule RustQ.Meta do
     end
   end
 
+  defp cached_rust_source_callables(path),
+    do: cached_callables({:rust_source, path}, fn -> rust_source_callables(path) end)
+
   defp rust_source_callables(path) do
-    file = Syn.parse_file!(path)
+    unless File.regular?(path) do
+      Diagnostic.defrust(:invalid_rust_source, path, "configured Rust source does not exist",
+        details: %{path: path}
+      )
+    end
+
+    file =
+      try do
+        Syn.parse_file!(path)
+      rescue
+        error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
+          Diagnostic.defrust(
+            :rust_source_parse_failed,
+            path,
+            "configured Rust source could not be parsed",
+            details: %{path: path, error: error}
+          )
+      end
 
     function_callables = file |> Syn.functions() |> Enum.map(&Callable.from_syn_function/1)
     method_callables = file |> Syn.impls() |> Enum.flat_map(&impl_callables/1)
@@ -228,11 +251,25 @@ defmodule RustQ.Meta do
     |> Module.get_attribute(:rustq_rust_packages)
     |> List.wrap()
     |> List.flatten()
-    |> Enum.flat_map(&rust_package_callables/1)
+    |> Enum.flat_map(&cached_rust_package_callables/1)
   end
 
+  defp cached_rust_package_callables(config),
+    do: cached_callables({:rust_package, config}, fn -> rust_package_callables(config) end)
+
   defp rust_package_callables({package, opts}) when is_binary(package) and is_list(opts) do
-    index = Syn.Index.cached_package(package, opts)
+    index =
+      try do
+        Syn.Index.cached_package(package, opts)
+      rescue
+        error in [RustQ.Error, Mix.Error, ArgumentError, RuntimeError] ->
+          Diagnostic.defrust(
+            :rust_package_load_failed,
+            package,
+            "configured Rust package could not be loaded",
+            details: %{package: package, opts: opts, error: error}
+          )
+      end
 
     index
     |> Syn.Index.impls()
@@ -291,6 +328,20 @@ defmodule RustQ.Meta do
 
   defp rust_source_path(path) when is_binary(path) do
     if Path.type(path) == :absolute, do: path, else: Path.expand(path, File.cwd!())
+  end
+
+  defp cached_callables(key, fun) do
+    cache_key = {__MODULE__, :callables, key}
+
+    case :persistent_term.get(cache_key, :missing) do
+      :missing ->
+        callables = fun.()
+        :persistent_term.put(cache_key, callables)
+        callables
+
+      callables ->
+        callables
+    end
   end
 
   defp rust_module_mapping!(alias_ast, opts) do

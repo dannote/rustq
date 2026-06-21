@@ -194,6 +194,42 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "syn_external_callable_wrapper.rs")
   end
 
+  test "configured Rust sources raise structured diagnostics" do
+    error =
+      assert_raise Diagnostic.Error, fn ->
+        defmodule InvalidRustSourceConfigCase do
+          use RustQ.Meta, rust_sources: ["test/fixtures/missing_external_callables.rs"]
+          alias RustQ.Type, as: R
+
+          @spec run() :: R.nif_result(R.unit())
+          defrust run do
+            :ok
+          end
+        end
+      end
+
+    assert %Diagnostic{phase: :defrust, kind: :invalid_rust_source} = error.diagnostic
+    assert error.diagnostic.details.path =~ "missing_external_callables.rs"
+  end
+
+  test "configured Rust packages raise structured diagnostics" do
+    error =
+      assert_raise Diagnostic.Error, fn ->
+        defmodule InvalidRustPackageConfigCase do
+          use RustQ.Meta, rust_packages: ["definitely-not-a-real-rustq-test-package"]
+          alias RustQ.Type, as: R
+
+          @spec run() :: R.nif_result(R.unit())
+          defrust run do
+            :ok
+          end
+        end
+      end
+
+    assert %Diagnostic{phase: :defrust, kind: :rust_package_load_failed} = error.diagnostic
+    assert error.diagnostic.details.package == "definitely-not-a-real-rustq-test-package"
+  end
+
   test "configured callable modules must expose callable metadata" do
     error =
       assert_raise Diagnostic.Error, fn ->
