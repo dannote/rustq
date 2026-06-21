@@ -1096,7 +1096,8 @@ defmodule RustQ.Meta.Lower do
       Enum.map_join(mapped, "::", &to_string/1),
       mapped |> List.last() |> to_string(),
       Enum.map_join(parts, "::", &to_string/1),
-      parts |> List.last() |> to_string()
+      parts |> List.last() |> to_string(),
+      nil
     ]
     |> Enum.uniq()
   end

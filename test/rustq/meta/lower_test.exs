@@ -230,6 +230,71 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers remote call argument propagation from free-function callable metadata" do
+    mode_type = %Type{kind: :type, rust: "Mode", ast: %AST.TypePath{parts: [:Mode]}}
+
+    result_mode = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Mode>",
+      ast: %AST.TypeNifResult{inner: mode_type.ast},
+      meta: %{inner: mode_type}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          paint.set_blend_mode(GeneratedEnums.decode_blend_mode(atom))
+          :ok
+        end,
+        unit_type(),
+        %{
+          paint: %Type{
+            kind: :mut_ref,
+            rust: "&mut Paint",
+            ast: %AST.TypeRef{inner: %AST.TypePath{parts: [:Paint]}, mutable: true}
+          },
+          atom: %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
+        },
+        callables: [
+          %Callable{
+            name: "decode_blend_mode",
+            kind: :function,
+            args: [
+              %{
+                name: "atom",
+                type: %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}},
+                syn: nil
+              }
+            ],
+            returns: result_mode
+          },
+          %Callable{
+            name: "set_blend_mode",
+            kind: :method,
+            target: "Paint",
+            args: [self_arg(), %{name: "mode", type: mode_type, syn: nil}],
+            returns: nil
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.MethodCall{
+                 method: :set_blend_mode,
+                 args: [
+                   %AST.Try{
+                     expr: %AST.PathCall{
+                       path: %AST.Path{parts: [:generated_enums, :decode_blend_mode]}
+                     }
+                   }
+                 ]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers remote call argument propagation from callable arg types" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 
