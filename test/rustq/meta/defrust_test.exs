@@ -218,6 +218,66 @@ defmodule RustQ.Meta.DefrustTest do
     assert error.diagnostic.details.key == :rust_packages
   end
 
+  test "Rust source callable cache refreshes when the source file changes" do
+    unique = System.unique_integer([:positive])
+    path = Path.join(System.tmp_dir!(), "rustq_source_cache_#{unique}.rs")
+    on_exit(fn -> File.rm(path) end)
+
+    File.write!(path, "fn consume_first(color: Color) -> NifResult<()> { todo!() }\n")
+
+    first_module = Module.concat(__MODULE__, :FreshRustSourceFirst)
+
+    Module.create(
+      first_module,
+      quote do
+        use RustQ.Meta, rust_sources: [unquote(path)]
+        alias RustQ.Type, as: R
+
+        @spec decode(atom()) :: R.nif_result(R.path(:Color))
+        defrust decode(atom) do
+          color = decode_as!(atom, R.u32())
+          {:ok, Color.from_argb(255, color, 0, 0)}
+        end
+
+        @spec run(atom()) :: R.nif_result(R.unit())
+        defrust run(atom) do
+          consume_first(decode(atom))
+          :ok
+        end
+      end,
+      Macro.Env.location(__ENV__)
+    )
+
+    assert first_module.__rustq_source__() =~ "consume_first(decode(atom)?);"
+
+    File.write!(path, "fn consume_second(color: Color) -> NifResult<()> { todo!() }\n")
+
+    second_module = Module.concat(__MODULE__, :FreshRustSourceSecond)
+
+    Module.create(
+      second_module,
+      quote do
+        use RustQ.Meta, rust_sources: [unquote(path)]
+        alias RustQ.Type, as: R
+
+        @spec decode(atom()) :: R.nif_result(R.path(:Color))
+        defrust decode(atom) do
+          color = decode_as!(atom, R.u32())
+          {:ok, Color.from_argb(255, color, 0, 0)}
+        end
+
+        @spec run(atom()) :: R.nif_result(R.unit())
+        defrust run(atom) do
+          consume_second(decode(atom))
+          :ok
+        end
+      end,
+      Macro.Env.location(__ENV__)
+    )
+
+    assert second_module.__rustq_source__() =~ "consume_second(decode(atom)?);"
+  end
+
   test "configured Rust sources raise structured diagnostics" do
     error =
       assert_raise Diagnostic.Error, fn ->

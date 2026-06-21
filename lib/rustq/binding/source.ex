@@ -79,8 +79,30 @@ defmodule RustQ.Binding.Source do
     end
   end
 
-  defp cached_rust_source_callables(path),
-    do: cached_callables({:rust_source, path}, fn -> rust_source_callables(path) end)
+  defp cached_rust_source_callables(path) do
+    fingerprint = rust_source_fingerprint(path)
+    cache_key = {__MODULE__, :callables, {:rust_source, path}}
+
+    case :persistent_term.get(cache_key, :missing) do
+      {:rust_source, ^fingerprint, callables} ->
+        callables
+
+      _missing_or_stale ->
+        callables = rust_source_callables(path)
+        :persistent_term.put(cache_key, {:rust_source, fingerprint, callables})
+        callables
+    end
+  end
+
+  defp rust_source_fingerprint(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %File.Stat{size: size, mtime: mtime}} ->
+        {mtime, size}
+
+      {:error, _reason} ->
+        :missing
+    end
+  end
 
   defp rust_source_callables(path) do
     unless File.regular?(path) do
