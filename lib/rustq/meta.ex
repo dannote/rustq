@@ -43,6 +43,7 @@ defmodule RustQ.Meta do
 
   alias RustQ.Binding.Source
   alias RustQ.Meta.AST
+  alias RustQ.Meta.Options
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
   alias RustQ.Rust
@@ -50,14 +51,12 @@ defmodule RustQ.Meta do
 
   @doc false
   defmacro __using__(opts) do
-    rust_sources = opts |> Keyword.get(:rust_sources, []) |> Source.rust_source_paths()
-    rust_packages = Keyword.get(opts, :rust_packages, [])
-
-    callable_modules =
-      opts
-      |> Keyword.get(:callable_modules, [])
-      |> List.wrap()
-      |> Enum.map(&Macro.expand(&1, __CALLER__))
+    %{
+      rust_sources: rust_sources,
+      rust_packages: rust_packages,
+      callable_modules: callable_modules
+    } =
+      Options.validate!(opts, __CALLER__)
 
     quote do
       import RustQ.Meta

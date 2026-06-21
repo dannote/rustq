@@ -194,6 +194,30 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "syn_external_callable_wrapper.rs")
   end
 
+  test "unknown RustQ.Meta options raise structured diagnostics" do
+    error =
+      assert_raise Diagnostic.Error, fn ->
+        defmodule UnknownMetaOptionCase do
+          use RustQ.Meta, rust_source: "test/fixtures/external_callables.rs"
+        end
+      end
+
+    assert %Diagnostic{phase: :defrust, kind: :invalid_meta_option} = error.diagnostic
+    assert error.diagnostic.details.key == :rust_source
+  end
+
+  test "malformed RustQ.Meta callable metadata options raise structured diagnostics" do
+    error =
+      assert_raise Diagnostic.Error, fn ->
+        defmodule MalformedMetaOptionCase do
+          use RustQ.Meta, rust_packages: [123]
+        end
+      end
+
+    assert %Diagnostic{phase: :defrust, kind: :invalid_meta_option} = error.diagnostic
+    assert error.diagnostic.details.key == :rust_packages
+  end
+
   test "configured Rust sources raise structured diagnostics" do
     error =
       assert_raise Diagnostic.Error, fn ->
