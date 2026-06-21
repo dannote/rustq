@@ -46,13 +46,12 @@ defmodule RustQ.Meta do
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
   alias RustQ.Rust
-  alias RustQ.Rust.AST, as: RustAST
   alias RustQ.Rust.AST.Render
   alias RustQ.Syn
 
   @doc false
   defmacro __using__(opts) do
-    rust_sources = Keyword.get(opts, :rust_sources, [])
+    rust_sources = opts |> Keyword.get(:rust_sources, []) |> rust_source_paths()
     rust_packages = Keyword.get(opts, :rust_packages, [])
 
     callable_modules =
@@ -187,14 +186,20 @@ defmodule RustQ.Meta do
     |> List.wrap()
     |> List.flatten()
     |> Enum.uniq()
-    |> Enum.flat_map(fn callable_module ->
-      if Code.ensure_loaded?(callable_module) and
-           function_exported?(callable_module, :__rustq_callables__, 0) do
-        callable_module.__rustq_callables__()
-      else
-        []
-      end
-    end)
+    |> Enum.flat_map(&callable_module_callables!/1)
+  end
+
+  defp callable_module_callables!(module) when is_atom(module) do
+    unless Code.ensure_loaded?(module) do
+      raise ArgumentError, "configured RustQ callable module #{inspect(module)} is not loaded"
+    end
+
+    unless function_exported?(module, :__rustq_callables__, 0) do
+      raise ArgumentError,
+            "configured RustQ callable module #{inspect(module)} does not expose __rustq_callables__/0"
+    end
+
+    module.__rustq_callables__()
   end
 
   defp rust_source_callables(path) do
@@ -220,7 +225,7 @@ defmodule RustQ.Meta do
     index
     |> Syn.Index.impls()
     |> Enum.flat_map(&impl_callables/1)
-    |> Enum.map(&normalize_callable_public_aliases(&1, index))
+    |> Enum.map(&annotate_callable_public_aliases(&1, index))
   end
 
   defp rust_package_callables(package) when is_binary(package),
@@ -230,34 +235,51 @@ defmodule RustQ.Meta do
     Enum.map(impl.methods, &Callable.from_syn_method(&1, target: impl.target))
   end
 
-  defp normalize_callable_public_aliases(%Callable{} = callable, %Syn.Index{} = index) do
+  defp annotate_callable_public_aliases(%Callable{} = callable, %Syn.Index{} = index) do
     %{
       callable
-      | args: Enum.map(callable.args, &normalize_callable_arg(&1, index)),
-        returns: normalize_public_alias_type(callable.returns, index)
+      | args: Enum.map(callable.args, &annotate_callable_arg(&1, index)),
+        returns: annotate_public_alias_type(callable.returns, index)
     }
   end
 
-  defp normalize_callable_arg(%{type: type} = arg, index),
-    do: %{arg | type: normalize_public_alias_type(type, index)}
+  defp annotate_callable_arg(%{type: type} = arg, index),
+    do: %{arg | type: annotate_public_alias_type(type, index)}
 
-  defp normalize_public_alias_type(%Type{kind: :type, meta: %{syn_name: name}} = type, index)
+  defp annotate_public_alias_type(%Type{kind: :type, meta: %{syn_name: name}} = type, index)
        when is_binary(name) do
     case Syn.Index.public_type_name(index, name) do
       {:ok, public_name} when public_name != name ->
-        %{
-          type
-          | rust: public_name,
-            ast: %RustAST.TypePath{parts: [RustQ.Atom.identifier!(public_name)]}
-        }
+        put_equivalent_rust_name(type, public_name)
 
       _missing_or_same ->
         type
     end
   end
 
-  defp normalize_public_alias_type(%Type{} = type, _index), do: type
-  defp normalize_public_alias_type(nil, _index), do: nil
+  defp annotate_public_alias_type(%Type{} = type, _index), do: type
+  defp annotate_public_alias_type(nil, _index), do: nil
+
+  defp put_equivalent_rust_name(%Type{} = type, name) do
+    equivalents =
+      type.meta
+      |> Map.get(:equivalent_rust_names, [])
+      |> List.wrap()
+      |> Kernel.++([name])
+      |> Enum.uniq()
+
+    %{type | meta: Map.put(type.meta, :equivalent_rust_names, equivalents)}
+  end
+
+  defp rust_source_paths(paths) do
+    paths
+    |> List.wrap()
+    |> Enum.map(&rust_source_path/1)
+  end
+
+  defp rust_source_path(path) when is_binary(path) do
+    if Path.type(path) == :absolute, do: path, else: Path.expand(path, File.cwd!())
+  end
 
   defp rust_module_mapping!(alias_ast, opts) do
     alias_parts = alias_parts!(alias_ast)

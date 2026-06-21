@@ -83,14 +83,38 @@ defmodule RustQ.Meta.Type do
 
   def inner(%__MODULE__{}), do: nil
 
-  @doc "Returns true when two lowered types render to the same Rust type."
+  @doc "Returns true when two lowered types are semantically compatible."
   @spec compatible?(t() | nil, t() | nil) :: boolean()
-  def compatible?(%__MODULE__{rust: rust}, %__MODULE__{rust: rust}), do: true
-
-  def compatible?(%__MODULE__{} = left, %__MODULE__{} = right),
-    do: render_type(left.ast) == render_type(right.ast)
+  def compatible?(%__MODULE__{} = left, %__MODULE__{} = right) do
+    exact_type?(left, right) or equivalent_type_name?(left, right)
+  end
 
   def compatible?(_left, _right), do: false
+
+  defp exact_type?(%__MODULE__{ast: left}, %__MODULE__{ast: right}), do: left == right
+
+  defp equivalent_type_name?(%__MODULE__{} = left, %__MODULE__{} = right) do
+    left
+    |> equivalent_type_names()
+    |> MapSet.disjoint?(equivalent_type_names(right))
+    |> Kernel.not()
+  end
+
+  defp equivalent_type_names(%__MODULE__{} = type) do
+    [
+      type.rust,
+      path_type_name(type.ast),
+      type.meta[:syn_name] | List.wrap(type.meta[:equivalent_rust_names])
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&to_string/1)
+    |> MapSet.new()
+  end
+
+  defp path_type_name(%AST.TypePath{parts: [_ | _] = parts}),
+    do: parts |> List.last() |> to_string()
+
+  defp path_type_name(_ast), do: nil
 
   @doc """
   Converts structured `RustQ.Syn.Type` metadata into a RustQ meta type.
@@ -551,8 +575,6 @@ defmodule RustQ.Meta.Type do
   defp ast_type_kind(%AST.TypePath{parts: [:Atom]}), do: :atom
   defp ast_type_kind(%AST.TypePath{parts: [:Term]}), do: :term
   defp ast_type_kind(_ast), do: :type
-
-  defp render_type(ast), do: ast |> Render.render_type() |> IO.iodata_to_binary()
 
   defp tuple_type(tuple_types) do
     rendered = Enum.map_join(tuple_types, ", ", & &1.rust)

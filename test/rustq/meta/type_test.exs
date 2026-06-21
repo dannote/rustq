@@ -16,6 +16,25 @@ defmodule RustQ.Meta.TypeTest do
     assert RustQ.Spec.type(quote(do: binary())).rust == "Vec<u8>"
   end
 
+  test "compares equivalent Rust type aliases structurally" do
+    internal = %Type{
+      kind: :type,
+      rust: "Cap",
+      ast: %RustQ.Rust.AST.TypePath{parts: [:Cap]},
+      meta: %{syn_name: "Cap", equivalent_rust_names: ["PaintCap"]}
+    }
+
+    public = %Type{
+      kind: :type,
+      rust: "PaintCap",
+      ast: %RustQ.Rust.AST.TypePath{parts: [:PaintCap]},
+      meta: %{syn_name: "PaintCap"}
+    }
+
+    assert Type.compatible?(internal, public)
+    assert Type.compatible?(public, internal)
+  end
+
   test "parses external Rust module types from ordinary remote types" do
     assert RustQ.Spec.type(quote(do: GeneratedOpts.OvalOpts.t(R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"

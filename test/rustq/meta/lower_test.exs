@@ -250,8 +250,8 @@ defmodule RustQ.Meta.LowerTest do
         %{
           paint: %Type{
             kind: :mut_ref,
-            rust: "&mut Paint",
-            ast: %AST.TypeRef{inner: %AST.TypePath{parts: [:Paint]}, mutable: true}
+            rust: "&mut skia_safe::Paint",
+            ast: %AST.TypeRef{inner: %AST.TypePath{parts: [:skia_safe, :Paint]}, mutable: true}
           },
           atom: %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
         },

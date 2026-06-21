@@ -589,9 +589,7 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_path_call_args(path, function, args) do
     path
-    |> Enum.drop(-1)
-    |> callable_target_candidates()
-    |> Enum.find_value(&callable_argument_types(&1, function, length(args)))
+    |> path_callable_argument_types(function, length(args))
     |> lower_call_args(args)
   end
 
@@ -613,15 +611,30 @@ defmodule RustQ.Meta.Lower do
     BindingIndex.argument_types(current_callables(), target, function, arity)
   end
 
+  defp path_callable_argument_types(path, function, arity) do
+    target_parts = Enum.drop(path, -1)
+
+    target_parts
+    |> callable_target_candidates()
+    |> Enum.find_value(&callable_argument_types(&1, function, arity)) ||
+      callable_argument_types(nil, function, arity)
+  end
+
   defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
        when kind in [:ref, :mut_ref],
        do: callable_target_from_type(inner)
 
-  defp callable_target_from_type(%Type{kind: kind, rust: rust}) when kind in [:ref, :mut_ref],
-    do: rust |> String.trim_leading("&") |> String.trim_leading("mut ") |> String.trim()
+  defp callable_target_from_type(%Type{ast: %AST.TypeRef{inner: inner}}),
+    do: callable_target_from_ast(inner)
 
-  defp callable_target_from_type(%Type{rust: rust}) when is_binary(rust), do: rust
+  defp callable_target_from_type(%Type{meta: %{syn_name: name}}) when is_binary(name), do: name
+  defp callable_target_from_type(%Type{ast: ast}), do: callable_target_from_ast(ast)
   defp callable_target_from_type(_type), do: nil
+
+  defp callable_target_from_ast(%AST.TypePath{parts: [_ | _] = parts}),
+    do: parts |> List.last() |> to_string()
+
+  defp callable_target_from_ast(_ast), do: nil
 
   defp decode_as_expr(expression, type_ast) do
     %AST.MethodCall{
@@ -1083,11 +1096,17 @@ defmodule RustQ.Meta.Lower do
     arity = length(args)
 
     parts
-    |> callable_target_candidates()
-    |> Enum.find_value(&BindingIndex.return_type(callables, &1, function, arity))
+    |> callable_return_type_for_path(function, arity, callables)
   end
 
   defp callable_return_type_from_index(_call_ast, %BindingIndex{}), do: nil
+
+  defp callable_return_type_for_path(parts, function, arity, callables) do
+    parts
+    |> callable_target_candidates()
+    |> Enum.find_value(&BindingIndex.return_type(callables, &1, function, arity)) ||
+      BindingIndex.return_type(callables, nil, function, arity)
+  end
 
   defp callable_target_candidates(parts) do
     mapped = mapped_alias_parts(parts)
@@ -1096,8 +1115,7 @@ defmodule RustQ.Meta.Lower do
       Enum.map_join(mapped, "::", &to_string/1),
       mapped |> List.last() |> to_string(),
       Enum.map_join(parts, "::", &to_string/1),
-      parts |> List.last() |> to_string(),
-      nil
+      parts |> List.last() |> to_string()
     ]
     |> Enum.uniq()
   end
