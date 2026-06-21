@@ -46,6 +46,7 @@ defmodule RustQ.Meta do
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
   alias RustQ.Rust
+  alias RustQ.Rust.AST, as: RustAST
   alias RustQ.Rust.AST.Render
   alias RustQ.Syn
 
@@ -214,10 +215,12 @@ defmodule RustQ.Meta do
   end
 
   defp rust_package_callables({package, opts}) when is_binary(package) and is_list(opts) do
-    package
-    |> Syn.Index.cached_package(opts)
+    index = Syn.Index.cached_package(package, opts)
+
+    index
     |> Syn.Index.impls()
     |> Enum.flat_map(&impl_callables/1)
+    |> Enum.map(&normalize_callable_public_aliases(&1, index))
   end
 
   defp rust_package_callables(package) when is_binary(package),
@@ -226,6 +229,35 @@ defmodule RustQ.Meta do
   defp impl_callables(%Syn.Impl{} = impl) do
     Enum.map(impl.methods, &Callable.from_syn_method(&1, target: impl.target))
   end
+
+  defp normalize_callable_public_aliases(%Callable{} = callable, %Syn.Index{} = index) do
+    %{
+      callable
+      | args: Enum.map(callable.args, &normalize_callable_arg(&1, index)),
+        returns: normalize_public_alias_type(callable.returns, index)
+    }
+  end
+
+  defp normalize_callable_arg(%{type: type} = arg, index),
+    do: %{arg | type: normalize_public_alias_type(type, index)}
+
+  defp normalize_public_alias_type(%Type{kind: :type, meta: %{syn_name: name}} = type, index)
+       when is_binary(name) do
+    case Syn.Index.public_type_name(index, name) do
+      {:ok, public_name} when public_name != name ->
+        %{
+          type
+          | rust: public_name,
+            ast: %RustAST.TypePath{parts: [RustQ.Atom.identifier!(public_name)]}
+        }
+
+      _missing_or_same ->
+        type
+    end
+  end
+
+  defp normalize_public_alias_type(%Type{} = type, _index), do: type
+  defp normalize_public_alias_type(nil, _index), do: nil
 
   defp rust_module_mapping!(alias_ast, opts) do
     alias_parts = alias_parts!(alias_ast)
