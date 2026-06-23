@@ -35,6 +35,32 @@ defmodule RustQ.Meta.TypeTest do
     assert Type.compatible?(public, internal)
   end
 
+  test "compares compatible option wrapper inner paths" do
+    qualified = %Type{
+      kind: :option,
+      rust: "Option<skia_safe::ImageFilter>",
+      ast: %RustQ.Rust.AST.TypeOption{
+        inner: %RustQ.Rust.AST.TypePath{parts: [:skia_safe, :ImageFilter]}
+      }
+    }
+
+    unqualified = %Type{
+      kind: :option,
+      rust: "Option<ImageFilter>",
+      ast: %RustQ.Rust.AST.TypeOption{inner: %RustQ.Rust.AST.TypePath{parts: [:ImageFilter]}},
+      meta: %{
+        inner: %Type{
+          kind: :type,
+          rust: "ImageFilter",
+          ast: %RustQ.Rust.AST.TypePath{parts: [:ImageFilter]},
+          meta: %{syn_name: "ImageFilter"}
+        }
+      }
+    }
+
+    assert Type.compatible?(qualified, unqualified)
+  end
+
   test "parses external Rust module types from ordinary remote types" do
     assert RustQ.Spec.type(quote(do: GeneratedOpts.OvalOpts.t(R.lifetime(:a)))).rust ==
              "generated_opts::OvalOpts<'a>"

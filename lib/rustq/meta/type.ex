@@ -112,6 +112,12 @@ defmodule RustQ.Meta.Type do
 
   @doc "Returns true when two lowered types are semantically compatible."
   @spec compatible?(t() | nil, t() | nil) :: boolean()
+  def compatible?(%__MODULE__{kind: kind} = left, %__MODULE__{kind: kind} = right)
+      when kind in [:option, :ref, :mut_ref] do
+    exact_type?(left, right) or equivalent_type_name?(left, right) or
+      compatible?(inner(left), inner(right))
+  end
+
   def compatible?(%__MODULE__{} = left, %__MODULE__{} = right) do
     exact_type?(left, right) or equivalent_type_name?(left, right)
   end
