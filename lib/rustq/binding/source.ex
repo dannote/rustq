@@ -35,12 +35,14 @@ defmodule RustQ.Binding.Source do
   end
 
   defp rust_source_callables_for_module(module) do
-    module
-    |> Module.get_attribute(:rustq_rust_sources)
-    |> List.wrap()
-    |> List.flatten()
-    |> Enum.uniq()
-    |> Enum.flat_map(&cached_rust_source_callables/1)
+    paths =
+      module
+      |> Module.get_attribute(:rustq_rust_sources)
+      |> List.wrap()
+      |> List.flatten()
+      |> Enum.uniq()
+
+    cached_rust_source_callables(paths)
   end
 
   defp callable_module_callables(module) do
@@ -79,55 +81,75 @@ defmodule RustQ.Binding.Source do
     end
   end
 
-  defp cached_rust_source_callables(path) do
-    fingerprint = rust_source_fingerprint(path)
-    cache_key = {__MODULE__, :callables, {:rust_source, path}}
+  defp cached_rust_source_callables([]), do: []
+
+  defp cached_rust_source_callables(paths) do
+    fingerprint = rust_sources_fingerprint(paths)
+    cache_key = {__MODULE__, :callables, {:rust_sources, paths}}
 
     case :persistent_term.get(cache_key, :missing) do
-      {:rust_source, ^fingerprint, callables} ->
+      {:rust_sources, ^fingerprint, callables} ->
         callables
 
       _missing_or_stale ->
-        callables = rust_source_callables(path)
-        :persistent_term.put(cache_key, {:rust_source, fingerprint, callables})
+        callables = rust_source_callables(paths)
+        :persistent_term.put(cache_key, {:rust_sources, fingerprint, callables})
         callables
     end
+  end
+
+  defp rust_sources_fingerprint(paths) do
+    Enum.map(paths, &rust_source_fingerprint/1)
   end
 
   defp rust_source_fingerprint(path) do
     case File.stat(path, time: :posix) do
       {:ok, %File.Stat{size: size, mtime: mtime}} ->
-        {mtime, size}
+        {path, mtime, size}
 
-      {:error, _reason} ->
-        :missing
+      {:error, reason} ->
+        {path, :missing, reason}
     end
   end
 
-  defp rust_source_callables(path) do
+  defp rust_source_callables(paths) do
+    Enum.each(paths, &validate_rust_source!/1)
+
+    index =
+      try do
+        Syn.Index.from_paths(paths)
+      rescue
+        error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
+          Diagnostic.defrust(
+            :rust_source_parse_failed,
+            paths,
+            "configured Rust sources could not be parsed",
+            details: %{paths: paths, error: error}
+          )
+      end
+
+    function_callables =
+      index.files
+      |> Map.values()
+      |> Enum.flat_map(&Syn.functions/1)
+      |> Enum.map(&Callable.from_syn_function/1)
+      |> Enum.map(&annotate_callable_public_aliases(&1, index))
+
+    method_callables =
+      index
+      |> Syn.Index.impls()
+      |> Enum.flat_map(&impl_callables/1)
+      |> Enum.map(&annotate_callable_public_aliases(&1, index))
+
+    function_callables ++ method_callables
+  end
+
+  defp validate_rust_source!(path) do
     unless File.regular?(path) do
       Diagnostic.defrust(:invalid_rust_source, path, "configured Rust source does not exist",
         details: %{path: path}
       )
     end
-
-    file =
-      try do
-        Syn.parse_file!(path)
-      rescue
-        error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
-          Diagnostic.defrust(
-            :rust_source_parse_failed,
-            path,
-            "configured Rust source could not be parsed",
-            details: %{path: path, error: error}
-          )
-      end
-
-    function_callables = file |> Syn.functions() |> Enum.map(&Callable.from_syn_function/1)
-    method_callables = file |> Syn.impls() |> Enum.flat_map(&impl_callables/1)
-
-    function_callables ++ method_callables
   end
 
   defp rust_package_callables_for_module(module) do

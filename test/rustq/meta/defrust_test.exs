@@ -218,6 +218,49 @@ defmodule RustQ.Meta.DefrustTest do
     assert error.diagnostic.details.key == :rust_packages
   end
 
+  test "Rust source callable metadata preserves cross-file public aliases" do
+    unique = System.unique_integer([:positive])
+    dir = Path.join(System.tmp_dir!(), "rustq_source_aliases_#{unique}")
+    File.mkdir_p!(dir)
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    paint_path = Path.join(dir, "paint.rs")
+    core_path = Path.join(dir, "core.rs")
+    generated_path = Path.join(dir, "generated.rs")
+
+    File.write!(paint_path, """
+    pub use sb::SkPaint_Cap as Cap;
+
+    impl Paint {
+      pub fn set_stroke_cap(&mut self, cap: Cap) -> &mut Self { self }
+    }
+    """)
+
+    File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
+    File.write!(generated_path, "fn decode(atom: Atom) -> NifResult<PaintCap> { todo!() }\n")
+
+    module = Module.concat(__MODULE__, :CrossFileRustSourceAliasesCase)
+
+    Module.create(
+      module,
+      quote do
+        use RustQ.Meta,
+          rust_sources: unquote(Macro.escape([paint_path, core_path, generated_path]))
+
+        alias RustQ.Type, as: R
+
+        @spec run(R.mut_ref(Paint.t()), R.atom()) :: R.nif_result(R.unit())
+        defrust run(paint, atom) do
+          paint.set_stroke_cap(decode(atom))
+          :ok
+        end
+      end,
+      Macro.Env.location(__ENV__)
+    )
+
+    assert module.__rustq_source__() =~ "paint.set_stroke_cap(decode(atom)?);"
+  end
+
   test "Rust source callable cache refreshes when the source file changes" do
     unique = System.unique_integer([:positive])
     path = Path.join(System.tmp_dir!(), "rustq_source_cache_#{unique}.rs")
