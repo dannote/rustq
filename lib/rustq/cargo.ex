@@ -43,6 +43,60 @@ defmodule RustQ.Cargo do
   """
   @spec metadata!(keyword()) :: Metadata.t()
   def metadata!(opts \\ []) do
+    key = metadata_cache_key(opts)
+
+    key
+    |> :persistent_term.get(nil)
+    |> metadata_cache_entry(key, opts)
+  end
+
+  @doc "Clears cached Cargo metadata for a manifest."
+  @spec clear_cached_metadata(keyword()) :: :ok
+  def clear_cached_metadata(opts \\ []) do
+    try do
+      opts |> metadata_cache_key() |> :persistent_term.erase()
+    rescue
+      ArgumentError -> :ok
+    end
+
+    :ok
+  end
+
+  defp metadata_cache_entry(nil, key, opts) do
+    single_flight_metadata(key, fn -> fill_metadata_cache(key, opts) end)
+  end
+
+  defp metadata_cache_entry({:cargo_metadata, fingerprint, %Metadata{} = metadata}, key, opts) do
+    if fingerprint == metadata_fingerprint(opts) do
+      metadata
+    else
+      single_flight_metadata(key, fn -> fill_metadata_cache(key, opts) end)
+    end
+  end
+
+  defp fill_metadata_cache(key, opts) do
+    key
+    |> :persistent_term.get(nil)
+    |> fill_metadata_cache_entry(key, opts)
+  end
+
+  defp fill_metadata_cache_entry(nil, key, opts) do
+    cache_metadata(key, read_metadata!(opts), opts)
+  end
+
+  defp fill_metadata_cache_entry(
+         {:cargo_metadata, fingerprint, %Metadata{} = metadata},
+         key,
+         opts
+       ) do
+    if fingerprint == metadata_fingerprint(opts) do
+      metadata
+    else
+      cache_metadata(key, read_metadata!(opts), opts)
+    end
+  end
+
+  defp read_metadata!(opts) do
     manifest_path = Keyword.get(opts, :manifest_path, "Cargo.toml")
 
     args = [
@@ -59,6 +113,35 @@ defmodule RustQ.Cargo do
       {output, status} ->
         raise "cargo metadata failed with status #{status}: #{output}"
     end
+  end
+
+  defp cache_metadata(key, %Metadata{} = metadata, opts) do
+    :persistent_term.put(key, {:cargo_metadata, metadata_fingerprint(opts), metadata})
+    metadata
+  end
+
+  defp metadata_cache_key(opts) do
+    {__MODULE__, :metadata, Keyword.get(opts, :manifest_path, "Cargo.toml")}
+  end
+
+  defp metadata_fingerprint(opts) do
+    manifest_path = Keyword.get(opts, :manifest_path, "Cargo.toml")
+    lock_path = manifest_path |> Path.dirname() |> Path.join("Cargo.lock")
+
+    [manifest_path, lock_path]
+    |> Enum.uniq()
+    |> Enum.map(&file_fingerprint/1)
+  end
+
+  defp file_fingerprint(path) do
+    case File.read(path) do
+      {:ok, contents} -> {path, :sha256, :crypto.hash(:sha256, contents)}
+      {:error, reason} -> {path, :missing, reason}
+    end
+  end
+
+  defp single_flight_metadata(key, fun) do
+    :global.trans({{__MODULE__, :metadata_cache_fill, key}, self()}, fun, [node()], :infinity)
   end
 
   @doc """
