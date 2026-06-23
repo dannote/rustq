@@ -205,6 +205,317 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers let propagation from downstream callable argument type" do
+    tile_mode = %Type{kind: :type, rust: "TileMode", ast: %AST.TypePath{parts: [:TileMode]}}
+
+    nif_tile_mode = %Type{
+      kind: :nif_result,
+      rust: "NifResult<TileMode>",
+      ast: %AST.TypeNifResult{inner: tile_mode.ast},
+      meta: %{inner: tile_mode}
+    }
+
+    atom_type = %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          mode = decode_mode(atom)
+          consume_mode(mode)
+          :ok
+        end,
+        unit_type(),
+        %{atom: atom_type},
+        callables: [
+          %Callable{
+            name: "decode_mode",
+            kind: :function,
+            args: [%{name: "atom", type: atom_type, syn: nil}],
+            returns: nif_tile_mode
+          },
+          %Callable{
+            name: "consume_mode",
+            kind: :function,
+            args: [%{name: "mode", type: tile_mode, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.Let{
+               pattern: %AST.PatVar{name: :mode},
+               expr: %AST.Try{expr: %AST.LocalCall{name: :decode_mode}}
+             },
+             %AST.ExprStmt{expr: %AST.LocalCall{name: :consume_mode}},
+             %AST.Return{}
+           ] = statements
+  end
+
+  test "infers let propagation from downstream path call argument inside statement clauses" do
+    tile_mode = %Type{kind: :type, rust: "TileMode", ast: %AST.TypePath{parts: [:TileMode]}}
+
+    nif_tile_mode = %Type{
+      kind: :nif_result,
+      rust: "NifResult<TileMode>",
+      ast: %AST.TypeNifResult{inner: tile_mode.ast},
+      meta: %{inner: tile_mode}
+    }
+
+    atom_type = %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
+    matrix_type = %Type{kind: :type, rust: "Matrix", ast: %AST.TypePath{parts: [:Matrix]}}
+
+    option_matrix_type = %Type{
+      kind: :option,
+      rust: "Option<Matrix>",
+      ast: %AST.TypeOption{inner: matrix_type.ast},
+      meta: %{inner: matrix_type}
+    }
+
+    nif_option_matrix_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Option<Matrix>>",
+      ast: %AST.TypeNifResult{inner: option_matrix_type.ast},
+      meta: %{inner: option_matrix_type}
+    }
+
+    effect_type = %Type{
+      kind: :type,
+      rust: "RuntimeEffect",
+      ast: %AST.TypePath{parts: [:RuntimeEffect]}
+    }
+
+    image_type = %Type{kind: :type, rust: "Image", ast: %AST.TypePath{parts: [:Image]}}
+
+    nif_effect_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<RuntimeEffect>",
+      ast: %AST.TypeNifResult{inner: effect_type.ast},
+      meta: %{inner: effect_type}
+    }
+
+    nif_image_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Image>",
+      ast: %AST.TypeNifResult{inner: image_type.ast},
+      meta: %{inner: image_type}
+    }
+
+    tile_pair_type = %Type{
+      kind: :tuple,
+      rust: "(TileMode, TileMode)",
+      ast: %AST.TypeRaw{source: "(TileMode, TileMode)"},
+      meta: %{elements: [tile_mode, tile_mode]}
+    }
+
+    option_tile_pair_type = %Type{
+      kind: :option,
+      rust: "Option<(TileMode, TileMode)>",
+      ast: %AST.TypeOption{inner: tile_pair_type.ast},
+      meta: %{inner: tile_pair_type}
+    }
+
+    into_option_tile_pair_type = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Option<(TileMode, TileMode)>>",
+      ast: %AST.TypeRaw{source: "impl Into<Option<(TileMode, TileMode)>>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "Into<Option<(TileMode, TileMode)>>",
+            ast: %AST.TypePath{parts: [:Into]},
+            meta: %{syn_name: "Into", args: [option_tile_pair_type]}
+          }
+        ]
+      }
+    }
+
+    into_atom_type = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Atom>",
+      ast: %AST.TypeRaw{source: "impl Into<Atom>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "Into<Atom>",
+            ast: %AST.TypePath{parts: [:Into]},
+            meta: %{syn_name: "Into", args: [atom_type]}
+          }
+        ]
+      }
+    }
+
+    into_option_matrix_ref_type = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Option<&Matrix>>",
+      ast: %AST.TypeRaw{source: "impl Into<Option<&Matrix>>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "Into<Option<&Matrix>>",
+            ast: %AST.TypePath{parts: [:Into]},
+            meta: %{
+              syn_name: "Into",
+              args: [
+                %Type{
+                  kind: :option,
+                  rust: "Option<&Matrix>",
+                  ast: %AST.TypeOption{inner: %AST.TypeRef{inner: matrix_type.ast}},
+                  meta: %{
+                    inner: %Type{
+                      kind: :ref,
+                      rust: "&Matrix",
+                      ast: %AST.TypeRef{inner: matrix_type.ast},
+                      meta: %{inner: matrix_type}
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          if tag == atom do
+            effect = unwrap!(runtime_effect_from_term(atom))
+            image = unwrap!(image_from_term(atom))
+            mode = GeneratedEnums.decode_mode(atom)
+            mode_2 = GeneratedEnums.decode_mode(atom)
+            matrix = optional_matrix_from_term(atom)
+
+            effect.make_shader(atom, atom, matrix.as_ref())
+            image.to_shader({mode, mode_2}, atom, matrix.as_ref())
+
+            Shader.linear_gradient(
+              atom,
+              atom,
+              atom,
+              mode,
+              none(),
+              matrix.as_ref()
+            )
+          end
+
+          :ok
+        end,
+        unit_type(),
+        %{atom: atom_type, tag: atom_type, mode: atom_type},
+        callables: [
+          %Callable{
+            name: "decode_mode",
+            kind: :function,
+            target: "GeneratedEnums",
+            args: [%{name: "atom", type: atom_type, syn: nil}],
+            returns: nif_tile_mode
+          },
+          %Callable{
+            name: "runtime_effect_from_term",
+            kind: :function,
+            args: [%{name: "term", type: atom_type, syn: nil}],
+            returns: nif_effect_type
+          },
+          %Callable{
+            name: "image_from_term",
+            kind: :function,
+            args: [%{name: "term", type: atom_type, syn: nil}],
+            returns: nif_image_type
+          },
+          %Callable{
+            name: "optional_matrix_from_term",
+            kind: :function,
+            args: [%{name: "term", type: atom_type, syn: nil}],
+            returns: nif_option_matrix_type
+          },
+          %Callable{
+            name: "make_shader",
+            kind: :method,
+            target: "RuntimeEffect",
+            args: [
+              %{name: "uniforms", type: atom_type, syn: nil},
+              %{name: "children", type: atom_type, syn: nil},
+              %{name: "matrix", type: into_option_matrix_ref_type, syn: nil}
+            ],
+            returns: unit_type()
+          },
+          %Callable{
+            name: "to_shader",
+            kind: :method,
+            target: "Image",
+            args: [
+              %{name: "tile_modes", type: into_option_tile_pair_type, syn: nil},
+              %{name: "sampling", type: into_atom_type, syn: nil},
+              %{name: "matrix", type: into_option_matrix_ref_type, syn: nil}
+            ],
+            returns: unit_type()
+          },
+          %Callable{
+            name: "linear_gradient",
+            kind: :method,
+            target: "Shader",
+            args: [
+              %{name: "points", type: atom_type, syn: nil},
+              %{name: "colors", type: atom_type, syn: nil},
+              %{name: "positions", type: atom_type, syn: nil},
+              %{name: "mode", type: tile_mode, syn: nil},
+              %{name: "flags", type: atom_type, syn: nil},
+              %{name: "matrix", type: into_option_matrix_ref_type, syn: nil}
+            ],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.If{
+                 then: [
+                   %AST.Let{
+                     pattern: %AST.PatVar{name: :effect},
+                     expr: %AST.Try{expr: %AST.LocalCall{name: :runtime_effect_from_term}}
+                   },
+                   %AST.Let{
+                     pattern: %AST.PatVar{name: :image},
+                     expr: %AST.Try{expr: %AST.LocalCall{name: :image_from_term}}
+                   },
+                   %AST.Let{
+                     pattern: %AST.PatVar{name: :mode},
+                     expr: %AST.Try{
+                       expr: %AST.PathCall{
+                         path: %AST.Path{parts: [:generated_enums, :decode_mode]}
+                       }
+                     }
+                   },
+                   %AST.Let{
+                     pattern: %AST.PatVar{name: :mode_2},
+                     expr: %AST.Try{
+                       expr: %AST.PathCall{
+                         path: %AST.Path{parts: [:generated_enums, :decode_mode]}
+                       }
+                     }
+                   },
+                   %AST.Let{
+                     pattern: %AST.PatVar{name: :matrix},
+                     expr: %AST.Try{expr: %AST.LocalCall{name: :optional_matrix_from_term}}
+                   },
+                   %AST.ExprStmt{expr: %AST.MethodCall{method: :make_shader}},
+                   %AST.ExprStmt{expr: %AST.MethodCall{method: :to_shader}},
+                   %AST.ExprStmt{
+                     expr: %AST.PathCall{path: %AST.Path{parts: [:Shader, :linear_gradient]}}
+                   }
+                 ]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers tuple-pattern let propagation from callable return metadata" do
     color_vec = %Type{kind: :type, rust: "Vec<Color>", ast: %AST.TypePath{parts: [:Vec]}}
 

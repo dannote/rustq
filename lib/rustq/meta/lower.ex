@@ -66,6 +66,8 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_block(expressions, %Context{} = context) do
+    context = context_with_downstream_let_types(expressions, context)
+
     {statements, final} = split_final(expressions)
     statement_context = %{context | position: :statement}
     return_context = %{context | position: :return}
@@ -250,8 +252,10 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_clause_body(body, %Context{position: :statement} = context) do
-    body
-    |> block_expressions()
+    expressions = block_expressions(body)
+    context = context_with_downstream_let_types(expressions, context)
+
+    expressions
     |> Enum.map(&lower_statement(&1, context))
     |> reject_unit_statements()
   end
@@ -902,6 +906,202 @@ defmodule RustQ.Meta.Lower do
 
   defp infer_expr_type(_expression, _vars), do: nil
 
+  defp context_with_downstream_let_types(expressions, %Context{} = context) do
+    %{
+      context
+      | vars: Map.merge(context.vars, infer_downstream_let_types(expressions, context.vars))
+    }
+  end
+
+  defp infer_downstream_let_types(expressions, vars) do
+    expressions
+    |> Stream.with_index()
+    |> Enum.reduce({%{}, vars}, fn {expression, index}, {inferred, known_vars} ->
+      new_inferred = infer_downstream_let_type(expression, expressions, index, known_vars)
+      next_known_vars = Map.merge(known_vars, inferred_binding_types(expression, new_inferred))
+      {Map.merge(inferred, new_inferred), next_known_vars}
+    end)
+    |> elem(0)
+  end
+
+  defp infer_downstream_let_type({:=, _, [{name, _, context}, _rhs]}, expressions, index, vars)
+       when is_atom(name) and is_atom(context) do
+    expressions
+    |> Enum.drop(index + 1)
+    |> Enum.find_value(&expected_type_for_var(name, &1, vars))
+    |> case do
+      %Type{} = type -> %{name => type}
+      nil -> %{}
+    end
+  end
+
+  defp infer_downstream_let_type(_expression, _expressions, _index, _vars), do: %{}
+
+  defp inferred_binding_types({:=, _, [{name, _, context}, rhs]}, inferred)
+       when is_atom(name) and is_atom(context) do
+    case Map.fetch(inferred, name) do
+      {:ok, %Type{} = type} -> %{name => type}
+      :error -> inferred_binding_type_from_rhs(name, rhs)
+    end
+  end
+
+  defp inferred_binding_types(_expression, _inferred), do: %{}
+
+  defp inferred_binding_type_from_rhs(name, {:unwrap!, _, [call]}) do
+    case callable_return_type(call) do
+      %Type{} = type -> %{name => Type.inner(type) || type}
+      nil -> %{}
+    end
+  end
+
+  defp inferred_binding_type_from_rhs(name, call) do
+    case callable_return_type(call) do
+      %Type{} = type -> %{name => type}
+      nil -> %{}
+    end
+  end
+
+  defp expected_type_for_var(name, ast, vars) do
+    ast
+    |> downstream_call_arg_types(vars)
+    |> Enum.find_value(fn {args, expected_types} ->
+      expected_type_for_arg(name, args, expected_types)
+    end)
+  end
+
+  defp expected_type_for_arg(name, args, expected_types)
+       when is_list(args) and is_list(expected_types) do
+    args
+    |> Enum.zip(expected_types)
+    |> Enum.find_value(fn {arg, expected_type} ->
+      expected_type_for_arg_expr(name, arg, expected_type)
+    end)
+  end
+
+  defp expected_type_for_arg(_name, _args, _expected_types), do: nil
+
+  defp expected_type_for_arg_expr(name, {var_name, _, context}, %Type{} = type)
+       when name == var_name and is_atom(context),
+       do: expected_value_type_for_argument(type)
+
+  defp expected_type_for_arg_expr(
+         name,
+         {{:., _, [{var_name, _, context}, :as_ref]}, _meta, []},
+         %Type{} = type
+       )
+       when name == var_name and is_atom(context),
+       do: receiver_type_for_as_ref_argument(type)
+
+  defp expected_type_for_arg_expr(name, tuple, %Type{} = type) do
+    expected_type_for_tuple_arg(name, tuple, expected_value_type_for_argument(type))
+  end
+
+  defp expected_type_for_arg_expr(_name, _arg, _expected_type), do: nil
+
+  defp expected_type_for_tuple_arg(name, tuple, %Type{kind: :tuple, meta: %{elements: types}}) do
+    case tuple_pattern_elements(tuple) do
+      elements when is_list(elements) and length(elements) == length(types) ->
+        elements
+        |> Enum.zip(types)
+        |> Enum.find_value(fn {element, type} ->
+          expected_type_for_arg_expr(name, element, type)
+        end)
+
+      _not_tuple ->
+        nil
+    end
+  end
+
+  defp expected_type_for_tuple_arg(_name, _tuple, _type), do: nil
+
+  defp expected_value_type_for_argument(%Type{kind: :impl_trait, meta: %{traits: traits}} = type) do
+    traits
+    |> Enum.find_value(fn
+      %Type{meta: %{syn_name: "Into", args: [inner]}} -> expected_value_type_for_argument(inner)
+      _trait -> nil
+    end) || type
+  end
+
+  defp expected_value_type_for_argument(%Type{
+         kind: :option,
+         meta: %{inner: %Type{kind: :tuple} = inner}
+       }),
+       do: inner
+
+  defp expected_value_type_for_argument(%Type{} = type), do: type
+
+  defp receiver_type_for_as_ref_argument(%Type{kind: :impl_trait, meta: %{traits: traits}}) do
+    traits
+    |> Enum.find_value(fn
+      %Type{meta: %{syn_name: "Into", args: [type]}} -> receiver_type_for_as_ref_argument(type)
+      _trait -> nil
+    end)
+  end
+
+  defp receiver_type_for_as_ref_argument(%Type{
+         kind: :option,
+         meta: %{inner: %Type{kind: :ref, meta: %{inner: inner}}}
+       }) do
+    %Type{
+      kind: :option,
+      rust: "Option<#{inner.rust}>",
+      ast: %AST.TypeOption{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+  end
+
+  defp receiver_type_for_as_ref_argument(_type), do: nil
+
+  defp downstream_call_arg_types(ast, vars) do
+    {_ast, calls} = Macro.prewalk(ast, [], &collect_downstream_call_arg_types(&1, &2, vars))
+    calls
+  end
+
+  defp collect_downstream_call_arg_types({name, _meta, args} = ast, calls, _vars)
+       when is_atom(name) and is_list(args) do
+    {ast,
+     maybe_add_downstream_call(calls, args, callable_argument_types(nil, name, length(args)))}
+  end
+
+  defp collect_downstream_call_arg_types(
+         {{:., _, [{:__aliases__, _, parts}, function]}, _meta, args} = ast,
+         calls,
+         _vars
+       )
+       when is_atom(function) and is_list(args) do
+    path = alias_parts({:__aliases__, [], parts}) ++ [function]
+
+    {ast,
+     maybe_add_downstream_call(
+       calls,
+       args,
+       path_callable_argument_types(path, function, length(args))
+     )}
+  end
+
+  defp collect_downstream_call_arg_types(
+         {{:., _, [receiver, function]}, _meta, args} = ast,
+         calls,
+         vars
+       )
+       when is_atom(function) and is_list(args) do
+    target = receiver |> infer_expr_type(vars) |> callable_target_from_type()
+
+    {ast,
+     maybe_add_downstream_call(
+       calls,
+       args,
+       callable_argument_types(target, function, length(args))
+     )}
+  end
+
+  defp collect_downstream_call_arg_types(ast, calls, _vars), do: {ast, calls}
+
+  defp maybe_add_downstream_call(calls, args, [_ | _] = expected_types),
+    do: [{args, expected_types} | calls]
+
+  defp maybe_add_downstream_call(calls, _args, _expected_types), do: calls
+
   defp infer_mutability(body) do
     mutable_vars = body |> collect_mutable_let_refs() |> MapSet.new()
     Enum.map(body, &mark_mutable_lets(&1, mutable_vars))
@@ -1173,14 +1373,39 @@ defmodule RustQ.Meta.Lower do
 
   defp callable_target_candidates(parts) do
     mapped = mapped_alias_parts(parts)
+    mapped_last = List.last(mapped)
+    parts_last = List.last(parts)
 
     [
       Enum.map_join(mapped, "::", &to_string/1),
-      mapped |> List.last() |> to_string(),
+      to_string(mapped_last),
+      singular_candidate(mapped_last),
+      singular_module_candidate(mapped_last),
       Enum.map_join(parts, "::", &to_string/1),
-      parts |> List.last() |> to_string()
+      to_string(parts_last),
+      singular_candidate(parts_last),
+      singular_module_candidate(parts_last)
     ]
+    |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
+  end
+
+  defp singular_candidate(part) when is_atom(part),
+    do: part |> to_string() |> singular_candidate()
+
+  defp singular_candidate(part) when is_binary(part) do
+    if String.ends_with?(part, "s") and String.length(part) > 1 do
+      String.trim_trailing(part, "s")
+    end
+  end
+
+  defp singular_candidate(_part), do: nil
+
+  defp singular_module_candidate(part) do
+    case singular_candidate(part) do
+      nil -> nil
+      singular -> Macro.camelize(singular)
+    end
   end
 
   defp with_lowering_context(%Context{} = context, fun) do
