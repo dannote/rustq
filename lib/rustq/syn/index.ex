@@ -58,31 +58,110 @@ defmodule RustQ.Syn.Index do
   package's Rust source files. Concurrent callers for the same package/config are
   serialized so parallel compilation does not stampede Cargo metadata or package
   cache access; later callers read the already-built index from `:persistent_term`.
+
+  Cached entries are fingerprinted from the Cargo manifest/lockfile inputs and
+  indexed Rust source file mtimes/sizes. If any of those files change, the next
+  caller rebuilds the package index.
   """
   @spec cached_package(String.t(), keyword()) :: t()
   def cached_package(package_name, opts \\ []) when is_binary(package_name) do
     key = {__MODULE__, :package, package_name, Enum.sort(opts)}
 
-    case :persistent_term.get(key, nil) do
-      nil -> single_flight_package(key, fn -> fill_cached_package(key, package_name, opts) end)
-      %__MODULE__{} = index -> index
+    key
+    |> :persistent_term.get(nil)
+    |> cached_package_entry(key, package_name, opts)
+  end
+
+  defp cached_package_entry(nil, key, package_name, opts) do
+    single_flight_package(key, fn -> fill_cached_package(key, package_name, opts) end)
+  end
+
+  defp cached_package_entry(
+         {:package_index, fingerprint, %__MODULE__{} = index},
+         key,
+         package_name,
+         opts
+       ) do
+    if fingerprint == package_fingerprint(index, opts) do
+      index
+    else
+      single_flight_package(key, fn -> fill_cached_package(key, package_name, opts) end)
     end
   end
 
-  defp fill_cached_package(key, package_name, opts) do
-    case :persistent_term.get(key, nil) do
-      nil ->
-        index = from_package(package_name, opts)
-        :persistent_term.put(key, index)
-        index
+  defp cached_package_entry(%__MODULE__{} = index, key, _package_name, opts) do
+    single_flight_package(key, fn -> refresh_legacy_cached_package(key, index, opts) end)
+  end
 
-      %__MODULE__{} = index ->
-        index
+  defp fill_cached_package(key, package_name, opts) do
+    key
+    |> :persistent_term.get(nil)
+    |> fill_cached_package_entry(key, package_name, opts)
+  end
+
+  defp fill_cached_package_entry(nil, key, package_name, opts) do
+    cache_package_index(key, from_package(package_name, opts), opts)
+  end
+
+  defp fill_cached_package_entry(
+         {:package_index, fingerprint, %__MODULE__{} = index},
+         key,
+         package_name,
+         opts
+       ) do
+    if fingerprint == package_fingerprint(index, opts) do
+      index
+    else
+      cache_package_index(key, from_package(package_name, opts), opts)
     end
+  end
+
+  defp fill_cached_package_entry(%__MODULE__{} = index, key, _package_name, opts) do
+    refresh_legacy_cached_package(key, index, opts)
+  end
+
+  defp refresh_legacy_cached_package(key, %__MODULE__{} = index, opts) do
+    cache_package_index(key, index, opts)
+  end
+
+  defp cache_package_index(key, %__MODULE__{} = index, opts) do
+    :persistent_term.put(key, {:package_index, package_fingerprint(index, opts), index})
+    index
   end
 
   defp single_flight_package(key, fun) do
     :global.trans({{__MODULE__, :package_cache_fill, key}, self()}, fun, [node()], :infinity)
+  end
+
+  defp package_fingerprint(%__MODULE__{} = index, opts) do
+    index
+    |> package_fingerprint_paths(opts)
+    |> Enum.uniq()
+    |> Enum.sort()
+    |> Enum.map(&file_fingerprint/1)
+  end
+
+  defp package_fingerprint_paths(%__MODULE__{files: files, package: package}, opts) do
+    Map.keys(files) ++ package_manifest_paths(package) ++ project_manifest_paths(opts)
+  end
+
+  defp package_manifest_paths(%RustQ.Cargo.Package{manifest_path: manifest_path}) do
+    [manifest_path]
+  end
+
+  defp package_manifest_paths(nil), do: []
+
+  defp project_manifest_paths(opts) do
+    manifest_path = Keyword.get(opts, :manifest_path, "Cargo.toml")
+    lock_path = manifest_path |> Path.dirname() |> Path.join("Cargo.lock")
+    [manifest_path, lock_path]
+  end
+
+  defp file_fingerprint(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %File.Stat{mtime: mtime, size: size}} -> {path, mtime, size}
+      {:error, reason} -> {path, :missing, reason}
+    end
   end
 
   @doc "Clears a cached package index."

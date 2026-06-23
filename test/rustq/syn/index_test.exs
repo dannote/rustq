@@ -35,6 +35,45 @@ defmodule RustQ.Syn.IndexTest do
     )
   end
 
+  test "refreshes cached package indexes when package source changes" do
+    dir =
+      Path.join(
+        System.tmp_dir!(),
+        "rustq_syn_package_cache_#{System.unique_integer([:positive])}"
+      )
+
+    manifest_path = Path.join(dir, "Cargo.toml")
+    lib_path = Path.join([dir, "src", "lib.rs"])
+
+    File.mkdir_p!(Path.dirname(lib_path))
+
+    on_exit(fn ->
+      Index.clear_cached_package("rustq_cache_fixture", manifest_path: manifest_path)
+      File.rm_rf(dir)
+    end)
+
+    File.write!(manifest_path, """
+    [package]
+    name = "rustq_cache_fixture"
+    version = "0.1.0"
+    edition = "2021"
+    """)
+
+    File.write!(lib_path, "pub fn first() -> u32 { 1 }\n")
+
+    first = Index.cached_package("rustq_cache_fixture", manifest_path: manifest_path)
+
+    assert [%RustQ.Syn.Function{name: "first"}] =
+             RustQ.Syn.functions(Map.fetch!(first.files, lib_path))
+
+    File.write!(lib_path, "pub fn second() -> u32 { 2 }\n")
+
+    second = Index.cached_package("rustq_cache_fixture", manifest_path: manifest_path)
+
+    assert [%RustQ.Syn.Function{name: "second"}] =
+             RustQ.Syn.functions(Map.fetch!(second.files, lib_path))
+  end
+
   test "indexes enums by name" do
     path =
       write_source!("""
