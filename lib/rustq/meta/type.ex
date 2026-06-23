@@ -436,12 +436,12 @@ defmodule RustQ.Meta.Type do
   defp parse_rust_type(:result, [ok, error], aliases) do
     ok = parse(ok, aliases)
     error = parse(error, aliases)
-    type(:result, %AST.TypeResult{ok: ok.ast, error: error.ast})
+    type(:result, %AST.TypeResult{ok: ok.ast, error: error.ast}, %{ok: ok, error: error})
   end
 
   defp parse_rust_type(:nif_result, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:nif_result, %AST.TypeNifResult{inner: inner.ast})
+    type(:nif_result, %AST.TypeNifResult{inner: inner.ast}, %{inner: inner})
   end
 
   defp parse_rust_type(function, args, aliases) do
