@@ -183,6 +183,18 @@ defmodule RustQ.Meta.Lower do
   defp lower_statement_expr(expression, _return_type), do: lower_expr(expression)
 
   defp infer_statement_propagation?(expression, %Type{} = return_type) do
+    same_wrapper_propagation?(expression, return_type)
+  end
+
+  defp lower_wrapper_arg_expr(expression) do
+    if same_wrapper_propagation?(expression, current_return_type()) do
+      %AST.Try{expr: lower_expr(expression)}
+    else
+      lower_expr(expression)
+    end
+  end
+
+  defp same_wrapper_propagation?(expression, %Type{} = return_type) do
     case callable_return_type(expression) do
       %Type{kind: kind} = call_type ->
         Type.propagates?(call_type) and Type.propagates?(return_type) and kind == return_type.kind
@@ -191,6 +203,8 @@ defmodule RustQ.Meta.Lower do
         false
     end
   end
+
+  defp same_wrapper_propagation?(_expression, _return_type), do: false
 
   defp infer_propagation?(expression, %Type{} = expected_type) do
     case callable_return_type(expression) do
@@ -426,7 +440,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:tuple_field, _, [expression, index]}) when is_integer(index),
     do: %AST.Field{receiver: lower_expr(expression), field: index}
 
-  defp lower_expr({:some, _, [expression]}), do: %AST.Some{expr: lower_expr(expression)}
+  defp lower_expr({:some, _, [expression]}),
+    do: %AST.Some{expr: lower_wrapper_arg_expr(expression)}
+
   defp lower_expr({:none, _, []}), do: %AST.None{}
   defp lower_expr({:ok, _, []}), do: %AST.Ok{}
   defp lower_expr({:ok, _, [expression]}), do: %AST.Ok{expr: lower_expr(expression)}
@@ -1144,30 +1160,38 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp with_lowering_context(%Context{} = context, fun) do
-    with_process_value(:rust_modules, context.rust_modules, fn ->
-      with_process_value(:callables, context.callables, fn ->
-        with_process_value(:vars, context.vars, fun)
-      end)
-    end)
+    values = [
+      rust_modules: context.rust_modules,
+      callables: context.callables,
+      vars: context.vars,
+      return_type: context.return_type
+    ]
+
+    with_process_values(values, fun)
   end
 
-  defp with_process_value(name, value, fun) do
-    key = {__MODULE__, name}
-    previous = Process.get(key)
-    Process.put(key, value)
+  defp with_process_values(values, fun) do
+    previous = Map.new(values, fn {name, value} -> {name, put_process_value(name, value)} end)
 
     try do
       fun.()
     after
-      if previous do
-        Process.put(key, previous)
-      else
-        Process.delete(key)
-      end
+      Enum.each(previous, fn {name, value} -> restore_process_value(name, value) end)
     end
   end
+
+  defp put_process_value(name, value) do
+    key = {__MODULE__, name}
+    previous = Process.get(key)
+    Process.put(key, value)
+    previous
+  end
+
+  defp restore_process_value(name, nil), do: Process.delete({__MODULE__, name})
+  defp restore_process_value(name, value), do: Process.put({__MODULE__, name}, value)
 
   defp current_rust_modules, do: Process.get({__MODULE__, :rust_modules}, %{})
   defp current_callables, do: Process.get({__MODULE__, :callables}, %BindingIndex{})
   defp current_vars, do: Process.get({__MODULE__, :vars}, %{})
+  defp current_return_type, do: Process.get({__MODULE__, :return_type})
 end

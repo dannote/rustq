@@ -94,6 +94,56 @@ defmodule RustQ.Meta.LowerTest do
              statements
   end
 
+  test "infers propagation inside some wrapper arguments" do
+    clip_type = %Type{kind: :type, rust: "ClipOp", ast: %AST.TypePath{parts: [:ClipOp]}}
+
+    option_clip = %Type{
+      kind: :option,
+      rust: "Option<ClipOp>",
+      ast: %AST.TypeOption{inner: clip_type.ast},
+      meta: %{inner: clip_type}
+    }
+
+    nif_clip = %Type{
+      kind: :nif_result,
+      rust: "NifResult<ClipOp>",
+      ast: %AST.TypeNifResult{inner: clip_type.ast},
+      meta: %{inner: clip_type}
+    }
+
+    nif_option_clip = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Option<ClipOp>>",
+      ast: %AST.TypeNifResult{inner: option_clip.ast},
+      meta: %{inner: option_clip}
+    }
+
+    atom_type = %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
+
+    statements =
+      Lower.quoted_body(
+        quote(do: {:ok, some(decode_clip(value))}),
+        nif_option_clip,
+        %{value: atom_type},
+        callables: [
+          %Callable{
+            name: "decode_clip",
+            kind: :function,
+            args: [%{name: "value", type: atom_type, syn: nil}],
+            returns: nif_clip
+          }
+        ]
+      )
+
+    assert [
+             %AST.Return{
+               expr: %AST.Ok{
+                 expr: %AST.Some{expr: %AST.Try{expr: %AST.LocalCall{name: :decode_clip}}}
+               }
+             }
+           ] = statements
+  end
+
   test "infers statement-position propagation for matching wrapper returns" do
     unit = unit_type()
 
