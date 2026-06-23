@@ -5,6 +5,8 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
+  alias RustQ.Meta.Inference
+  alias RustQ.Meta.Pattern
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
@@ -882,7 +884,7 @@ defmodule RustQ.Meta.Lower do
   defp infer_pattern_type(_pattern, _vars), do: nil
 
   defp infer_pattern_type_from_call(pattern, expression) do
-    with [_ | _] = elements <- tuple_pattern_elements(pattern),
+    with [_ | _] = elements <- Pattern.tuple_elements(pattern),
          %Type{} = call_type <- callable_return_type(expression),
          true <- Type.propagates?(call_type),
          %Type{kind: :tuple, meta: %{elements: types}} = inner <- Type.inner(call_type),
@@ -893,214 +895,32 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp tuple_pattern_elements({:{}, _, elements}) when is_list(elements), do: elements
-
-  defp tuple_pattern_elements(pattern)
-       when is_tuple(pattern) and tuple_size(pattern) != 3,
-       do: Tuple.to_list(pattern)
-
-  defp tuple_pattern_elements(_pattern), do: nil
-
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)
 
   defp infer_expr_type(_expression, _vars), do: nil
 
   defp context_with_downstream_let_types(expressions, %Context{} = context) do
+    inferred =
+      Inference.infer_downstream_let_types(expressions, context.vars, inference_callbacks())
+
+    %{context | vars: Map.merge(context.vars, inferred)}
+  end
+
+  defp inference_callbacks do
     %{
-      context
-      | vars: Map.merge(context.vars, infer_downstream_let_types(expressions, context.vars))
+      return_type: &callable_return_type/1,
+      local_argument_types: fn name, arity -> callable_argument_types(nil, name, arity) end,
+      path_argument_types: fn parts, function, arity ->
+        path = alias_parts({:__aliases__, [], parts}) ++ [function]
+        path_callable_argument_types(path, function, arity)
+      end,
+      method_argument_types: fn target, function, arity ->
+        callable_argument_types(target, function, arity)
+      end,
+      target_type: &callable_target_from_type/1
     }
   end
-
-  defp infer_downstream_let_types(expressions, vars) do
-    expressions
-    |> Stream.with_index()
-    |> Enum.reduce({%{}, vars}, fn {expression, index}, {inferred, known_vars} ->
-      new_inferred = infer_downstream_let_type(expression, expressions, index, known_vars)
-      next_known_vars = Map.merge(known_vars, inferred_binding_types(expression, new_inferred))
-      {Map.merge(inferred, new_inferred), next_known_vars}
-    end)
-    |> elem(0)
-  end
-
-  defp infer_downstream_let_type({:=, _, [{name, _, context}, _rhs]}, expressions, index, vars)
-       when is_atom(name) and is_atom(context) do
-    expressions
-    |> Enum.drop(index + 1)
-    |> Enum.find_value(&expected_type_for_var(name, &1, vars))
-    |> case do
-      %Type{} = type -> %{name => type}
-      nil -> %{}
-    end
-  end
-
-  defp infer_downstream_let_type(_expression, _expressions, _index, _vars), do: %{}
-
-  defp inferred_binding_types({:=, _, [{name, _, context}, rhs]}, inferred)
-       when is_atom(name) and is_atom(context) do
-    case Map.fetch(inferred, name) do
-      {:ok, %Type{} = type} -> %{name => type}
-      :error -> inferred_binding_type_from_rhs(name, rhs)
-    end
-  end
-
-  defp inferred_binding_types(_expression, _inferred), do: %{}
-
-  defp inferred_binding_type_from_rhs(name, {:unwrap!, _, [call]}) do
-    case callable_return_type(call) do
-      %Type{} = type -> %{name => Type.inner(type) || type}
-      nil -> %{}
-    end
-  end
-
-  defp inferred_binding_type_from_rhs(name, call) do
-    case callable_return_type(call) do
-      %Type{} = type -> %{name => type}
-      nil -> %{}
-    end
-  end
-
-  defp expected_type_for_var(name, ast, vars) do
-    ast
-    |> downstream_call_arg_types(vars)
-    |> Enum.find_value(fn {args, expected_types} ->
-      expected_type_for_arg(name, args, expected_types)
-    end)
-  end
-
-  defp expected_type_for_arg(name, args, expected_types)
-       when is_list(args) and is_list(expected_types) do
-    args
-    |> Enum.zip(expected_types)
-    |> Enum.find_value(fn {arg, expected_type} ->
-      expected_type_for_arg_expr(name, arg, expected_type)
-    end)
-  end
-
-  defp expected_type_for_arg(_name, _args, _expected_types), do: nil
-
-  defp expected_type_for_arg_expr(name, {var_name, _, context}, %Type{} = type)
-       when name == var_name and is_atom(context),
-       do: expected_value_type_for_argument(type)
-
-  defp expected_type_for_arg_expr(
-         name,
-         {{:., _, [{var_name, _, context}, :as_ref]}, _meta, []},
-         %Type{} = type
-       )
-       when name == var_name and is_atom(context),
-       do: receiver_type_for_as_ref_argument(type)
-
-  defp expected_type_for_arg_expr(name, tuple, %Type{} = type) do
-    expected_type_for_tuple_arg(name, tuple, expected_value_type_for_argument(type))
-  end
-
-  defp expected_type_for_arg_expr(_name, _arg, _expected_type), do: nil
-
-  defp expected_type_for_tuple_arg(name, tuple, %Type{kind: :tuple, meta: %{elements: types}}) do
-    case tuple_pattern_elements(tuple) do
-      elements when is_list(elements) and length(elements) == length(types) ->
-        elements
-        |> Enum.zip(types)
-        |> Enum.find_value(fn {element, type} ->
-          expected_type_for_arg_expr(name, element, type)
-        end)
-
-      _not_tuple ->
-        nil
-    end
-  end
-
-  defp expected_type_for_tuple_arg(_name, _tuple, _type), do: nil
-
-  defp expected_value_type_for_argument(%Type{kind: :impl_trait, meta: %{traits: traits}} = type) do
-    traits
-    |> Enum.find_value(fn
-      %Type{meta: %{syn_name: "Into", args: [inner]}} -> expected_value_type_for_argument(inner)
-      _trait -> nil
-    end) || type
-  end
-
-  defp expected_value_type_for_argument(%Type{
-         kind: :option,
-         meta: %{inner: %Type{kind: :tuple} = inner}
-       }),
-       do: inner
-
-  defp expected_value_type_for_argument(%Type{} = type), do: type
-
-  defp receiver_type_for_as_ref_argument(%Type{kind: :impl_trait, meta: %{traits: traits}}) do
-    traits
-    |> Enum.find_value(fn
-      %Type{meta: %{syn_name: "Into", args: [type]}} -> receiver_type_for_as_ref_argument(type)
-      _trait -> nil
-    end)
-  end
-
-  defp receiver_type_for_as_ref_argument(%Type{
-         kind: :option,
-         meta: %{inner: %Type{kind: :ref, meta: %{inner: inner}}}
-       }) do
-    %Type{
-      kind: :option,
-      rust: "Option<#{inner.rust}>",
-      ast: %AST.TypeOption{inner: inner.ast},
-      meta: %{inner: inner}
-    }
-  end
-
-  defp receiver_type_for_as_ref_argument(_type), do: nil
-
-  defp downstream_call_arg_types(ast, vars) do
-    {_ast, calls} = Macro.prewalk(ast, [], &collect_downstream_call_arg_types(&1, &2, vars))
-    calls
-  end
-
-  defp collect_downstream_call_arg_types({name, _meta, args} = ast, calls, _vars)
-       when is_atom(name) and is_list(args) do
-    {ast,
-     maybe_add_downstream_call(calls, args, callable_argument_types(nil, name, length(args)))}
-  end
-
-  defp collect_downstream_call_arg_types(
-         {{:., _, [{:__aliases__, _, parts}, function]}, _meta, args} = ast,
-         calls,
-         _vars
-       )
-       when is_atom(function) and is_list(args) do
-    path = alias_parts({:__aliases__, [], parts}) ++ [function]
-
-    {ast,
-     maybe_add_downstream_call(
-       calls,
-       args,
-       path_callable_argument_types(path, function, length(args))
-     )}
-  end
-
-  defp collect_downstream_call_arg_types(
-         {{:., _, [receiver, function]}, _meta, args} = ast,
-         calls,
-         vars
-       )
-       when is_atom(function) and is_list(args) do
-    target = receiver |> infer_expr_type(vars) |> callable_target_from_type()
-
-    {ast,
-     maybe_add_downstream_call(
-       calls,
-       args,
-       callable_argument_types(target, function, length(args))
-     )}
-  end
-
-  defp collect_downstream_call_arg_types(ast, calls, _vars), do: {ast, calls}
-
-  defp maybe_add_downstream_call(calls, args, [_ | _] = expected_types),
-    do: [{args, expected_types} | calls]
-
-  defp maybe_add_downstream_call(calls, _args, _expected_types), do: calls
 
   defp infer_mutability(body) do
     mutable_vars = body |> collect_mutable_let_refs() |> MapSet.new()
