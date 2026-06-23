@@ -115,7 +115,10 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_statement(:ok, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
   defp lower_statement(nil, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
-  defp lower_statement(expression, %Context{}), do: %AST.ExprStmt{expr: lower_expr(expression)}
+
+  defp lower_statement(expression, %Context{return_type: return_type}) do
+    %AST.ExprStmt{expr: lower_statement_expr(expression, return_type)}
+  end
 
   defp lower_return({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
     %AST.Return{expr: lower_case(expression, clauses, context)}
@@ -168,6 +171,26 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expr(expression, _expected_type), do: lower_expr(expression)
+
+  defp lower_statement_expr(expression, %Type{} = return_type) do
+    if infer_statement_propagation?(expression, return_type) do
+      %AST.Try{expr: lower_expr(expression)}
+    else
+      lower_expr(expression)
+    end
+  end
+
+  defp lower_statement_expr(expression, _return_type), do: lower_expr(expression)
+
+  defp infer_statement_propagation?(expression, %Type{} = return_type) do
+    case callable_return_type(expression) do
+      %Type{kind: kind} = call_type ->
+        Type.propagates?(call_type) and Type.propagates?(return_type) and kind == return_type.kind
+
+      _unknown_or_plain ->
+        false
+    end
+  end
 
   defp infer_propagation?(expression, %Type{} = expected_type) do
     case callable_return_type(expression) do

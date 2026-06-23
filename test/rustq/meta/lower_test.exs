@@ -94,6 +94,35 @@ defmodule RustQ.Meta.LowerTest do
              statements
   end
 
+  test "infers statement-position propagation for matching wrapper returns" do
+    unit = unit_type()
+
+    nif_unit = %Type{
+      kind: :nif_result,
+      rust: "NifResult<()>",
+      ast: %AST.TypeNifResult{inner: unit.ast},
+      meta: %{inner: unit}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          maybe_unit()
+          :ok
+        end,
+        nif_unit,
+        %{},
+        callables: [
+          %Callable{name: "maybe_unit", kind: :function, args: [], returns: nif_unit}
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{expr: %AST.Try{expr: %AST.LocalCall{name: :maybe_unit}}},
+             %AST.Return{expr: %AST.Ok{}}
+           ] = statements
+  end
+
   test "infers let RHS propagation when pattern type is known" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 

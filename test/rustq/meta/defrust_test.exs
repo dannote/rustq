@@ -291,7 +291,7 @@ defmodule RustQ.Meta.DefrustTest do
       Macro.Env.location(__ENV__)
     )
 
-    assert first_module.__rustq_source__() =~ "consume_first(decode(atom)?);"
+    assert first_module.__rustq_source__() =~ "consume_first(decode(atom)?)?;"
 
     File.write!(path, "fn consume_second(color: Color) -> NifResult<()> { todo!() }\n")
 
@@ -318,7 +318,7 @@ defmodule RustQ.Meta.DefrustTest do
       Macro.Env.location(__ENV__)
     )
 
-    assert second_module.__rustq_source__() =~ "consume_second(decode(atom)?);"
+    assert second_module.__rustq_source__() =~ "consume_second(decode(atom)?)?;"
   end
 
   test "configured Rust sources raise structured diagnostics" do
