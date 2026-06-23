@@ -90,7 +90,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_statement({:=, _, [pattern, expression]}, %Context{} = context) do
-    expected_type = infer_pattern_type(pattern, context.vars)
+    expected_type = infer_let_expected_type(pattern, expression, context.vars)
     %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression, expected_type)}
   end
 
@@ -868,10 +868,34 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
+  defp infer_let_expected_type(pattern, expression, vars) do
+    infer_pattern_type(pattern, vars) || infer_pattern_type_from_call(pattern, expression)
+  end
+
   defp infer_pattern_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)
 
   defp infer_pattern_type(_pattern, _vars), do: nil
+
+  defp infer_pattern_type_from_call(pattern, expression) do
+    with [_ | _] = elements <- tuple_pattern_elements(pattern),
+         %Type{} = call_type <- callable_return_type(expression),
+         true <- Type.propagates?(call_type),
+         %Type{kind: :tuple, meta: %{elements: types}} = inner <- Type.inner(call_type),
+         true <- length(elements) == length(types) do
+      inner
+    else
+      _no_tuple_match -> nil
+    end
+  end
+
+  defp tuple_pattern_elements({:{}, _, elements}) when is_list(elements), do: elements
+
+  defp tuple_pattern_elements(pattern)
+       when is_tuple(pattern) and tuple_size(pattern) != 3,
+       do: Tuple.to_list(pattern)
+
+  defp tuple_pattern_elements(_pattern), do: nil
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)

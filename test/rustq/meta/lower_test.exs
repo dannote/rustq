@@ -205,6 +205,58 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers tuple-pattern let propagation from callable return metadata" do
+    color_vec = %Type{kind: :type, rust: "Vec<Color>", ast: %AST.TypePath{parts: [:Vec]}}
+
+    positions = %Type{
+      kind: :option,
+      rust: "Option<Vec<f32>>",
+      ast: %AST.TypeOption{inner: %AST.TypePath{parts: [:Vec]}}
+    }
+
+    tuple = %Type{
+      kind: :tuple,
+      rust: "(Vec<Color>, Option<Vec<f32>>)",
+      ast: %AST.TypeRaw{source: "(Vec<Color>, Option<Vec<f32>>)"},
+      meta: %{elements: [color_vec, positions]}
+    }
+
+    nif_tuple = %Type{
+      kind: :nif_result,
+      rust: "NifResult<(Vec<Color>, Option<Vec<f32>>)",
+      ast: %AST.TypeNifResult{inner: tuple.ast},
+      meta: %{inner: tuple}
+    }
+
+    stops_type = %Type{kind: :type, rust: "Vec<Term>", ast: %AST.TypePath{parts: [:Vec]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          {colors, positions} = decode_stops(stops)
+          :ok
+        end,
+        unit_type(),
+        %{stops: stops_type},
+        callables: [
+          %Callable{
+            name: "decode_stops",
+            kind: :function,
+            args: [%{name: "stops", type: stops_type, syn: nil}],
+            returns: nif_tuple
+          }
+        ]
+      )
+
+    assert [
+             %AST.Let{
+               pattern: %AST.PatTuple{},
+               expr: %AST.Try{expr: %AST.LocalCall{name: :decode_stops}}
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers assignment RHS propagation when target type is known" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 
