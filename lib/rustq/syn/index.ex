@@ -56,8 +56,26 @@ defmodule RustQ.Syn.Index do
   def cached_package(package_name, opts \\ []) when is_binary(package_name) do
     key = {__MODULE__, :package, package_name, Enum.sort(opts)}
 
-    :persistent_term.get(key, nil) ||
-      tap(from_package(package_name, opts), &:persistent_term.put(key, &1))
+    case :persistent_term.get(key, nil) do
+      nil -> single_flight_package(key, fn -> fill_cached_package(key, package_name, opts) end)
+      %__MODULE__{} = index -> index
+    end
+  end
+
+  defp fill_cached_package(key, package_name, opts) do
+    case :persistent_term.get(key, nil) do
+      nil ->
+        index = from_package(package_name, opts)
+        :persistent_term.put(key, index)
+        index
+
+      %__MODULE__{} = index ->
+        index
+    end
+  end
+
+  defp single_flight_package(key, fun) do
+    :global.trans({{__MODULE__, :package_cache_fill, key}, self()}, fun, [node()], :infinity)
   end
 
   @doc "Clears a cached package index."
