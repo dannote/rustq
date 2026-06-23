@@ -195,6 +195,42 @@ RustQ.Meta.ast!(MyApp.Native.Generated, :save)
 These helpers are intentionally small; they are for reusing RustQ-generated Rust
 items without adding a binding-level framework.
 
+### Callable metadata for propagation inference
+
+RustQ can infer Rust `?` propagation when it knows the signature of the function
+or method being called. Local `defrust` functions contribute callable metadata
+from their `@spec`; external Rust callables can be imported at the `use RustQ.Meta`
+boundary:
+
+```elixir
+defmodule MyApp.Native.GeneratedStyleHelpers do
+  use RustQ.Meta,
+    rust_sources: ["native/my_nif/src/style_helpers.rs"],
+    rust_packages: [{"skia-safe", manifest_path: "native/my_nif/Cargo.toml"}],
+    callable_modules: [MyApp.Native.GeneratedEnums]
+end
+```
+
+Supported options are:
+
+- `:rust_sources` — a Rust source path or list of paths. Relative paths are
+  expanded from the current project working directory. RustQ parses free
+  functions and `impl` methods from these files and refreshes cached metadata
+  when the source file mtime or size changes.
+- `:rust_packages` — a Cargo package name or `{package_name, opts}` entry, or a
+  list of those entries. Options are passed to Cargo metadata lookup, commonly
+  `manifest_path: "native/my_nif/Cargo.toml"`. RustQ indexes package Rust source
+  structurally through `RustQ.Syn.Index.cached_package/2` and serializes initial
+  cache population so parallel Elixir compilation does not stampede Cargo's
+  package cache.
+- `:callable_modules` — a RustQ module or list of modules that expose
+  `__rustq_callables__/0`, usually another module using `RustQ.Meta`.
+
+These options are validated with structured `RustQ.Diagnostic` errors. Prefer
+small `rust_sources` or callable modules for project-owned helpers; use
+`rust_packages` when the source of truth is an external crate and RustQ needs to
+learn method signatures or public alias relationships from that crate.
+
 ### Advanced: RustQ-owned modules with `defrustmod`
 
 `defrustmod` is for RustQ-owned Rust module structure. Use the block form when

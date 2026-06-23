@@ -51,7 +51,14 @@ defmodule RustQ.Syn.Index do
     |> from_paths(package: package)
   end
 
-  @doc "Returns a cached index for all Rust sources in a Cargo package."
+  @doc """
+  Returns a cached index for all Rust sources in a Cargo package.
+
+  The first caller builds a structural package index from Cargo metadata and the
+  package's Rust source files. Concurrent callers for the same package/config are
+  serialized so parallel compilation does not stampede Cargo metadata or package
+  cache access; later callers read the already-built index from `:persistent_term`.
+  """
   @spec cached_package(String.t(), keyword()) :: t()
   def cached_package(package_name, opts \\ []) when is_binary(package_name) do
     key = {__MODULE__, :package, package_name, Enum.sort(opts)}
