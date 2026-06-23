@@ -83,6 +83,33 @@ defmodule RustQ.Meta.Type do
 
   def inner(%__MODULE__{}), do: nil
 
+  @doc """
+  Returns the concrete value type expected by a callable argument.
+
+  This peels structural argument adapters such as `impl Into<T>` and the common
+  `impl Into<Option<(A, B)>>` tuple case so propagation inference can compare a
+  decoder's success type with the value the Rust call actually expects.
+  """
+  @spec expected_value(t()) :: t()
+  def expected_value(%__MODULE__{kind: :impl_trait, meta: %{traits: traits}} = type) do
+    traits
+    |> Enum.find_value(fn
+      %__MODULE__{meta: %{syn_name: "Into", args: [%__MODULE__{} = inner]}} ->
+        expected_value(inner)
+
+      _trait ->
+        nil
+    end) || type
+  end
+
+  def expected_value(%__MODULE__{
+        kind: :option,
+        meta: %{inner: %__MODULE__{kind: :tuple} = inner}
+      }),
+      do: inner
+
+  def expected_value(%__MODULE__{} = type), do: type
+
   @doc "Returns true when two lowered types are semantically compatible."
   @spec compatible?(t() | nil, t() | nil) :: boolean()
   def compatible?(%__MODULE__{} = left, %__MODULE__{} = right) do

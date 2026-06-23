@@ -102,7 +102,7 @@ defmodule RustQ.Meta.Inference do
 
   defp expected_type_for_arg_expr(name, {var_name, _, context}, %Type{} = type)
        when name == var_name and is_atom(context),
-       do: expected_value_type_for_argument(type)
+       do: Type.expected_value(type)
 
   defp expected_type_for_arg_expr(
          name,
@@ -113,7 +113,7 @@ defmodule RustQ.Meta.Inference do
        do: receiver_type_for_as_ref_argument(type)
 
   defp expected_type_for_arg_expr(name, tuple, %Type{} = type) do
-    expected_type_for_tuple_arg(name, tuple, expected_value_type_for_argument(type))
+    expected_type_for_tuple_arg(name, tuple, Type.expected_value(type))
   end
 
   defp expected_type_for_arg_expr(_name, _arg, _expected_type), do: nil
@@ -133,22 +133,6 @@ defmodule RustQ.Meta.Inference do
   end
 
   defp expected_type_for_tuple_arg(_name, _tuple, _type), do: nil
-
-  defp expected_value_type_for_argument(%Type{kind: :impl_trait, meta: %{traits: traits}} = type) do
-    traits
-    |> Enum.find_value(fn
-      %Type{meta: %{syn_name: "Into", args: [inner]}} -> expected_value_type_for_argument(inner)
-      _trait -> nil
-    end) || type
-  end
-
-  defp expected_value_type_for_argument(%Type{
-         kind: :option,
-         meta: %{inner: %Type{kind: :tuple} = inner}
-       }),
-       do: inner
-
-  defp expected_value_type_for_argument(%Type{} = type), do: type
 
   defp receiver_type_for_as_ref_argument(%Type{kind: :impl_trait, meta: %{traits: traits}}) do
     traits

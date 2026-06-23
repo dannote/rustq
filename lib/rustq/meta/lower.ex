@@ -216,7 +216,7 @@ defmodule RustQ.Meta.Lower do
         Type.propagates?(call_type) and
           call_type
           |> Type.inner()
-          |> Type.compatible?(expected_type)
+          |> Type.compatible?(Type.expected_value(expected_type))
 
       _unknown_or_plain ->
         false

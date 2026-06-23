@@ -94,6 +94,80 @@ defmodule RustQ.Meta.LowerTest do
              statements
   end
 
+  test "infers propagation through impl Into option arguments" do
+    image_filter_type = %Type{
+      kind: :type,
+      rust: "ImageFilter",
+      ast: %AST.TypePath{parts: [:ImageFilter]}
+    }
+
+    option_filter_type = %Type{
+      kind: :option,
+      rust: "Option<ImageFilter>",
+      ast: %AST.TypeOption{inner: image_filter_type.ast},
+      meta: %{inner: image_filter_type}
+    }
+
+    nif_option_filter_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Option<ImageFilter>>",
+      ast: %AST.TypeNifResult{inner: option_filter_type.ast},
+      meta: %{inner: option_filter_type}
+    }
+
+    into_option_filter_type = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Option<ImageFilter>>",
+      ast: %AST.TypeRaw{source: "impl Into<Option<ImageFilter>>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "Into<Option<ImageFilter>>",
+            ast: %AST.TypePath{parts: [:Into]},
+            meta: %{syn_name: "Into", args: [option_filter_type]}
+          }
+        ]
+      }
+    }
+
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          offset(optional_image_filter_from_term(term))
+          :ok
+        end,
+        unit_type(),
+        %{term: term_type},
+        callables: [
+          %Callable{
+            name: "optional_image_filter_from_term",
+            kind: :function,
+            args: [%{name: "term", type: term_type, syn: nil}],
+            returns: nif_option_filter_type
+          },
+          %Callable{
+            name: "offset",
+            kind: :function,
+            args: [%{name: "input", type: into_option_filter_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{
+                 name: :offset,
+                 args: [%AST.Try{expr: %AST.LocalCall{name: :optional_image_filter_from_term}}]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers propagation inside some wrapper arguments" do
     clip_type = %Type{kind: :type, rust: "ClipOp", ast: %AST.TypePath{parts: [:ClipOp]}}
 
