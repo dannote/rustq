@@ -137,6 +137,7 @@ defmodule RustQ.Meta.LowerTest do
       Lower.quoted_body(
         quote do
           offset(optional_image_filter_from_term(term))
+          ImageFilters.offset(term, optional_image_filter_from_term(term), term)
           :ok
         end,
         unit_type(),
@@ -153,6 +154,27 @@ defmodule RustQ.Meta.LowerTest do
             kind: :function,
             args: [%{name: "input", type: into_option_filter_type, syn: nil}],
             returns: unit_type()
+          },
+          %Callable{
+            name: "offset",
+            kind: :function,
+            args: [
+              %{name: "offset", type: term_type, syn: nil},
+              %{name: "input", type: into_option_filter_type, syn: nil},
+              %{name: "crop_rect", type: term_type, syn: nil}
+            ],
+            returns: unit_type()
+          },
+          %Callable{
+            name: "offset",
+            kind: :method,
+            target: "ImageFilter",
+            args: [
+              %{name: "self", type: image_filter_type, syn: nil},
+              %{name: "crop_rect", type: term_type, syn: nil},
+              %{name: "delta", type: term_type, syn: nil}
+            ],
+            returns: unit_type()
           }
         ]
       )
@@ -162,6 +184,16 @@ defmodule RustQ.Meta.LowerTest do
                expr: %AST.LocalCall{
                  name: :offset,
                  args: [%AST.Try{expr: %AST.LocalCall{name: :optional_image_filter_from_term}}]
+               }
+             },
+             %AST.ExprStmt{
+               expr: %AST.PathCall{
+                 path: %AST.Path{parts: [:image_filters, :offset]},
+                 args: [
+                   %AST.Var{name: :term},
+                   %AST.Try{expr: %AST.LocalCall{name: :optional_image_filter_from_term}},
+                   %AST.Var{name: :term}
+                 ]
                }
              },
              %AST.Return{}

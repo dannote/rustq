@@ -660,9 +660,12 @@ defmodule RustQ.Meta.Lower do
     target_parts = Enum.drop(path, -1)
 
     target_parts
-    |> callable_target_candidates()
+    |> exact_callable_target_candidates()
     |> Enum.find_value(&callable_argument_types(&1, function, arity)) ||
-      callable_argument_types(nil, function, arity)
+      callable_argument_types(nil, function, arity) ||
+      target_parts
+      |> callable_target_candidates()
+      |> Enum.find_value(&callable_argument_types(&1, function, arity))
   end
 
   defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
@@ -1189,6 +1192,18 @@ defmodule RustQ.Meta.Lower do
     |> callable_target_candidates()
     |> Enum.find_value(&BindingIndex.return_type(callables, &1, function, arity)) ||
       BindingIndex.return_type(callables, nil, function, arity)
+  end
+
+  defp exact_callable_target_candidates(parts) do
+    mapped = mapped_alias_parts(parts)
+
+    [
+      Enum.map_join(mapped, "::", &to_string/1),
+      mapped |> List.last() |> to_string(),
+      Enum.map_join(parts, "::", &to_string/1),
+      parts |> List.last() |> to_string()
+    ]
+    |> Enum.uniq()
   end
 
   defp callable_target_candidates(parts) do
