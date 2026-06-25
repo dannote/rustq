@@ -27,6 +27,33 @@ defmodule RustQ.Meta.LowerTest do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.{Attribute, ExprStmt, Function, FunctionArg, MethodCall}
 
+  test "lowers ok_or bang as option to result propagation" do
+    statements =
+      Lower.quoted_body(
+        quote do
+          ok_or!(paint.shader(), badarg())
+        end,
+        %Type{
+          kind: :nif_result,
+          rust: "NifResult<Shader>",
+          ast: %AST.TypeNifResult{inner: %AST.TypePath{parts: [:Shader]}}
+        },
+        %{paint: %Type{kind: :type, rust: "Paint", ast: %AST.TypePath{parts: [:Paint]}}}
+      )
+
+    assert [
+             %AST.Return{
+               expr: %AST.Try{
+                 expr: %AST.MethodCall{
+                   method: :ok_or,
+                   receiver: %AST.MethodCall{method: :shader},
+                   args: [%AST.Path{parts: [:rustler, :Error, :BadArg]}]
+                 }
+               }
+             }
+           ] = statements
+  end
+
   test "infers return-position propagation from callable metadata" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 

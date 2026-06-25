@@ -433,6 +433,16 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:unwrap!, _, [expression]}), do: %AST.Try{expr: lower_expr(expression)}
 
+  defp lower_expr({:ok_or!, _, [option, error]}) do
+    %AST.Try{
+      expr: %AST.MethodCall{
+        receiver: lower_expr(option),
+        method: :ok_or,
+        args: [lower_nif_error(error)]
+      }
+    }
+  end
+
   defp lower_expr({:|>, _, [left, right]}), do: lower_pipe(left, right)
 
   defp lower_expr({:cast, _, [expression, type]}),
