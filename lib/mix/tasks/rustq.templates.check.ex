@@ -5,6 +5,8 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
 
   use Mix.Task
 
+  alias RustQ.Rust.AST.Builder, as: A
+
   @shortdoc "Checks RustQ's Rustler helper templates"
 
   @fixture Path.join(["fixtures", "rustler_template_check"])
@@ -74,8 +76,8 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
         fields: []
       ),
       RustQ.Rustler.tagged_enum(:ExContent,
-        attrs: ["allow(dead_code)"],
-        tag: "atom_struct()",
+        attrs: [A.allow_attr(:dead_code)],
+        tag: A.call(:atom_struct),
         variants: [
           Text: [type: :ExText, module: "Elixir.Folio.Content.Text"],
           Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]

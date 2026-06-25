@@ -1,10 +1,15 @@
 defmodule RustQ.RustlerSchemaTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+
   defmodule ContentSchema do
     use RustQ.Rustler.Schema
 
-    schema Folio.Content, default_attrs: ["allow(dead_code)"] do
+    schema Folio.Content do
+      default_attrs([A.allow_attr(:dead_code)])
+
       node Text do
         field(:text, :String)
         field(:size, {:option, :String})
@@ -30,7 +35,7 @@ defmodule RustQ.RustlerSchemaTest do
     assert schema.module_prefix == Folio.Content
     assert schema.rust_prefix == "Ex"
     assert schema.tag_field == :__struct__
-    assert schema.default_attrs == ["allow(dead_code)"]
+    assert [%AST.Attribute{path: [:allow], args: [:dead_code]}] = schema.default_attrs
     assert schema.type_aliases == []
     assert {:Text, [text: :String, size: {:option, :String}]} not in schema.nodes
 

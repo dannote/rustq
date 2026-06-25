@@ -13,7 +13,7 @@ defmodule RustQ.Rustler.TaggedEnum do
   @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
   def build(name, opts) do
     variants = Keyword.fetch!(opts, :variants)
-    tag = Keyword.get(opts, :tag, "atom_struct()")
+    tag = Keyword.get(opts, :tag, A.call(:atom_struct))
     unknown = Keyword.get(opts, :unknown, "unknown_variant")
 
     [
@@ -24,15 +24,13 @@ defmodule RustQ.Rustler.TaggedEnum do
   end
 
   defp enum(name, variants, opts) do
-    name
-    |> Rust.enum(
+    Rust.ast_item(%AST.Enum{
+      name: ident_atom(name),
       vis: Keyword.get(opts, :vis, :pub),
       derive: Keyword.get(opts, :derive, [:Clone, :Debug]),
       variants: Enum.map(variants, &variant/1),
       attrs: Keyword.get(opts, :attrs, [])
-    )
-    |> Rust.to_fragment()
-    |> Rust.item()
+    })
   end
 
   defp decoder(name, variants, tag, unknown) do
@@ -57,7 +55,7 @@ defmodule RustQ.Rustler.TaggedEnum do
   end
 
   defp variant({variant, opts}) do
-    {variant, [tuple: [Keyword.fetch!(opts, :type)]]}
+    %AST.EnumVariant{name: ident_atom(variant), tuple: [Keyword.fetch!(opts, :type)]}
   end
 
   defp decoder_function(enum_name, variants, tag, unknown) do
@@ -69,7 +67,7 @@ defmodule RustQ.Rustler.TaggedEnum do
         A.let(:env, A.method(:term, :get_env)),
         A.let(
           :module,
-          A.try(A.method(A.try(A.method(:term, :map_get, [A.escape_expr(tag)])), :decode)),
+          A.try(A.method(A.try(A.method(:term, :map_get, [tag])), :decode)),
           type: A.type_path([:rustler, :Atom])
         ),
         A.let(
@@ -79,7 +77,7 @@ defmodule RustQ.Rustler.TaggedEnum do
         A.return(
           A.match_expr(
             A.method(:name_str, :as_str),
-            Enum.map(variants, &decode_arm(enum_name, &1)) ++ [unknown_arm(unknown)]
+            Enum.map(variants, &decode_arm(ident_atom(enum_name), &1)) ++ [unknown_arm(unknown)]
           )
         )
       ]
@@ -94,7 +92,7 @@ defmodule RustQ.Rustler.TaggedEnum do
       body: [
         A.return(
           A.ok(
-            A.path_call([enum_name, variant], [
+            A.path_call([ident_atom(enum_name), ident_atom(variant)], [
               A.try(A.path_call([:rustler, :Decoder, :decode], [:term]))
             ])
           )
@@ -115,7 +113,7 @@ defmodule RustQ.Rustler.TaggedEnum do
 
   defp encode_arm(enum_name, {variant, _opts}) do
     %AST.Arm{
-      pattern: P.path_tuple([enum_name, variant], [:value]),
+      pattern: P.path_tuple([ident_atom(enum_name), ident_atom(variant)], [:value]),
       body: [A.return(A.method(:value, :encode, [:env]))]
     }
   end
@@ -128,4 +126,7 @@ defmodule RustQ.Rustler.TaggedEnum do
       ]
     }
   end
+
+  defp ident_atom(value) when is_atom(value), do: value
+  defp ident_atom(value) when is_binary(value), do: RustQ.Atom.identifier!(value)
 end

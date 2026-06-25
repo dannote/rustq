@@ -28,6 +28,8 @@ defmodule RustQ.Rustler.Schema do
   Field optionality is encoded in the Rust type (`{:option, :String}`), keeping
   the schema close to the generated Rust.
   """
+  alias RustQ.Rust.AST.Builder, as: A
+
   defstruct module_prefix: nil,
             rust_prefix: "Ex",
             tag_field: :__struct__,
@@ -190,13 +192,27 @@ defmodule RustQ.Rustler.Schema do
       tag: tag_expr(schema.tag_field),
       unknown: Keyword.get(opts, :unknown, :unknown_variant),
       variants: variants,
-      attrs: attrs(schema, opts),
+      attrs: enum_attrs(schema, opts),
       derive: Keyword.get(opts, :derive, [:Clone, :Debug]),
       vis: Keyword.get(opts, :vis, :pub)
     )
   end
 
   defp attrs(schema, opts), do: Keyword.get(opts, :attrs, schema.default_attrs)
+
+  defp enum_attrs(schema, opts) do
+    case attrs(schema, opts) do
+      [] -> []
+      attrs -> Enum.map(attrs, &enum_attr!/1)
+    end
+  end
+
+  defp enum_attr!(%RustQ.Rust.AST.Attribute{} = attr), do: attr
+
+  defp enum_attr!(other) do
+    raise ArgumentError,
+          "tagged_enum attrs must be RustQ.Rust.AST.Attribute structs, got: #{inspect(other)}"
+  end
 
   defp enum_variants(:all, schema), do: Enum.map(schema.nodes, &elem(&1, 0))
   defp enum_variants(variants, _schema), do: List.wrap(variants)
@@ -232,8 +248,8 @@ defmodule RustQ.Rustler.Schema do
     end)
   end
 
-  defp tag_expr(:__struct__), do: "atom_struct()"
-  defp tag_expr(field), do: "atoms::#{field}()"
+  defp tag_expr(:__struct__), do: A.call(:atom_struct)
+  defp tag_expr(field), do: A.path_call([:atoms, field])
 
   defp rust_type(_schema, :string), do: :String
   defp rust_type(_schema, :boolean), do: :bool

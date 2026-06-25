@@ -1,6 +1,8 @@
 defmodule RustQ.RustlerTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Rust.AST.Builder, as: A
+
   test "builds Rustler helpers" do
     code =
       "__rq_items!();"
@@ -143,8 +145,6 @@ defmodule RustQ.RustlerTest do
   end
 
   test "builds atom dispatch functions from AST expressions" do
-    alias RustQ.Rust.AST.Builder, as: A
-
     code =
       "__rq_items!();"
       |> RustQ.render!("atom_dispatch_ast.rs",
@@ -244,8 +244,8 @@ defmodule RustQ.RustlerTest do
         splice: [
           items:
             RustQ.Rustler.tagged_enum(:ExContent,
-              tag: "atom_struct()",
-              attrs: ["allow(dead_code)"],
+              tag: A.call(:atom_struct),
+              attrs: [A.allow_attr(:dead_code)],
               variants: [
                 Text: [type: :ExText, module: "Elixir.Folio.Content.Text"],
                 Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
