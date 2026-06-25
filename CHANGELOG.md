@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add `ok_or!(option_expr, error_expr)` as the Rusty-Elixir idiom for explicit
+  `Option<T>` to `Result<T, E>` propagation boundaries.
+- Extend type-driven propagation inference with nested Rust module function
+  metadata, downstream receiver-method let inference, `as_slice()` adapters,
+  source-backed `From<A> for B` compatibility for `impl Into<B>`, and
+  associated-type metadata such as `impl IntoIterator<Item = T>`.
+
 ## v0.6.0 - 2026-06-19
 
 - Reframe Rusty Elixir as the high-level `defrust` authoring surface.

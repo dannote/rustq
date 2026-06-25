@@ -155,6 +155,9 @@ Current `defrust` lowering supports a growing valid-Elixir subset:
 - Option cases can be written as `{:some, value}` and `:none`
 - Result cases can be written as `{:ok, value}` and `{:error, reason}`
 - `unwrap!(expr)` spells Rust `expr?`
+- `ok_or!(option_expr, error_expr)` spells Rust
+  `option_expr.ok_or(error_expr)?`; use it for explicit `Option<T>` to
+  `Result<T, E>` boundaries such as `ok_or!(paint.shader(), badarg())`
 - `assign!(target, expr)` spells Rust assignment for explicit mutation, and
   `return!(expr)` spells early return
 - `ref(expr)`, `mut_ref(expr)`, and `deref(expr)` spell Rust borrows and
@@ -230,6 +233,13 @@ These options are validated with structured `RustQ.Diagnostic` errors. Prefer
 small `rust_sources` or callable modules for project-owned helpers; use
 `rust_packages` when the source of truth is an external crate and RustQ needs to
 learn method signatures or public alias relationships from that crate.
+
+With callable metadata, RustQ can propagate `?` through common Rust adapter
+shapes without explicit `unwrap!` in Rusty Elixir, including local/remote/path
+and method call arguments, downstream local bindings, receiver-method uses,
+`ref(...)`, `as_ref()`, `as_slice()`, tuple elements, `Vec<T>.push(...)`,
+`impl Into<T>`, `impl Into<Option<T>>`, `From<A> for B` evidence for
+`impl Into<B>`, and `impl IntoIterator<Item = T>` vector arguments.
 
 ### Advanced: RustQ-owned modules with `defrustmod`
 
