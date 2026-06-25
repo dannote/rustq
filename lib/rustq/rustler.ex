@@ -108,7 +108,7 @@ defmodule RustQ.Rustler do
   This is intentionally generic: use it for command dispatch, tagged map
   dispatch, AST node dispatch, or any other Rustler atom switch.
   """
-  @spec atom_dispatch(atom() | String.t(), keyword()) :: Rust.Function.t()
+  @spec atom_dispatch(atom() | String.t(), keyword()) :: Rust.Fragment.t()
   def atom_dispatch(name, opts), do: Atom.dispatch(name, opts)
 
   @doc """

@@ -142,6 +142,28 @@ defmodule RustQ.RustlerTest do
     assert code =~ "_ => Ok(())"
   end
 
+  test "builds atom dispatch functions from AST expressions" do
+    alias RustQ.Rust.AST.Builder, as: A
+
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("atom_dispatch_ast.rs",
+        splice: [
+          items: [
+            RustQ.Rustler.atom_dispatch(:draw_command,
+              on: A.atom(:op),
+              cases: [rect: A.call(:draw_rect)],
+              unknown: A.err(A.badarg())
+            )
+          ]
+        ]
+      )
+
+    assert code =~ "let value = atoms::op();"
+    assert code =~ "value if value == atoms::rect() => draw_rect()"
+    assert code =~ "_ => Err(rustler::Error::BadArg)"
+  end
+
   test "builds map helper functions" do
     code =
       "__rq_items!();"

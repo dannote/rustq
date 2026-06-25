@@ -45,36 +45,28 @@ defmodule RustQ.Rustler.Atom do
     decoder_ast(name, input, result, atoms, unknown, cases)
   end
 
-  @spec dispatch(atom() | String.t(), keyword()) :: Rust.Function.t()
+  @spec dispatch(atom() | String.t(), keyword()) :: Rust.Fragment.t()
   def dispatch(name, opts) do
-    value = Keyword.fetch!(opts, :on)
     atoms = Keyword.get(opts, :atoms, "atoms")
-    unknown = Keyword.get(opts, :unknown, "Ok(())")
+    unknown = Keyword.get(opts, :unknown, A.ok())
 
-    arms =
-      opts
-      |> Keyword.fetch!(:cases)
-      |> Enum.map(fn {atom_name, call} ->
-        "value if value == #{atoms}::#{atom_name}() => #{call},"
-      end)
-      |> Kernel.++(["_ => #{unknown},"])
-
-    body = [
-      "let value = ",
-      value,
-      ";\n\nmatch value {\n",
-      Enum.map(arms, &["    ", &1, "\n"]),
-      "}"
-    ]
-
-    Rust.fn(name,
+    function = %AST.Function{
+      name: ident_atom(name),
       args: Keyword.get(opts, :args, []),
       returns: Keyword.get(opts, :returns, "NifResult<()>"),
-      body: body,
+      body: [
+        A.let(:value, dispatch_expr(Keyword.fetch!(opts, :on))),
+        A.return_stmt(%AST.Match{
+          expr: A.var(:value),
+          arms: dispatch_arms(Keyword.fetch!(opts, :cases), atoms, unknown)
+        })
+      ],
       vis: Keyword.get(opts, :vis),
       lifetime: Keyword.get(opts, :lifetime),
       attrs: Keyword.get(opts, :attrs, [])
-    )
+    }
+
+    Rust.ast_item(function)
   end
 
   @spec cached([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
@@ -128,6 +120,31 @@ defmodule RustQ.Rustler.Atom do
         unknown_arm(unknown)
       ]
   end
+
+  defp dispatch_arms(cases, atoms, unknown) do
+    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&RustQ.Atom.identifier!/1)
+
+    Enum.map(cases, fn {atom, call} ->
+      %AST.Arm{
+        pattern: %AST.PatAtomGuard{name: ident_atom(atom), module: module},
+        body: [A.return_stmt(dispatch_expr(call))]
+      }
+    end) ++
+      [
+        %AST.Arm{pattern: %AST.PatWildcard{}, body: [A.return_stmt(dispatch_expr(unknown))]}
+      ]
+  end
+
+  defp dispatch_expr(%{__struct__: _module} = expr) do
+    if AST.expr_node?(expr) do
+      expr
+    else
+      raise ArgumentError, "expected RustQ expression AST, got: #{inspect(expr)}"
+    end
+  end
+
+  defp dispatch_expr(source) when is_binary(source), do: A.escape_expr(source)
+  defp dispatch_expr(value), do: A.expr(value)
 
   defp ident_atom(value) when is_atom(value), do: value
   defp ident_atom(value) when is_binary(value), do: RustQ.Atom.identifier!(value)
