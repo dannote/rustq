@@ -2,12 +2,20 @@
 
 ## Unreleased
 
+## v0.7.0 - 2026-06-25
+
 - Add `ok_or!(option_expr, error_expr)` as the Rusty-Elixir idiom for explicit
   `Option<T>` to `Result<T, E>` propagation boundaries.
 - Extend type-driven propagation inference with nested Rust module function
   metadata, downstream receiver-method let inference, `as_slice()` adapters,
   source-backed `From<A> for B` compatibility for `impl Into<B>`, and
   associated-type metadata such as `impl IntoIterator<Item = T>`.
+- Add source-backed callable metadata from Rust source files, Cargo packages,
+  and callable modules.
+- Dogfood native RustQ AST generation in Rustler atom dispatch, tagged enum,
+  macro item, and native codegen helper paths.
+- Add structured diagnostics for RustQ configuration, source loading, lowering,
+  and native rendering failures.
 
 ## v0.6.0 - 2026-06-19
 
