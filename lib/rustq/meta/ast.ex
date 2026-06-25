@@ -57,7 +57,7 @@ defmodule RustQ.Meta.AST do
 
     lifetime =
       Keyword.get_lazy(opts, :lifetime, fn ->
-        if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
+        if Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: :a
       end)
 
     %AST.Function{
@@ -196,7 +196,7 @@ defmodule RustQ.Meta.AST do
         callables: spec_callables(specs, type_aliases) ++ external_callables
       )
 
-    lifetime = if Enum.any?(arg_types ++ [return_type], &String.contains?(&1.rust, "'a")), do: :a
+    lifetime = if Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: :a
 
     ast = %AST.Function{
       name: name,
@@ -378,7 +378,7 @@ defmodule RustQ.Meta.AST do
 
   defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
     lifetime =
-      if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
+      if Enum.any?(fields, fn {_name, type, _presence} -> Type.lifetime?(type) end),
         do: :a
 
     struct = %AST.Struct{

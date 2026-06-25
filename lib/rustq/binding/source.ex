@@ -254,11 +254,14 @@ defmodule RustQ.Binding.Source do
     |> Map.new(fn {key, names} -> {key, Enum.uniq(names)} end)
   end
 
-  defp from_conversion(%Syn.Impl{
-         trait: "From" <> _rest,
-         target_ast: target_ast,
-         methods: methods
-       }) do
+  defp from_conversion(%Syn.Impl{trait: trait, target_ast: target_ast, methods: methods})
+       when is_binary(trait) do
+    if from_trait?(trait), do: from_conversion(target_ast, methods)
+  end
+
+  defp from_conversion(%Syn.Impl{}), do: nil
+
+  defp from_conversion(target_ast, methods) do
     with %Syn.Method{name: "from", args: [arg | _]} <- Enum.find(methods, &(&1.name == "from")),
          %Type{} = from <- Spec.from_syn(arg.type_ast),
          %Type{} = to <- Spec.from_syn(target_ast) do
@@ -268,7 +271,9 @@ defmodule RustQ.Binding.Source do
     end
   end
 
-  defp from_conversion(%Syn.Impl{}), do: nil
+  defp from_trait?("From"), do: true
+  defp from_trait?("From" <> rest), do: String.match?(rest, ~r/^\s*</)
+  defp from_trait?(_trait), do: false
 
   defp annotate_from_conversion_type(%Type{} = type, conversions) do
     conversions

@@ -65,6 +65,12 @@ defmodule RustQ.Meta.Type do
 
   def external?(%__MODULE__{}, _module, _type), do: false
 
+  @doc "Returns true when the type AST structurally contains the given lifetime."
+  @spec lifetime?(t(), atom()) :: boolean()
+  def lifetime?(%__MODULE__{ast: ast, meta: meta}, lifetime \\ :a) when is_atom(lifetime) do
+    ast_lifetime?(ast, lifetime) or meta_lifetime?(meta, lifetime)
+  end
+
   @doc "Returns true for wrapper types that can propagate with Rust `?`."
   @spec propagates?(t()) :: boolean()
   def propagates?(%__MODULE__{kind: kind}) when kind in [:result, :nif_result, :option], do: true
@@ -189,6 +195,43 @@ defmodule RustQ.Meta.Type do
     do: parts |> List.last() |> to_string()
 
   defp path_type_name(_ast), do: nil
+
+  defp ast_lifetime?(%AST.TypePath{lifetimes: lifetimes, generics: generics}, lifetime) do
+    lifetime in lifetimes or Enum.any?(generics, &ast_lifetime?(&1, lifetime))
+  end
+
+  defp ast_lifetime?(%AST.TypeRef{lifetime: lifetime}, lifetime), do: true
+  defp ast_lifetime?(%AST.TypeRef{inner: inner}, lifetime), do: ast_lifetime?(inner, lifetime)
+  defp ast_lifetime?(%AST.TypeOption{inner: inner}, lifetime), do: ast_lifetime?(inner, lifetime)
+  defp ast_lifetime?(%AST.TypeVec{inner: inner}, lifetime), do: ast_lifetime?(inner, lifetime)
+  defp ast_lifetime?(%AST.TypeSlice{inner: inner}, lifetime), do: ast_lifetime?(inner, lifetime)
+  defp ast_lifetime?(%AST.TypeArray{inner: inner}, lifetime), do: ast_lifetime?(inner, lifetime)
+
+  defp ast_lifetime?(%AST.TypeNifResult{inner: inner}, lifetime),
+    do: ast_lifetime?(inner, lifetime)
+
+  defp ast_lifetime?(%AST.TypeResult{ok: ok, error: error}, lifetime) do
+    ast_lifetime?(ok, lifetime) or ast_lifetime?(error, lifetime)
+  end
+
+  defp ast_lifetime?(_ast, _lifetime), do: false
+
+  defp meta_lifetime?(%{inner: %__MODULE__{} = inner}, lifetime), do: lifetime?(inner, lifetime)
+
+  defp meta_lifetime?(%{elements: elements}, lifetime) when is_list(elements),
+    do: Enum.any?(elements, &lifetime?(&1, lifetime))
+
+  defp meta_lifetime?(%{fields: fields}, lifetime) when is_list(fields) do
+    Enum.any?(fields, fn
+      {_name, %__MODULE__{} = type, _presence} -> lifetime?(type, lifetime)
+      _field -> false
+    end)
+  end
+
+  defp meta_lifetime?(%{args: args}, lifetime) when is_list(args),
+    do: Enum.any?(args, &lifetime?(&1, lifetime))
+
+  defp meta_lifetime?(_meta, _lifetime), do: false
 
   @doc """
   Converts structured `RustQ.Syn.Type` metadata into a RustQ meta type.
@@ -479,7 +522,7 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(:slice, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:slice, %AST.TypeRef{inner: %AST.TypeSlice{inner: inner.ast}})
+    type(:slice, %AST.TypeRef{inner: %AST.TypeSlice{inner: inner.ast}}, %{inner: inner})
   end
 
   defp parse_rust_type(:raw, [type], _aliases), do: type(:type, raw_type!(type))
@@ -491,17 +534,17 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(:ref, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:ref, %AST.TypeRef{inner: inner.ast})
+    type(:ref, %AST.TypeRef{inner: inner.ast}, %{inner: inner})
   end
 
   defp parse_rust_type(:mut_ref, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:mut_ref, %AST.TypeRef{inner: inner.ast, mutable: true})
+    type(:mut_ref, %AST.TypeRef{inner: inner.ast, mutable: true}, %{inner: inner})
   end
 
   defp parse_rust_type(:option, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:option, %AST.TypeOption{inner: inner.ast})
+    type(:option, %AST.TypeOption{inner: inner.ast}, %{inner: inner})
   end
 
   defp parse_rust_type(:vec, [inner], aliases) do
@@ -681,7 +724,7 @@ defmodule RustQ.Meta.Type do
   defp map_type?(_ast), do: false
 
   defp field_lifetimes(fields) do
-    if Enum.any?(fields, fn {_name, type, _presence} -> String.contains?(type.rust, "'a") end),
+    if Enum.any?(fields, fn {_name, type, _presence} -> lifetime?(type) end),
       do: [:a],
       else: []
   end

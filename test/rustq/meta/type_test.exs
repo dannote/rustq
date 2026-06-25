@@ -72,6 +72,17 @@ defmodule RustQ.Meta.TypeTest do
              "&[(Atom, Term<'a>)]"
   end
 
+  test "detects lifetimes structurally" do
+    assert quote(do: term()) |> Spec.type() |> Type.lifetime?(:a)
+    assert quote(do: R.slice({R.atom(), R.term()})) |> Spec.type() |> Type.lifetime?(:a)
+
+    assert quote(do: GeneratedOpts.OvalOpts.t(R.lifetime(:a)))
+           |> Spec.type()
+           |> Type.lifetime?(:a)
+
+    refute quote(do: R.vec(R.u32())) |> Spec.type() |> Type.lifetime?(:a)
+  end
+
   test "categorizes lowered types semantically" do
     number = RustQ.Spec.type(quote(do: number()))
     integer = RustQ.Spec.type(quote(do: integer()))
