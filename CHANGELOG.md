@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.8.0 - 2026-06-25
+
+- Add semantic control-flow lowering for expression-oriented Rusty-Elixir.
+- Support macro-generated `case` clauses in `defrust` lowering.
+
 ## v0.7.0 - 2026-06-25
 
 - Add `ok_or!(option_expr, error_expr)` as the Rusty-Elixir idiom for explicit
