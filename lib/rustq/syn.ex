@@ -252,6 +252,7 @@ defmodule RustQ.Syn do
     @moduledoc "Rust free function metadata, including doc comments, arguments, and return type."
     defstruct [
       :name,
+      :module_path,
       :visibility,
       :source_line,
       :source_path,
@@ -265,6 +266,7 @@ defmodule RustQ.Syn do
 
     @type t :: %__MODULE__{
             name: String.t(),
+            module_path: [String.t()] | nil,
             visibility: :public | :private,
             source_line: pos_integer() | nil,
             source_path: Path.t() | nil,
@@ -654,13 +656,45 @@ defmodule RustQ.Syn do
     }
   end
 
+  defp decode_item!(
+         {"function", name, {module_path, visibility}, {source_line, signature}, docs, args,
+          returns}
+       ) do
+    decode_callable!(
+      RustQ.Syn.Function,
+      name,
+      module_path,
+      visibility,
+      {source_line, signature},
+      docs,
+      args,
+      returns
+    )
+  end
+
   defp decode_item!({"function", name, visibility, {source_line, signature}, docs, args, returns}) do
     decode_callable!(
       RustQ.Syn.Function,
       name,
+      [],
       visibility,
-      source_line,
-      signature,
+      {source_line, signature},
+      docs,
+      args,
+      returns
+    )
+  end
+
+  defp decode_item!(
+         {"function", name, module_path, visibility, {source_line, signature}, docs, args,
+          returns}
+       ) do
+    decode_callable!(
+      RustQ.Syn.Function,
+      name,
+      module_path,
+      visibility,
+      {source_line, signature},
       docs,
       args,
       returns
@@ -686,21 +720,31 @@ defmodule RustQ.Syn do
     decode_callable!(
       RustQ.Syn.Method,
       name,
+      nil,
       visibility,
-      source_line,
-      signature,
+      {source_line, signature},
       docs,
       args,
       returns
     )
   end
 
-  defp decode_callable!(module, name, visibility, source_line, signature, docs, args, returns) do
+  defp decode_callable!(
+         module,
+         name,
+         module_path,
+         visibility,
+         {source_line, signature},
+         docs,
+         args,
+         returns
+       ) do
     {returns, returns_ast} = decode_return(returns)
     args = decode_args(args)
 
     struct(module, %{
       name: name,
+      module_path: module_path,
       visibility: decode_visibility!(visibility),
       source_line: source_line,
       signature: signature,

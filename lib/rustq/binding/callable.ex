@@ -66,6 +66,7 @@ defmodule RustQ.Binding.Callable do
     %__MODULE__{
       name: function.name,
       kind: :function,
+      target: function_target(function),
       docs: function.docs,
       args: Enum.map(function.args, &arg/1),
       returns: maybe_type(function.returns_ast),
@@ -111,6 +112,11 @@ defmodule RustQ.Binding.Callable do
   def return_type!(%__MODULE__{name: name}) do
     raise ArgumentError, "callable #{name} has no return type"
   end
+
+  defp function_target(%Syn.Function{module_path: [_ | _] = module_path}),
+    do: Enum.join(module_path, "::")
+
+  defp function_target(%Syn.Function{}), do: nil
 
   defp arg(%Syn.Arg{} = arg) do
     %{name: arg.name, type: Spec.from_syn(arg.type_ast), syn: arg}

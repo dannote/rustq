@@ -119,99 +119,108 @@ impl<'ast> Visit<'ast> for AtomReferenceVisitor {
 }
 
 fn items<'a>(env: Env<'a>, items: Vec<Item>) -> Vec<Term<'a>> {
+    items_with_module(env, items, Vec::new())
+}
+
+fn items_with_module<'a>(
+    env: Env<'a>,
+    items: Vec<Item>,
+    module_path: Vec<String>,
+) -> Vec<Term<'a>> {
     items
         .into_iter()
-        .filter_map(|item| item_term(env, item))
+        .flat_map(|item| item_terms(env, item, module_path.clone()))
         .collect()
 }
 
-fn item_term<'a>(env: Env<'a>, item: Item) -> Option<Term<'a>> {
+fn item_terms<'a>(env: Env<'a>, item: Item, module_path: Vec<String>) -> Vec<Term<'a>> {
     match item {
-        Item::Enum(item) => Some(
+        Item::Enum(item) => vec![(
+            "enum",
+            item.ident.to_string(),
+            visibility(&item.vis),
+            line(item.ident.span()),
+            docs(&item.attrs),
+            item.variants
+                .into_iter()
+                .map(|variant| variant.ident.to_string())
+                .collect::<Vec<_>>(),
+        )
+            .encode(env)],
+        Item::Struct(item) => vec![(
+            "struct",
+            item.ident.to_string(),
+            visibility(&item.vis),
+            line(item.ident.span()),
+            docs(&item.attrs),
+            fields(env, item.fields),
+        )
+            .encode(env)],
+        Item::Fn(item) => vec![(
+            "function",
+            item.sig.ident.to_string(),
+            (module_path, visibility(&item.vis)),
             (
-                "enum",
-                item.ident.to_string(),
-                visibility(&item.vis),
-                line(item.ident.span()),
-                docs(&item.attrs),
-                item.variants
-                    .into_iter()
-                    .map(|variant| variant.ident.to_string())
-                    .collect::<Vec<_>>(),
-            )
-                .encode(env),
-        ),
-        Item::Struct(item) => Some(
-            (
-                "struct",
-                item.ident.to_string(),
-                visibility(&item.vis),
-                line(item.ident.span()),
-                docs(&item.attrs),
-                fields(env, item.fields),
-            )
-                .encode(env),
-        ),
-        Item::Fn(item) => Some(
-            (
-                "function",
-                item.sig.ident.to_string(),
-                visibility(&item.vis),
-                (
-                    line(item.sig.ident.span()),
-                    item.sig.to_token_stream().to_string(),
-                ),
-                docs(&item.attrs),
-                item.sig
-                    .inputs
-                    .into_iter()
-                    .map(|arg| function_arg(env, arg))
-                    .collect::<Vec<_>>(),
-                return_type(env, item.sig.output),
-            )
-                .encode(env),
-        ),
-        Item::Impl(item) => Some(
-            (
-                "impl",
-                type_string(&item.self_ty),
-                type_metadata(env, &item.self_ty),
-                item.trait_
-                    .map(|(_bang, path, _for)| path.to_token_stream().to_string()),
-                line(item.impl_token.span),
-                docs(&item.attrs),
-                item.items
-                    .into_iter()
-                    .filter_map(|item| impl_method_term(env, item))
-                    .collect::<Vec<_>>(),
-            )
-                .encode(env),
-        ),
-        Item::Use(item) => use_alias(&item.tree).map(|(path, segments, alias, glob)| {
-            (
-                "use",
-                path,
-                segments,
-                alias,
-                glob,
-                (visibility(&item.vis), line(item.use_token.span)),
-                docs(&item.attrs),
-            )
-                .encode(env)
-        }),
-        Item::Type(item) => Some(
-            (
-                "type_alias",
-                item.ident.to_string(),
-                visibility(&item.vis),
-                line(item.ident.span()),
-                docs(&item.attrs),
-                type_string(&item.ty),
-                type_metadata(env, &item.ty),
-            )
-                .encode(env),
-        ),
-        _ => None,
+                line(item.sig.ident.span()),
+                item.sig.to_token_stream().to_string(),
+            ),
+            docs(&item.attrs),
+            item.sig
+                .inputs
+                .into_iter()
+                .map(|arg| function_arg(env, arg))
+                .collect::<Vec<_>>(),
+            return_type(env, item.sig.output),
+        )
+            .encode(env)],
+        Item::Impl(item) => vec![(
+            "impl",
+            type_string(&item.self_ty),
+            type_metadata(env, &item.self_ty),
+            item.trait_
+                .map(|(_bang, path, _for)| path.to_token_stream().to_string()),
+            line(item.impl_token.span),
+            docs(&item.attrs),
+            item.items
+                .into_iter()
+                .filter_map(|item| impl_method_term(env, item))
+                .collect::<Vec<_>>(),
+        )
+            .encode(env)],
+        Item::Use(item) => {
+            use_alias(&item.tree).map_or_else(Vec::new, |(path, segments, alias, glob)| {
+                vec![(
+                    "use",
+                    path,
+                    segments,
+                    alias,
+                    glob,
+                    (visibility(&item.vis), line(item.use_token.span)),
+                    docs(&item.attrs),
+                )
+                    .encode(env)]
+            })
+        }
+        Item::Type(item) => vec![(
+            "type_alias",
+            item.ident.to_string(),
+            visibility(&item.vis),
+            line(item.ident.span()),
+            docs(&item.attrs),
+            type_string(&item.ty),
+            type_metadata(env, &item.ty),
+        )
+            .encode(env)],
+        Item::Mod(item) => {
+            if let Some((_brace, items)) = item.content {
+                let mut nested_path = module_path;
+                nested_path.push(item.ident.to_string());
+                items_with_module(env, items, nested_path)
+            } else {
+                Vec::new()
+            }
+        }
+        _ => Vec::new(),
     }
 }
 

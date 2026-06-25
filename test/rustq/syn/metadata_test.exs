@@ -114,6 +114,29 @@ defmodule RustQ.Syn.MetadataTest do
              "fn offset(&mut self, dx: f32, dy: f32) -> Self"
   end
 
+  test "parses nested module free functions with module paths" do
+    source = """
+    pub mod color_filters {
+        pub fn blend(c: impl Into<Color>, mode: BlendMode) -> Option<ColorFilter> { todo!() }
+    }
+    """
+
+    assert {:ok, file} = Syn.parse(source)
+
+    assert [
+             %Syn.Function{
+               name: "blend",
+               module_path: ["color_filters"],
+               source_line: 2,
+               args: [
+                 %Arg{name: "c", type_ast: %Type.ImplTrait{}},
+                 %Arg{name: "mode", type_ast: %Type.Path{name: "BlendMode"}}
+               ],
+               returns_ast: %Type.Option{inner: %Type.Path{name: "ColorFilter"}}
+             }
+           ] = Syn.functions(file)
+  end
+
   test "parses common compound type metadata" do
     source = """
     impl Canvas {

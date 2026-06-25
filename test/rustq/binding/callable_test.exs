@@ -27,6 +27,29 @@ defmodule RustQ.Binding.CallableTest do
            } = Callable.from_syn_function(function)
   end
 
+  test "normalizes parsed nested Rust free functions with module targets" do
+    function =
+      """
+      pub mod color_filters {
+        pub fn blend(c: impl Into<Color>, mode: BlendMode) -> Option<ColorFilter> { todo!() }
+      }
+      """
+      |> parsed_file!()
+      |> Syn.functions()
+      |> List.first()
+
+    assert %Callable{
+             name: "blend",
+             kind: :function,
+             target: "color_filters",
+             args: [
+               %{name: "c", type: %Type{kind: :impl_trait}},
+               %{name: "mode", type: %Type{kind: :type, rust: "BlendMode"}}
+             ],
+             returns: %Type{kind: :option, rust: "Option<ColorFilter>"}
+           } = Callable.from_syn_function(function)
+  end
+
   test "normalizes parsed Rust impl methods with receiver and return metadata" do
     method =
       """
