@@ -853,6 +853,105 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers let propagation through as_slice arguments" do
+    atom_type = %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
+    child_type = %Type{kind: :type, rust: "ChildPtr", ast: %AST.TypePath{parts: [:ChildPtr]}}
+
+    vec_child_type = %Type{
+      kind: :vec,
+      rust: "Vec<ChildPtr>",
+      ast: %AST.TypeVec{inner: child_type.ast},
+      meta: %{inner: child_type}
+    }
+
+    slice_child_type = %Type{
+      kind: :slice,
+      rust: "[ChildPtr]",
+      ast: %AST.TypeSlice{inner: child_type.ast},
+      meta: %{inner: child_type}
+    }
+
+    ref_slice_child_type = %Type{
+      kind: :ref,
+      rust: "&[ChildPtr]",
+      ast: %AST.TypeRef{inner: slice_child_type.ast},
+      meta: %{inner: slice_child_type}
+    }
+
+    into_option_ref_slice_child_type = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Option<&[ChildPtr]>>",
+      ast: %AST.TypeRaw{source: "impl Into<Option<&[ChildPtr]>>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "Into<Option<&[ChildPtr]>>",
+            ast: %AST.TypePath{parts: [:Into]},
+            meta: %{
+              syn_name: "Into",
+              args: [
+                %Type{
+                  kind: :option,
+                  rust: "Option<&[ChildPtr]>",
+                  ast: %AST.TypeOption{inner: ref_slice_child_type.ast},
+                  meta: %{inner: ref_slice_child_type}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          children = runtime_children(term)
+          effect.make_shader(children.as_slice())
+          :ok
+        end,
+        unit_type(),
+        %{
+          term: atom_type,
+          effect: %Type{
+            kind: :type,
+            rust: "RuntimeEffect",
+            ast: %AST.TypePath{parts: [:RuntimeEffect]}
+          }
+        },
+        callables: [
+          %Callable{
+            name: "runtime_children",
+            kind: :function,
+            args: [%{name: "term", type: atom_type, syn: nil}],
+            returns: %Type{
+              kind: :nif_result,
+              rust: "NifResult<Vec<ChildPtr>>",
+              ast: %AST.TypeNifResult{inner: vec_child_type.ast},
+              meta: %{inner: vec_child_type}
+            }
+          },
+          %Callable{
+            name: "make_shader",
+            kind: :method,
+            target: "RuntimeEffect",
+            args: [%{name: "children", type: into_option_ref_slice_child_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.Let{
+               pattern: %AST.PatVar{name: :children},
+               expr: %AST.Try{expr: %AST.LocalCall{name: :runtime_children}}
+             },
+             %AST.ExprStmt{expr: %AST.MethodCall{method: :make_shader}},
+             %AST.Return{}
+           ] = statements
+  end
+
   test "does not fail receiver inference for non-simple upstream target names" do
     term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
 

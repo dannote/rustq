@@ -118,6 +118,14 @@ defmodule RustQ.Meta.Inference do
        when name == var_name and is_atom(context),
        do: receiver_type_for_as_ref_argument(type)
 
+  defp expected_type_for_arg_expr(
+         name,
+         {{:., _, [{var_name, _, context}, :as_slice]}, _meta, []},
+         %Type{} = type
+       )
+       when name == var_name and is_atom(context),
+       do: receiver_type_for_as_slice_argument(type)
+
   defp expected_type_for_arg_expr(name, tuple, %Type{} = type) do
     expected_type_for_tuple_arg(name, tuple, Type.expected_value(type))
   end
@@ -161,6 +169,38 @@ defmodule RustQ.Meta.Inference do
   end
 
   defp receiver_type_for_as_ref_argument(_type), do: nil
+
+  defp receiver_type_for_as_slice_argument(%Type{kind: :impl_trait, meta: %{traits: traits}}) do
+    traits
+    |> Enum.find_value(fn
+      %Type{meta: %{syn_name: "Into", args: [type]}} -> receiver_type_for_as_slice_argument(type)
+      _trait -> nil
+    end)
+  end
+
+  defp receiver_type_for_as_slice_argument(%Type{kind: :option, meta: %{inner: inner}}),
+    do: receiver_type_for_as_slice_argument(inner)
+
+  defp receiver_type_for_as_slice_argument(%Type{
+         kind: kind,
+         meta: %{inner: %Type{kind: :slice, meta: %{inner: inner}}}
+       })
+       when kind in [:ref, :mut_ref],
+       do: vec_type(inner)
+
+  defp receiver_type_for_as_slice_argument(%Type{kind: :slice, meta: %{inner: inner}}),
+    do: vec_type(inner)
+
+  defp receiver_type_for_as_slice_argument(_type), do: nil
+
+  defp vec_type(%Type{} = inner) do
+    %Type{
+      kind: :vec,
+      rust: "Vec<#{inner.rust}>",
+      ast: %AST.TypeVec{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+  end
 
   defp expected_return_type_for_var(name, expression, %Type{} = return_type) do
     expression
