@@ -94,6 +94,60 @@ defmodule RustQ.Meta.LowerTest do
              statements
   end
 
+  test "infers propagation inside ref wrapper arguments" do
+    matrix_type = %Type{kind: :type, rust: "Matrix", ast: %AST.TypePath{parts: [:Matrix]}}
+
+    matrix_ref_type = %Type{
+      kind: :ref,
+      rust: "&Matrix",
+      ast: %AST.TypeRef{inner: matrix_type.ast},
+      meta: %{inner: matrix_type}
+    }
+
+    nif_matrix_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Matrix>",
+      ast: %AST.TypeNifResult{inner: matrix_type.ast},
+      meta: %{inner: matrix_type}
+    }
+
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          matrix_transform(ref(matrix_from_term(term)))
+          :ok
+        end,
+        unit_type(),
+        %{term: term_type},
+        callables: [
+          %Callable{
+            name: "matrix_from_term",
+            kind: :function,
+            args: [%{name: "term", type: term_type, syn: nil}],
+            returns: nif_matrix_type
+          },
+          %Callable{
+            name: "matrix_transform",
+            kind: :function,
+            args: [%{name: "matrix", type: matrix_ref_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{
+                 name: :matrix_transform,
+                 args: [%AST.Ref{expr: %AST.Try{expr: %AST.LocalCall{name: :matrix_from_term}}}]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers propagation through impl Into option arguments" do
     image_filter_type = %Type{
       kind: :type,

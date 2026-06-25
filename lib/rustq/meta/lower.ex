@@ -166,6 +166,11 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
 
+  defp lower_expr({:ref, _, [expression]}, %Type{} = expected_type) do
+    expected_inner = Type.ref_inner(Type.expected_value(expected_type))
+    %AST.Ref{expr: lower_expr(expression, expected_inner || expected_type)}
+  end
+
   defp lower_expr(expression, %Type{} = expected_type) do
     if infer_propagation?(expression, expected_type) do
       %AST.Try{expr: lower_expr(expression)}

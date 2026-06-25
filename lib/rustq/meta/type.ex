@@ -83,6 +83,15 @@ defmodule RustQ.Meta.Type do
 
   def inner(%__MODULE__{}), do: nil
 
+  @doc "Returns the referenced inner type for `&T` or `&mut T` metadata."
+  @spec ref_inner(t()) :: t() | nil
+  def ref_inner(%__MODULE__{kind: kind, meta: %{inner: %__MODULE__{} = inner}})
+      when kind in [:ref, :mut_ref],
+      do: inner
+
+  def ref_inner(%__MODULE__{ast: %AST.TypeRef{inner: inner}}), do: ast_type(inner)
+  def ref_inner(%__MODULE__{}), do: nil
+
   @doc """
   Returns the concrete value type expected by a callable argument.
 
