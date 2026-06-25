@@ -71,6 +71,24 @@ defmodule RustQ.Binding.Index do
     end
   end
 
+  @doc "Returns method receiver targets for a method name and Elixir-style call arity."
+  @spec method_targets(t(), String.t() | atom(), non_neg_integer()) :: [String.t()]
+  def method_targets(%__MODULE__{} = index, name, arity) do
+    name = name_part(name)
+
+    index.by_key
+    |> Map.values()
+    |> Enum.flat_map(fn
+      %Callable{name: ^name, kind: :method, target: target, args: [_receiver | args]}
+      when is_binary(target) ->
+        if length(args) == arity, do: [target], else: []
+
+      _callable ->
+        []
+    end)
+    |> Enum.uniq()
+  end
+
   defp callable_keys(%Callable{name: name, target: target, args: args}) do
     rust_arity = length(args)
 

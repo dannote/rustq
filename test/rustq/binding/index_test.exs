@@ -34,6 +34,30 @@ defmodule RustQ.Binding.IndexTest do
     assert Index.get(index, "Canvas", "draw_rect", 1) == callable
     assert Index.return_type(index, :Canvas, :draw_rect, 1) == return
     assert Index.argument_types(index, :Canvas, :draw_rect, 1) == [type(:type, "Term")]
+    assert Index.method_targets(index, :draw_rect, 1) == ["Canvas"]
+  end
+
+  test "returns unique method receiver targets by receiverless call arity" do
+    index =
+      Index.new([
+        %Callable{
+          name: "to_shader",
+          kind: :method,
+          target: "Image",
+          args: [arg("self")],
+          returns: nil
+        },
+        %Callable{
+          name: "to_shader",
+          kind: :method,
+          target: "Picture",
+          args: [arg("self"), arg("rect")],
+          returns: nil
+        }
+      ])
+
+    assert Index.method_targets(index, :to_shader, 0) == ["Image"]
+    assert Index.method_targets(index, :to_shader, 1) == ["Picture"]
   end
 
   defp arg(name), do: %{name: name, type: type(:type, "Term"), syn: nil}

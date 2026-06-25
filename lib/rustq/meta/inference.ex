@@ -20,6 +20,7 @@ defmodule RustQ.Meta.Inference do
           required(:method_argument_types) => (Type.t() | nil, atom(), non_neg_integer() ->
                                                  [Type.t()] | nil),
           required(:target_type) => (Type.t() | nil -> term()),
+          required(:method_receiver_type) => (atom(), non_neg_integer() -> Type.t() | nil),
           optional(:block_return_type) => Type.t() | nil
         }
 
@@ -90,7 +91,8 @@ defmodule RustQ.Meta.Inference do
         expected_type_for_arg(name, args, expected_types)
       end)
 
-    call_expected_type || expected_return_type_for_var(name, ast, callbacks[:block_return_type])
+    call_expected_type || expected_receiver_type_for_var(name, ast, callbacks) ||
+      expected_return_type_for_var(name, ast, callbacks[:block_return_type])
   end
 
   defp expected_type_for_arg(name, args, expected_types)
@@ -218,6 +220,26 @@ defmodule RustQ.Meta.Inference do
   end
 
   defp expected_type_for_return_expr(_name, _expression, _type), do: nil
+
+  defp expected_receiver_type_for_var(name, ast, callbacks) do
+    {_ast, receiver_types} =
+      Macro.prewalk(ast, [], &collect_downstream_receiver_type(&1, &2, name, callbacks))
+
+    Enum.find(receiver_types, &match?(%Type{}, &1))
+  end
+
+  defp collect_downstream_receiver_type(
+         {{:., _, [{var_name, _, context}, function]}, _meta, args} = ast,
+         receiver_types,
+         name,
+         callbacks
+       )
+       when name == var_name and is_atom(context) and is_atom(function) and is_list(args) do
+    {ast, [callbacks.method_receiver_type.(function, length(args)) | receiver_types]}
+  end
+
+  defp collect_downstream_receiver_type(ast, receiver_types, _name, _callbacks),
+    do: {ast, receiver_types}
 
   defp downstream_call_arg_types(ast, vars, callbacks) do
     {_ast, calls} =

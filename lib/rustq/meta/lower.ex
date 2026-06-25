@@ -946,8 +946,20 @@ defmodule RustQ.Meta.Lower do
       method_argument_types: fn target, function, arity ->
         callable_argument_types(target, function, arity)
       end,
-      target_type: &callable_target_from_type/1
+      target_type: &callable_target_from_type/1,
+      method_receiver_type: &method_receiver_type/2
     }
+  end
+
+  defp method_receiver_type(function, arity) do
+    case BindingIndex.method_targets(current_callables(), function, arity) do
+      [target] -> type_for_callable_target(target)
+      _ambiguous_or_missing -> nil
+    end
+  end
+
+  defp type_for_callable_target(target) when is_binary(target) do
+    %Type{kind: :type, rust: target, ast: %AST.TypePath{parts: [RustQ.Atom.identifier!(target)]}}
   end
 
   defp infer_mutability(body) do

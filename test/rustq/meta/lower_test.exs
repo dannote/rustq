@@ -798,6 +798,61 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers let propagation from downstream receiver method type" do
+    image_type = %Type{kind: :type, rust: "Image", ast: %AST.TypePath{parts: [:Image]}}
+    shader_type = %Type{kind: :type, rust: "Shader", ast: %AST.TypePath{parts: [:Shader]}}
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          image = image_from_term(term)
+          image.to_shader()
+          :ok
+        end,
+        %Type{
+          kind: :nif_result,
+          rust: "NifResult<()>",
+          ast: %AST.TypeNifResult{inner: %AST.TypeUnit{}}
+        },
+        %{term: term_type},
+        callables: [
+          %Callable{
+            name: "image_from_term",
+            kind: :function,
+            args: [%{name: "term", type: term_type, syn: nil}],
+            returns: %Type{
+              kind: :nif_result,
+              rust: "NifResult<Image>",
+              ast: %AST.TypeNifResult{inner: image_type.ast},
+              meta: %{inner: image_type}
+            }
+          },
+          %Callable{
+            name: "to_shader",
+            kind: :method,
+            target: "Image",
+            args: [%{name: "self", type: image_type, syn: nil}],
+            returns: %Type{
+              kind: :option,
+              rust: "Option<Shader>",
+              ast: %AST.TypeOption{inner: shader_type.ast},
+              meta: %{inner: shader_type}
+            }
+          }
+        ]
+      )
+
+    assert [
+             %AST.Let{
+               pattern: %AST.PatVar{name: :image},
+               expr: %AST.Try{expr: %AST.LocalCall{name: :image_from_term}}
+             },
+             %AST.ExprStmt{expr: %AST.MethodCall{method: :to_shader}},
+             %AST.Return{expr: %AST.Ok{}}
+           ] = statements
+  end
+
   test "infers vector push argument propagation from downstream return type" do
     color_type = %Type{kind: :type, rust: "Color", ast: %AST.TypePath{parts: [:Color]}}
 
