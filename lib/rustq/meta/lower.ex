@@ -959,7 +959,25 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp type_for_callable_target(target) when is_binary(target) do
-    %Type{kind: :type, rust: target, ast: %AST.TypePath{parts: [RustQ.Atom.identifier!(target)]}}
+    ast =
+      case callable_target_parts(target) do
+        [_ | _] = parts -> %AST.TypePath{parts: parts}
+        nil -> %AST.TypeRaw{source: target}
+      end
+
+    %Type{kind: :type, rust: target, ast: ast}
+  end
+
+  defp callable_target_parts(target) do
+    parts = String.split(target, "::")
+
+    if Enum.all?(parts, &simple_rust_identifier?/1) do
+      Enum.map(parts, &RustQ.Atom.identifier!/1)
+    end
+  end
+
+  defp simple_rust_identifier?(part) do
+    Regex.match?(~r/^[_A-Za-z][_0-9A-Za-z]*$/, part)
   end
 
   defp infer_mutability(body) do

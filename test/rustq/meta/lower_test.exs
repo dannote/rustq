@@ -853,6 +853,44 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "does not fail receiver inference for non-simple upstream target names" do
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          values = Vec.new()
+          values.len()
+          :ok
+        end,
+        %Type{
+          kind: :nif_result,
+          rust: "NifResult<()>",
+          ast: %AST.TypeNifResult{inner: %AST.TypeUnit{}}
+        },
+        %{},
+        callables: [
+          %Callable{
+            name: "new",
+            kind: :function,
+            target: "Vec",
+            args: [],
+            returns: term_type
+          },
+          %Callable{
+            name: "len",
+            kind: :method,
+            target: "GradientShaderColors < '_ >",
+            args: [%{name: "self", type: term_type, syn: nil}],
+            returns: %Type{kind: :usize, rust: "usize", ast: %AST.TypePath{parts: [:usize]}}
+          }
+        ]
+      )
+
+    assert [%AST.Let{}, %AST.ExprStmt{expr: %AST.MethodCall{method: :len}}, %AST.Return{}] =
+             statements
+  end
+
   test "infers vector push argument propagation from downstream return type" do
     color_type = %Type{kind: :type, rust: "Color", ast: %AST.TypePath{parts: [:Color]}}
 
