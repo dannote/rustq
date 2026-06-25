@@ -119,6 +119,17 @@ defmodule RustQ.Meta.Type do
 
   def expected_value(%__MODULE__{} = type), do: type
 
+  @doc "Returns true when a value type can satisfy a callable expected argument type."
+  @spec compatible_with_expected?(t() | nil, t() | nil) :: boolean()
+  def compatible_with_expected?(%__MODULE__{} = value, %__MODULE__{} = expected) do
+    expected_value = expected_value(expected)
+
+    compatible?(value, expected_value) or
+      (expected_value.kind == :option and compatible?(value, inner(expected_value)))
+  end
+
+  def compatible_with_expected?(_value, _expected), do: false
+
   @doc "Returns true when two lowered types are semantically compatible."
   @spec compatible?(t() | nil, t() | nil) :: boolean()
   def compatible?(%__MODULE__{kind: kind} = left, %__MODULE__{kind: kind} = right)

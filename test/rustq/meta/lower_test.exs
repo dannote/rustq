@@ -148,6 +148,76 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers propagation through impl Into option arguments from plain values" do
+    tile_mode_type = %Type{kind: :type, rust: "TileMode", ast: %AST.TypePath{parts: [:TileMode]}}
+
+    option_tile_mode_type = %Type{
+      kind: :option,
+      rust: "Option<TileMode>",
+      ast: %AST.TypeOption{inner: tile_mode_type.ast},
+      meta: %{inner: tile_mode_type}
+    }
+
+    nif_tile_mode_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<TileMode>",
+      ast: %AST.TypeNifResult{inner: tile_mode_type.ast},
+      meta: %{inner: tile_mode_type}
+    }
+
+    into_option_tile_mode_type = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Option<TileMode>>",
+      ast: %AST.TypeRaw{source: "impl Into<Option<TileMode>>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "Into<Option<TileMode>>",
+            ast: %AST.TypePath{parts: [:Into]},
+            meta: %{syn_name: "Into", args: [option_tile_mode_type]}
+          }
+        ]
+      }
+    }
+
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          blur(decode_tile_mode(term))
+          :ok
+        end,
+        unit_type(),
+        %{term: term_type},
+        callables: [
+          %Callable{
+            name: "decode_tile_mode",
+            kind: :function,
+            args: [%{name: "term", type: term_type, syn: nil}],
+            returns: nif_tile_mode_type
+          },
+          %Callable{
+            name: "blur",
+            kind: :function,
+            args: [%{name: "tile_mode", type: into_option_tile_mode_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{
+                 name: :blur,
+                 args: [%AST.Try{expr: %AST.LocalCall{name: :decode_tile_mode}}]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers propagation through impl Into option arguments" do
     image_filter_type = %Type{
       kind: :type,
