@@ -261,6 +261,49 @@ defmodule RustQ.Meta.DefrustTest do
     assert module.__rustq_source__() =~ "paint.set_stroke_cap(decode(atom)?);"
   end
 
+  test "infers propagation through source-backed From impl into Into argument" do
+    unique = System.unique_integer([:positive])
+    path = Path.join(System.tmp_dir!(), "rustq_from_into_#{unique}.rs")
+    on_exit(fn -> File.rm(path) end)
+
+    File.write!(path, """
+    struct Color;
+    struct Color4f;
+    struct ImageFilter;
+
+    impl From<Color> for Color4f {
+      fn from(color: Color) -> Self { todo!() }
+    }
+
+    fn drop_shadow(color: impl Into<Color4f>) -> Option<ImageFilter> { todo!() }
+    """)
+
+    module = Module.concat(__MODULE__, :FromIntoArgumentCase)
+
+    Module.create(
+      module,
+      quote do
+        use RustQ.Meta, rust_sources: [unquote(path)]
+        alias RustQ.Type, as: R
+
+        @spec decode_color(term()) :: R.nif_result(R.path(:Color))
+        defrust decode_color(term) do
+          _value = decode_as!(term, R.u32())
+          {:ok, Color.default()}
+        end
+
+        @spec run(term()) :: R.nif_result(R.unit())
+        defrust run(term) do
+          drop_shadow(decode_color(term))
+          :ok
+        end
+      end,
+      Macro.Env.location(__ENV__)
+    )
+
+    assert module.__rustq_source__() =~ "drop_shadow(decode_color(term)?);"
+  end
+
   test "Rust source callable cache refreshes when the source file changes" do
     unique = System.unique_integer([:positive])
     path = Path.join(System.tmp_dir!(), "rustq_source_cache_#{unique}.rs")

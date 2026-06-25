@@ -10,6 +10,7 @@ defmodule RustQ.Binding.Source do
   alias RustQ.Binding.Callable
   alias RustQ.Diagnostic
   alias RustQ.Meta.Type
+  alias RustQ.Spec
   alias RustQ.Syn
 
   @type rust_package :: String.t() | {String.t(), keyword()}
@@ -128,18 +129,20 @@ defmodule RustQ.Binding.Source do
           )
       end
 
+    conversions = from_conversions(index)
+
     function_callables =
       index.files
       |> Map.values()
       |> Enum.flat_map(&Syn.functions/1)
       |> Enum.map(&Callable.from_syn_function/1)
-      |> Enum.map(&annotate_callable_public_aliases(&1, index))
+      |> Enum.map(&annotate_callable_types(&1, index, conversions))
 
     method_callables =
       index
       |> Syn.Index.impls()
       |> Enum.flat_map(&impl_callables/1)
-      |> Enum.map(&annotate_callable_public_aliases(&1, index))
+      |> Enum.map(&annotate_callable_types(&1, index, conversions))
 
     function_callables ++ method_callables
   end
@@ -177,10 +180,12 @@ defmodule RustQ.Binding.Source do
           )
       end
 
+    conversions = from_conversions(index)
+
     index
     |> Syn.Index.impls()
     |> Enum.flat_map(&impl_callables/1)
-    |> Enum.map(&annotate_callable_public_aliases(&1, index))
+    |> Enum.map(&annotate_callable_types(&1, index, conversions))
   end
 
   defp rust_package_callables(package) when is_binary(package),
@@ -190,16 +195,25 @@ defmodule RustQ.Binding.Source do
     Enum.map(impl.methods, &Callable.from_syn_method(&1, target: impl.target))
   end
 
-  defp annotate_callable_public_aliases(%Callable{} = callable, %Syn.Index{} = index) do
+  defp annotate_callable_types(%Callable{} = callable, %Syn.Index{} = index, conversions) do
     %{
       callable
-      | args: Enum.map(callable.args, &annotate_callable_arg(&1, index)),
-        returns: annotate_public_alias_type(callable.returns, index)
+      | args: Enum.map(callable.args, &annotate_callable_arg(&1, index, conversions)),
+        returns: annotate_type(callable.returns, index, conversions)
     }
   end
 
-  defp annotate_callable_arg(%{type: type} = arg, index),
-    do: %{arg | type: annotate_public_alias_type(type, index)}
+  defp annotate_callable_arg(%{type: type} = arg, index, conversions),
+    do: %{arg | type: annotate_type(type, index, conversions)}
+
+  defp annotate_type(%Type{} = type, index, conversions) do
+    type
+    |> annotate_public_alias_type(index)
+    |> annotate_from_conversion_type(conversions)
+    |> annotate_nested_type(index, conversions)
+  end
+
+  defp annotate_type(nil, _index, _conversions), do: nil
 
   defp annotate_public_alias_type(%Type{kind: :type, meta: %{syn_name: name}} = type, index)
        when is_binary(name) do
@@ -213,7 +227,6 @@ defmodule RustQ.Binding.Source do
   end
 
   defp annotate_public_alias_type(%Type{} = type, _index), do: type
-  defp annotate_public_alias_type(nil, _index), do: nil
 
   defp put_equivalent_rust_name(%Type{} = type, name) do
     equivalents =
@@ -225,6 +238,115 @@ defmodule RustQ.Binding.Source do
 
     %{type | meta: Map.put(type.meta, :equivalent_rust_names, equivalents)}
   end
+
+  defp from_conversions(%Syn.Index{} = index) do
+    index
+    |> Syn.Index.impls()
+    |> Enum.reduce(%{}, fn impl, conversions ->
+      case from_conversion(impl) do
+        {%Type{} = from, %Type{} = to} ->
+          Map.update(conversions, type_key(to), type_names(from), &(type_names(from) ++ &1))
+
+        nil ->
+          conversions
+      end
+    end)
+    |> Map.new(fn {key, names} -> {key, Enum.uniq(names)} end)
+  end
+
+  defp from_conversion(%Syn.Impl{
+         trait: "From" <> _rest,
+         target_ast: target_ast,
+         methods: methods
+       }) do
+    with %Syn.Method{name: "from", args: [arg | _]} <- Enum.find(methods, &(&1.name == "from")),
+         %Type{} = from <- Spec.from_syn(arg.type_ast),
+         %Type{} = to <- Spec.from_syn(target_ast) do
+      {from, to}
+    else
+      _not_from_impl -> nil
+    end
+  end
+
+  defp from_conversion(%Syn.Impl{}), do: nil
+
+  defp annotate_from_conversion_type(%Type{} = type, conversions) do
+    conversions
+    |> Map.get(type_key(type), [])
+    |> Enum.reduce(type, &put_equivalent_rust_name(&2, &1))
+  end
+
+  defp annotate_nested_type(%Type{kind: kind, meta: meta} = type, index, conversions)
+       when kind in [:option, :ref, :mut_ref, :vec] do
+    case meta do
+      %{inner: %Type{} = inner} ->
+        %{type | meta: Map.put(meta, :inner, annotate_type(inner, index, conversions))}
+
+      _other ->
+        type
+    end
+  end
+
+  defp annotate_nested_type(%Type{kind: kind, meta: meta} = type, index, conversions)
+       when kind in [:result] do
+    meta =
+      meta
+      |> annotate_meta_type(:ok, index, conversions)
+      |> annotate_meta_type(:error, index, conversions)
+
+    %{type | meta: meta}
+  end
+
+  defp annotate_nested_type(
+         %Type{kind: :tuple, meta: %{elements: elements} = meta} = type,
+         index,
+         conversions
+       ) do
+    elements = Enum.map(elements, &annotate_type(&1, index, conversions))
+    %{type | meta: Map.put(meta, :elements, elements)}
+  end
+
+  defp annotate_nested_type(
+         %Type{kind: :impl_trait, meta: %{traits: traits} = meta} = type,
+         index,
+         conversions
+       ) do
+    traits = Enum.map(traits, &annotate_type(&1, index, conversions))
+    %{type | meta: Map.put(meta, :traits, traits)}
+  end
+
+  defp annotate_nested_type(%Type{meta: %{args: args} = meta} = type, index, conversions)
+       when is_list(args) do
+    args = Enum.map(args, &annotate_type(&1, index, conversions))
+    %{type | meta: Map.put(meta, :args, args)}
+  end
+
+  defp annotate_nested_type(%Type{} = type, _index, _conversions), do: type
+
+  defp annotate_meta_type(meta, key, index, conversions) do
+    case Map.fetch(meta, key) do
+      {:ok, %Type{} = type} -> Map.put(meta, key, annotate_type(type, index, conversions))
+      _missing_or_other -> meta
+    end
+  end
+
+  defp type_key(%Type{} = type) do
+    type
+    |> type_names()
+    |> List.first()
+  end
+
+  defp type_names(%Type{} = type) do
+    [type.rust, type.meta[:syn_name], type_name_from_ast(type.ast)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&to_string/1)
+    |> Enum.uniq()
+  end
+
+  defp type_name_from_ast(%RustQ.Rust.AST.TypePath{parts: [_ | _] = parts}),
+    do: parts |> List.last() |> to_string()
+
+  defp type_name_from_ast(_ast), do: nil
 
   defp cached_callables(key, fun) do
     cache_key = {__MODULE__, :callables, key}
