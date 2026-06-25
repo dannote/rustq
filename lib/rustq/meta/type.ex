@@ -92,6 +92,12 @@ defmodule RustQ.Meta.Type do
   def ref_inner(%__MODULE__{ast: %AST.TypeRef{inner: inner}}), do: ast_type(inner)
   def ref_inner(%__MODULE__{}), do: nil
 
+  @doc "Returns the element type for `Vec<T>` metadata."
+  @spec vec_inner(t()) :: t() | nil
+  def vec_inner(%__MODULE__{kind: :vec, meta: %{inner: %__MODULE__{} = inner}}), do: inner
+  def vec_inner(%__MODULE__{ast: %AST.TypeVec{inner: inner}}), do: ast_type(inner)
+  def vec_inner(%__MODULE__{}), do: nil
+
   @doc """
   Returns the concrete value type expected by a callable argument.
 
@@ -483,7 +489,7 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(:vec, [inner], aliases) do
     inner = parse(inner, aliases)
-    type(:vec, %AST.TypeVec{inner: inner.ast})
+    type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
   end
 
   defp parse_rust_type(:result, [ok, error], aliases) do

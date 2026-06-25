@@ -798,6 +798,76 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers vector push argument propagation from downstream return type" do
+    color_type = %Type{kind: :type, rust: "Color", ast: %AST.TypePath{parts: [:Color]}}
+
+    vec_color_type = %Type{
+      kind: :vec,
+      rust: "Vec<Color>",
+      ast: %AST.TypeVec{inner: color_type.ast},
+      meta: %{inner: color_type}
+    }
+
+    return_type = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Vec<Color>>",
+      ast: %AST.TypeNifResult{inner: vec_color_type.ast},
+      meta: %{inner: vec_color_type}
+    }
+
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          colors = Vec.with_capacity(stops.len())
+
+          for stop <- stops do
+            colors.push(decode_color(stop))
+          end
+
+          {:ok, colors}
+        end,
+        return_type,
+        %{
+          stops: %Type{
+            kind: :vec,
+            rust: "Vec<Term>",
+            ast: %AST.TypeVec{inner: term_type.ast},
+            meta: %{inner: term_type}
+          }
+        },
+        callables: [
+          %Callable{
+            name: "decode_color",
+            kind: :function,
+            args: [%{name: "term", type: term_type, syn: nil}],
+            returns: %Type{
+              kind: :nif_result,
+              rust: "NifResult<Color>",
+              ast: %AST.TypeNifResult{inner: color_type.ast},
+              meta: %{inner: color_type}
+            }
+          }
+        ]
+      )
+
+    assert [
+             %AST.Let{},
+             %AST.For{
+               body: [
+                 %AST.ExprStmt{
+                   expr: %AST.MethodCall{
+                     method: :push,
+                     args: [%AST.Try{expr: %AST.LocalCall{name: :decode_color}}]
+                   }
+                 }
+               ]
+             },
+             %AST.Return{expr: %AST.Ok{expr: %AST.Var{name: :colors}}}
+           ] = statements
+  end
+
   test "infers assignment RHS propagation when target type is known" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 

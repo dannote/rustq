@@ -70,12 +70,14 @@ defmodule RustQ.Meta.Lower do
   defp lower_block(expressions, %Context{} = context) do
     context = context_with_downstream_let_types(expressions, context)
 
-    {statements, final} = split_final(expressions)
-    statement_context = %{context | position: :statement}
-    return_context = %{context | position: :return}
+    with_context_vars(context, fn ->
+      {statements, final} = split_final(expressions)
+      statement_context = %{context | position: :statement}
+      return_context = %{context | position: :return}
 
-    Enum.map(statements, &lower_statement(&1, statement_context)) ++
-      [lower_return(final, return_context)]
+      Enum.map(statements, &lower_statement(&1, statement_context)) ++
+        [lower_return(final, return_context)]
+    end)
   end
 
   defp split_final([]), do: {[], :ok}
@@ -262,9 +264,11 @@ defmodule RustQ.Meta.Lower do
     expressions = block_expressions(body)
     context = context_with_downstream_let_types(expressions, context)
 
-    expressions
-    |> Enum.map(&lower_statement(&1, context))
-    |> reject_unit_statements()
+    with_context_vars(context, fn ->
+      expressions
+      |> Enum.map(&lower_statement(&1, context))
+      |> reject_unit_statements()
+    end)
   end
 
   defp lower_clause_body(body, %Context{position: :return} = context) do
@@ -588,12 +592,13 @@ defmodule RustQ.Meta.Lower do
         }
 
       true ->
-        target = receiver |> infer_expr_type(current_vars()) |> callable_target_from_type()
+        receiver_type = infer_expr_type(receiver, current_vars())
+        target = callable_target_from_type(receiver_type)
 
         %AST.MethodCall{
           receiver: lower_expr(receiver),
           method: function,
-          args: lower_call_args(target, function, args)
+          args: lower_method_call_args(receiver_type, target, function, args)
         }
     end
   end
@@ -647,6 +652,17 @@ defmodule RustQ.Meta.Lower do
     target
     |> callable_argument_types(function, length(args))
     |> lower_call_args(args)
+  end
+
+  defp lower_method_call_args(%Type{} = receiver_type, _target, :push, [arg]) do
+    case Type.vec_inner(receiver_type) do
+      %Type{} = inner -> lower_call_args([inner], [arg])
+      nil -> [lower_expr(arg)]
+    end
+  end
+
+  defp lower_method_call_args(_receiver_type, target, function, args) do
+    lower_call_args(target, function, args)
   end
 
   defp lower_call_args(nil, args), do: Enum.map(args, &lower_expr/1)
@@ -910,7 +926,11 @@ defmodule RustQ.Meta.Lower do
 
   defp context_with_downstream_let_types(expressions, %Context{} = context) do
     inferred =
-      Inference.infer_downstream_let_types(expressions, context.vars, inference_callbacks())
+      Inference.infer_downstream_let_types(
+        expressions,
+        context.vars,
+        Map.put(inference_callbacks(), :block_return_type, context.return_type)
+      )
 
     %{context | vars: Map.merge(context.vars, inferred)}
   end
@@ -1257,6 +1277,10 @@ defmodule RustQ.Meta.Lower do
     ]
 
     with_process_values(values, fun)
+  end
+
+  defp with_context_vars(%Context{} = context, fun) do
+    with_process_values([vars: context.vars, return_type: context.return_type], fun)
   end
 
   defp with_process_values(values, fun) do

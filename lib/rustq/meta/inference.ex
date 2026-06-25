@@ -19,7 +19,8 @@ defmodule RustQ.Meta.Inference do
                                                [Type.t()] | nil),
           required(:method_argument_types) => (Type.t() | nil, atom(), non_neg_integer() ->
                                                  [Type.t()] | nil),
-          required(:target_type) => (Type.t() | nil -> term())
+          required(:target_type) => (Type.t() | nil -> term()),
+          optional(:block_return_type) => Type.t() | nil
         }
 
   @spec infer_downstream_let_types([Macro.t()], map(), callbacks()) :: map()
@@ -82,11 +83,14 @@ defmodule RustQ.Meta.Inference do
   end
 
   defp expected_type_for_var(name, ast, vars, callbacks) do
-    ast
-    |> downstream_call_arg_types(vars, callbacks)
-    |> Enum.find_value(fn {args, expected_types} ->
-      expected_type_for_arg(name, args, expected_types)
-    end)
+    call_expected_type =
+      ast
+      |> downstream_call_arg_types(vars, callbacks)
+      |> Enum.find_value(fn {args, expected_types} ->
+        expected_type_for_arg(name, args, expected_types)
+      end)
+
+    call_expected_type || expected_return_type_for_var(name, ast, callbacks[:block_return_type])
   end
 
   defp expected_type_for_arg(name, args, expected_types)
@@ -156,6 +160,65 @@ defmodule RustQ.Meta.Inference do
 
   defp receiver_type_for_as_ref_argument(_type), do: nil
 
+  defp expected_return_type_for_var(name, expression, %Type{} = return_type) do
+    expression
+    |> return_expressions()
+    |> Enum.find_value(&expected_type_for_return_expr(name, &1, return_type))
+  end
+
+  defp expected_return_type_for_var(_name, _expression, _return_type), do: nil
+
+  defp return_expressions({:if, _, [_condition, branches]}) when is_list(branches) do
+    branches
+    |> Keyword.take([:do, :else])
+    |> Keyword.values()
+    |> Enum.flat_map(&return_expressions/1)
+  end
+
+  defp return_expressions({:case, _, [_expression, [do: clauses]]}) do
+    Enum.flat_map(clauses, fn {:->, _, [_patterns, body]} -> return_expressions(body) end)
+  end
+
+  defp return_expressions({:__block__, _, expressions}),
+    do: return_expressions(List.last(expressions))
+
+  defp return_expressions({:return!, _, [expression]}), do: [expression]
+  defp return_expressions(expression), do: [expression]
+
+  defp expected_type_for_return_expr(name, {:ok, value}, %Type{} = return_type) do
+    case Type.inner(return_type) do
+      %Type{} = inner -> expected_type_for_return_expr(name, value, inner)
+      nil -> nil
+    end
+  end
+
+  defp expected_type_for_return_expr(name, {:some, _, [value]}, %Type{kind: :option} = type) do
+    case Type.inner(type) do
+      %Type{} = inner -> expected_type_for_return_expr(name, value, inner)
+      nil -> nil
+    end
+  end
+
+  defp expected_type_for_return_expr(name, {var_name, _, context}, %Type{} = type)
+       when name == var_name and is_atom(context),
+       do: type
+
+  defp expected_type_for_return_expr(name, tuple, %Type{kind: :tuple, meta: %{elements: types}}) do
+    case Pattern.tuple_elements(tuple) do
+      elements when is_list(elements) and length(elements) == length(types) ->
+        elements
+        |> Enum.zip(types)
+        |> Enum.find_value(fn {element, type} ->
+          expected_type_for_return_expr(name, element, type)
+        end)
+
+      _not_tuple ->
+        nil
+    end
+  end
+
+  defp expected_type_for_return_expr(_name, _expression, _type), do: nil
+
   defp downstream_call_arg_types(ast, vars, callbacks) do
     {_ast, calls} =
       Macro.prewalk(ast, [], &collect_downstream_call_arg_types(&1, &2, vars, callbacks))
@@ -194,15 +257,24 @@ defmodule RustQ.Meta.Inference do
     target_type = infer_expr_type(receiver, vars)
     target = callbacks.target_type.(target_type)
 
-    {ast,
-     maybe_add_downstream_call(
-       calls,
-       args,
-       callbacks.method_argument_types.(target, function, length(args))
-     )}
+    expected_types =
+      method_expected_types(target_type, target, function, length(args), callbacks)
+
+    {ast, maybe_add_downstream_call(calls, args, expected_types)}
   end
 
   defp collect_downstream_call_arg_types(ast, calls, _vars, _callbacks), do: {ast, calls}
+
+  defp method_expected_types(%Type{} = receiver_type, _target, :push, 1, _callbacks) do
+    case Type.vec_inner(receiver_type) do
+      %Type{} = inner -> [inner]
+      nil -> nil
+    end
+  end
+
+  defp method_expected_types(_receiver_type, target, function, arity, callbacks) do
+    callbacks.method_argument_types.(target, function, arity)
+  end
 
   defp maybe_add_downstream_call(calls, args, [_ | _] = expected_types),
     do: [{args, expected_types} | calls]
