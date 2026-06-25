@@ -271,6 +271,8 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_case(expression, clauses, %Context{} = context) do
+    clauses = normalize_case_clauses(clauses)
+
     case_type =
       infer_expr_type(expression, context.vars) || infer_case_type_from_patterns(clauses)
 
@@ -290,6 +292,9 @@ defmodule RustQ.Meta.Lower do
 
     %AST.Match{expr: lower_expr(expression), arms: arms}
   end
+
+  defp normalize_case_clauses({:__block__, _meta, clauses}), do: clauses
+  defp normalize_case_clauses(clauses), do: clauses
 
   defp lower_if(condition, branches, %Context{} = context) do
     then_body = Keyword.fetch!(branches, :do)

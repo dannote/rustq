@@ -44,6 +44,39 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
+  test "defrust lowers macro-generated case clauses" do
+    defmodule MacroGeneratedCaseClauseCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defmacro generated_case(value) do
+        clauses =
+          quote do
+            1 -> {:ok, 10}
+            other -> {:ok, other}
+          end
+
+        quote do
+          case unquote(value) do
+            (unquote_splicing(clauses))
+          end
+        end
+      end
+
+      @spec decode(R.i64()) :: R.nif_result(R.i64())
+      defrust decode(value) do
+        generated_case(value)
+      end
+    end
+
+    source = MacroGeneratedCaseClauseCase.__rustq_source__()
+
+    assert source =~ "match value"
+    assert source =~ "1i64 => Ok(10)"
+    assert source =~ "other => Ok(other)"
+    assert RustQ.valid?(source, "macro_generated_case_clause.rs")
+  end
+
   test "defrust uses module specs as callable metadata for propagation inference" do
     defmodule LocalCallablePropagationCase do
       use RustQ.Meta
