@@ -28,6 +28,7 @@ defmodule RustQ.Rustler.Schema do
   Field optionality is encoded in the Rust type (`{:option, :String}`), keeping
   the schema close to the generated Rust.
   """
+  alias RustQ.Diagnostic
   alias RustQ.Rust.AST.Builder, as: A
 
   defstruct module_prefix: nil,
@@ -210,8 +211,13 @@ defmodule RustQ.Rustler.Schema do
   defp enum_attr!(%RustQ.Rust.AST.Attribute{} = attr), do: attr
 
   defp enum_attr!(other) do
-    raise ArgumentError,
-          "tagged_enum attrs must be RustQ.Rust.AST.Attribute structs, got: #{inspect(other)}"
+    Diagnostic.render(
+      :invalid_tagged_enum_attr,
+      other,
+      "tagged_enum attrs must be RustQ.Rust.AST.Attribute structs",
+      details: %{attr: other},
+      suggestion: "Pass attrs built with RustQ.Rust.AST.Builder.attr/2 or allow_attr/1."
+    )
   end
 
   defp enum_variants(:all, schema), do: Enum.map(schema.nodes, &elem(&1, 0))

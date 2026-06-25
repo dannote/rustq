@@ -3,9 +3,9 @@ defmodule RustQ.Codegen.DefrustModule do
   Compile-time bridge for modules that define native support helpers with `defrust`.
   """
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
     quote do
-      use RustQ.Meta
+      use RustQ.Meta, unquote(opts)
 
       alias RustQ.Type, as: R
 

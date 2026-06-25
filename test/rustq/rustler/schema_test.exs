@@ -78,6 +78,26 @@ defmodule RustQ.RustlerSchemaTest do
     assert code =~ ~S/Err(rustler::Error::RaiseAtom("unknown_content_variant"))/
   end
 
+  test "raises structured diagnostics for raw tagged enum attrs" do
+    defmodule InvalidAttrSchema do
+      use RustQ.Rustler.Schema
+
+      schema Folio.Content, default_attrs: ["allow(dead_code)"] do
+        node Text do
+          field(:text, :String)
+        end
+
+        tagged_enum Content do
+          variants(:all)
+        end
+      end
+    end
+
+    assert_raise RustQ.Diagnostic.Error, ~r/render invalid_tagged_enum_attr/, fn ->
+      InvalidAttrSchema.rust_items()
+    end
+  end
+
   test "supports node Rust and module overrides" do
     code =
       "__rq_items!();"

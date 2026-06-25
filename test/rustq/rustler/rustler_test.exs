@@ -19,7 +19,8 @@ defmodule RustQ.RustlerTest do
     assert code =~ "rustler::atoms!"
     assert code =~ "#[rustler::nif]"
     assert code =~ "fn add(a: i64, b: i64) -> i64"
-    assert code =~ ~s|rustler::init!("Elixir.RustQ.Native");|
+    assert code =~ ~s|rustler::init! {|
+    assert code =~ ~s|"Elixir.RustQ.Native"|
   end
 
   test "builds NIF export functions" do

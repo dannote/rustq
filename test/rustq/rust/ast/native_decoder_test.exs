@@ -44,6 +44,14 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     end
   end
 
+  test "native decoder renders macro item calls with literal arguments" do
+    source =
+      Native.render_ast(A.macro_item_call([:rustler, :init], literal: "Elixir.RustQ.Native"))
+
+    assert source =~ "rustler::init!"
+    assert source =~ ~s|"Elixir.RustQ.Native"|
+  end
+
   test "dogfooded item and type decoders render use, module, macro, constants, structs, and enums" do
     use_source = Native.render_ast(%AST.Use{tree: "std::fmt"})
 

@@ -11,6 +11,7 @@ defmodule RustQ.Rustler do
   """
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST.Builder, as: A
 
   alias RustQ.Rustler.{
     Atom,
@@ -71,7 +72,9 @@ defmodule RustQ.Rustler do
   """
   @spec init(module() | String.t()) :: Rust.Fragment.t()
   def init(module) when is_atom(module), do: init(Elixir.Atom.to_string(module))
-  def init(module) when is_binary(module), do: Rust.item(~s|rustler::init!("#{module}");|)
+
+  def init(module) when is_binary(module),
+    do: Rust.ast_item(A.macro_item_call([:rustler, :init], literal: module))
 
   @doc """
   Builds a `rustler::atoms!` block.

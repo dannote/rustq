@@ -195,6 +195,7 @@ defmodule RustQ.Rust.AST.Render do
     [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &render_macro_arg/1), ", }"]
   end
 
+  defp render_macro_arg({:literal, value}), do: inspect(value)
   defp render_macro_arg({name, value}), do: [to_string(name), " = ", inspect(value)]
   defp render_macro_arg(value), do: to_string(value)
 
