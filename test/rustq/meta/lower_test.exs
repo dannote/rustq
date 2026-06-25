@@ -880,6 +880,112 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "infers vector push argument propagation from downstream IntoIterator item type" do
+    image_filter_type = %Type{
+      kind: :type,
+      rust: "ImageFilter",
+      ast: %AST.TypePath{parts: [:ImageFilter]}
+    }
+
+    option_image_filter_type = %Type{
+      kind: :option,
+      rust: "Option<ImageFilter>",
+      ast: %AST.TypeOption{inner: image_filter_type.ast},
+      meta: %{inner: image_filter_type}
+    }
+
+    into_iterator_type = %Type{
+      kind: :impl_trait,
+      rust: "impl IntoIterator<Item = Option<ImageFilter>>",
+      ast: %AST.TypeRaw{source: "impl IntoIterator<Item = Option<ImageFilter>>"},
+      meta: %{
+        traits: [
+          %Type{
+            kind: :type,
+            rust: "IntoIterator",
+            ast: %AST.TypePath{parts: [:IntoIterator]},
+            meta: %{
+              syn_name: "IntoIterator",
+              assoc: %{"Item" => option_image_filter_type},
+              args: []
+            }
+          }
+        ]
+      }
+    }
+
+    term_type = %Type{kind: :term, rust: "Term", ast: %AST.TypePath{parts: [:Term]}}
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          mapped_filters = Vec.with_capacity(filters.len())
+
+          for filter <- filters do
+            mapped_filters.push(optional_image_filter_from_term(filter))
+          end
+
+          ImageFilters.merge(mapped_filters, none())
+          :ok
+        end,
+        unit_type(),
+        %{
+          filters: %Type{
+            kind: :vec,
+            rust: "Vec<Term>",
+            ast: %AST.TypeVec{inner: term_type.ast},
+            meta: %{inner: term_type}
+          }
+        },
+        callables: [
+          %Callable{
+            name: "optional_image_filter_from_term",
+            kind: :function,
+            args: [%{name: "term", type: term_type, syn: nil}],
+            returns: %Type{
+              kind: :nif_result,
+              rust: "NifResult<Option<ImageFilter>>",
+              ast: %AST.TypeNifResult{inner: option_image_filter_type.ast},
+              meta: %{inner: option_image_filter_type}
+            }
+          },
+          %Callable{
+            name: "merge",
+            kind: :function,
+            target: "image_filters",
+            args: [
+              %{name: "filters", type: into_iterator_type, syn: nil},
+              %{name: "crop_rect", type: term_type, syn: nil}
+            ],
+            returns: %Type{
+              kind: :option,
+              rust: "Option<ImageFilter>",
+              ast: %AST.TypeOption{inner: image_filter_type.ast},
+              meta: %{inner: image_filter_type}
+            }
+          }
+        ]
+      )
+
+    assert [
+             %AST.Let{},
+             %AST.For{
+               body: [
+                 %AST.ExprStmt{
+                   expr: %AST.MethodCall{
+                     method: :push,
+                     args: [
+                       %AST.Try{expr: %AST.LocalCall{name: :optional_image_filter_from_term}}
+                     ]
+                   }
+                 }
+               ]
+             },
+             %AST.ExprStmt{expr: %AST.PathCall{}},
+             %AST.Return{expr: %AST.Tuple{values: []}}
+           ] = statements
+  end
+
   test "infers let propagation through as_slice arguments" do
     atom_type = %Type{kind: :atom, rust: "Atom", ast: %AST.TypePath{parts: [:Atom]}}
     child_type = %Type{kind: :type, rust: "ChildPtr", ast: %AST.TypePath{parts: [:ChildPtr]}}

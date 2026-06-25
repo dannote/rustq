@@ -99,13 +99,14 @@ defmodule RustQ.Syn do
 
     defmodule Path do
       @moduledoc "Rust path type metadata, for example `Paint`, `skia_safe::Canvas`, or `AsRef<Rect>`."
-      defstruct [:code, :name, segments: [], args: []]
+      defstruct [:code, :name, segments: [], args: [], assoc: %{}]
 
       @type t :: %__MODULE__{
               code: String.t(),
               name: String.t(),
               segments: [String.t()],
-              args: [RustQ.Syn.type()]
+              args: [RustQ.Syn.type()],
+              assoc: %{optional(String.t()) => RustQ.Syn.type()}
             }
     end
 
@@ -766,12 +767,11 @@ defmodule RustQ.Syn do
   defp decode_return({type, type_ast}), do: {type, decode_type!(type_ast)}
 
   defp decode_type!({"path", code, segments, args}) do
-    %RustQ.Syn.Type.Path{
-      code: code,
-      name: List.last(segments),
-      segments: segments,
-      args: Elixir.Enum.map(args, &decode_type!/1)
-    }
+    decode_path_type!(code, segments, args, [])
+  end
+
+  defp decode_type!({"path", code, segments, args, assoc}) do
+    decode_path_type!(code, segments, args, assoc)
   end
 
   defp decode_type!({"ref", code, mutable, inner}) do
@@ -804,6 +804,16 @@ defmodule RustQ.Syn do
 
   defp decode_type!({"self", code}), do: %RustQ.Syn.Type.Self{code: code}
   defp decode_type!({"raw", code}), do: %RustQ.Syn.Type.Raw{code: code}
+
+  defp decode_path_type!(code, segments, args, assoc) do
+    %RustQ.Syn.Type.Path{
+      code: code,
+      name: List.last(segments),
+      segments: segments,
+      args: Elixir.Enum.map(args, &decode_type!/1),
+      assoc: Map.new(assoc, fn {name, type} -> {name, decode_type!(type)} end)
+    }
+  end
 
   defp decode_visibility!("public"), do: :public
   defp decode_visibility!("private"), do: :private

@@ -401,7 +401,7 @@ fn path_type_metadata<'a>(env: Env<'a>, code: String, path: &syn::Path) -> Term<
         .map(|segment| segment.ident.to_string())
         .collect::<Vec<_>>();
 
-    let args = path
+    let (args, assoc) = path
         .segments
         .last()
         .map(|segment| generic_args(env, &segment.arguments))
@@ -412,7 +412,7 @@ fn path_type_metadata<'a>(env: Env<'a>, code: String, path: &syn::Path) -> Term<
     match name.as_str() {
         "Option" if args.len() == 1 => ("option", code, args[0]).encode(env),
         "Result" if args.len() == 2 => ("result", code, args[0], args[1]).encode(env),
-        _ => ("path", code, segments, args).encode(env),
+        _ => ("path", code, segments, args, assoc).encode(env),
     }
 }
 
@@ -427,17 +427,27 @@ fn trait_bound_metadata<'a>(env: Env<'a>, bound: &TypeParamBound) -> Option<Term
     }
 }
 
-fn generic_args<'a>(env: Env<'a>, arguments: &PathArguments) -> Vec<Term<'a>> {
+fn generic_args<'a>(env: Env<'a>, arguments: &PathArguments) -> (Vec<Term<'a>>, Vec<Term<'a>>) {
     match arguments {
-        PathArguments::AngleBracketed(args) => args
-            .args
-            .iter()
-            .filter_map(|arg| match arg {
-                GenericArgument::Type(ty) => Some(type_metadata(env, ty)),
-                _ => None,
-            })
-            .collect(),
-        _ => Vec::new(),
+        PathArguments::AngleBracketed(args) => {
+            let mut positional = Vec::new();
+            let mut associated = Vec::new();
+
+            for arg in &args.args {
+                match arg {
+                    GenericArgument::Type(ty) => positional.push(type_metadata(env, ty)),
+                    GenericArgument::AssocType(assoc) => {
+                        associated.push(
+                            (assoc.ident.to_string(), type_metadata(env, &assoc.ty)).encode(env),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+
+            (positional, associated)
+        }
+        _ => (Vec::new(), Vec::new()),
     }
 }
 

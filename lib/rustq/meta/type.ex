@@ -98,6 +98,21 @@ defmodule RustQ.Meta.Type do
   def vec_inner(%__MODULE__{ast: %AST.TypeVec{inner: inner}}), do: ast_type(inner)
   def vec_inner(%__MODULE__{}), do: nil
 
+  @doc "Returns the vector type that can satisfy an `IntoIterator<Item = T>` expectation."
+  @spec into_iterator_vec(t()) :: t() | nil
+  def into_iterator_vec(%__MODULE__{kind: :impl_trait, meta: %{traits: traits}}) do
+    traits
+    |> Enum.find_value(fn
+      %__MODULE__{meta: %{syn_name: "IntoIterator", assoc: %{"Item" => %__MODULE__{} = item}}} ->
+        vec_type(item)
+
+      _trait ->
+        nil
+    end)
+  end
+
+  def into_iterator_vec(%__MODULE__{}), do: nil
+
   @doc """
   Returns the concrete value type expected by a callable argument.
 
@@ -226,11 +241,12 @@ defmodule RustQ.Meta.Type do
     type(:impl_trait, %AST.TypeRaw{source: code}, %{traits: trait_types})
   end
 
-  defp from_syn_path(%SynType.Path{name: name, segments: segments, args: args}) do
+  defp from_syn_path(%SynType.Path{name: name, segments: segments, args: args, assoc: assoc}) do
     args = Enum.map(args, &from_syn/1)
+    assoc = Map.new(assoc, fn {assoc_name, type} -> {assoc_name, from_syn(type)} end)
     parts = path_segments(segments, name)
 
-    from_syn_path_parts(parts, name, args)
+    from_syn_path_parts(parts, name, args, assoc)
   end
 
   defp path_segments([], name), do: [name]
@@ -243,22 +259,23 @@ defmodule RustQ.Meta.Type do
   defp path_kind(["Term"]), do: :term
   defp path_kind(_parts), do: :type
 
-  defp from_syn_path_parts(["NifResult"], name, [inner]) do
+  defp from_syn_path_parts(["NifResult"], name, [inner], assoc) do
     type(:nif_result, %AST.TypeNifResult{inner: inner.ast}, %{
       syn_name: name,
       syn_segments: ["NifResult"],
       args: [inner],
+      assoc: assoc,
       inner: inner
     })
   end
 
-  defp from_syn_path_parts(parts, name, args) do
+  defp from_syn_path_parts(parts, name, args, assoc) do
     ast = %AST.TypePath{
       parts: Enum.map(parts, &RustQ.Atom.identifier!/1),
       generics: Enum.map(args, & &1.ast)
     }
 
-    type(path_kind(parts), ast, %{syn_name: name, syn_segments: parts, args: args})
+    type(path_kind(parts), ast, %{syn_name: name, syn_segments: parts, args: args, assoc: assoc})
   end
 
   defp ref_kind(true), do: :mut_ref
@@ -638,6 +655,10 @@ defmodule RustQ.Meta.Type do
   defp tuple_type(tuple_types) do
     rendered = Enum.map_join(tuple_types, ", ", & &1.rust)
     type(:tuple, %AST.TypeRaw{source: "(#{rendered})"}, %{elements: tuple_types})
+  end
+
+  defp vec_type(%__MODULE__{} = inner) do
+    type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
   end
 
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),

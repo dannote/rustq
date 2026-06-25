@@ -114,6 +114,31 @@ defmodule RustQ.Syn.MetadataTest do
              "fn offset(&mut self, dx: f32, dy: f32) -> Self"
   end
 
+  test "parses path associated type metadata" do
+    source = """
+    pub fn merge(filters: impl IntoIterator<Item = Option<ImageFilter>>) {}
+    """
+
+    assert {:ok, file} = Syn.parse(source)
+
+    assert [
+             %Syn.Function{
+               args: [
+                 %Arg{
+                   type_ast: %Type.ImplTrait{
+                     traits: [
+                       %Type.Path{
+                         name: "IntoIterator",
+                         assoc: %{"Item" => %Type.Option{inner: %Type.Path{name: "ImageFilter"}}}
+                       }
+                     ]
+                   }
+                 }
+               ]
+             }
+           ] = Syn.functions(file)
+  end
+
   test "parses nested module free functions with module paths" do
     source = """
     pub mod color_filters {
