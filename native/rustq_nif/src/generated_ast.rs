@@ -43,6 +43,9 @@ pub(crate) mod ast_modules {
     pub(crate) const EARLY_RETURN: &str = "Elixir.RustQ.Rust.AST.EarlyReturn";
     pub(crate) const IF_LET: &str = "Elixir.RustQ.Rust.AST.IfLet";
     pub(crate) const FOR: &str = "Elixir.RustQ.Rust.AST.For";
+    pub(crate) const LOOP: &str = "Elixir.RustQ.Rust.AST.Loop";
+    pub(crate) const BREAK: &str = "Elixir.RustQ.Rust.AST.Break";
+    pub(crate) const CONTINUE: &str = "Elixir.RustQ.Rust.AST.Continue";
     pub(crate) const VAR: &str = "Elixir.RustQ.Rust.AST.Var";
     pub(crate) const PATH: &str = "Elixir.RustQ.Rust.AST.Path";
     pub(crate) const FIELD: &str = "Elixir.RustQ.Rust.AST.Field";
@@ -71,6 +74,7 @@ pub(crate) mod ast_modules {
     pub(crate) const OK: &str = "Elixir.RustQ.Rust.AST.Ok";
     pub(crate) const ERR: &str = "Elixir.RustQ.Rust.AST.Err";
     pub(crate) const NIF_RAISE_ATOM: &str = "Elixir.RustQ.Rust.AST.NifRaiseAtom";
+    pub(crate) const BLOCK_EXPR: &str = "Elixir.RustQ.Rust.AST.BlockExpr";
     pub(crate) const MATCH: &str = "Elixir.RustQ.Rust.AST.Match";
     pub(crate) const IF: &str = "Elixir.RustQ.Rust.AST.If";
     pub(crate) const BINARY_OP: &str = "Elixir.RustQ.Rust.AST.BinaryOp";
@@ -251,6 +255,9 @@ pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
         ast_modules::EARLY_RETURN => decode_stmt_early_return(term),
         ast_modules::IF_LET => decode_stmt_if_let(term),
         ast_modules::FOR => decode_stmt_for(term),
+        ast_modules::LOOP => decode_stmt_loop(term),
+        ast_modules::BREAK => decode_stmt_break(term),
+        ast_modules::CONTINUE => decode_stmt_continue(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -285,6 +292,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::OK => decode_expr_ok(term),
         ast_modules::ERR => decode_expr_err(term),
         ast_modules::NIF_RAISE_ATOM => decode_expr_nif_raise_atom(term),
+        ast_modules::BLOCK_EXPR => decode_expr_block_expr(term),
         ast_modules::MATCH => decode_expr_match(term),
         ast_modules::IF => decode_expr_if(term),
         ast_modules::BINARY_OP => decode_expr_binary_op(term),
@@ -591,6 +599,20 @@ pub(crate) fn decode_stmt_for<'a>(term: Term<'a>) -> NifResult<Stmt> {
     super::parse_for_stmt(pattern, expr, body)
 }
 
+pub(crate) fn decode_stmt_loop<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let body = super::decode_block(required_field(term, "body")?)?;
+    super::parse_loop_stmt(body)
+}
+
+pub(crate) fn decode_stmt_break<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let expr = super::decode_optional_expr_field(term, "expr")?;
+    super::parse_break_stmt(expr)
+}
+
+pub(crate) fn decode_stmt_continue<'a>(_term: Term<'a>) -> NifResult<Stmt> {
+    super::parse_continue_stmt()
+}
+
 pub(crate) fn decode_stmt_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let pattern = required_pat(term, "pattern")?;
     let mutable = required_field(term, "mutable")?.decode()?;
@@ -610,12 +632,13 @@ pub(crate) fn decode_stmt_let_else<'a>(term: Term<'a>) -> NifResult<Stmt> {
 pub(crate) fn decode_arm<'a>(term: Term<'a>) -> NifResult<Arm> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Arm")?;
     let pat_term = required_field(term, "pattern")?;
+    let guard = super::decode_optional_expr_field(term, "guard")?;
     let block = super::decode_block(required_field(term, "body")?)?;
     if struct_name(pat_term)? == "Elixir.RustQ.Rust.AST.PatAtomGuard" {
         super::decode_atom_guard_arm(pat_term, block)
     } else {
         let pat = super::decode_pat(pat_term)?;
-        super::parse_block_arm(pat, block)
+        super::parse_guarded_block_arm(pat, guard, block)
     }
 }
 
@@ -713,6 +736,11 @@ pub(crate) fn decode_expr_binary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
     let right = required_expr(term, "right")?;
     let op = atom_key(term, "op")?;
     super::parse_binary_expr(left, op, right)
+}
+
+pub(crate) fn decode_expr_block_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let block = super::decode_block(required_field(term, "body")?)?;
+    super::parse_block_expr(block)
 }
 
 pub(crate) fn decode_expr_match<'a>(term: Term<'a>) -> NifResult<Expr> {

@@ -47,6 +47,23 @@ defmodule RustQ.Codegen.Decoders.Stmt do
     Super.parse_for_stmt(pattern, expr, body)
   end
 
+  @spec decode_stmt_loop(term()) :: R.nif_result(R.path(:Stmt))
+  defrust decode_stmt_loop(term) do
+    body = unwrap!(Super.decode_block(unwrap!(required_field(term, "body"))))
+    Super.parse_loop_stmt(body)
+  end
+
+  @spec decode_stmt_break(term()) :: R.nif_result(R.path(:Stmt))
+  defrust decode_stmt_break(term) do
+    expr = unwrap!(Super.decode_optional_expr_field(term, "expr"))
+    Super.parse_break_stmt(expr)
+  end
+
+  @spec decode_stmt_continue(term()) :: R.nif_result(R.path(:Stmt))
+  defrust decode_stmt_continue(_term) do
+    Super.parse_continue_stmt()
+  end
+
   @spec decode_stmt_let(term()) :: R.nif_result(R.path(:Stmt))
   defrust decode_stmt_let(term) do
     pattern = unwrap!(required_pat(term, "pattern"))

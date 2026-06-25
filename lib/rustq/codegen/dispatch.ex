@@ -204,6 +204,9 @@ defmodule RustQ.Codegen.Dispatch do
   defp stmt_decoder_path(:early_return), do: [:decode_stmt_early_return]
   defp stmt_decoder_path(:if_let), do: [:decode_stmt_if_let]
   defp stmt_decoder_path(:for), do: [:decode_stmt_for]
+  defp stmt_decoder_path(:loop), do: [:decode_stmt_loop]
+  defp stmt_decoder_path(:break), do: [:decode_stmt_break]
+  defp stmt_decoder_path(:continue), do: [:decode_stmt_continue]
 
   defp decode_ast_expr_item do
     function :decode_ast_expr,
@@ -260,6 +263,7 @@ defmodule RustQ.Codegen.Dispatch do
               :ok,
               :err,
               :nif_raise_atom,
+              :block_expr,
               :match,
               :if,
               :binary_op

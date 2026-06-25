@@ -84,6 +84,102 @@ defmodule RustQ.Meta.DefrustTest do
     end
   end
 
+  test "defrust lowers case when guards" do
+    defmodule CaseWhenGuardCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode(term()) :: R.nif_result(R.u32())
+      defrust decode(term) do
+        case decode_as(term, {atom(), R.u32()}) do
+          {:ok, {tag, value}} when tag == Atoms.count() and value > 0 -> {:ok, value}
+          {:ok, {_tag, _value}} -> {:error, badarg()}
+          {:error, _reason} -> {:error, badarg()}
+        end
+      end
+    end
+
+    source = CaseWhenGuardCase.__rustq_source__()
+
+    assert source =~ "Ok((tag, value)) if tag == atoms::count() && value > 0 =>"
+    assert source =~ "Ok(value)"
+    assert RustQ.valid?(source, "case_when_guard_case.rs")
+  end
+
+  test "defrust lowers with expressions for result-oriented alternatives" do
+    defmodule WithResultCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode_color(term()) :: R.nif_result(R.u32())
+      defrust decode_color(term) do
+        case term do
+          1 -> {:ok, 10}
+          _ -> {:error, badarg()}
+        end
+      end
+
+      @spec decode_shader(term()) :: R.nif_result(R.u32())
+      defrust decode_shader(term) do
+        case term do
+          2 -> {:ok, 20}
+          _ -> {:error, badarg()}
+        end
+      end
+
+      @spec decode(term()) :: R.nif_result(R.u32())
+      defrust decode(term) do
+        with {:error, _color_reason} <- decode_color(term),
+             {:error, _shader_reason} <- decode_shader(term) do
+          {:error, badarg()}
+        else
+          {:ok, value} -> {:ok, value + 1}
+          {:error, _reason} -> {:error, badarg()}
+        end
+      end
+    end
+
+    source = WithResultCase.__rustq_source__()
+
+    assert source =~ "match decode_color(term)"
+    assert source =~ "Err(_color_reason) =>"
+    assert source =~ "match __rustq_with_value"
+    assert source =~ "Ok(value) =>"
+    assert source =~ "Ok(value + 1)"
+    refute source =~ "return "
+    assert RustQ.valid?(source, "with_result_case.rs")
+  end
+
+  test "defrust lowers for reduce as an expression-valued fallible loop" do
+    defmodule ForReduceResultCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec validate(R.vec(R.u32())) :: R.nif_result(R.unit())
+      defrust validate(values) do
+        for value <- values, reduce: :ok do
+          :ok ->
+            if value == 0 do
+              {:error, badarg()}
+            else
+              :ok
+            end
+        end
+      end
+    end
+
+    source = ForReduceResultCase.__rustq_source__()
+
+    assert source =~ "let mut __rustq_reduce = Ok(());"
+    assert source =~ "for value in values"
+    assert source =~ "__rustq_reduce = match __rustq_reduce"
+    assert source =~ "Ok(()) =>"
+    assert source =~ "__rustq_reduce_value =>"
+    assert source =~ "Err(rustler::Error::BadArg)"
+    refute source =~ "return "
+    assert RustQ.valid?(source, "for_reduce_result_case.rs")
+  end
+
   test "defrust can use Syn-derived external callable metadata" do
     defmodule SynExternalCallableCase do
       use RustQ.Meta, rust_sources: ["test/fixtures/external_callables.rs"]

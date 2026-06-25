@@ -77,6 +77,9 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:early_return), do: "return 1;"
   defp semantic_fragment(:if_let), do: "if let Some(value) = maybe"
   defp semantic_fragment(:for), do: "for value in values"
+  defp semantic_fragment(:loop), do: "loop"
+  defp semantic_fragment(:break), do: "break;"
+  defp semantic_fragment(:continue), do: "continue;"
   defp semantic_fragment(:var), do: "value"
   defp semantic_fragment(:path), do: "Sample::VALUE"
   defp semantic_fragment(:field), do: "opts.value"
@@ -105,6 +108,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:ok), do: "Ok(())"
   defp semantic_fragment(:err), do: "Err(rustler::Error::BadArg)"
   defp semantic_fragment(:nif_raise_atom), do: "RaiseAtom"
+  defp semantic_fragment(:block_expr), do: "let value = 1;"
   defp semantic_fragment(:match), do: "match value"
   defp semantic_fragment(:if), do: "if condition"
   defp semantic_fragment(:binary_op), do: "left == right"
@@ -267,6 +271,16 @@ defmodule RustQ.ASTSamples do
         returns: "NifResult<()>"
       )
 
+  def sample_for(:loop),
+    do:
+      function_sample(:loop_sample, A.ok(),
+        body: [A.loop([A.continue(), A.break()]), A.return(A.ok())],
+        returns: "NifResult<()>"
+      )
+
+  def sample_for(:break), do: sample_for(:loop)
+  def sample_for(:continue), do: sample_for(:loop)
+
   def sample_for(:var), do: function_sample(:var_sample, A.var(:value), returns: "i64")
 
   def sample_for(:path),
@@ -370,6 +384,14 @@ defmodule RustQ.ASTSamples do
     do:
       function_sample(:nif_raise_atom_sample, %AST.NifRaiseAtom{name: :invalid},
         returns: "NifResult<()> "
+      )
+
+  def sample_for(:block_expr),
+    do:
+      function_sample(
+        :block_expr_sample,
+        A.block_expr([A.let(:value, A.lit(1)), A.return(:value)]),
+        returns: "i64"
       )
 
   def sample_for(:match), do: match_sample(:match_sample, A.wildcard())

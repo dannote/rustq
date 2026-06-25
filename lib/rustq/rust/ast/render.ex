@@ -12,10 +12,13 @@ defmodule RustQ.Rust.AST.Render do
     AtomValue,
     Attribute,
     BinaryOp,
+    BlockExpr,
+    Break,
     ByteString,
     Cast,
     Closure,
     Const,
+    Continue,
     Derive,
     EarlyReturn,
     Enum,
@@ -35,6 +38,7 @@ defmodule RustQ.Rust.AST.Render do
     LetElse,
     Literal,
     LocalCall,
+    Loop,
     MacroCall,
     MacroItem,
     MacroItemCall,
@@ -441,6 +445,11 @@ defmodule RustQ.Rust.AST.Render do
     ]
   end
 
+  def render_stmt(%Loop{} = stmt), do: ["loop {\n", render_stmt_block(stmt.body), "\n}"]
+  def render_stmt(%Break{expr: nil}), do: "break;"
+  def render_stmt(%Break{expr: expr}), do: ["break ", render_expr(expr), ";"]
+  def render_stmt(%Continue{}), do: "continue;"
+
   def render_expr(%Var{name: name}), do: Atom.to_string(name)
   def render_expr(%Path{parts: parts}), do: Elixir.Enum.map_join(parts, "::", &render_path_part/1)
 
@@ -533,6 +542,8 @@ defmodule RustQ.Rust.AST.Render do
     ~s|rustler::Error::RaiseAtom("#{name}")|
   end
 
+  def render_expr(%BlockExpr{} = block), do: ["{\n", render_stmt_block(block.body), "\n}"]
+
   def render_expr(%Match{} = match) do
     arms = match.arms |> Elixir.Enum.map(&render_arm/1) |> Elixir.Enum.join("\n")
     ["match ", render_expr(match.expr), " {\n", indent(arms), "\n}"]
@@ -564,9 +575,18 @@ defmodule RustQ.Rust.AST.Render do
     [render_expr(left), " ", render_binary_op(op), " ", render_expr(right)]
   end
 
-  def render_arm(%Arm{pattern: pattern, body: body}) do
-    [render_pattern(pattern), " => {\n", render_stmt_block(body), "\n},"]
+  def render_arm(%Arm{pattern: pattern, guard: guard, body: body}) do
+    [
+      render_pattern(pattern),
+      render_arm_guard(guard),
+      " => {\n",
+      render_stmt_block(body),
+      "\n},"
+    ]
   end
+
+  defp render_arm_guard(nil), do: []
+  defp render_arm_guard(guard), do: [" if ", render_expr(guard)]
 
   def render_pattern(%PatVar{name: name, mutable: true}), do: ["mut ", Atom.to_string(name)]
   def render_pattern(%PatVar{name: name}), do: Atom.to_string(name)

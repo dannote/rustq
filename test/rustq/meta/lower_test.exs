@@ -1910,6 +1910,18 @@ defmodule RustQ.Meta.LowerTest do
            } = Enum.find(decoders, &(&1.name == :decode_pat_some))
 
     assert %Function{
+             name: :decode_stmt_continue,
+             body: [
+               %RustQ.Rust.AST.Return{
+                 expr: %RustQ.Rust.AST.PathCall{
+                   path: %RustQ.Rust.AST.Path{parts: [:super, :parse_continue_stmt]},
+                   args: []
+                 }
+               }
+             ]
+           } = Enum.find(decoders, &(&1.name == :decode_stmt_continue))
+
+    assert %Function{
              name: :decode_stmt_return,
              body: [
                %RustQ.Rust.AST.Let{},

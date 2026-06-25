@@ -18,10 +18,13 @@ defmodule RustQ.Rust.AST.Builder do
     AtomValue,
     Attribute,
     BinaryOp,
+    BlockExpr,
+    Break,
     ByteString,
     Cast,
     Closure,
     Const,
+    Continue,
     Derive,
     EarlyReturn,
     Err,
@@ -38,6 +41,7 @@ defmodule RustQ.Rust.AST.Builder do
     LetElse,
     Literal,
     LocalCall,
+    Loop,
     MacroCall,
     MacroItem,
     MacroItemCall,
@@ -80,10 +84,11 @@ defmodule RustQ.Rust.AST.Builder do
     end
   end
 
-  defmacro arm(pattern, do: body) do
+  defmacro arm(pattern, opts \\ [], do: body) do
     quote do
       %Arm{
         pattern: unquote(pattern),
+        guard: unquote(opts) |> Keyword.get(:when) |> Builder.maybe_expr(),
         body: Builder.flatten(unquote(block_values(body)))
       }
     end
@@ -192,6 +197,12 @@ defmodule RustQ.Rust.AST.Builder do
 
   def for_(pattern, expression, body),
     do: %For{pattern: pat_expr(pattern), expr: expr(expression), body: flatten(body)}
+
+  def block_expr(body), do: %BlockExpr{body: flatten(body)}
+  def loop(body), do: %Loop{body: flatten(body)}
+  def break, do: %Break{}
+  def break(expression), do: %Break{expr: expr(expression)}
+  def continue, do: %Continue{}
 
   def arg(name, type) when is_binary(type), do: %FunctionArg{name: name, type: type}
   def arg(name, type), do: %FunctionArg{name: name, type: type(type)}
@@ -348,6 +359,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Ok,
              AST.Err,
              AST.NifRaiseAtom,
+             AST.BlockExpr,
              AST.Match,
              AST.If,
              AST.BinaryOp
@@ -360,8 +372,8 @@ defmodule RustQ.Rust.AST.Builder do
       when is_binary(value) or is_integer(value) or is_float(value) or is_boolean(value),
       do: lit(value)
 
-  defp maybe_expr(nil), do: nil
-  defp maybe_expr(value), do: expr(value)
+  def maybe_expr(nil), do: nil
+  def maybe_expr(value), do: expr(value)
 
   def trait_path(%TypePath{} = path), do: path
   def trait_path(path) when is_binary(path), do: type_path(path)

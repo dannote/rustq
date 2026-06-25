@@ -16,10 +16,13 @@ defmodule RustQ.Rust.AST do
     AtomValue,
     Attribute,
     BinaryOp,
+    BlockExpr,
+    Break,
     ByteString,
     Cast,
     Closure,
     Const,
+    Continue,
     Derive,
     EarlyReturn,
     Enum,
@@ -38,6 +41,7 @@ defmodule RustQ.Rust.AST do
     Let,
     LetElse,
     Literal,
+    Loop,
     LocalCall,
     MacroCall,
     MacroItem,
@@ -112,6 +116,9 @@ defmodule RustQ.Rust.AST do
           | EarlyReturn.t()
           | IfLet.t()
           | For.t()
+          | Loop.t()
+          | Break.t()
+          | Continue.t()
 
   @typedoc false
   @type expr ::
@@ -143,6 +150,7 @@ defmodule RustQ.Rust.AST do
           | Ok.t()
           | Err.t()
           | NifRaiseAtom.t()
+          | BlockExpr.t()
           | Match.t()
           | If.t()
           | BinaryOp.t()
@@ -424,6 +432,12 @@ defmodule RustQ.Rust.AST do
       )
   )
 
+  defnode(Loop, :stmt, [body: []], type: quote(do: %__MODULE__{body: [AST.stmt()]}))
+
+  defnode(Break, :stmt, [:expr], type: quote(do: %__MODULE__{expr: AST.expr() | nil}))
+
+  defnode(Continue, :stmt, [], type: quote(do: %__MODULE__{}))
+
   defnode(Var, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
   defnode(Path, :expr, [:parts], type: quote(do: %__MODULE__{parts: [atom() | String.t()]}))
@@ -531,6 +545,8 @@ defmodule RustQ.Rust.AST do
 
   defnode(NifRaiseAtom, :expr, [:name], type: quote(do: %__MODULE__{name: atom()}))
 
+  defnode(BlockExpr, :expr, [body: []], type: quote(do: %__MODULE__{body: [AST.stmt()]}))
+
   defnode(Match, :expr, [:expr, arms: []],
     type: quote(do: %__MODULE__{expr: AST.expr(), arms: [Arm.t()]})
   )
@@ -557,8 +573,8 @@ defmodule RustQ.Rust.AST do
       )
   )
 
-  defnode(Arm, :field, [:pattern, body: []],
-    type: quote(do: %__MODULE__{pattern: AST.pat(), body: [AST.stmt()]})
+  defnode(Arm, :field, [:pattern, guard: nil, body: []],
+    type: quote(do: %__MODULE__{pattern: AST.pat(), guard: AST.expr() | nil, body: [AST.stmt()]})
   )
 
   defnode(PatVar, :pat, [:name, mutable: false],
@@ -640,6 +656,9 @@ defmodule RustQ.Rust.AST do
       EarlyReturn,
       IfLet,
       For,
+      Loop,
+      Break,
+      Continue,
       Var,
       Path,
       Field,
@@ -668,6 +687,7 @@ defmodule RustQ.Rust.AST do
       Ok,
       Err,
       NifRaiseAtom,
+      BlockExpr,
       Match,
       If,
       BinaryOp,

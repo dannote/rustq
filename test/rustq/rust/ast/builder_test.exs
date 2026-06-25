@@ -163,6 +163,56 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert source =~ "Ok(atoms::clear())"
   end
 
+  test "renders loop and break statements" do
+    function = %Function{
+      name: :read_until_done,
+      args: [],
+      returns: "NifResult<()> ",
+      body:
+        A.block do
+          A.loop([
+            A.stmt(A.call(:step)),
+            A.continue(),
+            A.break()
+          ])
+
+          A.return(A.ok())
+        end
+    }
+
+    source = Render.render_function(function)
+
+    assert source =~ "loop {"
+    assert source =~ "step();"
+    assert source =~ "continue;"
+    assert source =~ "break;"
+  end
+
+  test "renders match arm guards" do
+    function = %Function{
+      name: :guarded,
+      args: [A.arg(:value, :i64)],
+      returns: "NifResult<i64>",
+      body:
+        A.block do
+          A.return do
+            A.match A.var(:value) do
+              A.arm P.var(:value), when: A.gt(:value, 0) do
+                A.return(A.ok(:value))
+              end
+
+              A.badarg_arm()
+            end
+          end
+        end
+    }
+
+    source = Render.render_function(function)
+
+    assert source =~ "value if value > 0 =>"
+    assert source =~ "Ok(value)"
+  end
+
   test "builds semantic badarg helpers" do
     assert %Path{parts: [:rustler, :Error, :BadArg]} = A.badarg()
 

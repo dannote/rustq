@@ -119,6 +119,12 @@ defmodule RustQ.Codegen.Decoders.Expr do
     Super.parse_binary_expr(left, op, right)
   end
 
+  @spec decode_expr_block_expr(term()) :: R.nif_result(R.path(:Expr))
+  defrust decode_expr_block_expr(term) do
+    block = unwrap!(Super.decode_block(unwrap!(required_field(term, "body"))))
+    Super.parse_block_expr(block)
+  end
+
   @spec decode_expr_match(term()) :: R.nif_result(R.path(:Expr))
   defrust decode_expr_match(term) do
     expr = unwrap!(required_expr(term, "expr"))

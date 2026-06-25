@@ -214,6 +214,18 @@ pub(crate) fn parse_block_arm(pat: Pat, block: syn::Block) -> NifResult<Arm> {
     })
 }
 
+pub(crate) fn parse_guarded_block_arm(
+    pat: Pat,
+    guard: Option<Expr>,
+    block: syn::Block,
+) -> NifResult<Arm> {
+    if let Some(guard) = guard {
+        parse_syn::<Arm>(quote!(#pat if #guard => #block,))
+    } else {
+        parse_block_arm(pat, block)
+    }
+}
+
 pub(crate) fn decode_optional_block_field(
     term: Term,
     field: &str,
@@ -268,6 +280,14 @@ pub(crate) fn parse_return_stmt(expr: Expr) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(return #expr;))
 }
 
+pub(crate) fn parse_block_expr(block: syn::Block) -> NifResult<Expr> {
+    Ok(Expr::Block(syn::ExprBlock {
+        attrs: Vec::new(),
+        label: None,
+        block,
+    }))
+}
+
 pub(crate) fn parse_if_expr(
     condition: Expr,
     then_block: syn::Block,
@@ -295,6 +315,22 @@ pub(crate) fn parse_if_let_stmt(
 
 pub(crate) fn parse_for_stmt(pattern: Pat, expr: Expr, body: syn::Block) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(for #pattern in #expr #body))
+}
+
+pub(crate) fn parse_loop_stmt(body: syn::Block) -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(loop #body))
+}
+
+pub(crate) fn parse_break_stmt(expr: Option<Expr>) -> NifResult<Stmt> {
+    if let Some(expr) = expr {
+        parse_syn::<Stmt>(quote!(break #expr;))
+    } else {
+        parse_syn::<Stmt>(quote!(break;))
+    }
+}
+
+pub(crate) fn parse_continue_stmt() -> NifResult<Stmt> {
+    parse_syn::<Stmt>(quote!(continue;))
 }
 
 pub(crate) fn decode_expr(term: Term) -> NifResult<Expr> {
