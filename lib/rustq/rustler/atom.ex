@@ -90,7 +90,7 @@ defmodule RustQ.Rustler.Atom do
   @spec cached_atom(R.path(:Env), R.ref(R.raw(:"OnceLock<Atom>")), R.ref(R.path(:str))) ::
           atom()
   defrust cached_atom(env, cell, name) do
-    deref(cell.get_or_init(fn -> Atom.from_term(name.encode(env)).unwrap() end))
+    deref(cell.get_or_init(fn -> Atom.from_str(env, name).unwrap() end))
   end
 
   defp decoder_ast(name, input, result, atoms, unknown, cases) do

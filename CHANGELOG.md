@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.8.1 - 2026-06-25
+
+- Add Rustler fixed struct term helpers for cached keys, default values, and raw `NIF_TERM` map construction.
+- Use `Atom::from_str` for generated cached atom helpers.
+- Add missing Rust integer marker types to `RustQ.Type`.
+
 ## v0.8.0 - 2026-06-25
 
 - Add semantic control-flow lowering for expression-oriented Rusty-Elixir.

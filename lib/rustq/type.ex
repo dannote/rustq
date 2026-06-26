@@ -36,14 +36,35 @@ defmodule RustQ.Type do
   # `bool`, `atom`, and `term` are built-in Elixir type names and cannot be
   # redefined as remote types. RustQ still accepts `R.bool()`, `R.atom()`, and
   # `R.term()` in defrust specs by reading the marker call AST.
+  @typedoc "Rust `i8`."
+  @type i8 :: integer()
+
+  @typedoc "Rust `i16`."
+  @type i16 :: integer()
+
+  @typedoc "Rust `i32`."
+  @type i32 :: integer()
+
+  @typedoc "Rust `i64`."
+  @type i64 :: integer()
+
+  @typedoc "Rust `isize`."
+  @type isize :: integer()
+
   @typedoc "Rust `u8`."
   @type u8 :: 0..255
+
+  @typedoc "Rust `u16`."
+  @type u16 :: non_neg_integer()
 
   @typedoc "Rust `u32`."
   @type u32 :: non_neg_integer()
 
-  @typedoc "Rust `i64`."
-  @type i64 :: integer()
+  @typedoc "Rust `u64`."
+  @type u64 :: non_neg_integer()
+
+  @typedoc "Rust `usize`."
+  @type usize :: non_neg_integer()
 
   @typedoc "Rust `f32`."
   @type f32 :: float()

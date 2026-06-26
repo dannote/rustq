@@ -3,7 +3,7 @@
 #![allow(clippy::manual_ok_err)]
 #![allow(clippy::manual_unwrap_or_default)]
 
-use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use std::sync::OnceLock;
 
 struct Node;
