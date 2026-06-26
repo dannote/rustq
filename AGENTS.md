@@ -7,7 +7,9 @@ When adding or changing Rust generation in this repository, always try to expres
 Preferred order:
 
 1. **Use valid Elixir + `defrust` when possible**
-   - Prefer ordinary Elixir syntax, pattern matching, calls, normal Elixir macros, and `@spec`/`@type` driven lowering.
+   - Prefer ordinary Elixir syntax, pattern matching, calls, normal Elixir macros, recursion, and `@spec`/`@type` driven lowering.
+   - Treat Rusty-Elixir as a functional Elixir-shaped surface. For repeated or counted work, prefer recursive helper functions, pattern matching, and accumulator-style APIs over imperative loops.
+   - `loop`, `break`, and `continue` are RustQ internal IR / low-level Rust implementation details, not the preferred user-facing or downstream-generator authoring style. Do not introduce them into product generator code just because Rust has loops; first model the logic with valid Elixir recursion or higher-level RustQ constructs.
    - Use ordinary external remote types in specs for Rust paths where possible (for example `GeneratedOpts.OvalOpts.t(R.lifetime(:a))` -> `generated_opts::OvalOpts<'a>`); keep `R.path` as a low-level escape hatch.
    - Do not introduce fake Rust syntax into Elixir.
 
