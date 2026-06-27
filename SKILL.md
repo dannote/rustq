@@ -217,6 +217,16 @@ If AST/native rendering rejects a shape you need, that is usually a RustQ capabi
 
 ## Raw Rust strings: last resort
 
+RustQ itself still has a few explicit low-level escape boundaries. Treat these as
+owned exceptions, not examples to copy:
+
+- core renderers/validators that must accept Rust text (`RustQ.render/3`, splice validation)
+- `RustQ.Rust.AST.MacroItem`, `EscapeExpr`, and `TypeRaw` nodes, which are explicit escape nodes
+- Rustler helper APIs that accept caller-provided Rust expressions for advanced dispatch/defaults
+- unsafe raw `NIF_TERM` helpers where Rustler exposes only low-level primitives
+
+Anything outside those boundaries should use `defrust`, RustQ AST, or inferred metadata first.
+
 Acceptable:
 
 ```elixir

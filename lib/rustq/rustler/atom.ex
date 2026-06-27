@@ -1,6 +1,10 @@
 defmodule RustQ.Rustler.Atom do
   @moduledoc """
   Generates Rustler atom declarations, decoders, dispatchers, and cached atom helpers.
+
+  Decoder and dispatch helpers prefer RustQ AST. Options such as `:on`, `:cases`,
+  and `:unknown` may accept explicit Rust expression strings for advanced caller
+  escape hatches; prefer AST expressions when composing generated code.
   """
 
   use RustQ.Meta

@@ -1,6 +1,10 @@
 defmodule RustQ.Rustler.Nif do
   @moduledoc """
   Generates Rustler NIF exports, NifStruct declarations, and raw NIF_TERM builders.
+
+  Most helpers in this module use RustQ AST. The raw `NIF_TERM` builders are an
+  explicit low-level Rustler escape boundary for unsafe wrapper APIs; prefer
+  `RustQ.Rustler.Term` helpers when normal `Term<'a>` values are available.
   """
 
   use RustQ.Sigil

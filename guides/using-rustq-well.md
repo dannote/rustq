@@ -262,6 +262,19 @@ Rust.ast_item(A.const(:MAX_FIELDS, :usize, A.lit(128), vis: :pub))
 If the AST cannot represent a needed construct, that is a RustQ feature request,
 not permission to create large string templates.
 
+## Explicit escape boundaries
+
+RustQ has explicit escape boundaries. They exist so low-level integration points
+are honest about being low-level:
+
+- render/template entry points validate real Rust text
+- `MacroItem`, `EscapeExpr`, and `TypeRaw` are explicit AST escape nodes
+- some Rustler helpers accept caller-provided Rust expressions for advanced dispatch or defaults
+- unsafe raw `NIF_TERM` helpers may need handwritten Rust because they sit at the Rustler wrapper boundary
+
+Do not treat those boundaries as a normal generator style. Outside them, prefer
+`defrust`, RustQ AST, or inferred metadata.
+
 ## Bad patterns
 
 ### String-built functions

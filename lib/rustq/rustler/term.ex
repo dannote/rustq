@@ -1,6 +1,10 @@
 defmodule RustQ.Rustler.Term do
   @moduledoc """
   Generates Rustler `Term<'a>` builders, decoders, and map access helpers.
+
+  Most helpers are authored with `defrust` or RustQ AST. The remaining
+  `EscapeExpr` fragments are localized Rustler wrapper-boundary escapes for
+  unsafe raw term construction or caller-supplied decoder expressions.
   """
 
   use RustQ.Meta
