@@ -17,8 +17,8 @@ defmodule RustQ.Meta do
   external Rust paths should normally be expressed as ordinary remote types such
   as `GeneratedOpts.OvalOpts.t(R.lifetime(:a))`; use `RustQ.Type` markers such
   as `R.ref/1`, `R.nif_result/1`, `R.unit/0`, `R.slice/1`, and `R.lifetime/1`
-  only where Elixir typespecs need Rust-specific precision. `RustQ.Meta.AST.quoted/2`
-  is a low-level bridge for internal generators that already hold RustQ AST
+  only where Elixir typespecs need Rust-specific precision. The internal
+  `RustQ.Meta.AST` bridge is for generators that already hold RustQ AST
   signature metadata; it is not the intended authoring surface.
 
   Preferred Rusty-Elixir body forms are ordinary Elixir where possible:

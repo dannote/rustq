@@ -93,7 +93,7 @@ defmodule RustQ.Rust.AST do
     VecLiteral
   }
 
-  @typedoc false
+  @typedoc "Rust item nodes supported by RustQ's compact AST."
   @type item ::
           Use.t()
           | Module.t()
@@ -107,6 +107,7 @@ defmodule RustQ.Rust.AST do
           | Struct.t()
           | Enum.t()
 
+  @typedoc "Rust statement nodes supported by RustQ's compact AST."
   @type stmt ::
           Let.t()
           | LetElse.t()
@@ -120,7 +121,7 @@ defmodule RustQ.Rust.AST do
           | Break.t()
           | Continue.t()
 
-  @typedoc false
+  @typedoc "Rust expression nodes supported by RustQ's compact AST."
   @type expr ::
           Var.t()
           | Path.t()
@@ -155,6 +156,7 @@ defmodule RustQ.Rust.AST do
           | If.t()
           | BinaryOp.t()
 
+  @typedoc "Rust type nodes supported by RustQ's compact AST."
   @type type ::
           TypePath.t()
           | TypeRef.t()
@@ -167,6 +169,7 @@ defmodule RustQ.Rust.AST do
           | RustQ.Rust.AST.TypeRaw.t()
           | TypeUnit.t()
 
+  @typedoc "Rust pattern nodes supported by RustQ's compact AST."
   @type pat ::
           PatVar.t()
           | PatWildcard.t()

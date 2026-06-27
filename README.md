@@ -26,6 +26,17 @@ Add RustQ to `mix.exs`:
 RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available
 where `mix rustq.gen` or your own codegen task runs.
 
+## Agent skill included
+
+RustQ ships an agent-facing skill file at [`SKILL.md`](SKILL.md). If you use a
+coding agent to start a RustQ project, port existing bindings, or maintain a
+RustQ-powered generator, give the agent that file first. It summarizes RustQ's
+ideology, authoring order, inference features, and anti-patterns.
+
+The same guidance is published in HexDocs as
+[`Using RustQ Well`](https://rustq.hexdocs.pm/using-rustq-well.md). The skill
+itself is also available at [`https://rustq.hexdocs.pm/skill.md`](https://rustq.hexdocs.pm/skill.md).
+
 ## Choose an authoring style
 
 | Need | Use |
@@ -179,7 +190,9 @@ the boundary to nearby handwritten Rust primitives for Rustler term APIs,
 generic `syn` parsing/assembly, or collection glue.
 
 Raw token escapes (`raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`) are explicit
-low-level escape hatches for cases not yet covered by semantic helpers.
+low-level escape hatches for cases not yet covered by semantic helpers. If an
+escape grows beyond a small local syntax boundary, stop and add a RustQ semantic
+helper or AST node instead.
 
 RustQ dogfoods this layer in `RustQ.Codegen.Decoders.*` to generate much of
 its own native AST decoder support.

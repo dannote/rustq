@@ -1,5 +1,16 @@
 # Agent Guidelines for RustQ
 
+## Canonical RustQ dogfooding doctrine
+
+Before changing Rust generation in RustQ or downstream projects, read and follow:
+
+- [`SKILL.md`](SKILL.md) — agent-facing RustQ skill for consumers, ports, generators, and dogfooding
+- [`guides/using-rustq-well.md`](guides/using-rustq-well.md) — HexDocs guide for the same doctrine
+
+The short version: RustQ exists to make Elixir↔Rust bridge generation readable,
+maintainable, and beautiful. Prefer valid Elixir, `defrust`, ordinary Elixir
+macros, RustQ AST, and structural metadata over raw Rust strings.
+
 ## Rusty Elixir / AST-first discipline
 
 When adding or changing Rust generation in this repository, always try to express the work through RustQ itself before falling back to raw Rust strings.

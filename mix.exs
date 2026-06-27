@@ -103,6 +103,8 @@ defmodule RustQ.MixProject do
         "mix.exs",
         "rustq.exs",
         "README.md",
+        "SKILL.md",
+        "guides/using-rustq-well.md",
         "CHANGELOG.md",
         "LICENSE"
       ]
@@ -112,7 +114,13 @@ defmodule RustQ.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
+      extras: [
+        "README.md",
+        "guides/using-rustq-well.md",
+        "SKILL.md",
+        "CHANGELOG.md",
+        "LICENSE"
+      ],
       source_ref: "v#{@version}",
       source_url: @source_url
     ]
