@@ -48,7 +48,7 @@ If RustQ knows `decode_color/1` returns `NifResult<Color>` and `draw_color/1` ex
 
 ## Prefer inference over `unwrap!`
 
-`unwrap!` still exists as an explicit `?` escape hatch, but it should not be the default style for every fallible call.
+`unwrap!` still exists as an explicit `?` escape hatch, but it should not be the default style for every fallible call. Before using it, first make sure RustQ can see the callable metadata that would let it infer propagation.
 
 Prefer this when callable metadata is available:
 
@@ -70,7 +70,18 @@ RustQ can infer propagation from:
 - downstream uses of previously-bound locals
 - vector pushes and iterator-like argument expectations in supported cases
 
-Use `unwrap!` when you genuinely need to force propagation and RustQ cannot infer it yet:
+Before reaching for `unwrap!`, check:
+
+- Is the callable defined by a local `@spec`?
+- Is it exposed through a `callable_modules` module?
+- Is it parseable from configured `rust_sources`?
+- Is it available from configured `rust_packages`?
+- Is the receiver type known well enough for method lookup?
+- Is the expected return or argument type known?
+
+If a fallible call is a method on a Rust type, read the Rust source that defines it and configure metadata before assuming RustQ cannot infer it. Do not use `unwrap!`, verbose `case`, or raw Rust wrappers to paper over missing metadata.
+
+Use `unwrap!` only when you genuinely need to force propagation and metadata/inference cannot express the shape yet:
 
 ```elixir
 @spec decode_alpha(R.term()) :: R.nif_result(R.u8())
@@ -115,6 +126,23 @@ end
 
 RustQ parses callable signatures and uses them for propagation/argument inference.
 This is the preferred way to bridge existing Rust libraries.
+
+When a `defrust` function calls a Rust method such as `decoder.read_var_int64()`, the correct first move is to expose the `Decoder` implementation through `rust_sources` or equivalent callable metadata. Do not duplicate the method signature in an ad hoc Elixir registry or hide missing metadata behind wrappers.
+
+## Do not create trivial wrappers for missing metadata
+
+Do not create a new Rust or `defrust` helper merely to call one Rust method and return `Ok(())`:
+
+```elixir
+# Bad if the only reason is that RustQ cannot see `Decoder.read_var_int64/0` yet.
+@spec kiwi_skip_int64_value(R.mut_ref(R.path(:Decoder, R.lifetime(:_)))) :: R.nif_result(R.unit())
+defrust kiwi_skip_int64_value(decoder) do
+  unwrap!(decoder.read_var_int64())
+  :ok
+end
+```
+
+First make RustQ understand the underlying Rust method via `rust_sources`, `rust_packages`, or `callable_modules`, or improve RustQ inference if the metadata is present but unused. Wrappers are fine when they encode real bridge semantics or are required as stable function-pointer targets, but they should not be a workaround for skipped metadata.
 
 ## Use recursion and reducers instead of return/break-driven product code
 
@@ -254,7 +282,7 @@ When porting existing bindings:
 3. Configure `rust_sources` / `rust_packages` before duplicating Rust signatures.
 4. Replace metadata registries with inference from Rust/schema/typespecs.
 5. Add `rustq.exs`, generate checked-in Rust if needed, and enforce `mix rustq.gen --check`.
-6. Run generated Rust through `cargo fmt`, `cargo check`, and `cargo clippy -- -D warnings`.
+6. Run generated Rust through `cargo fmt`, `cargo check`, and `cargo clippy -- -D warnings`. For generator changes that call downstream Rust methods, run the downstream native crate too; Elixir tests alone can miss missing callable metadata or receiver-type drift.
 
 ## References
 

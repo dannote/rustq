@@ -106,15 +106,24 @@ The later `draw_color/1` call can tell RustQ that `color` should be the unwrappe
 
 ### When to use `unwrap!`
 
-Use `unwrap!` when you intentionally need to force `?` and RustQ cannot infer the
-propagation yet:
+Use `unwrap!` only when you intentionally need to force `?` and RustQ cannot infer the propagation yet.
+
+Before reaching for it, check whether the callable is available from:
+
+- a local `@spec`
+- a configured `callable_modules` module
+- configured `rust_sources`
+- configured `rust_packages`
+- a known receiver type and method lookup
+- an expected argument or return type
+
+If a fallible call is a method on a Rust type, read the Rust source that defines the method and expose it to RustQ before assuming inference is impossible.
 
 ```elixir
 value = unwrap!(legacy_decoder(term))
 ```
 
-Do not use it reflexively around every fallible call. Prefer giving RustQ enough
-metadata to infer.
+Do not use it reflexively around every fallible call. Prefer giving RustQ enough metadata to infer. If metadata is available but RustQ still cannot infer, treat that as a RustQ improvement candidate rather than normal downstream style.
 
 Use `ok_or!` for explicit `Option<T>` to `Result`/`NifResult` conversion:
 
@@ -147,8 +156,24 @@ defmodule MyApp.Native.Generated do
 end
 ```
 
-RustQ parses functions, impl methods, aliases, argument types, and return types
-through `RustQ.Syn`/binding metadata and uses that information while lowering.
+RustQ parses functions, impl methods, aliases, argument types, and return types through `RustQ.Syn`/binding metadata and uses that information while lowering.
+
+For example, if generated code calls a downstream Rust `Decoder` method such as `decoder.read_var_int64()`, the right first step is to expose the `Decoder` implementation through `rust_sources` or equivalent callable metadata. Do not retype the method signature into an ad hoc Elixir table, and do not hide missing metadata behind `unwrap!`, verbose `case` propagation, or trivial wrappers.
+
+## Do not paper over missing metadata with trivial wrappers
+
+A wrapper that only calls one Rust method and returns unit is usually a smell if it exists only because RustQ cannot infer propagation:
+
+```elixir
+# Avoid this as a metadata workaround.
+@spec skip_int64(R.mut_ref(R.path(:Decoder, R.lifetime(:_)))) :: R.nif_result(R.unit())
+defrust skip_int64(decoder) do
+  unwrap!(decoder.read_var_int64())
+  :ok
+end
+```
+
+First make the underlying Rust method visible through `rust_sources`, `rust_packages`, or `callable_modules`, or improve RustQ inference. Keep wrappers when they encode real bridge semantics or provide a stable function pointer shape, but do not use them to avoid reading the actual Rust API.
 
 ## Prefer recursion and reducers over Rusty exits
 
