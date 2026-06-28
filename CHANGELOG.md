@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.8.2 - 2026-06-26
+
+- Add the RustQ agent skill to the Hex package and documentation.
+- Add guidance for authoring RustQ generators with `defrust`, AST builders,
+  metadata, inference, and explicit escape boundaries.
+- Document expression-oriented Rusty-Elixir style and recursion/reducer patterns.
+
 ## v0.8.1 - 2026-06-25
 
 - Add Rustler fixed struct term helpers for cached keys, default values, and raw `NIF_TERM` map construction.
