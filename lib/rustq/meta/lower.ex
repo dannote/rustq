@@ -27,7 +27,7 @@ defmodule RustQ.Meta.Lower do
     ]
   end
 
-  @spec quoted_body(Macro.t(), Type.t(), map(), keyword()) :: [struct()]
+  @spec quoted_body(Macro.t(), Type.t() | nil, map(), keyword()) :: [struct()]
   def quoted_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     context = %Context{
       return_type: return_type,

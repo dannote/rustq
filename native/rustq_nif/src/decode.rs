@@ -81,6 +81,7 @@ pub(crate) fn decode_derive(term: Term) -> NifResult<Vec<syn::Attribute>> {
 
 enum AttributeArg {
     Ident(proc_macro2::Ident),
+    Path(syn::Path),
     NameValueString(proc_macro2::Ident, String),
 }
 
@@ -88,6 +89,7 @@ impl ToTokens for AttributeArg {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             AttributeArg::Ident(ident) => tokens.extend(quote!(#ident)),
+            AttributeArg::Path(path) => tokens.extend(quote!(#path)),
             AttributeArg::NameValueString(ident, value) => tokens.extend(quote!(#ident = #value)),
         }
     }
@@ -145,13 +147,23 @@ fn decode_attribute_args(term: Term) -> NifResult<Vec<AttributeArg>> {
 
     term.decode::<Vec<Term>>()?
         .into_iter()
-        .map(|value| {
-            Ok(AttributeArg::Ident(format_ident!(
-                "{}",
-                atom_or_string(value)?
-            )))
-        })
+        .map(decode_attribute_arg)
         .collect()
+}
+
+fn decode_attribute_arg(term: Term) -> NifResult<AttributeArg> {
+    if struct_name(term).ok().as_deref() == Some("Elixir.RustQ.Rust.AST.Path") {
+        let path = path_from_parts(decode_string_list(
+            term.map_get(atom(term.get_env(), "parts")?)?,
+        )?)?;
+
+        return Ok(AttributeArg::Path(path));
+    }
+
+    Ok(AttributeArg::Ident(format_ident!(
+        "{}",
+        atom_or_string(term)?
+    )))
 }
 
 pub(crate) fn decode_derive_path_terms(term: Term) -> NifResult<Vec<Term>> {

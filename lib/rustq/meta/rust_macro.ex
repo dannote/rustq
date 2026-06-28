@@ -11,6 +11,7 @@ defmodule RustQ.Meta.RustMacro do
 
   alias RustQ.Diagnostic
   alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Meta.Lower
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
 
@@ -94,7 +95,7 @@ defmodule RustQ.Meta.RustMacro do
     body_ast = MetaAST.expand_body_macros(definition.body_ast, env)
 
     body =
-      RustQ.Meta.Lower.quoted_body(body_ast, nil, %{},
+      Lower.quoted_body(body_ast, nil, %{},
         rust_modules: rust_modules,
         callables: callables,
         macro_vars: Map.new(definition.args),
@@ -160,6 +161,7 @@ defmodule RustQ.Meta.RustMacro do
     end
   end
 
+  @spec invalid_keyword_args!(term()) :: no_return()
   defp invalid_keyword_args!(args) do
     Diagnostic.defrust(
       :invalid_defrustmacro_argument,
@@ -215,6 +217,7 @@ defmodule RustQ.Meta.RustMacro do
     |> Enum.map_join("\n", &["        ", &1])
   end
 
+  @spec raise_diagnostic(Definition.t(), term()) :: no_return()
   defp raise_diagnostic(%Definition{} = definition, cause) do
     Diagnostic.defrust(
       :defrustmacro_failed,

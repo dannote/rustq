@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add idiomatic Clippy lint paths for Rust-facing attributes, such as
+  `@allow Clippy.redundant_field_names` rendering to
+  `#[allow(clippy::redundant_field_names)]`.
 - Add `defrustmacro` for defining compact Rust `macro_rules!` helpers from
   Rusty-Elixir bodies, with `:expr` arguments by default and `:ty` annotations
   for type fragments.

@@ -270,6 +270,7 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   defp render_attr_arg({key, value}), do: [to_string(key), " = ", render_attr_value(value)]
+  defp render_attr_arg(%Path{} = path), do: render_expr(path)
   defp render_attr_arg(value), do: to_string(value)
   defp render_attr_value(value) when is_binary(value), do: inspect(value)
   defp render_attr_value(value), do: to_string(value)

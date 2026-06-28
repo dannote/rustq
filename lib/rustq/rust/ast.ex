@@ -204,7 +204,10 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           path: [atom() | String.t()],
-          args: keyword() | [atom() | String.t()] | {:value, String.t() | atom()},
+          args:
+            keyword()
+            | [atom() | String.t() | AST.Path.t()]
+            | {:value, String.t() | atom()},
           style: :outer | :inner
         }
       )

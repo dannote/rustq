@@ -66,6 +66,7 @@ defmodule RustQ.Meta do
 
     quote do
       import RustQ.Meta
+      alias RustQ.Clippy, as: Clippy
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_macros, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
