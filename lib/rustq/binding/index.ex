@@ -92,10 +92,11 @@ defmodule RustQ.Binding.Index do
   defp callable_keys(%Callable{name: name, target: target, args: args}) do
     rust_arity = length(args)
 
-    keys = [key(target, name, rust_arity)]
+    targets = target_keys(target)
+    keys = Enum.map(targets, &key(&1, name, rust_arity))
 
     if receiver_arg?(List.first(args)) and rust_arity > 0 do
-      [key(target, name, rust_arity - 1) | keys]
+      Enum.map(targets, &key(&1, name, rust_arity - 1)) ++ keys
     else
       keys
     end
@@ -113,6 +114,27 @@ defmodule RustQ.Binding.Index do
 
   defp receiver_arg?(%{name: "self"}), do: true
   defp receiver_arg?(_arg), do: false
+
+  defp target_keys(nil), do: [nil]
+
+  defp target_keys(target) do
+    target = target_part(target)
+
+    [target, base_target_part(target)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp base_target_part(target) when is_binary(target) do
+    target
+    |> String.replace(~r/\s+/, "")
+    |> String.split("<", parts: 2)
+    |> hd()
+    |> case do
+      "" -> nil
+      base -> base
+    end
+  end
 
   defp key(nil, name, arity), do: {nil, name_part(name), arity}
   defp key(target, name, arity), do: {target_part(target), name_part(name), arity}

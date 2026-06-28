@@ -1461,6 +1461,19 @@ defmodule RustQ.Meta.Lower do
     |> callable_return_type_for_path(function, arity, callables)
   end
 
+  defp callable_return_type_from_index(
+         {{:., _, [receiver, function]}, _meta, args},
+         %BindingIndex{} = callables
+       )
+       when is_atom(function) and is_list(args) do
+    target =
+      receiver
+      |> infer_expr_type(current_vars())
+      |> callable_target_from_type()
+
+    BindingIndex.return_type(callables, target, function, length(args))
+  end
+
   defp callable_return_type_from_index(_call_ast, %BindingIndex{}), do: nil
 
   defp callable_return_type_for_path(parts, function, arity, callables) do

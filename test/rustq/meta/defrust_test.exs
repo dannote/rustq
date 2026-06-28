@@ -109,6 +109,25 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "local_callable_propagation.rs")
   end
 
+  test "defrust uses rust source method metadata for discarded fallible statements" do
+    defmodule RustSourceMethodPropagationCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/decoder_metadata.rs"]
+      alias RustQ.Type, as: R
+
+      @spec skip(R.mut_ref(R.path(:Decoder, R.lifetime(:_)))) :: R.nif_result(R.unit())
+      defrust skip(decoder) do
+        decoder.read_var_int64()
+        :ok
+      end
+    end
+
+    source = RustSourceMethodPropagationCase.__rustq_source__()
+
+    assert source =~ "decoder.read_var_int64()?;"
+    assert source =~ "Ok(())"
+    assert RustQ.valid?(source, "rust_source_method_propagation.rs")
+  end
+
   defmodule SynSourceDomain do
     defmacro __using__(_opts) do
       quote do
