@@ -231,6 +231,40 @@ end
 RustQ expands ordinary Elixir macros before lowering. Use that instead of
 building a separate Rust string DSL.
 
+Use ordinary Elixir macros when you want to make the **Rusty-Elixir source**
+more reusable or readable. They run while compiling the Elixir generator and
+usually disappear before Rust exists.
+
+## `defrustmacro` for compact generated Rust
+
+Use `defrustmacro` for a different job: keeping the **generated Rust output**
+small. When generated Rust repeats the same small implementation pattern many
+times, `defrustmacro` can define one Rust `macro_rules!` helper from a
+Rusty-Elixir body:
+
+```elixir
+defrustmacro field(term, name, type: :ty) do
+  decode_as!(required_field(term, name), type)
+end
+
+@spec decode(R.term()) :: R.nif_result(R.u32())
+defrust decode(term) do
+  field!(term, "value", R.u32())
+end
+```
+
+Plain arguments are Rust `:expr` fragments. Annotate type arguments with `:ty`.
+The body is still Rusty-Elixir: use ordinary calls, `decode_as!/2`, propagation
+inference, pattern matching, and semantic helpers rather than Rust token syntax.
+Keep these macros small and supportive; they are for reducing generated Rust
+bulk, not for hiding large bridge functions.
+
+Rule of thumb:
+
+- Use `defmacro` to reuse or generate Rusty-Elixir before lowering.
+- Use `defrustmacro` only when the emitted Rust should contain and call a Rust
+  macro to avoid repeated Rust code.
+
 ## Typespecs are the signature source of truth
 
 Prefer ordinary Elixir and remote types where possible:

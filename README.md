@@ -189,6 +189,30 @@ Rust-shaped values that are still authored as valid Elixir. `Super.*` calls mark
 the boundary to nearby handwritten Rust primitives for Rustler term APIs,
 generic `syn` parsing/assembly, or collection glue.
 
+Ordinary Elixir `defmacro` and RustQ `defrustmacro` solve different problems.
+Use `defmacro` when you want reusable Rusty-Elixir source; RustQ expands it
+before lowering and the generated Rust does not contain a corresponding macro.
+Use `defrustmacro` when repeated generated Rust should call one compact
+`macro_rules!` helper while the helper body remains Rusty-Elixir:
+
+```elixir
+defrustmacro field(term, name, type: :ty) do
+  decode_as!(required_field(term, name), type)
+end
+
+@spec decode(R.term()) :: R.nif_result(R.u32())
+defrust decode(term) do
+  field!(term, "value", R.u32())
+end
+```
+
+Plain macro arguments are Rust `:expr` fragments. Annotate type arguments with
+`:ty`. The body is not Rust token syntax: use ordinary calls, `decode_as!/2`,
+inference, and other Rusty-Elixir forms. Keep `defrustmacro` small and supportive;
+do not hide large functions inside macro bodies. In short: `defmacro` improves
+the Elixir authoring layer; `defrustmacro` intentionally changes the Rust output
+shape.
+
 Raw token escapes (`raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`) are explicit
 low-level escape hatches for cases not yet covered by semantic helpers. If an
 escape grows beyond a small local syntax boundary, stop and add a RustQ semantic

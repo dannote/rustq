@@ -77,6 +77,177 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "macro_generated_case_clause.rs")
   end
 
+  test "defrustmacro defines Rust macros from Rusty-Elixir bodies" do
+    defmodule DefrustMacroFieldCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec required_field(R.term(), binary()) :: R.nif_result(R.term())
+      defrust required_field(term, _name) do
+        {:ok, term}
+      end
+
+      defrustmacro field(term, name, type: :ty) do
+        decode_as!(required_field(term, name), type)
+      end
+
+      @spec decode(R.term()) :: R.nif_result(R.u32())
+      defrust decode(term) do
+        field!(term, "value", R.u32())
+      end
+    end
+
+    source = DefrustMacroFieldCase.__rustq_source__()
+
+    assert source =~ "macro_rules! field"
+    assert source =~ "$term:expr"
+    assert source =~ "$type:ty"
+    assert source =~ "required_field($term, $name)?.decode::<$type>()?"
+    assert source =~ ~s|field!(term, "value", u32)|
+    assert RustQ.valid?(source, "defrustmacro_field.rs")
+  end
+
+  test "defrustmacro groups with defrustmod functions" do
+    defmodule DefrustMacroModuleCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod Helpers, as: :helpers do
+        defrustmacro identity(value) do
+          value
+        end
+
+        @spec decode(R.u32()) :: R.u32()
+        defrust decode(value) do
+          identity!(value)
+        end
+      end
+    end
+
+    source = DefrustMacroModuleCase.__rustq_source__()
+
+    assert source =~ "mod helpers"
+    assert source =~ "macro_rules! identity"
+    assert source =~ "fn decode(value: u32) -> u32"
+    assert source =~ "identity!(value)"
+    assert RustQ.valid?(source, "defrustmacro_module.rs")
+  end
+
+  test "defrust lowers remote Rust macro calls" do
+    defmodule RemoteRustMacroCallCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec log_value(R.u32()) :: R.nif_result(R.unit())
+      defrust log_value(value) do
+        Debug.trace!(value)
+        :ok
+      end
+    end
+
+    source = RemoteRustMacroCallCase.__rustq_source__()
+
+    assert source =~ "Debug::trace!(value);"
+    assert RustQ.valid?(source, "remote_rust_macro_call.rs")
+  end
+
+  test "defrustmacro reports unsupported fragment annotations" do
+    quoted =
+      quote do
+        defmodule UnsupportedDefrustMacroFragmentCase do
+          use RustQ.Meta
+
+          defrustmacro ok(value: :pat) do
+            value
+          end
+        end
+      end
+
+    assert_raise Diagnostic.Error, ~r/unsupported Rust macro fragment :pat/, fn ->
+      Code.compile_quoted(quoted)
+    end
+  end
+
+  test "defrustmacro reports duplicate macro names" do
+    quoted =
+      quote do
+        defmodule DuplicateDefrustMacroCase do
+          use RustQ.Meta
+
+          defrustmacro same(value) do
+            value
+          end
+
+          defrustmacro same(left, right) do
+            left + right
+          end
+        end
+      end
+
+    assert_raise Diagnostic.Error, ~r/duplicate defrustmacro same/, fn ->
+      Code.compile_quoted(quoted)
+    end
+  end
+
+  test "defrustmacro reports duplicate argument names" do
+    quoted =
+      quote do
+        defmodule DuplicateDefrustMacroArgumentCase do
+          use RustQ.Meta
+
+          defrustmacro bad(value, value) do
+            value
+          end
+        end
+      end
+
+    assert_raise Diagnostic.Error, ~r/duplicate argument value in defrustmacro bad/, fn ->
+      Code.compile_quoted(quoted)
+    end
+  end
+
+  test "defrustmacro reports type macro variables used as expressions" do
+    quoted =
+      quote do
+        defmodule TypeMacroVariableExpressionCase do
+          use RustQ.Meta
+
+          defrustmacro bad(type: :ty) do
+            type
+          end
+        end
+      end
+
+    assert_raise Diagnostic.Error,
+                 ~r/type is a Rust type fragment, but this is an expression position/,
+                 fn ->
+                   Code.compile_quoted(quoted)
+                 end
+  end
+
+  test "defrustmacro reports arity mismatches at macro call sites" do
+    quoted =
+      quote do
+        defmodule DefrustMacroArityMismatchCase do
+          use RustQ.Meta
+          alias RustQ.Type, as: R
+
+          defrustmacro passthrough(value) do
+            value
+          end
+
+          @spec decode(R.term()) :: R.term()
+          defrust decode(term) do
+            passthrough!()
+          end
+        end
+      end
+
+    assert_raise Diagnostic.Error, ~r/macro passthrough! expects 1 arguments, got 0/, fn ->
+      Code.compile_quoted(quoted)
+    end
+  end
+
   test "defrust uses module specs as callable metadata for propagation inference" do
     defmodule LocalCallablePropagationCase do
       use RustQ.Meta

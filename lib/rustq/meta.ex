@@ -13,6 +13,11 @@ defmodule RustQ.Meta do
   their own codegen boundary instead of pretending external Rust modules are
   Elixir modules.
 
+  `defrustmacro` defines a small `macro_rules!` item from a Rusty-Elixir body.
+  Its arguments are Rust macro fragments (`:expr` by default, with `:ty`
+  supported for type arguments) while the body still uses ordinary Rusty-Elixir
+  forms such as calls, `decode_as!/2`, and inference-backed propagation.
+
   Prefer `@spec` plus `defrust` for user-facing Rusty Elixir. Generated or
   external Rust paths should normally be expressed as ordinary remote types such
   as `GeneratedOpts.OvalOpts.t(R.lifetime(:a))`; use `RustQ.Type` markers such
@@ -44,6 +49,7 @@ defmodule RustQ.Meta do
   alias RustQ.Binding.Source
   alias RustQ.Meta.AST
   alias RustQ.Meta.Options
+  alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
   alias RustQ.Meta.Validate
   alias RustQ.Rust
@@ -61,6 +67,7 @@ defmodule RustQ.Meta do
     quote do
       import RustQ.Meta
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_macros, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_rust_sources, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_rust_packages, accumulate: true)
@@ -109,8 +116,16 @@ defmodule RustQ.Meta do
     end
   end
 
+  defmacro defrustmacro(call_ast, do: body_ast) do
+    quote do
+      @rustq_macros {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast)),
+                     RustQ.Meta.Attrs.current_rust_mod(__MODULE__)}
+    end
+  end
+
   defmacro __before_compile__(env) do
     defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
+    macro_defs = Module.get_attribute(env.module, :rustq_macros) |> List.wrap() |> Enum.reverse()
     specs = Module.get_attribute(env.module, :spec) |> List.wrap()
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
     rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
@@ -119,16 +134,28 @@ defmodule RustQ.Meta do
     external_callables = Source.external_callables(env.module)
     callables = local_callables ++ external_callables
 
+    rust_macros = RustMacro.definitions(macro_defs)
+    rust_macro_index = RustMacro.index!(rust_macros)
+    built_macros = RustMacro.items(rust_macros, rust_modules, env, callables, rust_macro_index)
+
     built_asts =
       Enum.map(
         defs,
-        &AST.build_ast(&1, specs, type_aliases, rust_modules, env, external_callables)
+        &AST.build_ast(
+          &1,
+          specs,
+          type_aliases,
+          rust_modules,
+          env,
+          external_callables,
+          rust_macro_index
+        )
       )
 
     asts = Enum.map(built_asts, & &1.ast)
     type_asts = AST.build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &Validate.item_ast/1)
-    rust_items = AST.group_module_asts(built_asts)
+    rust_items = AST.group_module_asts(built_macros ++ built_asts)
     rendered_items = Enum.map(rust_items, &Validate.item_ast/1)
     items = type_items ++ rendered_items
 

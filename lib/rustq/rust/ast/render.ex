@@ -95,7 +95,7 @@ defmodule RustQ.Rust.AST.Render do
   def render_item(%Const{} = item), do: render_native(item)
   def render_item(%Static{} = item), do: render_native(item)
   def render_item(%TypeAlias{} = item), do: render_native(item)
-  def render_item(%MacroItem{} = item), do: render_native(item)
+  def render_item(%MacroItem{} = item), do: render_macro_item(item)
 
   def render_item(%MacroItemCall{} = item), do: render_macro_item_call(item)
 
