@@ -12,6 +12,9 @@
   invocations, and support remote Rust macro calls such as `Debug.trace!(value)`.
 - Document when to use ordinary Elixir `defmacro` for authoring-layer reuse
   versus `defrustmacro` for intentionally reducing generated Rust size.
+- Add dev-only RustQ Reach smell checks and dogfood them in strict mode for raw
+  Rust escapes, low-level Rusty-Elixir control flow, trivial `defrust` wrappers,
+  and blockless `defrustmod` aliases.
 
 ## v0.8.3 - 2026-06-28
 
