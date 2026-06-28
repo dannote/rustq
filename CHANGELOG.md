@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add `defrustmacro` for defining compact Rust `macro_rules!` helpers from
+  Rusty-Elixir bodies, with `:expr` arguments by default and `:ty` annotations
+  for type fragments.
+- Lower calls to known `defrustmacro` helpers as generated Rust macro
+  invocations, and support remote Rust macro calls such as `Debug.trace!(value)`.
+- Document when to use ordinary Elixir `defmacro` for authoring-layer reuse
+  versus `defrustmacro` for intentionally reducing generated Rust size.
+
 ## v0.8.3 - 2026-06-28
 
 - Infer propagation for source-backed receiver method calls when the receiver type is known.
