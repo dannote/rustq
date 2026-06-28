@@ -15,6 +15,7 @@ defmodule RustQ.MixProject do
       aliases: aliases(),
       package: package(),
       docs: docs(),
+      elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [plt_add_apps: [:mix]],
       test_ignore_filters: [~r|test/support/|],
       deps: deps()
@@ -28,6 +29,9 @@ defmodule RustQ.MixProject do
   def cli do
     [preferred_envs: [ci: :test]]
   end
+
+  defp elixirc_paths(env) when env in [:dev, :test], do: ["lib", "dev/reach"]
+  defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do
     [
