@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.8.3 - 2026-06-28
+
+- Infer propagation for source-backed receiver method calls when the receiver type is known.
+- Index Rust source callables by normalized receiver target names.
+- Strengthen metadata guidance for avoiding `unwrap!` when Rust source metadata can be configured.
+
 ## v0.8.2 - 2026-06-26
 
 - Add the RustQ agent skill to the Hex package and documentation.
