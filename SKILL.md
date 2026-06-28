@@ -198,6 +198,24 @@ end
 
 RustQ expands normal Elixir macros before lowering. Use that power instead of generating Rust strings.
 
+Use ordinary Elixir macros when you want reusable Rusty-Elixir source. They run
+while compiling the Elixir generator and do not intentionally leave a Rust macro
+in the output.
+
+Use `defrustmacro` for the different case where repeated generated Rust should
+call one compact `macro_rules!` helper while the helper body remains
+Rusty-Elixir:
+
+```elixir
+defrustmacro field(term, name, type: :ty) do
+  decode_as!(required_field(term, name), type)
+end
+```
+
+Plain arguments are `:expr` fragments; annotate type arguments with `:ty`. Do not
+write Rust syntax in the body. In short: `defmacro` improves the authoring layer;
+`defrustmacro` intentionally changes the generated Rust shape.
+
 ## Use the supported Rusty-Elixir surface
 
 Common supported forms include:

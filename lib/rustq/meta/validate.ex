@@ -8,6 +8,7 @@ defmodule RustQ.Meta.Validate do
 
   def item_ast(%AST.Function{} = item), do: ast_item(item)
   def item_ast(%AST.Module{} = item), do: ast_item(item)
+  def item_ast(%AST.MacroItem{} = item), do: ast_item(item)
   def item_ast(%AST.Impl{} = item), do: ast_item(item)
   def item_ast(%AST.Struct{} = item), do: ast_item(item)
   def item_ast(%AST.Enum{} = item), do: ast_item(item)

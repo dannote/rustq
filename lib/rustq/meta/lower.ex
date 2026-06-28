@@ -7,6 +7,7 @@ defmodule RustQ.Meta.Lower do
   alias RustQ.Diagnostic
   alias RustQ.Meta.Inference
   alias RustQ.Meta.Pattern
+  alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
@@ -20,7 +21,9 @@ defmodule RustQ.Meta.Lower do
       vars: %{},
       position: :return,
       rust_modules: %{},
-      callables: %BindingIndex{}
+      callables: %BindingIndex{},
+      macro_vars: %{},
+      rust_macros: %{}
     ]
   end
 
@@ -30,7 +33,9 @@ defmodule RustQ.Meta.Lower do
       return_type: return_type,
       vars: vars,
       rust_modules: Keyword.get(opts, :rust_modules, %{}),
-      callables: BindingIndex.new(Keyword.get(opts, :callables))
+      callables: BindingIndex.new(Keyword.get(opts, :callables)),
+      macro_vars: Keyword.get(opts, :macro_vars, %{}),
+      rust_macros: Keyword.get(opts, :rust_macros, %{})
     }
 
     with_lowering_context(context, fn ->
@@ -643,7 +648,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:|>, _, [left, right]}), do: lower_pipe(left, right)
 
   defp lower_expr({:cast, _, [expression, type]}),
-    do: %AST.Cast{expr: lower_expr(expression), type: RustQ.Spec.type(type).ast}
+    do: %AST.Cast{expr: lower_expr(expression), type: lower_type_arg(type)}
 
   defp lower_expr({:decode_as!, _, [expression, type_ast]}),
     do: %AST.Try{expr: decode_as_expr(expression, type_ast)}
@@ -790,6 +795,9 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({{:., _meta, [receiver, function]}, _, args}) do
     cond do
+      macro_call_name?(function) ->
+        lower_remote_macro_call(receiver, function, args)
+
       super_alias_ast?(receiver) ->
         %AST.PathCall{
           path: %AST.Path{parts: [:super, function]},
@@ -831,17 +839,29 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({name, _, args}) when is_atom(name) and is_list(args) do
     if macro_call_name?(name) do
-      %AST.MacroCall{
-        path: %AST.Path{parts: [macro_call_part(name)]},
-        args: Enum.map(args, &lower_expr/1)
-      }
+      lower_macro_call(name, args)
     else
       %AST.LocalCall{name: name, args: lower_call_args(nil, name, args)}
     end
   end
 
-  defp lower_expr({name, _, context}) when is_atom(name) and is_atom(context),
-    do: %AST.Var{name: name}
+  defp lower_expr({name, _, context}) when is_atom(name) and is_atom(context) do
+    case macro_var_fragment(name) do
+      nil ->
+        %AST.Var{name: name}
+
+      :ty ->
+        Diagnostic.lower(
+          :macro_variable_wrong_position,
+          {name, [], context},
+          "macro variable #{name} is a Rust type fragment, but this is an expression position",
+          suggestion: "Use #{name} in a type position such as decode_as(value, #{name})."
+        )
+
+      _fragment ->
+        %AST.EscapeExpr{source: "$#{name}"}
+    end
+  end
 
   defp lower_expr(values) when is_list(values),
     do: %AST.VecLiteral{values: Enum.map(values, &lower_expr/1)}
@@ -928,10 +948,10 @@ defmodule RustQ.Meta.Lower do
 
   defp decode_as_expr(expression, type_ast) do
     %AST.MethodCall{
-      receiver: lower_expr(expression),
+      receiver: lower_expr(expression, rustler_term_type()),
       method: :decode,
       args: [],
-      generics: [RustQ.Spec.type(type_ast).ast]
+      generics: [lower_type_arg(type_ast)]
     }
   end
 
@@ -1011,6 +1031,73 @@ defmodule RustQ.Meta.Lower do
     RustQ.Atom.identifier!(String.trim_trailing(Atom.to_string(name), "!"))
   end
 
+  defp lower_macro_call(name, args) do
+    part = macro_call_part(name)
+    path = %AST.Path{parts: [part]}
+
+    case Map.get(current_rust_macros(), part) do
+      nil ->
+        %AST.MacroCall{path: path, args: Enum.map(args, &lower_expr/1)}
+
+      %RustMacro.Definition{} = macro_definition ->
+        fragments = RustMacro.fragments(macro_definition)
+
+        if length(args) != length(fragments) do
+          Diagnostic.lower(
+            :macro_call_arity_mismatch,
+            {name, [], args},
+            "macro #{part}! expects #{length(fragments)} arguments, got #{length(args)}"
+          )
+        end
+
+        %AST.TokenMacro{
+          path: path,
+          tokens:
+            args
+            |> Enum.zip(fragments)
+            |> Enum.map_join(", ", fn {arg, fragment} -> macro_call_arg_tokens(arg, fragment) end)
+        }
+    end
+  end
+
+  defp lower_remote_macro_call(receiver, function, args) do
+    path_parts =
+      cond do
+        super_alias_ast?(receiver) -> [:super, macro_call_part(function)]
+        alias_ast?(receiver) -> alias_parts(receiver) ++ [macro_call_part(function)]
+        true -> nil
+      end
+
+    if path_parts do
+      %AST.MacroCall{
+        path: %AST.Path{parts: path_parts},
+        args: Enum.map(args, &lower_expr/1)
+      }
+    else
+      Diagnostic.lower(
+        :unsupported_remote_macro_receiver,
+        {{:., [], [receiver, function]}, [], args},
+        "unsupported remote Rust macro receiver",
+        suggestion: "Call Rust macros through an alias path such as Rustler.resource!(...)."
+      )
+    end
+  end
+
+  defp macro_call_arg_tokens(arg, :expr),
+    do: arg |> lower_expr() |> Render.render_expr() |> IO.iodata_to_binary()
+
+  defp macro_call_arg_tokens(arg, :ty),
+    do: arg |> lower_type_arg() |> Render.render_type() |> IO.iodata_to_binary()
+
+  defp macro_call_arg_tokens(arg, fragment) do
+    Diagnostic.lower(
+      :unsupported_macro_call_fragment,
+      arg,
+      "unsupported Rust macro fragment #{inspect(fragment)} in defrust macro call",
+      suggestion: "Currently RustQ can lower :expr and :ty macro arguments from Rusty-Elixir."
+    )
+  end
+
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other), do: lower_expr(other)
 
@@ -1081,6 +1168,27 @@ defmodule RustQ.Meta.Lower do
   defp semantic_atom!(other) do
     Diagnostic.lower(:expected_atom_identifier, other, "expected atom identifier")
   end
+
+  defp lower_type_arg({name, _, context}) when is_atom(name) and is_atom(context) do
+    case macro_var_fragment(name) do
+      :ty ->
+        %AST.TypeRaw{source: "$#{name}"}
+
+      nil ->
+        RustQ.Spec.type({name, [], context}).ast
+
+      fragment ->
+        Diagnostic.lower(
+          :macro_variable_wrong_position,
+          {name, [], context},
+          "macro variable #{name} is a Rust #{fragment} fragment, but this is a type position"
+        )
+    end
+  end
+
+  defp lower_type_arg(type_ast), do: RustQ.Spec.type(type_ast).ast
+
+  defp rustler_term_type, do: RustQ.Spec.type(quote(do: RustQ.Type.term()))
 
   defp parse_syn(type, tokens) do
     %AST.PathCall{
@@ -1537,7 +1645,9 @@ defmodule RustQ.Meta.Lower do
       rust_modules: context.rust_modules,
       callables: context.callables,
       vars: context.vars,
-      return_type: context.return_type
+      return_type: context.return_type,
+      macro_vars: context.macro_vars,
+      rust_macros: context.rust_macros
     ]
 
     with_process_values(values, fun)
@@ -1571,4 +1681,7 @@ defmodule RustQ.Meta.Lower do
   defp current_callables, do: Process.get({__MODULE__, :callables}, %BindingIndex{})
   defp current_vars, do: Process.get({__MODULE__, :vars}, %{})
   defp current_return_type, do: Process.get({__MODULE__, :return_type})
+  defp current_macro_vars, do: Process.get({__MODULE__, :macro_vars}, %{})
+  defp current_rust_macros, do: Process.get({__MODULE__, :rust_macros}, %{})
+  defp macro_var_fragment(name), do: Map.get(current_macro_vars(), name)
 end

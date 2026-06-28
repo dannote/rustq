@@ -71,18 +71,35 @@ defmodule RustQ.Meta.AST do
     }
   end
 
-  def build_ast(definition, specs, type_aliases, rust_modules, env, external_callables \\ [])
-
-  def build_ast({call_ast, body_ast}, specs, type_aliases, rust_modules, env, external_callables),
-    do:
-      build_ast(
-        {call_ast, body_ast, [], nil},
+  def build_ast(
+        definition,
         specs,
         type_aliases,
         rust_modules,
         env,
-        external_callables
+        external_callables \\ [],
+        rust_macros \\ %{}
       )
+
+  def build_ast(
+        {call_ast, body_ast},
+        specs,
+        type_aliases,
+        rust_modules,
+        env,
+        external_callables,
+        rust_macros
+      ),
+      do:
+        build_ast(
+          {call_ast, body_ast, [], nil},
+          specs,
+          type_aliases,
+          rust_modules,
+          env,
+          external_callables,
+          rust_macros
+        )
 
   def build_ast(
         {call_ast, body_ast, attrs},
@@ -90,7 +107,8 @@ defmodule RustQ.Meta.AST do
         type_aliases,
         rust_modules,
         env,
-        external_callables
+        external_callables,
+        rust_macros
       ),
       do:
         build_ast(
@@ -99,7 +117,8 @@ defmodule RustQ.Meta.AST do
           type_aliases,
           rust_modules,
           env,
-          external_callables
+          external_callables,
+          rust_macros
         )
 
   def build_ast(
@@ -108,7 +127,8 @@ defmodule RustQ.Meta.AST do
         type_aliases,
         rust_modules,
         env,
-        external_callables
+        external_callables,
+        rust_macros
       ) do
     do_build_ast(
       {call_ast, body_ast, attrs, rust_module},
@@ -116,7 +136,8 @@ defmodule RustQ.Meta.AST do
       type_aliases,
       rust_modules,
       env,
-      external_callables
+      external_callables,
+      rust_macros
     )
   rescue
     error in Diagnostic.Error ->
@@ -178,7 +199,8 @@ defmodule RustQ.Meta.AST do
          type_aliases,
          rust_modules,
          env,
-         external_callables
+         external_callables,
+         rust_macros
        ) do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
@@ -193,7 +215,8 @@ defmodule RustQ.Meta.AST do
     body =
       Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
         rust_modules: rust_modules,
-        callables: spec_callables(specs, type_aliases) ++ external_callables
+        callables: spec_callables(specs, type_aliases) ++ external_callables,
+        rust_macros: rust_macros
       )
 
     lifetime = if Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: :a
@@ -227,7 +250,8 @@ defmodule RustQ.Meta.AST do
   defp diagnostic_cause_message(%Diagnostic{} = diagnostic), do: diagnostic.message
   defp diagnostic_cause_message(error), do: Exception.message(error)
 
-  defp expand_body_macros(body_ast, env) do
+  @doc false
+  def expand_body_macros(body_ast, env) do
     body_ast
     |> Macro.prewalk(fn ast -> expand_body_macro(ast, env) end)
     |> flatten_blocks()
