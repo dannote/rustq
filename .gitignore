@@ -30,3 +30,5 @@ rustq-*.tar
 # RustQ template-check fixture build/generated artifacts.
 /priv/fixtures/rustler_template_check/target/
 /priv/fixtures/rustler_template_check/src/generated.rs
+# Git worktrees for parallel agent work
+.worktrees/
