@@ -391,6 +391,19 @@ Elixir unions would be ambiguous or too implicit:
 @type skip_kind :: R.enum(one: [skip_fn()], repeated: [skip_fn()], bytes: [])
 ```
 
+Construct those variants in Rusty-Elixir with `enum_variant/2+` rather than raw
+Rust or token macros:
+
+```elixir
+defrust kind(repeated, skip) do
+  if repeated do
+    enum_variant(SkipKind, :repeated, skip)
+  else
+    enum_variant(SkipKind, :one, skip)
+  end
+end
+```
+
 The generated items are exposed through `__rustq_type_items__/0`, alongside
 `__rustq_items__/0` for functions/macros. Generators can use those type items as
 structural RustQ fragments instead of writing Rust declaration strings.

@@ -378,6 +378,9 @@ defmodule RustQ.Meta.RustMacro do
 
       [field_id, field_name, field_mode, field_decode, skip_mode, field_skip] ->
         "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)}; #{capture_pattern(skip_mode)} #{capture_pattern(field_skip)};)*]"
+
+      [field_id, field_name, field_mode, field_decode, skip_repeated, skip_bytes, field_skip] ->
+        "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)}; #{capture_pattern(skip_repeated)} #{capture_pattern(skip_bytes)} #{capture_pattern(field_skip)};)*]"
     end
   end
 

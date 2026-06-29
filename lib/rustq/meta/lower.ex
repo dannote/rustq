@@ -778,6 +778,14 @@ defmodule RustQ.Meta.Lower do
       fields: lower_named_fields(fields)
     }
 
+  defp lower_expr({:enum_variant, _, [path, variant]}), do: enum_variant_path(path, variant)
+
+  defp lower_expr({:enum_variant, _, [path, variant | args]}),
+    do: %AST.PathCall{
+      path: enum_variant_path(path, variant),
+      args: Enum.map(args, &lower_expr/1)
+    }
+
   defp lower_expr({:array, _, [values]}),
     do: %AST.ArrayLiteral{values: Enum.map(values, &lower_array_value/1)}
 
@@ -1294,6 +1302,11 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_struct_literal_path(path), do: lower_expr(path)
+
+  defp enum_variant_path(path, variant) do
+    %AST.Path{parts: parts} = lower_expr(path)
+    %AST.Path{parts: parts ++ [rust_variant(semantic_atom!(variant))]}
+  end
 
   defp lower_named_fields(fields) when is_list(fields) do
     Enum.map(fields, fn {name, expression} -> {name, lower_expr(expression)} end)

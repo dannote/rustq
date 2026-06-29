@@ -335,6 +335,18 @@ not want to overload ordinary Elixir tuple unions:
 @type skip_kind :: R.enum(one: [skip_fn()], repeated: [skip_fn()], bytes: [])
 ```
 
+Construct those variants from `defrust` with `enum_variant/2+`, not token macros:
+
+```elixir
+defrust kind(repeated, skip) do
+  if repeated do
+    enum_variant(SkipKind, :repeated, skip)
+  else
+    enum_variant(SkipKind, :one, skip)
+  end
+end
+```
+
 Type items are available through `__rustq_type_items__/0`; use them in
 generators just like `defrust` items from `__rustq_items__/0` /
 `RustQ.Meta.AST.item/2`. This is the preferred path for support structs such as
