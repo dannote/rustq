@@ -779,7 +779,12 @@ defmodule RustQ.Meta.Lower do
     }
 
   defp lower_expr({:array, _, [values]}),
-    do: %AST.ArrayLiteral{values: Enum.map(values, &lower_expr/1)}
+    do: %AST.ArrayLiteral{values: Enum.map(values, &lower_array_value/1)}
+
+  defp lower_expr({:repeat, _, [{group, _, context}, [do: expression]]})
+       when is_atom(group) and is_atom(context) do
+    repeat_expression(group, expression)
+  end
 
   defp lower_expr({:index, _, [receiver, index]}),
     do: %AST.Index{receiver: lower_expr(receiver), index: lower_expr(index)}
@@ -938,7 +943,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expr(values) when is_list(values),
-    do: %AST.VecLiteral{values: Enum.map(values, &lower_expr/1)}
+    do: %AST.VecLiteral{values: Enum.map(values, &lower_array_value/1)}
 
   defp lower_expr(value) when is_binary(value), do: %AST.Literal{value: value}
   defp lower_expr(value) when is_integer(value) or is_float(value), do: %AST.Literal{value: value}
@@ -1164,6 +1169,9 @@ defmodule RustQ.Meta.Lower do
 
   defp macro_call_arg_tokens(arg, :ty),
     do: arg |> lower_type_arg() |> Render.render_type() |> IO.iodata_to_binary()
+
+  defp macro_call_arg_tokens(arg, fragment) when fragment in [:ident, :literal],
+    do: arg |> lower_expr() |> Render.render_expr() |> IO.iodata_to_binary()
 
   defp macro_call_arg_tokens(arg, fragment) do
     Diagnostic.lower(
@@ -1779,6 +1787,30 @@ defmodule RustQ.Meta.Lower do
 
   defp restore_process_value(name, nil), do: Process.delete({__MODULE__, name})
   defp restore_process_value(name, value), do: Process.put({__MODULE__, name}, value)
+
+  defp lower_array_value({:repeat, _, [{group, _, context}, [do: expression]]})
+       when is_atom(group) and is_atom(context) do
+    repeat_expression(group, expression)
+  end
+
+  defp lower_array_value(value), do: lower_expr(value)
+
+  defp repeat_expression(_group, expression) do
+    rendered =
+      expression
+      |> lower_expr()
+      |> Render.render_expr()
+      |> IO.iodata_to_binary()
+      |> clean_macro_metavariable_spacing()
+
+    %AST.EscapeExpr{source: "$(#{rendered},)*"}
+  end
+
+  defp clean_macro_metavariable_spacing(source) do
+    source
+    |> String.replace(~r/\$([a-zA-Z_][a-zA-Z0-9_]*)\s+/, ~S|$\1|)
+    |> String.replace(" ?", "?")
+  end
 
   defp current_rust_modules, do: Process.get({__MODULE__, :rust_modules}, %{})
   defp current_callables, do: Process.get({__MODULE__, :callables}, %BindingIndex{})

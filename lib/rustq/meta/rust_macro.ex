@@ -12,6 +12,7 @@ defmodule RustQ.Meta.RustMacro do
   alias RustQ.Diagnostic
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.Lower
+  alias RustQ.Meta.Type
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
 
@@ -23,8 +24,11 @@ defmodule RustQ.Meta.RustMacro do
     @enforce_keys [:name, :args, :call_ast, :body_ast]
     defstruct [:name, :args, :call_ast, :body_ast, :rust_module]
 
-    @type fragment :: :expr | :ty
-    @type arg :: {atom(), fragment()}
+    @type fragment :: :expr | :ty | :ident | :literal
+    @type arg ::
+            {atom(), fragment()}
+            | {:labeled, atom(), atom(), fragment()}
+            | {:repeat, atom(), [arg()]}
     @type t :: %__MODULE__{
             name: atom(),
             args: [arg()],
@@ -89,24 +93,36 @@ defmodule RustQ.Meta.RustMacro do
 
   @doc false
   @spec fragments(Definition.t()) :: [Definition.fragment()]
-  def fragments(%Definition{args: args}), do: Enum.map(args, &elem(&1, 1))
+  def fragments(%Definition{args: args}) do
+    args
+    |> Enum.reject(&match?({:repeat, _name, _args}, &1))
+    |> Enum.map(fn
+      {_name, fragment} -> fragment
+      {:labeled, _label, _name, fragment} -> fragment
+    end)
+  end
 
   defp item(%Definition{} = definition, rust_modules, env, callables, index) do
-    body_ast = MetaAST.expand_body_macros(definition.body_ast, env)
+    ast =
+      case item_macro_body(definition.body_ast, definition, rust_modules, callables, index) do
+        {:ok, source} ->
+          %AST.MacroItem{source: source}
 
-    body =
-      Lower.quoted_body(body_ast, nil, %{},
-        rust_modules: rust_modules,
-        callables: callables,
-        macro_vars: Map.new(definition.args),
-        rust_macros: index
-      )
+        :error ->
+          body_ast = MetaAST.expand_body_macros(definition.body_ast, env)
 
-    %Item{
-      name: definition.name,
-      ast: %AST.MacroItem{source: source(definition.name, definition.args, body)},
-      rust_module: definition.rust_module
-    }
+          body =
+            Lower.quoted_body(body_ast, nil, %{},
+              rust_modules: rust_modules,
+              callables: callables,
+              macro_vars: macro_var_map(definition.args),
+              rust_macros: index
+            )
+
+          %AST.MacroItem{source: source(definition.name, definition.args, body)}
+      end
+
+    %Item{name: definition.name, ast: ast, rust_module: definition.rust_module}
   rescue
     error in Diagnostic.Error ->
       raise_diagnostic(definition, error.diagnostic)
@@ -119,7 +135,7 @@ defmodule RustQ.Meta.RustMacro do
     {plain_args, keyword_args} = split_args(args)
 
     positional = Enum.map(plain_args, &arg!(&1, :expr))
-    annotated = Enum.map(keyword_args, fn {arg_name, fragment} -> arg!(arg_name, fragment) end)
+    annotated = Enum.map(keyword_args, &keyword_arg!/1)
 
     args = positional ++ annotated
     validate_unique_args!(name, args)
@@ -147,8 +163,8 @@ defmodule RustQ.Meta.RustMacro do
 
   defp validate_unique_args!(macro_name, args) do
     args
-    |> Enum.map(&elem(&1, 0))
-    |> Enum.find(fn name -> Enum.count(args, &(elem(&1, 0) == name)) > 1 end)
+    |> capture_names()
+    |> duplicate_capture()
     |> case do
       nil ->
         :ok
@@ -162,6 +178,27 @@ defmodule RustQ.Meta.RustMacro do
     end
   end
 
+  defp duplicate_capture(names) do
+    {_seen, duplicate} =
+      Enum.reduce_while(names, {MapSet.new(), nil}, fn name, {seen, _duplicate} ->
+        if MapSet.member?(seen, name) do
+          {:halt, {seen, name}}
+        else
+          {:cont, {MapSet.put(seen, name), nil}}
+        end
+      end)
+
+    duplicate
+  end
+
+  defp capture_names(args) do
+    Enum.flat_map(args, fn
+      {name, _fragment} -> [name]
+      {:labeled, _label, name, _fragment} -> [name]
+      {:repeat, name, args} -> [name | capture_names(args)]
+    end)
+  end
+
   @spec invalid_keyword_args!(term()) :: no_return()
   defp invalid_keyword_args!(args) do
     Diagnostic.defrust(
@@ -172,19 +209,36 @@ defmodule RustQ.Meta.RustMacro do
     )
   end
 
+  defp keyword_arg!({label, {:repeat, _meta, [[do: body]]}}) when is_atom(label) do
+    {:repeat, label, repeat_args!(body)}
+  end
+
+  defp keyword_arg!({label, {name, _meta, [fragment]}})
+       when is_atom(label) and is_atom(name) and is_atom(fragment) do
+    {:labeled, label, name, fragment!(name, fragment)}
+  end
+
+  defp keyword_arg!({arg_name, fragment}), do: arg!(arg_name, fragment)
+
+  defp repeat_args!({:__block__, _meta, expressions}), do: Enum.map(expressions, &repeat_arg!/1)
+  defp repeat_args!(expression), do: [repeat_arg!(expression)]
+
+  defp repeat_arg!({name, _meta, [fragment]}) when is_atom(name) and is_atom(fragment),
+    do: {name, fragment!(name, fragment)}
+
+  defp repeat_arg!(other) do
+    Diagnostic.defrust(
+      :invalid_defrustmacro_repeat,
+      other,
+      "invalid defrustmacro repeat capture",
+      suggestion: "Use captures such as field_id(:literal) inside repeat blocks."
+    )
+  end
+
   defp arg!({name, _meta, context}, fragment) when is_atom(name) and is_atom(context),
     do: arg!(name, fragment)
 
-  defp arg!(name, fragment) when is_atom(name) and fragment in [:expr, :ty], do: {name, fragment}
-
-  defp arg!(name, fragment) when is_atom(name) do
-    Diagnostic.defrust(
-      :unsupported_defrustmacro_fragment,
-      name,
-      "unsupported Rust macro fragment #{inspect(fragment)} for #{name}",
-      suggestion: "Currently defrustmacro supports :expr and :ty fragments."
-    )
-  end
+  defp arg!(name, fragment) when is_atom(name), do: {name, fragment!(name, fragment)}
 
   defp arg!(arg, _fragment) do
     Diagnostic.defrust(
@@ -193,6 +247,156 @@ defmodule RustQ.Meta.RustMacro do
       "invalid defrustmacro argument",
       suggestion: "Use plain variables and optional keyword fragment annotations."
     )
+  end
+
+  defp fragment!(_name, fragment) when fragment in [:expr, :ty, :ident, :literal], do: fragment
+
+  defp fragment!(name, fragment) when is_atom(name) do
+    Diagnostic.defrust(
+      :unsupported_defrustmacro_fragment,
+      name,
+      "unsupported Rust macro fragment #{inspect(fragment)} for #{name}",
+      suggestion: "Currently defrustmacro supports :expr and :ty fragments."
+    )
+  end
+
+  defp item_macro_body(
+         {:__block__, _meta, expressions},
+         definition,
+         rust_modules,
+         callables,
+         index
+       ) do
+    spec = Enum.find_value(expressions, &spec_ast/1)
+    defrust = Enum.find_value(expressions, &defrust_ast/1)
+
+    if spec && defrust do
+      {:ok, item_macro_source(definition, spec, defrust, rust_modules, callables, index)}
+    else
+      :error
+    end
+  end
+
+  defp item_macro_body(expression, definition, rust_modules, callables, index),
+    do:
+      item_macro_body({:__block__, [], [expression]}, definition, rust_modules, callables, index)
+
+  defp spec_ast({:@, _meta, [{:spec, _spec_meta, [{:"::", _op_meta, [call_ast, return_ast]}]}]}),
+    do: {call_ast, return_ast}
+
+  defp spec_ast(_expression), do: nil
+
+  defp defrust_ast({:defrust, _meta, [call_ast, [do: body_ast]]}), do: {call_ast, body_ast}
+  defp defrust_ast(_expression), do: nil
+
+  defp item_macro_source(
+         definition,
+         {spec_call, return_ast},
+         {call_ast, body_ast},
+         rust_modules,
+         callables,
+         index
+       ) do
+    {_spec_name, _spec_meta, arg_type_asts} = spec_call
+    {name_ast, _call_meta, arg_asts} = call_ast
+
+    arg_names = Enum.map(arg_asts, &capture_var_name!/1)
+    arg_types = Enum.map(arg_type_asts, &Type.parse(&1, %{}))
+    return_type = Type.parse(return_ast, %{})
+    vars = Map.new(Enum.zip(arg_names, arg_types))
+
+    body =
+      Lower.quoted_body(body_ast, return_type, vars,
+        rust_modules: rust_modules,
+        callables: callables,
+        macro_vars: macro_var_map(definition.args),
+        rust_macros: index
+      )
+
+    pattern = item_pattern(definition.args)
+
+    expansion =
+      function_expansion(
+        name_ast,
+        arg_names,
+        arg_types,
+        return_type,
+        body,
+        macro_var_map(definition.args)
+      )
+
+    "macro_rules! #{definition.name} {\n#{indent("(#{pattern}) => {\n#{indent(expansion)}\n};")}\n}"
+  end
+
+  defp capture_var_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name
+
+  defp capture_var_name!(other) do
+    Diagnostic.defrust(
+      :invalid_defrustmacro_item_arg,
+      other,
+      "invalid defrustmacro item argument",
+      suggestion: "Use plain captured argument names in inner defrust, such as defrust name(env)."
+    )
+  end
+
+  defp item_pattern(args), do: Enum.map_join(args, "\n", &item_pattern_arg/1)
+
+  defp item_pattern_arg({:labeled, :fn, name, fragment}), do: "fn $#{name}:#{fragment};"
+  defp item_pattern_arg({:labeled, label, name, fragment}), do: "#{label} $#{name}:#{fragment};"
+  defp item_pattern_arg({name, fragment}), do: "$#{name}:#{fragment};"
+
+  defp item_pattern_arg({:repeat, :fields, args}) do
+    [field_id, field_name, field_mode, field_decode] = args
+
+    "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
+  end
+
+  defp item_pattern_arg({:repeat, name, args}) do
+    captures = Enum.map_join(args, " ", &capture_pattern/1)
+    "#{name} [$(#{captures};)*]"
+  end
+
+  defp capture_pattern({name, fragment}), do: "$#{name}:#{fragment}"
+
+  defp function_expansion(name_ast, arg_names, arg_types, return_type, body, macro_vars) do
+    name = macro_capture_source(name_ast, macro_vars)
+
+    args =
+      Enum.zip(arg_names, arg_types)
+      |> Enum.map_join(", ", fn {arg_name, type} -> "$#{arg_name}: #{render_type(type)}" end)
+
+    rendered_body =
+      body
+      |> Enum.map_join("\n", &(Render.render_stmt(&1) |> IO.iodata_to_binary()))
+      |> clean_macro_metavariable_spacing()
+
+    "fn #{name}<'a>(#{args}) -> #{render_type(return_type)} {\n#{indent(rendered_body)}\n}"
+  end
+
+  defp macro_capture_source({name, _meta, args}, macro_vars)
+       when is_atom(name) and is_list(args) do
+    if Map.has_key?(macro_vars, name), do: "$#{name}", else: Atom.to_string(name)
+  end
+
+  defp macro_capture_source({name, _meta, context}, macro_vars)
+       when is_atom(name) and is_atom(context) do
+    if Map.has_key?(macro_vars, name), do: "$#{name}", else: Atom.to_string(name)
+  end
+
+  defp macro_capture_source(other, macro_vars) when is_atom(other) do
+    if Map.has_key?(macro_vars, other), do: "$#{other}", else: Atom.to_string(other)
+  end
+
+  defp render_type(%Type{} = type), do: type.ast |> Render.render_type() |> IO.iodata_to_binary()
+
+  defp macro_var_map(args) do
+    args
+    |> Enum.flat_map(fn
+      {name, fragment} -> [{name, fragment}]
+      {:labeled, _label, name, fragment} -> [{name, fragment}]
+      {:repeat, _name, args} -> macro_var_map(args)
+    end)
+    |> Map.new()
   end
 
   defp source(name, args, body) do
