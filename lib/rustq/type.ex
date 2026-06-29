@@ -111,8 +111,8 @@ defmodule RustQ.Type do
   @typedoc "Raw Rust type fragment marker for syntax Elixir typespecs cannot model. Prefer structural markers such as `R.slice/1` when possible."
   @type raw(name) :: {name, term()}
 
-  @typedoc "Enum intent marker for domain-specific descriptor resolution."
-  @type enum(name) :: atom() | {name}
+  @typedoc "Enum intent marker for domain-specific descriptor resolution, or explicit Rust enum variants when used in a type alias."
+  @type enum(name_or_variants) :: atom() | {name_or_variants}
 
   @spec atom() :: no_return()
   def atom, do: type_only!()
@@ -181,7 +181,7 @@ defmodule RustQ.Type do
   def raw(_name), do: type_only!()
 
   @spec enum(term()) :: no_return()
-  def enum(_name), do: type_only!()
+  def enum(_name_or_variants), do: type_only!()
 
   @spec ref(term()) :: no_return()
   def ref(_type), do: type_only!()

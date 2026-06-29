@@ -50,9 +50,12 @@ defmodule RustQ.Meta.GeneratedCase do
 
   @type callback :: R.raw(:"fn(u32) -> u32")
 
+  @type callback_kind :: R.enum(one: [callback()], repeated: [callback()], disabled: [])
+
   @type callback_descriptor :: %{
           required(:id) => R.u32(),
-          required(:callback) => callback()
+          required(:callback) => callback(),
+          required(:kind) => R.raw(:CallbackKind)
         }
 
   @spec draw_save(R.ref(Canvas.t())) :: R.nif_result(R.unit())

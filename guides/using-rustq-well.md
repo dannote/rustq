@@ -384,6 +384,13 @@ Unions of struct types become tuple enums:
 @type event :: click() | resize() | scroll()
 ```
 
+Use `R.enum(...)` for explicit Rust enum items with tuple payloads when ordinary
+Elixir unions would be ambiguous or too implicit:
+
+```elixir
+@type skip_kind :: R.enum(one: [skip_fn()], repeated: [skip_fn()], bytes: [])
+```
+
 The generated items are exposed through `__rustq_type_items__/0`, alongside
 `__rustq_items__/0` for functions/macros. Generators can use those type items as
 structural RustQ fragments instead of writing Rust declaration strings.

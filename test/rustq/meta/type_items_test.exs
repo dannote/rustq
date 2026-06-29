@@ -75,19 +75,38 @@ defmodule RustQ.Meta.TypeItemsTest do
            } = RustQ.Spec.type(quote(do: MyMap.t(String.t(), R.u32())))
   end
 
-  test "raw aliases and Rust-only structs generate declarations without decoders" do
+  test "raw aliases and Rust-only structs/enums generate declarations without decoders" do
     type_asts = Generated.__rustq_type_asts__()
     source = Generated.__rustq_source__()
 
     assert %RustQ.Rust.AST.TypeAlias{name: :Callback, type: %RustQ.Rust.AST.TypeRaw{}} =
              Enum.find(type_asts, &match?(%RustQ.Rust.AST.TypeAlias{name: :Callback}, &1))
 
+    assert %RustQ.Rust.AST.Enum{
+             name: :CallbackKind,
+             variants: [
+               %RustQ.Rust.AST.EnumVariant{
+                 name: :One,
+                 tuple: [%RustQ.Rust.AST.TypePath{parts: ["Callback"]}]
+               },
+               %RustQ.Rust.AST.EnumVariant{
+                 name: :Repeated,
+                 tuple: [%RustQ.Rust.AST.TypePath{parts: ["Callback"]}]
+               },
+               %RustQ.Rust.AST.EnumVariant{name: :Disabled, tuple: []}
+             ]
+           } = Enum.find(type_asts, &match?(%RustQ.Rust.AST.Enum{name: :CallbackKind}, &1))
+
     assert %RustQ.Rust.AST.Struct{name: :CallbackDescriptor} =
              Enum.find(type_asts, &match?(%RustQ.Rust.AST.Struct{name: :CallbackDescriptor}, &1))
 
     assert source =~ "pub type Callback = fn(u32) -> u32;"
+    assert source =~ "pub enum CallbackKind"
+    assert source =~ "One(Callback),"
+    assert source =~ "Disabled,"
     assert source =~ "pub struct CallbackDescriptor"
     refute source =~ "decode_callback_descriptor"
+    refute source =~ "decode_callback_kind"
   end
 
   test "type aliases generate structural Rust ASTs and decoders" do

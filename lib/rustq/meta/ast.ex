@@ -394,23 +394,16 @@ defmodule RustQ.Meta.AST do
     [enum, decoder]
   end
 
+  defp type_items(%Type{kind: :rust_enum, meta: %{rust_name: rust_name, variants: variants}}) do
+    [enum_item(rust_name, variants)]
+  end
+
   defp type_items(%Type{
          kind: :tuple_enum,
          rust: rust_name,
          meta: %{elixir_name: elixir_name, variants: variants}
        }) do
-    enum = %AST.Enum{
-      name: RustQ.Atom.identifier!(rust_name),
-      vis: :pub,
-      derive: [:Clone, :Debug],
-      variants:
-        Enum.map(variants, fn {tag, types} ->
-          %AST.EnumVariant{
-            name: tag |> Decoder.rust_variant() |> RustQ.Atom.identifier!(),
-            tuple: Enum.map(types, & &1.ast)
-          }
-        end)
-    }
+    enum = enum_item(rust_name, variants)
 
     decoder = %AST.Function{
       name: RustQ.Atom.identifier!("decode_#{elixir_name}"),
@@ -467,6 +460,21 @@ defmodule RustQ.Meta.AST do
 
   defp type_items(_type), do: []
 
+  defp enum_item(rust_name, variants) do
+    %AST.Enum{
+      name: RustQ.Atom.identifier!(rust_name),
+      vis: :pub,
+      derive: [:Clone, :Debug],
+      variants:
+        Enum.map(variants, fn {tag, types} ->
+          %AST.EnumVariant{
+            name: tag |> Decoder.rust_variant() |> RustQ.Atom.identifier!(),
+            tuple: Enum.map(types, & &1.ast)
+          }
+        end)
+    }
+  end
+
   defp struct_field_traits(fields) do
     Enum.reduce(fields, {false, true}, fn {_name, type, _presence} = field,
                                           {lifetime?, decodable?} ->
@@ -483,6 +491,7 @@ defmodule RustQ.Meta.AST do
   defp decodable_struct_field?({_name, %Type{} = type, _presence}), do: decodable_type?(type)
 
   defp decodable_type?(%Type{kind: :type, ast: %AST.TypeRaw{}}), do: false
+  defp decodable_type?(%Type{kind: :rust_enum}), do: false
   defp decodable_type?(%Type{kind: :alias, meta: %{target: target}}), do: decodable_type?(target)
   defp decodable_type?(%Type{}), do: true
 

@@ -52,7 +52,7 @@ defmodule RustQ.Meta.Type do
   def category(%__MODULE__{kind: :bool}), do: :boolean
   def category(%__MODULE__{kind: :atom}), do: :atom
   def category(%__MODULE__{kind: :term}), do: :term
-  def category(%__MODULE__{kind: :enum}), do: :enum
+  def category(%__MODULE__{kind: kind}) when kind in [:enum, :rust_enum], do: :enum
   def category(%__MODULE__{kind: :tuple, meta: %{elements: elements}}), do: {:tuple, elements}
   def category(%__MODULE__{kind: :alias, meta: %{elixir_name: name}}), do: {:alias, name}
   def category(%__MODULE__{meta: %{elixir_module: String, elixir_type: :t}}), do: :string
@@ -332,7 +332,7 @@ defmodule RustQ.Meta.Type do
       |> List.wrap()
       |> Enum.reverse()
       |> Map.new(fn {:type, {:"::", _, [{name, _, args}, ast]}, _location} ->
-        arity = args |> List.wrap() |> length()
+        arity = type_alias_arity(args)
         rust_name = name |> Atom.to_string() |> Macro.camelize()
         {{name, arity}, {name, ast, rust_name}}
       end)
@@ -341,6 +341,9 @@ defmodule RustQ.Meta.Type do
     |> Map.keys()
     |> Enum.reduce(%{}, fn key, aliases -> elem(resolve_alias(key, raw, aliases), 1) end)
   end
+
+  defp type_alias_arity(args) when is_list(args), do: length(args)
+  defp type_alias_arity(_context), do: 0
 
   defp resolve_alias(key, raw, aliases) do
     case Map.fetch(aliases, key) do
@@ -356,6 +359,24 @@ defmodule RustQ.Meta.Type do
   end
 
   defp parse_type_alias(name, ast, rust_name, raw, aliases) do
+    if rust_enum_marker?(ast) do
+      parse_rust_enum_alias(name, ast, rust_name, raw, aliases)
+    else
+      parse_standard_type_alias(name, ast, rust_name, raw, aliases)
+    end
+  end
+
+  defp parse_rust_enum_alias(name, ast, rust_name, raw, aliases) do
+    {variants, _aliases} = rust_enum_marker_variants!(ast, raw, aliases)
+
+    type(:rust_enum, path(rust_name), %{
+      elixir_name: name,
+      rust_name: rust_name,
+      variants: variants
+    })
+  end
+
+  defp parse_standard_type_alias(name, ast, rust_name, raw, aliases) do
     cond do
       atom_union?(ast) ->
         type(:enum, path(rust_name), %{elixir_name: name, variants: union_members(ast)})
@@ -408,7 +429,16 @@ defmodule RustQ.Meta.Type do
 
       true ->
         {target_type, _aliases} = parse_alias_type(ast, raw, aliases)
-        type(:alias, path(rust_name), %{elixir_name: name, target: target_type})
+
+        if target_type.kind == :rust_enum do
+          type(
+            :rust_enum,
+            path(rust_name),
+            Map.merge(target_type.meta, %{elixir_name: name, rust_name: rust_name})
+          )
+        else
+          type(:alias, path(rust_name), %{elixir_name: name, target: target_type})
+        end
     end
   end
 
@@ -528,6 +558,10 @@ defmodule RustQ.Meta.Type do
 
   defp parse_rust_type(:raw, [type], _aliases), do: type(:type, raw_type!(type))
 
+  defp parse_rust_type(:enum, [variants], aliases) when is_list(variants) do
+    type(:rust_enum, path(:Enum), %{variants: rust_enum_variants!(variants, aliases)})
+  end
+
   defp parse_rust_type(:enum, [name], _aliases) do
     enum = spec_path_part!(name)
     type(:enum, path(enum), %{enum: enum})
@@ -640,6 +674,34 @@ defmodule RustQ.Meta.Type do
 
   defp raw_type!(other) do
     raise ArgumentError, "expected R.raw atom marker or string, got: #{Macro.to_string(other)}"
+  end
+
+  defp rust_enum_marker?({{:., _, [module, :enum]}, _, [variants]}) when is_list(variants),
+    do: type_module?(module)
+
+  defp rust_enum_marker?(_ast), do: false
+
+  defp rust_enum_marker_variants!({{:., _, [_module, :enum]}, _, [variants]}, raw, aliases) do
+    Enum.map_reduce(variants, aliases, fn
+      {name, tuple_types}, aliases when is_atom(name) and is_list(tuple_types) ->
+        {types, aliases} = Enum.map_reduce(tuple_types, aliases, &parse_alias_type(&1, raw, &2))
+        {{name, types}, aliases}
+
+      other, _aliases ->
+        raise ArgumentError,
+              "expected R.enum variants as keyword entries with type lists, got: #{inspect(other)}"
+    end)
+  end
+
+  defp rust_enum_variants!(variants, aliases) do
+    Enum.map(variants, fn
+      {name, tuple_types} when is_atom(name) and is_list(tuple_types) ->
+        {name, Enum.map(tuple_types, &parse(&1, aliases))}
+
+      other ->
+        raise ArgumentError,
+              "expected R.enum variants as keyword entries with type lists, got: #{inspect(other)}"
+    end)
   end
 
   defp external_type_path(parts, args, aliases) do

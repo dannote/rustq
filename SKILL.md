@@ -328,6 +328,13 @@ Atom unions become Rust enums, and struct unions become tuple enums:
 @type event :: click() | resize() | scroll()
 ```
 
+Use `R.enum(...)` when you need an explicit Rust enum with tuple payloads but do
+not want to overload ordinary Elixir tuple unions:
+
+```elixir
+@type skip_kind :: R.enum(one: [skip_fn()], repeated: [skip_fn()], bytes: [])
+```
+
 Type items are available through `__rustq_type_items__/0`; use them in
 generators just like `defrust` items from `__rustq_items__/0` /
 `RustQ.Meta.AST.item/2`. This is the preferred path for support structs such as

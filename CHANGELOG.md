@@ -5,6 +5,8 @@
 - Add Rust type item generation from `@type` aliases, including type aliases,
   structs, enums, and Rust-only support records that do not force generated
   Rustler term decoders.
+- Add `R.enum(...)` for explicit Rust enum type items and fix zero-arity type
+  alias resolution for bare `@type name :: ...` declarations.
 - Add structural `macro_rules!` AST support and native validation/rendering for
   macro variables, captures, and repetitions.
 - Extend `defrustmacro` with identifier/literal captures, item-generating inner
