@@ -267,19 +267,35 @@ defmodule RustQ.Meta.RustMacro do
          callables,
          index
        ) do
-    spec = Enum.find_value(expressions, &spec_ast/1)
-    defrust = Enum.find_value(expressions, &defrust_ast/1)
+    pairs = item_defrust_pairs(expressions)
 
-    if spec && defrust do
-      {:ok, item_macro_source(definition, spec, defrust, rust_modules, callables, index)}
-    else
+    if pairs == [] do
       :error
+    else
+      {:ok, item_macro_source(definition, pairs, rust_modules, callables, index)}
     end
   end
 
   defp item_macro_body(expression, definition, rust_modules, callables, index),
     do:
       item_macro_body({:__block__, [], [expression]}, definition, rust_modules, callables, index)
+
+  defp item_defrust_pairs(expressions), do: item_defrust_pairs(expressions, nil, [])
+
+  defp item_defrust_pairs([], _pending_spec, acc), do: Enum.reverse(acc)
+
+  defp item_defrust_pairs([expression | rest], pending_spec, acc) do
+    case {spec_ast(expression), defrust_ast(expression)} do
+      {{spec_call, return_ast}, nil} ->
+        item_defrust_pairs(rest, {spec_call, return_ast}, acc)
+
+      {nil, {call_ast, body_ast}} when not is_nil(pending_spec) ->
+        item_defrust_pairs(rest, nil, [{pending_spec, {call_ast, body_ast}} | acc])
+
+      _ ->
+        item_defrust_pairs(rest, nil, acc)
+    end
+  end
 
   defp spec_ast({:@, _meta, [{:spec, _spec_meta, [{:"::", _op_meta, [call_ast, return_ast]}]}]}),
     do: {call_ast, return_ast}
@@ -289,7 +305,19 @@ defmodule RustQ.Meta.RustMacro do
   defp defrust_ast({:defrust, _meta, [call_ast, [do: body_ast]]}), do: {call_ast, body_ast}
   defp defrust_ast(_expression), do: nil
 
-  defp item_macro_source(
+  defp item_macro_source(definition, pairs, rust_modules, callables, index) do
+    pattern = item_pattern(definition.args)
+
+    expansion =
+      pairs
+      |> Enum.map_join("\n\n", fn {spec, defrust} ->
+        item_function_expansion(definition, spec, defrust, rust_modules, callables, index)
+      end)
+
+    "macro_rules! #{definition.name} {\n#{indent("(#{pattern}) => {\n#{indent(expansion)}\n};")}\n}"
+  end
+
+  defp item_function_expansion(
          definition,
          {spec_call, return_ast},
          {call_ast, body_ast},
@@ -313,19 +341,14 @@ defmodule RustQ.Meta.RustMacro do
         rust_macros: index
       )
 
-    pattern = item_pattern(definition.args)
-
-    expansion =
-      function_expansion(
-        name_ast,
-        arg_names,
-        arg_types,
-        return_type,
-        body,
-        macro_var_map(definition.args)
-      )
-
-    "macro_rules! #{definition.name} {\n#{indent("(#{pattern}) => {\n#{indent(expansion)}\n};")}\n}"
+    function_expansion(
+      name_ast,
+      arg_names,
+      arg_types,
+      return_type,
+      body,
+      macro_var_map(definition.args)
+    )
   end
 
   defp capture_var_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name
@@ -346,9 +369,13 @@ defmodule RustQ.Meta.RustMacro do
   defp item_pattern_arg({name, fragment}), do: "$#{name}:#{fragment};"
 
   defp item_pattern_arg({:repeat, :fields, args}) do
-    [field_id, field_name, field_mode, field_decode] = args
+    case args do
+      [field_id, field_name, field_mode, field_decode] ->
+        "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
 
-    "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
+      [field_id, field_name, field_mode, field_decode, skip_mode, field_skip] ->
+        "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)}; #{capture_pattern(skip_mode)} #{capture_pattern(field_skip)};)*]"
+    end
   end
 
   defp item_pattern_arg({:repeat, name, args}) do
@@ -370,7 +397,9 @@ defmodule RustQ.Meta.RustMacro do
       |> Enum.map_join("\n", &render_macro_item_stmt/1)
       |> clean_macro_metavariable_spacing()
 
-    "fn #{name}<'a>(#{args}) -> #{render_type(return_type)} {\n#{indent(rendered_body)}\n}"
+    lifetime = if Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: "<'a>", else: ""
+
+    "fn #{name}#{lifetime}(#{args}) -> #{render_type(return_type)} {\n#{indent(rendered_body)}\n}"
   end
 
   defp render_macro_item_stmt(stmt) do

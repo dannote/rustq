@@ -160,7 +160,7 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "fn $name:ident;"
     assert source =~ "fields [$("
     assert source =~ "$field_id:literal => $field_name:literal:"
-    assert source =~ "fn $name<'a>() -> NifResult<()>"
+    assert source =~ "fn $name() -> NifResult<()>"
 
     assert source =~
              "build_fields(&[$(Field { id: $field_id, name: $field_name, repeated: repeated!($field_mode), decode: $field_decode},)*])"

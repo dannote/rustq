@@ -8,7 +8,8 @@
 - Add structural `macro_rules!` AST support and native validation/rendering for
   macro variables, captures, and repetitions.
 - Extend `defrustmacro` with identifier/literal captures, item-generating inner
-  `defrust` bodies, and `repeat ... do` macro-template repetitions.
+  `defrust` bodies, multiple generated item bodies, and `repeat ... do`
+  macro-template repetitions.
 - Document item-generating `defrustmacro` patterns for compact generated Rust
   that keeps implementation logic in Rusty-Elixir.
 - Add idiomatic Clippy lint paths for Rust-facing attributes, such as
