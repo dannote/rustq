@@ -367,10 +367,64 @@ defmodule RustQ.Meta.RustMacro do
 
     rendered_body =
       body
-      |> Enum.map_join("\n", &(Render.render_stmt(&1) |> IO.iodata_to_binary()))
+      |> Enum.map_join("\n", &render_macro_item_stmt/1)
       |> clean_macro_metavariable_spacing()
 
     "fn #{name}<'a>(#{args}) -> #{render_type(return_type)} {\n#{indent(rendered_body)}\n}"
+  end
+
+  defp render_macro_item_stmt(stmt) do
+    stmt
+    |> Render.render_stmt()
+    |> IO.iodata_to_binary()
+    |> format_repeated_array_call()
+  end
+
+  defp format_repeated_array_call(source) do
+    Regex.replace(
+      ~r/^([a-zA-Z_][a-zA-Z0-9_]*)\((.*), &\[\$\((.*)\)\*\]\)$/,
+      source,
+      fn _all, function, prefix, repeated ->
+        args = split_top_level_args(prefix)
+
+        [
+          function,
+          "(\n",
+          args |> Enum.map(&["    ", &1, ","]) |> Enum.intersperse("\n"),
+          "\n    &[\n",
+          "        $(",
+          repeated,
+          ")*\n",
+          "    ],\n",
+          ")"
+        ]
+        |> IO.iodata_to_binary()
+      end
+    )
+  end
+
+  defp split_top_level_args(source), do: split_top_level_args(String.graphemes(source), [], [], 0)
+
+  defp split_top_level_args([], current, acc, _depth) do
+    [current | acc]
+    |> Enum.reverse()
+    |> Enum.map(&(&1 |> Enum.reverse() |> Enum.join() |> String.trim()))
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp split_top_level_args(["," | rest], current, acc, 0),
+    do: split_top_level_args(rest, [], [current | acc], 0)
+
+  defp split_top_level_args([char | rest], current, acc, depth) when char in ["(", "[", "{"] do
+    split_top_level_args(rest, [char | current], acc, depth + 1)
+  end
+
+  defp split_top_level_args([char | rest], current, acc, depth) when char in [")", "]", "}"] do
+    split_top_level_args(rest, [char | current], acc, max(depth - 1, 0))
+  end
+
+  defp split_top_level_args([char | rest], current, acc, depth) do
+    split_top_level_args(rest, [char | current], acc, depth)
   end
 
   defp macro_capture_source({name, _meta, args}, macro_vars)
