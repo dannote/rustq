@@ -287,6 +287,61 @@ Use `RustQ.Type` for Rust-specific forms:
 
 Avoid fake Elixir modules that exist only to force Rust paths.
 
+## Generate Rust type items from `@type`
+
+RustQ can use ordinary Elixir `@type` aliases as more than function-signature
+metadata: aliases can also become Rust type items. Prefer this when a generator
+needs small support structs, enums, tuple enums, or aliases for `defrust`
+helpers.
+
+Map types become Rust structs:
+
+```elixir
+@type point :: %{
+  required(:x) => R.f32(),
+  required(:y) => R.f32()
+}
+```
+
+This emits a Rust struct shaped like:
+
+```rust
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+```
+
+Elixir struct types also become Rust structs:
+
+```elixir
+defmodule Click do
+  defstruct [:name]
+end
+
+@type click :: %Click{name: String.t()}
+```
+
+Atom unions become Rust enums:
+
+```elixir
+@type mode :: :src_over | :multiply
+```
+
+Unions of struct types become tuple enums:
+
+```elixir
+@type event :: click() | resize() | scroll()
+```
+
+The generated items are exposed through `__rustq_type_items__/0`, alongside
+`__rustq_items__/0` for functions/macros. Generators can use those type items as
+structural RustQ fragments instead of writing Rust declaration strings.
+
+Use this path for descriptor/support records that are consumed by `defrust`
+helpers. Reach for explicit RustQ AST builders only when `@type` cannot express
+the shape; add RustQ support rather than falling back to large raw templates.
+
 ## Semantic helpers and raw escapes
 
 Use semantic helpers when you need Rust-shaped AST values inside Rusty-Elixir:

@@ -248,6 +248,42 @@ Use `RustQ.Type` (`alias RustQ.Type, as: R`) for Rust-specific precision:
 
 Do not invent fake Elixir modules solely to spell Rust paths.
 
+## Generate Rust type items from `@type`
+
+RustQ can emit Rust type declarations from ordinary Elixir `@type` aliases.
+Use this before hand-building Rust struct/enum/type-alias strings.
+
+Map types become Rust structs:
+
+```elixir
+@type point :: %{
+  required(:x) => R.f32(),
+  required(:y) => R.f32()
+}
+```
+
+Struct types become Rust structs too:
+
+```elixir
+defmodule Click do
+  defstruct [:name]
+end
+
+@type click :: %Click{name: String.t()}
+```
+
+Atom unions become Rust enums, and struct unions become tuple enums:
+
+```elixir
+@type mode :: :src_over | :multiply
+@type event :: click() | resize() | scroll()
+```
+
+Type items are available through `__rustq_type_items__/0`; use them in
+generators just like `defrust` items from `__rustq_items__/0` /
+`RustQ.Meta.AST.item/2`. This is the preferred path for support structs such as
+small descriptor records used by generated `defrust` helpers.
+
 ## AST/builders for generated structure
 
 When generating Rust declarations, prefer RustQ AST/builders:
