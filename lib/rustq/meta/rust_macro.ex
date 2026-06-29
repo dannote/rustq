@@ -39,10 +39,10 @@ defmodule RustQ.Meta.RustMacro do
     Rust AST item emitted from a normalized `defrustmacro` declaration.
     """
 
-    @enforce_keys [:ast]
-    defstruct [:ast, :rust_module]
+    @enforce_keys [:name, :ast]
+    defstruct [:name, :ast, :rust_module]
 
-    @type t :: %__MODULE__{ast: AST.MacroItem.t(), rust_module: [atom()] | nil}
+    @type t :: %__MODULE__{name: atom(), ast: AST.MacroItem.t(), rust_module: [atom()] | nil}
   end
 
   @type index :: %{optional(atom()) => Definition.t()}
@@ -103,6 +103,7 @@ defmodule RustQ.Meta.RustMacro do
       )
 
     %Item{
+      name: definition.name,
       ast: %AST.MacroItem{source: source(definition.name, definition.args, body)},
       rust_module: definition.rust_module
     }

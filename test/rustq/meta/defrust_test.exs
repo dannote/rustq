@@ -107,6 +107,32 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "defrustmacro_field.rs")
   end
 
+  test "selects defrustmacro items by name" do
+    defmodule DefrustMacroSelectorCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec required_field(R.term(), binary()) :: R.nif_result(R.term())
+      defrust required_field(term, _name) do
+        {:ok, term}
+      end
+
+      defrustmacro field(term, name, type: :ty) do
+        decode_as!(required_field(term, name), type)
+      end
+    end
+
+    [field] = RustQ.Meta.AST.macro_items(DefrustMacroSelectorCase, [:field])
+    source = RustQ.Rust.to_fragment(field)
+
+    assert source =~ "macro_rules! field"
+    assert source =~ "required_field($term, $name)?.decode::<$type>()?"
+
+    assert_raise ArgumentError, ~r/no defrustmacro item named missing/, fn ->
+      RustQ.Meta.AST.macro_item(DefrustMacroSelectorCase, :missing)
+    end
+  end
+
   test "defrustmacro groups with defrustmod functions" do
     defmodule DefrustMacroModuleCase do
       use RustQ.Meta

@@ -154,6 +154,7 @@ defmodule RustQ.Meta do
       )
 
     asts = Enum.map(built_asts, & &1.ast)
+    macro_items = Enum.map(built_macros, &Map.take(&1, [:name, :ast, :rust_module]))
     type_asts = AST.build_type_asts(type_aliases)
     type_items = Enum.map(type_asts, &Validate.item_ast/1)
     rust_items = AST.group_module_asts(built_macros ++ built_asts)
@@ -170,6 +171,9 @@ defmodule RustQ.Meta do
     quote do
       @doc false
       def __rustq_asts__, do: unquote(Macro.escape(asts))
+
+      @doc false
+      def __rustq_macro_items__, do: unquote(Macro.escape(macro_items))
 
       @doc false
       def __rustq_types__, do: unquote(Macro.escape(type_aliases))

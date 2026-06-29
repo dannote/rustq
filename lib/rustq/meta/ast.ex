@@ -29,10 +29,34 @@ defmodule RustQ.Meta.AST do
     do: Enum.map(names, &item(module, &1))
 
   @doc false
+  @spec macro_item(module(), atom()) :: Rust.Fragment.t()
+  def macro_item(module, name) when is_atom(module) and is_atom(name) do
+    module
+    |> macro_ast!(name)
+    |> Rust.ast_item()
+  end
+
+  @doc false
+  @spec macro_items(module(), [atom()]) :: [Rust.Fragment.t()]
+  def macro_items(module, names) when is_atom(module) and is_list(names),
+    do: Enum.map(names, &macro_item(module, &1))
+
+  @doc false
   @spec ast!(module(), atom()) :: AST.Function.t()
   def ast!(module, name) when is_atom(module) and is_atom(name) do
     Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
       raise ArgumentError, "#{inspect(module)} has no defrust item named #{name}"
+  end
+
+  @doc false
+  @spec macro_ast!(module(), atom()) :: AST.MacroItem.t()
+  def macro_ast!(module, name) when is_atom(module) and is_atom(name) do
+    module.__rustq_macro_items__()
+    |> Enum.find(&(&1.name == name))
+    |> case do
+      %{ast: %AST.MacroItem{} = ast} -> ast
+      nil -> raise ArgumentError, "#{inspect(module)} has no defrustmacro item named #{name}"
+    end
   end
 
   @doc false
