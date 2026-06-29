@@ -234,6 +234,62 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "defrustmacro_shared_skip_field.rs")
   end
 
+  test "defrustmacro supports skip field descriptor rows" do
+    defmodule DefrustMacroSkipFieldCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @type skip_field :: %{
+              required(:id) => R.u32(),
+              required(:repeated) => R.bool(),
+              required(:bytes) => R.bool(),
+              required(:skip) => R.raw(:SkipFn)
+            }
+
+      @spec build_fields(R.slice(R.path(:SkipField))) :: R.nif_result(R.unit())
+      defrust build_fields(_fields) do
+        :ok
+      end
+
+      defrustmacro descriptor(
+                     fn: name(:ident),
+                     skip_fields:
+                       repeat do
+                         field_id(:literal)
+                         field_repeated(:literal)
+                         field_bytes(:literal)
+                         field_skip(:ident)
+                       end
+                   ) do
+        @spec name() :: R.nif_result(R.unit())
+        defrust name() do
+          build_fields(
+            ref(
+              array([
+                repeat skip_fields do
+                  struct_literal(SkipField,
+                    id: field_id,
+                    repeated: field_repeated,
+                    bytes: field_bytes,
+                    skip: field_skip
+                  )
+                end
+              ])
+            )
+          )
+        end
+      end
+    end
+
+    source = DefrustMacroSkipFieldCase.__rustq_source__()
+
+    assert source =~
+             "skip_fields [$(" <>
+               "$field_id:literal => $field_repeated:literal $field_bytes:literal $field_skip:ident;)*]"
+
+    assert RustQ.valid?(source, "defrustmacro_skip_field.rs")
+  end
+
   test "selects defrustmacro items by name" do
     defmodule DefrustMacroSelectorCase do
       use RustQ.Meta

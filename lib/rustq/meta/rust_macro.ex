@@ -368,6 +368,10 @@ defmodule RustQ.Meta.RustMacro do
   defp item_pattern_arg({:labeled, label, name, fragment}), do: "#{label} $#{name}:#{fragment};"
   defp item_pattern_arg({name, fragment}), do: "$#{name}:#{fragment};"
 
+  defp item_pattern_arg({:repeat, :skip_fields, [field_id, repeated, bytes, skip]}) do
+    "skip_fields [$(#{capture_pattern(field_id)} => #{capture_pattern(repeated)} #{capture_pattern(bytes)} #{capture_pattern(skip)};)*]"
+  end
+
   defp item_pattern_arg({:repeat, :fields, args}) do
     case args do
       [field_name, field_mode, field_decode] ->

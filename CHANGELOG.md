@@ -14,6 +14,7 @@
   macro-template repetitions, including compact field-row item patterns.
 - Add semantic `enum_variant(Type, :variant, ...)` lowering for constructing
   Rust enum variants from Rusty-Elixir without token macros.
+- Add `defrustmacro` support for compact `skip_fields` descriptor row patterns.
 - Document item-generating `defrustmacro` patterns for compact generated Rust
   that keeps implementation logic in Rusty-Elixir.
 - Add idiomatic Clippy lint paths for Rust-facing attributes, such as
