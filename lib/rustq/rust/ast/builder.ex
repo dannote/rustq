@@ -15,6 +15,7 @@ defmodule RustQ.Rust.AST.Builder do
     Arm,
     ArrayLiteral,
     Assign,
+    AssignOp,
     AtomValue,
     Attribute,
     BinaryOp,
@@ -182,6 +183,10 @@ defmodule RustQ.Rust.AST.Builder do
     do: %LetElse{pattern: pat_expr(pattern), expr: expr(expression), else: flatten(else_body)}
 
   def assign(target, expression), do: %Assign{target: expr(target), expr: expr(expression)}
+
+  def assign_op(target, op, expression),
+    do: %AssignOp{target: expr(target), op: op, expr: expr(expression)}
+
   def stmt(expression), do: %ExprStmt{expr: expr(expression)}
   def return_stmt(expression), do: %Return{expr: expr(expression)}
   def early_return(expression), do: %EarlyReturn{expr: expr(expression)}

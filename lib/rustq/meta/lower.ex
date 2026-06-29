@@ -93,7 +93,7 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_statement({:assign!, _, [target, expression]}, %Context{} = context) do
     expected_type = infer_expr_type(target, context.vars)
-    %AST.Assign{target: lower_expr(target), expr: lower_expr(expression, expected_type)}
+    lower_assignment(target, expression, expected_type)
   end
 
   defp lower_statement({:return!, _, [expression]}, %Context{return_type: return_type}) do
@@ -106,7 +106,10 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_statement({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
-    %AST.ExprStmt{expr: lower_case(expression, clauses, context)}
+    case lower_option_if_let_statement(expression, normalize_case_clauses(clauses), context) do
+      %AST.IfLet{} = if_let -> if_let
+      nil -> %AST.ExprStmt{expr: lower_case(expression, clauses, context)}
+    end
   end
 
   defp lower_statement({:if, _, [condition, branches]}, %Context{} = context) do
@@ -368,6 +371,77 @@ defmodule RustQ.Meta.Lower do
           }
         end)
     }
+  end
+
+  defp lower_assignment(target, {op, _meta, [left, right]}, expected_type)
+       when op in [:+, :-, :*, :/] do
+    lower_assignment_op(target, op, left, right, expected_type)
+  end
+
+  defp lower_assignment(
+         target,
+         {{:., _, [{:__aliases__, _, [:Bitwise]}, op]}, _, [left, right]},
+         expected_type
+       )
+       when op in [:bsr, :band] do
+    lower_assignment_op(target, op, left, right, expected_type)
+  end
+
+  defp lower_assignment(target, expression, expected_type) do
+    %AST.Assign{target: lower_expr(target), expr: lower_expr(expression, expected_type)}
+  end
+
+  defp lower_assignment_op(target, op, left, right, expected_type) do
+    lowered_target = lower_expr(target)
+    lowered_left = lower_expr(left)
+
+    if lowered_target == lowered_left do
+      %AST.AssignOp{
+        target: lowered_target,
+        op: operator_op(op),
+        expr: lower_expr(right, expected_type)
+      }
+    else
+      %AST.Assign{
+        target: lowered_target,
+        expr: lower_expr({op, [], [left, right]}, expected_type)
+      }
+    end
+  end
+
+  defp lower_option_if_let_statement(expression, clauses, %Context{} = context) do
+    with [{:some, some_pattern, some_body}, {:none, none_body}] <- option_if_let_clauses(clauses),
+         true <- unit_body?(none_body) do
+      then_body = lower_clause_body(some_body, context)
+      mutable_vars = then_body |> collect_mut_refs() |> MapSet.new()
+
+      %AST.IfLet{
+        pattern:
+          some_pattern
+          |> lower_match_pattern(%Type{kind: :option})
+          |> mark_mutable_pattern_vars(mutable_vars),
+        expr: lower_expr(expression, %Type{kind: :option}),
+        then: then_body
+      }
+    else
+      _other -> nil
+    end
+  end
+
+  defp option_if_let_clauses(clauses) do
+    Enum.map(clauses, fn
+      {:->, _, [[{:some, _pattern} = pattern], body]} -> {:some, pattern, body}
+      {:->, _, [[{:{}, _, [:some, _pattern]} = pattern], body]} -> {:some, pattern, body}
+      {:->, _, [[:none], body]} -> {:none, body}
+      {:->, _, [[nil], body]} -> {:none, body}
+      _other -> :unsupported
+    end)
+  end
+
+  defp unit_body?(body) do
+    body
+    |> block_expressions()
+    |> Enum.all?(&(&1 in [:ok, nil]))
   end
 
   defp lower_for_reduce_expr(
@@ -984,6 +1058,8 @@ defmodule RustQ.Meta.Lower do
   defp operator_op(:-), do: :sub
   defp operator_op(:*), do: :mul
   defp operator_op(:/), do: :div
+  defp operator_op(:bsr), do: :shr
+  defp operator_op(:band), do: :bitand
 
   defp lower_enum_map(collection, {:fn, _, [{:->, _, [args, body]}]}) do
     collection
@@ -1332,6 +1408,22 @@ defmodule RustQ.Meta.Lower do
         expr: mark_mutable_expr(stmt.expr, mutable_vars)
     }
 
+  defp mark_mutable_lets(%AST.AssignOp{} = stmt, mutable_vars),
+    do: %{
+      stmt
+      | target: mark_mutable_expr(stmt.target, mutable_vars),
+        expr: mark_mutable_expr(stmt.expr, mutable_vars)
+    }
+
+  defp mark_mutable_lets(%AST.IfLet{} = stmt, mutable_vars) do
+    %{
+      stmt
+      | expr: mark_mutable_expr(stmt.expr, mutable_vars),
+        then: Enum.map(stmt.then, &mark_mutable_lets(&1, mutable_vars)),
+        else: Enum.map(stmt.else, &mark_mutable_lets(&1, mutable_vars))
+    }
+  end
+
   defp mark_mutable_lets(%AST.ExprStmt{} = stmt, mutable_vars),
     do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
 
@@ -1439,8 +1531,19 @@ defmodule RustQ.Meta.Lower do
     do_collect_mutable_let_refs(assign.expr, [name | acc])
   end
 
+  defp do_collect_mutable_let_refs(%AST.AssignOp{target: %AST.Var{name: name}} = assign, acc) do
+    do_collect_mutable_let_refs(assign.expr, [name | acc])
+  end
+
   defp do_collect_mutable_let_refs(
          %AST.Assign{target: %AST.Index{receiver: %AST.Var{name: name}}} = assign,
+         acc
+       ) do
+    do_collect_mutable_let_refs(assign.expr, [name | acc])
+  end
+
+  defp do_collect_mutable_let_refs(
+         %AST.AssignOp{target: %AST.Index{receiver: %AST.Var{name: name}}} = assign,
          acc
        ) do
     do_collect_mutable_let_refs(assign.expr, [name | acc])

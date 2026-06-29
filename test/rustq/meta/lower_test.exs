@@ -1695,8 +1695,7 @@ defmodule RustQ.Meta.LowerTest do
 
     source = ClosureDerefCase.__rustq_source__()
 
-    assert source =~ "args.first().and_then(|term| decode_color(*term).ok())"
-    assert source =~ "Some(color) =>"
+    assert source =~ "if let Some(color) = args.first().and_then(|term| decode_color(*term).ok())"
     assert source =~ "canvas.clear(color);"
   end
 
@@ -1718,21 +1717,14 @@ defmodule RustQ.Meta.LowerTest do
 
     assert %AST.Function{
              body: [
-               %AST.ExprStmt{
-                 expr: %AST.Match{
-                   arms: [
-                     %AST.Arm{pattern: %AST.PatSome{pattern: %AST.PatVar{name: :alpha}}},
-                     %AST.Arm{pattern: %AST.PatNone{}}
-                   ]
-                 }
-               },
+               %AST.IfLet{pattern: %AST.PatSome{pattern: %AST.PatVar{name: :alpha}}},
                %AST.Return{expr: %AST.Ok{}}
              ]
            } = OptionCase.__rustq_asts__() |> List.first()
 
     source = OptionCase.__rustq_source__()
-    assert source =~ "Some(alpha) =>"
-    assert source =~ "None =>"
+    assert source =~ "if let Some(alpha) = maybe_alpha"
+    refute source =~ "None =>"
   end
 
   test "dogfooded native helpers lower binary operators and Rust string types" do

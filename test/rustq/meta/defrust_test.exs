@@ -830,7 +830,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     source = MutableOptionPatternCase.__rustq_source__()
-    assert source =~ "Some(mut paint) =>"
+    assert source =~ "if let Some(mut paint) = maybe_paint"
     assert source =~ "apply_blend_mode(&mut paint"
   end
 
@@ -1202,6 +1202,72 @@ defmodule RustQ.Meta.DefrustTest do
     source = AssignBangMutationCase.__rustq_source__()
     assert source =~ "let mut flag = true;"
     assert source =~ "flag = false;"
+  end
+
+  test "renders assign bang arithmetic as compound assignment" do
+    defmodule AssignBangCompoundCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec count() :: R.usize()
+      defrust count() do
+        count = 2
+        assign!(count, count + 1)
+        count
+      end
+    end
+
+    source = AssignBangCompoundCase.__rustq_source__()
+    assert source =~ "let mut count = 2;"
+    assert source =~ "count += 1;"
+  end
+
+  test "renders assign bang Bitwise operations as compound assignment" do
+    defmodule AssignBangBitwiseCompoundCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec masked(R.u32()) :: R.u32()
+      defrust masked(mask) do
+        value = 255
+        assign!(value, Bitwise.band(value, mask))
+        value
+      end
+    end
+
+    source = AssignBangBitwiseCompoundCase.__rustq_source__()
+    assert source =~ "value &= mask;"
+  end
+
+  test "lowers statement option cases with unit none branch to if let" do
+    defmodule OptionCaseIfLetStatementCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec attr(R.option(R.path(:String)), R.usize()) :: R.raw(:"Option<(&'static str, String)>")
+      defrust attr(name, index) do
+        cursor = 0
+
+        case name.as_ref() do
+          {:some, value} ->
+            if index == cursor do
+              return!(some({"name", value.clone()}))
+            end
+
+            assign!(cursor, cursor + 1)
+
+          :none ->
+            :ok
+        end
+
+        nil
+      end
+    end
+
+    source = OptionCaseIfLetStatementCase.__rustq_source__()
+    assert source =~ "if let Some(value) = name.as_ref()"
+    assert source =~ "cursor += 1;"
+    refute source =~ "match name.as_ref()"
   end
 
   test "builds typed Rustler decode expressions from defrust valid Elixir" do

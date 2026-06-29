@@ -9,6 +9,7 @@ defmodule RustQ.Rust.AST.Render do
     Arm,
     ArrayLiteral,
     Assign,
+    AssignOp,
     AtomValue,
     Attribute,
     BinaryOp,
@@ -414,6 +415,16 @@ defmodule RustQ.Rust.AST.Render do
   def render_stmt(%Assign{} = stmt),
     do: [render_expr(stmt.target), " = ", render_expr(stmt.expr), ";"]
 
+  def render_stmt(%AssignOp{} = stmt),
+    do: [
+      render_expr(stmt.target),
+      " ",
+      render_assign_op(stmt.op),
+      "= ",
+      render_expr(stmt.expr),
+      ";"
+    ]
+
   def render_stmt(%ExprStmt{} = stmt), do: [render_expr(stmt.expr), ";"]
   def render_stmt(%Return{} = stmt), do: render_expr(stmt.expr)
   def render_stmt(%EarlyReturn{} = stmt), do: ["return ", render_expr(stmt.expr), ";"]
@@ -664,6 +675,13 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   defp render_path_part(part), do: to_string(part)
+
+  defp render_assign_op(:add), do: "+"
+  defp render_assign_op(:sub), do: "-"
+  defp render_assign_op(:mul), do: "*"
+  defp render_assign_op(:div), do: "/"
+  defp render_assign_op(:shr), do: ">>"
+  defp render_assign_op(:bitand), do: "&"
 
   defp render_binary_op(:eq), do: "=="
   defp render_binary_op(:ne), do: "!="

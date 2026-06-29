@@ -199,6 +199,7 @@ defmodule RustQ.Codegen.Dispatch do
   defp stmt_decoder_path(:let), do: [:decode_stmt_let]
   defp stmt_decoder_path(:let_else), do: [:decode_stmt_let_else]
   defp stmt_decoder_path(:assign), do: [:decode_stmt_assign]
+  defp stmt_decoder_path(:assign_op), do: [:decode_stmt_assign_op]
   defp stmt_decoder_path(:expr_stmt), do: [:decode_stmt_expr_stmt]
   defp stmt_decoder_path(:return), do: [:decode_stmt_return]
   defp stmt_decoder_path(:early_return), do: [:decode_stmt_early_return]

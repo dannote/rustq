@@ -13,6 +13,7 @@ defmodule RustQ.Rust.AST do
     Arm,
     ArrayLiteral,
     Assign,
+    AssignOp,
     AtomValue,
     Attribute,
     BinaryOp,
@@ -112,6 +113,7 @@ defmodule RustQ.Rust.AST do
           Let.t()
           | LetElse.t()
           | Assign.t()
+          | AssignOp.t()
           | ExprStmt.t()
           | Return.t()
           | EarlyReturn.t()
@@ -409,6 +411,10 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{target: AST.expr(), expr: AST.expr()})
   )
 
+  defnode(AssignOp, :stmt, [:target, :op, :expr],
+    type: quote(do: %__MODULE__{target: AST.expr(), op: atom(), expr: AST.expr()})
+  )
+
   defnode(ExprStmt, :stmt, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
 
   defnode(Return, :stmt, [:expr], type: quote(do: %__MODULE__{expr: AST.expr()}))
@@ -657,6 +663,7 @@ defmodule RustQ.Rust.AST do
       Let,
       LetElse,
       Assign,
+      AssignOp,
       ExprStmt,
       Return,
       EarlyReturn,

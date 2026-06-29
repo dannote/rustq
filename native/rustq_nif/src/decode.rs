@@ -288,6 +288,20 @@ pub(crate) fn parse_assign_stmt(target: Expr, expr: Expr) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(#target = #expr;))
 }
 
+pub(crate) fn parse_assign_op_stmt(target: Expr, op: &str, expr: Expr) -> NifResult<Stmt> {
+    match op {
+        "add" => parse_syn::<Stmt>(quote!(#target += #expr;)),
+        "sub" => parse_syn::<Stmt>(quote!(#target -= #expr;)),
+        "mul" => parse_syn::<Stmt>(quote!(#target *= #expr;)),
+        "div" => parse_syn::<Stmt>(quote!(#target /= #expr;)),
+        "shr" => parse_syn::<Stmt>(quote!(#target >>= #expr;)),
+        "bitand" => parse_syn::<Stmt>(quote!(#target &= #expr;)),
+        other => Err(rustler::Error::Term(Box::new(format!(
+            "unsupported assignment operator: {other}"
+        )))),
+    }
+}
+
 pub(crate) fn parse_return_stmt(expr: Expr) -> NifResult<Stmt> {
     parse_syn::<Stmt>(quote!(return #expr;))
 }

@@ -12,6 +12,14 @@ defmodule RustQ.Codegen.Decoders.Stmt do
     Super.parse_assign_stmt(target, expr)
   end
 
+  @spec decode_stmt_assign_op(term()) :: R.nif_result(R.path(:Stmt))
+  defrust decode_stmt_assign_op(term) do
+    target = unwrap!(required_expr(term, "target"))
+    op = unwrap!(unwrap!(required_field(term, "op")).atom_to_string())
+    expr = unwrap!(required_expr(term, "expr"))
+    Super.parse_assign_op_stmt(target, op.as_str(), expr)
+  end
+
   @spec decode_stmt_expr_stmt(term()) :: R.nif_result(R.path(:Stmt))
   defrust decode_stmt_expr_stmt(term) do
     expr = unwrap!(required_expr(term, "expr"))

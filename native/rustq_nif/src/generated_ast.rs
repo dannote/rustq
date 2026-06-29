@@ -38,6 +38,7 @@ pub(crate) mod ast_modules {
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
     pub(crate) const LET_ELSE: &str = "Elixir.RustQ.Rust.AST.LetElse";
     pub(crate) const ASSIGN: &str = "Elixir.RustQ.Rust.AST.Assign";
+    pub(crate) const ASSIGN_OP: &str = "Elixir.RustQ.Rust.AST.AssignOp";
     pub(crate) const EXPR_STMT: &str = "Elixir.RustQ.Rust.AST.ExprStmt";
     pub(crate) const RETURN: &str = "Elixir.RustQ.Rust.AST.Return";
     pub(crate) const EARLY_RETURN: &str = "Elixir.RustQ.Rust.AST.EarlyReturn";
@@ -250,6 +251,7 @@ pub(crate) fn decode_ast_stmt(term: Term) -> NifResult<Stmt> {
         ast_modules::LET => decode_stmt_let(term),
         ast_modules::LET_ELSE => decode_stmt_let_else(term),
         ast_modules::ASSIGN => decode_stmt_assign(term),
+        ast_modules::ASSIGN_OP => decode_stmt_assign_op(term),
         ast_modules::EXPR_STMT => decode_stmt_expr_stmt(term),
         ast_modules::RETURN => decode_stmt_return(term),
         ast_modules::EARLY_RETURN => decode_stmt_early_return(term),
@@ -567,6 +569,13 @@ pub(crate) fn decode_stmt_assign<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let target = required_expr(term, "target")?;
     let expr = required_expr(term, "expr")?;
     super::parse_assign_stmt(target, expr)
+}
+
+pub(crate) fn decode_stmt_assign_op<'a>(term: Term<'a>) -> NifResult<Stmt> {
+    let target = required_expr(term, "target")?;
+    let op = required_field(term, "op")?.atom_to_string()?;
+    let expr = required_expr(term, "expr")?;
+    super::parse_assign_op_stmt(target, op.as_str(), expr)
 }
 
 pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {

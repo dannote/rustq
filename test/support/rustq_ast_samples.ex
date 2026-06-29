@@ -229,6 +229,13 @@ defmodule RustQ.ASTSamples do
         returns: "i64"
       )
 
+  def sample_for(:assign_op),
+    do:
+      function_sample(:assign_op_sample, A.var(:value),
+        body: [A.let_mut(:value, A.lit(1)), A.assign_op(:value, :add, A.lit(2)), A.return(:value)],
+        returns: "i64"
+      )
+
   def sample_for(:let_else),
     do:
       function_sample(:let_else_sample, A.var(:value),
