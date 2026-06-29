@@ -424,10 +424,13 @@ defmodule RustQ.Meta.AST do
     [enum, decoder]
   end
 
+  defp type_items(%Type{kind: :alias, rust: rust_name, meta: %{target: %Type{} = target}}) do
+    [%AST.TypeAlias{name: RustQ.Atom.identifier!(rust_name), type: target.ast, vis: :pub}]
+  end
+
   defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
-    lifetime =
-      if Enum.any?(fields, fn {_name, type, _presence} -> Type.lifetime?(type) end),
-        do: :a
+    {lifetime?, decodable?} = struct_field_traits(fields)
+    lifetime = if lifetime?, do: :a
 
     struct = %AST.Struct{
       name: RustQ.Atom.identifier!(rust_name),
@@ -437,24 +440,51 @@ defmodule RustQ.Meta.AST do
       fields: Enum.map(fields, &Decoder.struct_field_ast/1)
     }
 
-    decoder = %AST.Function{
-      name: RustQ.Atom.identifier!("decode_#{Macro.underscore(rust_name)}"),
-      vis: :pub,
-      args: [%AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}],
-      returns: %AST.TypeNifResult{
-        inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
-      },
-      lifetime: :a,
-      body:
-        A.block do
-          A.return(A.ok(A.struct([rust_name], Enum.map(fields, &Decoder.struct_decoder_field/1))))
-        end
-    }
+    if decodable? do
+      decoder = %AST.Function{
+        name: RustQ.Atom.identifier!("decode_#{Macro.underscore(rust_name)}"),
+        vis: :pub,
+        args: [
+          %AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}
+        ],
+        returns: %AST.TypeNifResult{
+          inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
+        },
+        lifetime: :a,
+        body:
+          A.block do
+            A.return(
+              A.ok(A.struct([rust_name], Enum.map(fields, &Decoder.struct_decoder_field/1)))
+            )
+          end
+      }
 
-    [struct, decoder]
+      [struct, decoder]
+    else
+      [struct]
+    end
   end
 
   defp type_items(_type), do: []
+
+  defp struct_field_traits(fields) do
+    Enum.reduce(fields, {false, true}, fn {_name, type, _presence} = field,
+                                          {lifetime?, decodable?} ->
+      {lifetime? or Type.lifetime?(type), decodable? and decodable_struct_field?(field)}
+    end)
+  end
+
+  defp decodable_struct_field?({_name, %Type{kind: :type, ast: %AST.TypeRaw{}}, _presence}),
+    do: false
+
+  defp decodable_struct_field?({_name, %Type{kind: :alias, meta: %{target: target}}, _presence}),
+    do: decodable_type?(target)
+
+  defp decodable_struct_field?({_name, %Type{} = type, _presence}), do: decodable_type?(type)
+
+  defp decodable_type?(%Type{kind: :type, ast: %AST.TypeRaw{}}), do: false
+  defp decodable_type?(%Type{kind: :alias, meta: %{target: target}}), do: decodable_type?(target)
+  defp decodable_type?(%Type{}), do: true
 
   defp arg_name!({name, _meta, context}) when is_atom(name) and is_atom(context), do: name
 

@@ -48,6 +48,13 @@ defmodule RustQ.Meta.GeneratedCase do
           optional(:label) => String.t()
         }
 
+  @type callback :: R.raw(:"fn(u32) -> u32")
+
+  @type callback_descriptor :: %{
+          required(:id) => R.u32(),
+          required(:callback) => callback()
+        }
+
   @spec draw_save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
   defrust draw_save(canvas) do
     canvas.save()

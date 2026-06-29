@@ -407,7 +407,8 @@ defmodule RustQ.Meta.Type do
         })
 
       true ->
-        type(:alias, path(rust_name), %{elixir_name: name, ast: ast})
+        {target_type, _aliases} = parse_alias_type(ast, raw, aliases)
+        type(:alias, path(rust_name), %{elixir_name: name, target: target_type})
     end
   end
 
