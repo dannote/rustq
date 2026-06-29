@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add Rust type item generation from `@type` aliases, including type aliases,
+  structs, enums, and Rust-only support records that do not force generated
+  Rustler term decoders.
+- Add structural `macro_rules!` AST support and native validation/rendering for
+  macro variables, captures, and repetitions.
+- Extend `defrustmacro` with identifier/literal captures, item-generating inner
+  `defrust` bodies, and `repeat ... do` macro-template repetitions.
+- Document item-generating `defrustmacro` patterns for compact generated Rust
+  that keeps implementation logic in Rusty-Elixir.
 - Add idiomatic Clippy lint paths for Rust-facing attributes, such as
   `@allow Clippy.redundant_field_names` rendering to
   `#[allow(clippy::redundant_field_names)]`.
