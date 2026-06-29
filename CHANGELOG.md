@@ -11,7 +11,7 @@
   macro variables, captures, and repetitions.
 - Extend `defrustmacro` with identifier/literal captures, item-generating inner
   `defrust` bodies, multiple generated item bodies, and `repeat ... do`
-  macro-template repetitions.
+  macro-template repetitions, including compact field-row item patterns.
 - Document item-generating `defrustmacro` patterns for compact generated Rust
   that keeps implementation logic in Rusty-Elixir.
 - Add idiomatic Clippy lint paths for Rust-facing attributes, such as

@@ -370,6 +370,9 @@ defmodule RustQ.Meta.RustMacro do
 
   defp item_pattern_arg({:repeat, :fields, args}) do
     case args do
+      [field_name, field_mode, field_decode] ->
+        "fields [$(#{capture_pattern(field_name)} #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
+
       [field_id, field_name, field_mode, field_decode] ->
         "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
 
