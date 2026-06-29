@@ -16,7 +16,7 @@ defmodule RustQ.MixProject do
       package: package(),
       docs: docs(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: [plt_add_apps: [:mix, :reach]],
       test_ignore_filters: [~r|test/support/|],
       deps: deps()
     ]
