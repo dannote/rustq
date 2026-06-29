@@ -212,9 +212,58 @@ defrustmacro field(term, name, type: :ty) do
 end
 ```
 
-Plain arguments are `:expr` fragments; annotate type arguments with `:ty`. Do not
-write Rust syntax in the body. In short: `defmacro` improves the authoring layer;
-`defrustmacro` intentionally changes the generated Rust shape.
+Plain arguments are `:expr` fragments; annotate type arguments with `:ty`. Use
+`:ident` and `:literal` when a macro captures Rust identifiers or literal tokens.
+Do not write Rust syntax in the body. In short: `defmacro` improves the authoring
+layer; `defrustmacro` intentionally changes the generated Rust shape.
+
+`defrustmacro` can also emit Rust items when the body contains normal Rusty-Elixir
+`defrust`. Keep the signature declarative and put the implementation in the inner
+`defrust` body:
+
+```elixir
+defrustmacro sparse_message(
+  fn: name(:ident),
+  env: env(:ident),
+  decoder: decoder(:ident),
+  module: module_name(:literal),
+  capacity: capacity(:literal),
+  fields:
+    repeat do
+      field_id(:literal)
+      field_name(:literal)
+      field_mode(:ident)
+      field_decode(:ident)
+    end
+) do
+  @spec name(R.path(:Env, R.lifetime(:a)), R.mut_ref(R.path(:Decoder))) ::
+          R.nif_result(term())
+  defrust name(env, decoder) do
+    decode_sparse_fields(
+      env,
+      decoder,
+      module_name,
+      capacity,
+      ref(
+        array([
+          repeat fields do
+            struct_literal(Field,
+              id: field_id,
+              name: field_name,
+              repeated: repeated!(field_mode),
+              decode: field_decode
+            )
+          end
+        ])
+      )
+    )
+  end
+end
+```
+
+Inside `defrustmacro`, declared captures such as `env`, `module_name`, and
+`field_id` lower to Rust macro variables (`$env`, `$module_name`, `$field_id`).
+`repeat fields do ... end` is a macro-template repetition, not a runtime loop.
 
 ## Use the supported Rusty-Elixir surface
 

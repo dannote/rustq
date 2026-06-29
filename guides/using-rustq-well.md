@@ -254,10 +254,60 @@ end
 ```
 
 Plain arguments are Rust `:expr` fragments. Annotate type arguments with `:ty`.
-The body is still Rusty-Elixir: use ordinary calls, `decode_as!/2`, propagation
-inference, pattern matching, and semantic helpers rather than Rust token syntax.
-Keep these macros small and supportive; they are for reducing generated Rust
-bulk, not for hiding large bridge functions.
+Use `:ident` and `:literal` for Rust identifier and literal captures. The body is
+still Rusty-Elixir: use ordinary calls, `decode_as!/2`, propagation inference,
+pattern matching, and semantic helpers rather than Rust token syntax. Keep these
+macros small and supportive; they are for reducing generated Rust bulk, not for
+hiding large bridge functions.
+
+`defrustmacro` can emit Rust items too. The item implementation should still be
+written as `defrust`, not as a hand-built function AST:
+
+```elixir
+defrustmacro sparse_message(
+  fn: name(:ident),
+  env: env(:ident),
+  decoder: decoder(:ident),
+  module: module_name(:literal),
+  capacity: capacity(:literal),
+  fields:
+    repeat do
+      field_id(:literal)
+      field_name(:literal)
+      field_mode(:ident)
+      field_decode(:ident)
+    end
+) do
+  @spec name(R.path(:Env, R.lifetime(:a)), R.mut_ref(R.path(:Decoder))) ::
+          R.nif_result(term())
+  defrust name(env, decoder) do
+    decode_sparse_fields(
+      env,
+      decoder,
+      module_name,
+      capacity,
+      ref(
+        array([
+          repeat fields do
+            struct_literal(Field,
+              id: field_id,
+              name: field_name,
+              repeated: repeated!(field_mode),
+              decode: field_decode
+            )
+          end
+        ])
+      )
+    )
+  end
+end
+```
+
+Inside the macro body, declared captures such as `env`, `module_name`, and
+`field_id` lower to Rust macro variables (`$env`, `$module_name`, `$field_id`).
+`repeat fields do ... end` is macro-template repetition (`$()*`), not a runtime
+loop. Use it for repeated token families that should stay compact in generated
+Rust.
 
 Rule of thumb:
 

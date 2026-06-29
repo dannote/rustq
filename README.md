@@ -207,11 +207,47 @@ end
 ```
 
 Plain macro arguments are Rust `:expr` fragments. Annotate type arguments with
-`:ty`. The body is not Rust token syntax: use ordinary calls, `decode_as!/2`,
-inference, and other Rusty-Elixir forms. Keep `defrustmacro` small and supportive;
-do not hide large functions inside macro bodies. In short: `defmacro` improves
-the Elixir authoring layer; `defrustmacro` intentionally changes the Rust output
-shape.
+`:ty`, and use `:ident` / `:literal` for identifier and literal captures. The
+body is not Rust token syntax: use ordinary calls, `decode_as!/2`, inference, and
+other Rusty-Elixir forms. Keep `defrustmacro` small and supportive; do not hide
+large functions inside macro bodies. In short: `defmacro` improves the Elixir
+authoring layer; `defrustmacro` intentionally changes the Rust output shape.
+
+`defrustmacro` can emit Rust items when its body contains an inner `defrust`:
+
+```elixir
+defrustmacro generated_decoder(
+  fn: name(:ident),
+  env: env(:ident),
+  decoder: decoder(:ident),
+  fields:
+    repeat do
+      field_id(:literal)
+      field_name(:literal)
+      field_decode(:ident)
+    end
+) do
+  @spec name(R.path(:Env, R.lifetime(:a)), R.mut_ref(R.path(:Decoder))) ::
+          R.nif_result(term())
+  defrust name(env, decoder) do
+    decode_fields(
+      env,
+      decoder,
+      ref(
+        array([
+          repeat fields do
+            struct_literal(Field, id: field_id, name: field_name, decode: field_decode)
+          end
+        ])
+      )
+    )
+  end
+end
+```
+
+In this context, declared captures lower to Rust macro variables and
+`repeat fields do ... end` lowers to macro-template repetition, not a runtime
+loop.
 
 Raw token escapes (`raw_expr!`, `raw_pat!`, `raw_stmt!`, `raw_arm!`) are explicit
 low-level escape hatches for cases not yet covered by semantic helpers. If an
