@@ -77,6 +77,61 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert Render.render_function(function) =~ "parse_pat(quote!(None))"
   end
 
+  test "renders structural item macros with repeated token trees" do
+    alias RustQ.Rust.AST.Builder, as: A
+
+    macro =
+      A.macro_rules(
+        :kiwi_sparse_message_descriptor_decoder,
+        A.macro_rule(
+          [
+            "fn ",
+            A.macro_var(:name, :ident),
+            "; fields [",
+            A.macro_repeat([
+              A.macro_var(:field_id, :literal),
+              " => ",
+              A.macro_var(:field_name, :literal),
+              ": ",
+              A.macro_var(:field_mode, :ident),
+              " ",
+              A.macro_var(:field_decode, :ident),
+              ";"
+            ]),
+            "]"
+          ],
+          [
+            "fn ",
+            A.macro_capture(:name),
+            "() { let _fields = &[",
+            A.macro_repeat([
+              "KiwiSparseField { id: ",
+              A.macro_capture(:field_id),
+              ", name: ",
+              A.macro_capture(:field_name),
+              ", repeated: kiwi_sparse_repeated!(",
+              A.macro_capture(:field_mode),
+              "), decode: ",
+              A.macro_capture(:field_decode),
+              " },"
+            ]),
+            "]; }"
+          ]
+        ),
+        attrs: [A.allow_attr(:unused_macros)]
+      )
+
+    source = Render.render_item(macro)
+
+    assert source =~ "macro_rules! kiwi_sparse_message_descriptor_decoder"
+
+    assert source =~
+             "$($field_id:literal => $field_name:literal: $field_mode:ident $field_decode:ident;)*"
+
+    assert source =~ "$(KiwiSparseField { id: $field_id, name: $field_name"
+    assert RustQ.valid?(source, "structural_item_macro.rs")
+  end
+
   test "renders function receiver arguments" do
     function = %Function{
       name: :encode,

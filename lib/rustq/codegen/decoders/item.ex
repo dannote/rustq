@@ -124,6 +124,12 @@ defmodule RustQ.Codegen.Decoders.Item do
     Super.parse_macro_item_call(path, args)
   end
 
+  @spec decode_ast_macro_rules(term()) :: R.nif_result(R.path(:Item))
+  defrust decode_ast_macro_rules(term) do
+    unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.MacroRules"))
+    Super.parse_macro_rules_term(term)
+  end
+
   @spec decode_ast_enum(term()) :: R.nif_result(R.path(:ItemEnum))
   defrust decode_ast_enum(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.Enum"))

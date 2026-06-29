@@ -45,8 +45,13 @@ defmodule RustQ.Rust.AST do
     Loop,
     LocalCall,
     MacroCall,
+    MacroCapture,
     MacroItem,
     MacroItemCall,
+    MacroRepeat,
+    MacroRule,
+    MacroRules,
+    MacroVar,
     Match,
     MethodCall,
     Module,
@@ -103,6 +108,7 @@ defmodule RustQ.Rust.AST do
           | TypeAlias.t()
           | MacroItem.t()
           | MacroItemCall.t()
+          | MacroRules.t()
           | Impl.t()
           | Function.t()
           | Struct.t()
@@ -256,6 +262,45 @@ defmodule RustQ.Rust.AST do
   )
 
   defnode(MacroItem, :item, [:source], type: quote(do: %__MODULE__{source: String.t()}))
+
+  @type macro_token ::
+          String.t()
+          | atom()
+          | MacroVar.t()
+          | MacroCapture.t()
+          | MacroRepeat.t()
+
+  defnode(MacroVar, :field, [:name, :fragment],
+    type: quote(do: %__MODULE__{name: atom(), fragment: atom()})
+  )
+
+  defnode(MacroCapture, :field, [:name], type: quote(do: %__MODULE__{name: atom()}))
+
+  defnode(MacroRepeat, :field, [tokens: [], separator: nil, operator: :*],
+    type:
+      quote(
+        do: %__MODULE__{
+          tokens: [AST.macro_token()],
+          separator: String.t() | nil,
+          operator: :* | :+ | :"?"
+        }
+      )
+  )
+
+  defnode(MacroRule, :field, [pattern: [], expansion: []],
+    type: quote(do: %__MODULE__{pattern: [AST.macro_token()], expansion: [AST.macro_token()]})
+  )
+
+  defnode(MacroRules, :item, [:name, rules: [], attrs: []],
+    type:
+      quote(
+        do: %__MODULE__{
+          name: atom(),
+          rules: [MacroRule.t()],
+          attrs: [AST.Attribute.t()]
+        }
+      )
+  )
 
   defnode(MacroItemCall, :item, [:path, args: []],
     type:
@@ -642,6 +687,11 @@ defmodule RustQ.Rust.AST do
       TypeAlias,
       MacroItem,
       MacroItemCall,
+      MacroRules,
+      MacroRule,
+      MacroVar,
+      MacroCapture,
+      MacroRepeat,
       Impl,
       FunctionArg,
       Function,

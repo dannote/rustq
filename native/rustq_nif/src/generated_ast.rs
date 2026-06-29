@@ -21,6 +21,11 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_ALIAS: &str = "Elixir.RustQ.Rust.AST.TypeAlias";
     pub(crate) const MACRO_ITEM: &str = "Elixir.RustQ.Rust.AST.MacroItem";
     pub(crate) const MACRO_ITEM_CALL: &str = "Elixir.RustQ.Rust.AST.MacroItemCall";
+    pub(crate) const MACRO_RULES: &str = "Elixir.RustQ.Rust.AST.MacroRules";
+    pub(crate) const MACRO_RULE: &str = "Elixir.RustQ.Rust.AST.MacroRule";
+    pub(crate) const MACRO_VAR: &str = "Elixir.RustQ.Rust.AST.MacroVar";
+    pub(crate) const MACRO_CAPTURE: &str = "Elixir.RustQ.Rust.AST.MacroCapture";
+    pub(crate) const MACRO_REPEAT: &str = "Elixir.RustQ.Rust.AST.MacroRepeat";
     pub(crate) const IMPL: &str = "Elixir.RustQ.Rust.AST.Impl";
     pub(crate) const FUNCTION: &str = "Elixir.RustQ.Rust.AST.Function";
     pub(crate) const STRUCT: &str = "Elixir.RustQ.Rust.AST.Struct";
@@ -204,6 +209,7 @@ pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
         ast_modules::TYPE_ALIAS => Ok(Item::Type(decode_ast_type_alias(term)?)),
         ast_modules::MACRO_ITEM => decode_ast_macro_item(term),
         ast_modules::MACRO_ITEM_CALL => decode_ast_macro_item_call(term),
+        ast_modules::MACRO_RULES => decode_ast_macro_rules(term),
         ast_modules::IMPL => Ok(Item::Impl(decode_ast_impl(term)?)),
         ast_modules::FUNCTION => Ok(Item::Fn(decode_ast_function(term)?)),
         ast_modules::STRUCT => Ok(Item::Struct(decode_ast_struct(term)?)),
@@ -406,6 +412,11 @@ pub(crate) fn decode_ast_macro_item_call<'a>(term: Term<'a>) -> NifResult<Item> 
     let path = required_path(term, "path")?;
     let args = super::decode_macro_item_arg_list(required_field(term, "args")?)?;
     super::parse_macro_item_call(path, args)
+}
+
+pub(crate) fn decode_ast_macro_rules<'a>(term: Term<'a>) -> NifResult<Item> {
+    expect_struct(term, "Elixir.RustQ.Rust.AST.MacroRules")?;
+    super::parse_macro_rules_term(term)
 }
 
 pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {

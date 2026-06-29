@@ -53,6 +53,12 @@ defmodule RustQ.Codegen.Dispatch do
     end
   end
 
+  defp decode_ast_item_arm(%Schema.Node{name: :macro_rules, rust_const: rust_const}) do
+    A.arm P.path([:ast_modules, rust_const]) do
+      A.return(A.path_call([:decode_ast_macro_rules], [:term]))
+    end
+  end
+
   defp decode_ast_item_arm(%Schema.Node{name: name, rust_const: rust_const}) do
     {wrapper, decoder} = item_decoder(name)
 

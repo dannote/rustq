@@ -416,6 +416,8 @@ defmodule RustQ.Rust do
     |> IO.iodata_to_binary()
   end
 
+  def to_fragment(%AST.MacroRules{} = item), do: Render.render_item(item)
+
   def to_fragment(%Fragment{} = fragment), do: IO.iodata_to_binary(fragment.code)
   def to_fragment(value) when is_binary(value), do: value
   def to_fragment(value) when is_list(value), do: IO.iodata_to_binary(value)

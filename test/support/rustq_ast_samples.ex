@@ -39,6 +39,8 @@ defmodule RustQ.ASTSamples do
     [Render.render_expr(path), "!"] |> IO.iodata_to_binary()
   end
 
+  defp base_fragment(%AST.MacroRules{name: name}), do: "macro_rules! #{name}"
+
   defp base_fragment(%AST.Const{name: name}), do: "const #{name}"
   defp base_fragment(%AST.Static{name: name}), do: "static #{name}"
   defp base_fragment(%AST.TypeAlias{name: name}), do: "type #{name}"
@@ -52,6 +54,11 @@ defmodule RustQ.ASTSamples do
 
   defp semantic_fragment(:module), do: "mod sample"
   defp semantic_fragment(:macro_item_call), do: "rustler::atoms!"
+  defp semantic_fragment(:macro_rules), do: "fn $name:ident;"
+  defp semantic_fragment(:macro_rule), do: "fn $name:ident;"
+  defp semantic_fragment(:macro_var), do: "$name:ident"
+  defp semantic_fragment(:macro_capture), do: "fn $name ()"
+  defp semantic_fragment(:macro_repeat), do: "$($field:ident;)*"
   defp semantic_fragment(:attribute), do: ~s|#[allow(dead_code)]|
   defp semantic_fragment(:type_alias), do: "type Bytes = Vec<u8>;"
   defp semantic_fragment(:impl), do: "impl Sample"
@@ -143,6 +150,33 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:macro_item), do: %AST.MacroItem{source: "type Alias = u32;"}
   def sample_for(:macro_item_call), do: A.macro_item_call([:rustler, :atoms], [:ok, :error])
+
+  def sample_for(:macro_rules) do
+    A.macro_rules(
+      :item_macro_sample,
+      A.macro_rule(
+        [
+          "fn ",
+          A.macro_var(:name, :ident),
+          "; fields [",
+          A.macro_repeat([A.macro_var(:field, :ident), ";"]),
+          "]"
+        ],
+        [
+          "fn ",
+          A.macro_capture(:name),
+          "() { ",
+          A.macro_repeat(["let _ = stringify!(", A.macro_capture(:field), ");"]),
+          " }"
+        ]
+      )
+    )
+  end
+
+  def sample_for(:macro_rule), do: sample_for(:macro_rules)
+  def sample_for(:macro_var), do: sample_for(:macro_rules)
+  def sample_for(:macro_capture), do: sample_for(:macro_rules)
+  def sample_for(:macro_repeat), do: sample_for(:macro_rules)
 
   def sample_for(:impl),
     do: %AST.Impl{

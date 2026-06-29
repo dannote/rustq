@@ -44,8 +44,13 @@ defmodule RustQ.Rust.AST.Builder do
     LocalCall,
     Loop,
     MacroCall,
+    MacroCapture,
     MacroItem,
     MacroItemCall,
+    MacroRepeat,
+    MacroRule,
+    MacroRules,
+    MacroVar,
     Match,
     MethodCall,
     Module,
@@ -167,6 +172,23 @@ defmodule RustQ.Rust.AST.Builder do
 
   def macro_item(source), do: %MacroItem{source: source}
   def macro_item_call(path, args \\ []), do: %MacroItemCall{path: expr_path(path), args: args}
+
+  def macro_rules(name, rules, opts \\ []),
+    do: %MacroRules{name: name, rules: List.wrap(rules), attrs: Keyword.get(opts, :attrs, [])}
+
+  def macro_rule(pattern, expansion),
+    do: %MacroRule{pattern: List.wrap(pattern), expansion: List.wrap(expansion)}
+
+  def macro_var(name, fragment), do: %MacroVar{name: name, fragment: fragment}
+  def macro_capture(name), do: %MacroCapture{name: name}
+
+  def macro_repeat(tokens, opts \\ []) do
+    %MacroRepeat{
+      tokens: List.wrap(tokens),
+      separator: Keyword.get(opts, :separator),
+      operator: Keyword.get(opts, :operator, :*)
+    }
+  end
 
   def let(name, expression, opts \\ []),
     do: %Let{pattern: pat(name), expr: expr(expression), type: Keyword.get(opts, :type)}

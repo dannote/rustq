@@ -41,8 +41,13 @@ defmodule RustQ.Rust.AST.Render do
     LocalCall,
     Loop,
     MacroCall,
+    MacroCapture,
     MacroItem,
     MacroItemCall,
+    MacroRepeat,
+    MacroRule,
+    MacroRules,
+    MacroVar,
     Match,
     MethodCall,
     Module,
@@ -99,6 +104,7 @@ defmodule RustQ.Rust.AST.Render do
   def render_item(%MacroItem{} = item), do: render_macro_item(item)
 
   def render_item(%MacroItemCall{} = item), do: render_macro_item_call(item)
+  def render_item(%MacroRules{} = item), do: render_macro_rules(item)
 
   def render_item(%Impl{} = item), do: render_native(item)
   def render_item(%Function{} = item), do: render_native(item)
@@ -195,6 +201,49 @@ defmodule RustQ.Rust.AST.Render do
   end
 
   def render_macro_item(%MacroItem{source: source}), do: source
+
+  def render_macro_rules(%MacroRules{name: name, rules: rules, attrs: attrs}) do
+    rendered_rules =
+      rules
+      |> Elixir.Enum.map(&render_macro_rule/1)
+      |> Elixir.Enum.join("\n")
+
+    [
+      render_attrs(attrs),
+      "macro_rules! ",
+      Atom.to_string(name),
+      " {\n",
+      indent(rendered_rules),
+      "\n}"
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  def render_macro_rule(%MacroRule{pattern: pattern, expansion: expansion}) do
+    [
+      "(",
+      render_macro_tokens(pattern),
+      ") => {\n",
+      indent(render_macro_tokens(expansion)),
+      "\n};"
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  def render_macro_tokens(tokens), do: Elixir.Enum.map(tokens, &render_macro_token/1)
+
+  defp render_macro_token(%MacroVar{name: name, fragment: fragment}) do
+    ["$", Atom.to_string(name), ":", Atom.to_string(fragment)]
+  end
+
+  defp render_macro_token(%MacroCapture{name: name}), do: ["$", Atom.to_string(name)]
+
+  defp render_macro_token(%MacroRepeat{tokens: tokens, separator: separator, operator: operator}) do
+    ["$(", render_macro_tokens(tokens), ")", separator || "", Atom.to_string(operator)]
+  end
+
+  defp render_macro_token(token) when is_atom(token), do: Atom.to_string(token)
+  defp render_macro_token(token) when is_binary(token), do: token
 
   def render_macro_item_call(%MacroItemCall{path: path, args: args}) do
     [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &render_macro_arg/1), ", }"]

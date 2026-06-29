@@ -13,6 +13,7 @@ defmodule RustQ.Meta.Validate do
   def item_ast(%AST.Struct{} = item), do: ast_item(item)
   def item_ast(%AST.Enum{} = item), do: ast_item(item)
   def item_ast(%AST.TypeAlias{} = item), do: ast_item(item)
+  def item_ast(%AST.MacroRules{} = item), do: ast_item(item)
 
   def ast_item(item) do
     RustQ.parse_fragment!(:item, Render.render_item(item))
