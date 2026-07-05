@@ -67,8 +67,9 @@ defmodule RustQ.Meta.Lower do
   def callable_return_type(call_ast, opts \\ []) do
     callables = opts |> Keyword.get(:callables, []) |> BindingIndex.new()
     rust_modules = Keyword.get(opts, :rust_modules, %{})
+    vars = Keyword.get(opts, :vars, %{})
 
-    callable_return_type_from_index(call_ast, callables, rust_modules)
+    callable_return_type_from_index(call_ast, callables, rust_modules, vars)
   end
 
   defp lower_block(expressions, %Context{} = context) do
@@ -269,25 +270,33 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_wrapper_arg_expr(expression) do
-    if same_wrapper_propagation?(expression, current_return_type()) do
-      %AST.Try{expr: lower_expr(expression)}
+    context = current_context()
+
+    if same_wrapper_propagation?(expression, context.return_type, context) do
+      %AST.Try{expr: lower_expr(expression, context)}
     else
-      lower_expr(expression)
+      lower_expr(expression, context)
     end
   end
 
   defp lower_cast_operand(expression) do
-    if same_wrapper_propagation?(expression, current_return_type()) do
-      %AST.Try{expr: lower_expr(expression)}
+    context = current_context()
+
+    if same_wrapper_propagation?(expression, context.return_type, context) do
+      %AST.Try{expr: lower_expr(expression, context)}
     else
-      lower_expr(expression)
+      lower_expr(expression, context)
     end
   end
 
-  defp same_wrapper_propagation?(expression, %Type{} = return_type) do
+  defp same_wrapper_propagation?(expression, %Type{} = return_type),
+    do: same_wrapper_propagation?(expression, return_type, current_context())
+
+  defp same_wrapper_propagation?(expression, %Type{} = return_type, %Context{} = context) do
     case callable_return_type(expression,
-           callables: current_callables(),
-           rust_modules: current_rust_modules()
+           callables: context.callables,
+           rust_modules: context.rust_modules,
+           vars: context.vars
          ) do
       %Type{kind: kind} = call_type ->
         Type.propagates?(call_type) and Type.propagates?(return_type) and kind == return_type.kind
@@ -297,16 +306,19 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp same_wrapper_propagation?(_expression, _return_type), do: false
+  defp same_wrapper_propagation?(_expression, _return_type, _context), do: false
 
   defp infer_propagation?(expression, %Type{} = expected_type) do
+    context = current_context()
+
     with %Type{} <-
            callable_return_type(expression,
-             callables: current_callables(),
-             rust_modules: current_rust_modules()
+             callables: context.callables,
+             rust_modules: context.rust_modules,
+             vars: context.vars
            ),
          %Typing.Check{coercion: :propagate} <-
-           Typing.check(expression, expected_type, typing_env()) do
+           Typing.check(expression, expected_type, typing_env(context)) do
       true
     else
       _unknown_or_not_propagating -> false
@@ -841,22 +853,29 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr({:enum_variant, _, [path, variant]}), do: enum_variant_path(path, variant)
 
-  defp lower_expr({:enum_variant, _, [path, variant | args]}),
-    do: %AST.PathCall{
+  defp lower_expr({:enum_variant, _, [path, variant | args]}) do
+    context = current_context()
+
+    %AST.PathCall{
       path: enum_variant_path(path, variant),
-      args: Enum.map(args, &lower_expr/1)
+      args: Enum.map(args, &lower_expr(&1, context))
     }
-
-  defp lower_expr({:array, _, [values]}),
-    do: %AST.ArrayLiteral{values: Enum.map(values, &lower_array_value/1)}
-
-  defp lower_expr({:repeat, _, [{group, _, context}, [do: expression]]})
-       when is_atom(group) and is_atom(context) do
-    repeat_expression(group, expression)
   end
 
-  defp lower_expr({:index, _, [receiver, index]}),
-    do: %AST.Index{receiver: lower_expr(receiver), index: lower_expr(index)}
+  defp lower_expr({:array, _, [values]}) do
+    context = current_context()
+    %AST.ArrayLiteral{values: Enum.map(values, &lower_array_value(&1, context))}
+  end
+
+  defp lower_expr({:repeat, _, [{group, _, ast_context}, [do: expression]]})
+       when is_atom(group) and is_atom(ast_context) do
+    repeat_expression(group, expression, current_context())
+  end
+
+  defp lower_expr({:index, _, [receiver, index]}) do
+    context = current_context()
+    %AST.Index{receiver: lower_expr(receiver, context), index: lower_expr(index, context)}
+  end
 
   defp lower_expr({:==, _, [left, right]}),
     do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
@@ -916,14 +935,15 @@ defmodule RustQ.Meta.Lower do
        do: lower_for_reduce_expr(expression, current_context())
 
   defp lower_expr({{:., _meta, [receiver, field_or_function]}, call_meta, []}) do
+    context = current_context()
     no_parens? = Keyword.get(call_meta, :no_parens, false)
 
     cond do
       no_parens? and alias_path_ast?(receiver) ->
-        %AST.Path{parts: alias_path_parts(receiver) ++ [field_or_function]}
+        %AST.Path{parts: alias_path_parts(receiver, context.rust_modules) ++ [field_or_function]}
 
       no_parens? ->
-        %AST.Field{receiver: lower_expr(receiver), field: field_or_function}
+        %AST.Field{receiver: lower_expr(receiver, context), field: field_or_function}
 
       super_alias_ast?(receiver) ->
         %AST.PathCall{
@@ -933,12 +953,14 @@ defmodule RustQ.Meta.Lower do
 
       alias_ast?(receiver) ->
         %AST.PathCall{
-          path: %AST.Path{parts: alias_parts(receiver) ++ [field_or_function]},
+          path: %AST.Path{
+            parts: alias_parts(receiver, context.rust_modules) ++ [field_or_function]
+          },
           args: []
         }
 
       true ->
-        %AST.MethodCall{receiver: lower_expr(receiver), method: field_or_function}
+        %AST.MethodCall{receiver: lower_expr(receiver, context), method: field_or_function}
     end
   end
 
@@ -983,10 +1005,19 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp lower_expr({:__aliases__, _, parts}), do: %AST.Path{parts: mapped_alias_parts(parts)}
+  defp lower_expr({:__aliases__, _, parts}) do
+    %AST.Path{parts: mapped_alias_parts(parts, current_context().rust_modules)}
+  end
 
-  defp lower_expr({:{}, _, values}), do: %AST.Tuple{values: Enum.map(values, &lower_expr/1)}
-  defp lower_expr({left, right}), do: %AST.Tuple{values: [lower_expr(left), lower_expr(right)]}
+  defp lower_expr({:{}, _, values}) do
+    context = current_context()
+    %AST.Tuple{values: Enum.map(values, &lower_expr(&1, context))}
+  end
+
+  defp lower_expr({left, right}) do
+    context = current_context()
+    %AST.Tuple{values: [lower_expr(left, context), lower_expr(right, context)]}
+  end
 
   defp lower_expr({name, _, args}) when is_atom(name) and is_list(args) do
     context = current_context()
@@ -998,15 +1029,17 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp lower_expr({name, _, context}) when is_atom(name) and is_atom(context) do
-    case macro_var_fragment(name) do
+  defp lower_expr({name, _, ast_context}) when is_atom(name) and is_atom(ast_context) do
+    context = current_context()
+
+    case macro_var_fragment(name, context.macro_vars) do
       nil ->
         %AST.Var{name: name}
 
       :ty ->
         Diagnostic.lower(
           :macro_variable_wrong_position,
-          {name, [], context},
+          {name, [], ast_context},
           "macro variable #{name} is a Rust type fragment, but this is an expression position",
           suggestion: "Use #{name} in a type position such as decode_as(value, #{name})."
         )
@@ -1016,8 +1049,10 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp lower_expr(values) when is_list(values),
-    do: %AST.VecLiteral{values: Enum.map(values, &lower_array_value/1)}
+  defp lower_expr(values) when is_list(values) do
+    context = current_context()
+    %AST.VecLiteral{values: Enum.map(values, &lower_array_value(&1, context))}
+  end
 
   defp lower_expr(value) when is_binary(value), do: %AST.Literal{value: value}
   defp lower_expr(value) when is_integer(value) or is_float(value), do: %AST.Literal{value: value}
@@ -1085,10 +1120,6 @@ defmodule RustQ.Meta.Lower do
 
   defp path_callable_argument_types(path, function, arity, %Context{} = context) do
     path_callable_argument_types(path, function, arity, context.callables, context.rust_modules)
-  end
-
-  defp path_callable_argument_types(path, function, arity, %BindingIndex{} = callables) do
-    path_callable_argument_types(path, function, arity, callables, current_rust_modules())
   end
 
   defp path_callable_argument_types(
@@ -1374,18 +1405,20 @@ defmodule RustQ.Meta.Lower do
     Diagnostic.lower(:expected_atom_identifier, other, "expected atom identifier")
   end
 
-  defp lower_type_arg({name, _, context}) when is_atom(name) and is_atom(context) do
-    case macro_var_fragment(name) do
+  defp lower_type_arg({name, _, ast_context}) when is_atom(name) and is_atom(ast_context) do
+    context = current_context()
+
+    case macro_var_fragment(name, context.macro_vars) do
       :ty ->
         %AST.TypeRaw{source: "$#{name}"}
 
       nil ->
-        RustQ.Spec.type({name, [], context}).ast
+        RustQ.Spec.type({name, [], ast_context}).ast
 
       fragment ->
         Diagnostic.lower(
           :macro_variable_wrong_position,
-          {name, [], context},
+          {name, [], ast_context},
           "macro variable #{name} is a Rust #{fragment} fragment, but this is a type position"
         )
     end
@@ -1414,20 +1447,23 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp lower_struct_literal_path(path), do: lower_expr(path)
+  defp lower_struct_literal_path(path), do: lower_expr(path, current_context())
 
   defp enum_variant_path(path, variant) do
-    %AST.Path{parts: parts} = lower_expr(path)
+    %AST.Path{parts: parts} = lower_expr(path, current_context())
     %AST.Path{parts: parts ++ [rust_variant(semantic_atom!(variant))]}
   end
 
   defp lower_named_fields(fields) when is_list(fields) do
-    Enum.map(fields, fn {name, expression} -> {name, lower_expr(expression)} end)
+    context = current_context()
+    Enum.map(fields, fn {name, expression} -> {name, lower_expr(expression, context)} end)
   end
 
   defp lower_named_fields(fields, %Type{} = struct_type) when is_list(fields) do
+    context = current_context()
+
     Enum.map(fields, fn {name, expression} ->
-      {name, lower_expr(expression, Typing.struct_field_type(struct_type, name))}
+      {name, lower_expr(expression, Typing.struct_field_type(struct_type, name), context)}
     end)
   end
 
@@ -1473,7 +1509,7 @@ defmodule RustQ.Meta.Lower do
       end,
       path_argument_types: fn parts, function, arity ->
         path = alias_parts({:__aliases__, [], parts}, context.rust_modules) ++ [function]
-        path_callable_argument_types(path, function, arity, callables)
+        path_callable_argument_types(path, function, arity, callables, context.rust_modules)
       end,
       method_argument_types: fn target, function, arity ->
         callable_argument_types(callables, target, function, arity)
@@ -1543,14 +1579,6 @@ defmodule RustQ.Meta.Lower do
     end)
   end
 
-  defp typing_env do
-    Typing.env(
-      vars: current_vars(),
-      callables: current_callables(),
-      rust_modules: current_rust_modules()
-    )
-  end
-
   defp typing_env(%Context{} = context) do
     Typing.env(
       vars: context.vars,
@@ -1577,12 +1605,8 @@ defmodule RustQ.Meta.Lower do
 
   defp rust_variant(name), do: RustQ.Atom.identifier!(Macro.camelize(Atom.to_string(name)))
 
-  defp alias_parts(ast), do: alias_parts(ast, current_rust_modules())
-
   defp alias_parts({:__aliases__, _, parts}, rust_modules),
     do: mapped_alias_parts(parts, rust_modules)
-
-  defp alias_path_parts(ast), do: alias_path_parts(ast, current_rust_modules())
 
   defp alias_path_parts(ast, rust_modules),
     do: ast |> raw_alias_path_parts() |> mapped_alias_parts(rust_modules)
@@ -1602,8 +1626,6 @@ defmodule RustQ.Meta.Lower do
       Diagnostic.lower(:unsupported_alias_path, ast, "unsupported alias path")
     end
   end
-
-  defp mapped_alias_parts(parts), do: mapped_alias_parts(parts, current_rust_modules())
 
   defp mapped_alias_parts(parts, rust_modules) do
     parts
@@ -1642,7 +1664,8 @@ defmodule RustQ.Meta.Lower do
   defp callable_return_type_from_index(
          {name, _meta, args},
          %BindingIndex{} = callables,
-         _rust_modules
+         _rust_modules,
+         _vars
        )
        when is_atom(name) and is_list(args) do
     BindingIndex.return_type(callables, nil, name, length(args))
@@ -1651,7 +1674,8 @@ defmodule RustQ.Meta.Lower do
   defp callable_return_type_from_index(
          {{:., _, [{:__aliases__, _, parts}, function]}, _meta, args},
          %BindingIndex{} = callables,
-         rust_modules
+         rust_modules,
+         _vars
        )
        when is_atom(function) and is_list(args) do
     arity = length(args)
@@ -1662,18 +1686,19 @@ defmodule RustQ.Meta.Lower do
   defp callable_return_type_from_index(
          {{:., _, [receiver, function]}, _meta, args},
          %BindingIndex{} = callables,
-         _rust_modules
+         _rust_modules,
+         vars
        )
        when is_atom(function) and is_list(args) do
     target =
       receiver
-      |> infer_expr_type(current_vars())
+      |> infer_expr_type(vars)
       |> callable_target_from_type()
 
     BindingIndex.return_type(callables, target, function, length(args))
   end
 
-  defp callable_return_type_from_index(_call_ast, %BindingIndex{}, _rust_modules), do: nil
+  defp callable_return_type_from_index(_call_ast, %BindingIndex{}, _rust_modules, _vars), do: nil
 
   defp callable_return_type_for_path(
          parts,
@@ -1774,17 +1799,20 @@ defmodule RustQ.Meta.Lower do
   defp restore_process_value(name, nil), do: Process.delete({__MODULE__, name})
   defp restore_process_value(name, value), do: Process.put({__MODULE__, name}, value)
 
-  defp lower_array_value({:repeat, _, [{group, _, context}, [do: expression]]})
-       when is_atom(group) and is_atom(context) do
-    repeat_expression(group, expression)
+  defp lower_array_value(
+         {:repeat, _, [{group, _, ast_context}, [do: expression]]},
+         %Context{} = context
+       )
+       when is_atom(group) and is_atom(ast_context) do
+    repeat_expression(group, expression, context)
   end
 
-  defp lower_array_value(value), do: lower_expr(value)
+  defp lower_array_value(value, %Context{} = context), do: lower_expr(value, context)
 
-  defp repeat_expression(_group, expression) do
+  defp repeat_expression(_group, expression, %Context{} = context) do
     rendered =
       expression
-      |> lower_expr()
+      |> lower_expr(context)
       |> Render.render_expr()
       |> IO.iodata_to_binary()
       |> clean_macro_metavariable_spacing()
@@ -1815,6 +1843,5 @@ defmodule RustQ.Meta.Lower do
   defp current_return_type, do: Process.get({__MODULE__, :return_type})
   defp current_macro_vars, do: Process.get({__MODULE__, :macro_vars}, %{})
   defp current_rust_macros, do: Process.get({__MODULE__, :rust_macros}, %{})
-  defp macro_var_fragment(name), do: macro_var_fragment(name, current_macro_vars())
   defp macro_var_fragment(name, macro_vars), do: Map.get(macro_vars, name)
 end
