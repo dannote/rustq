@@ -554,10 +554,7 @@ defmodule RustQ.Meta.RustMacro do
       Enum.zip(arg_names, arg_types)
       |> Enum.map_join(", ", fn {arg_name, type} -> "$#{arg_name}: #{render_type(type)}" end)
 
-    rendered_body =
-      body
-      |> Enum.map_join("\n", &render_macro_item_stmt/1)
-      |> clean_macro_metavariable_spacing()
+    rendered_body = Enum.map_join(body, "\n", &render_macro_item_stmt/1)
 
     lifetime = if Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: "<'a>", else: ""
 
@@ -600,17 +597,9 @@ defmodule RustQ.Meta.RustMacro do
     pattern = Enum.map_join(args, ", ", fn {arg_name, fragment} -> "$#{arg_name}:#{fragment}" end)
 
     rendered_body =
-      body
-      |> Enum.map_join("\n", &(Render.render_stmt(&1) |> IO.iodata_to_binary()))
-      |> clean_macro_metavariable_spacing()
+      Enum.map_join(body, "\n", &(Render.render_stmt(&1) |> IO.iodata_to_binary()))
 
     "macro_rules! #{name} {\n    (#{pattern}) => {{\n#{indent(rendered_body)}\n    }};\n}"
-  end
-
-  defp clean_macro_metavariable_spacing(source) do
-    source
-    |> String.replace(~r/\$([a-zA-Z_][a-zA-Z0-9_]*)\s+/, ~S|$\1|)
-    |> String.replace(" ?", "?")
   end
 
   defp indent(source) do

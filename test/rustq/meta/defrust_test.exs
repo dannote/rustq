@@ -163,7 +163,7 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "fn $name() -> NifResult<()>"
 
     assert source =~
-             "build_fields(&[$(Field { id: $field_id, name: $field_name, repeated: repeated!($field_mode), decode: $field_decode},)*])"
+             "build_fields(&[$(Field { id: $field_id, name: $field_name, repeated: repeated!($field_mode), decode: $field_decode },)*])"
 
     assert RustQ.valid?(source, "defrustmacro_item.rs")
   end

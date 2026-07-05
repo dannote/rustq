@@ -10,7 +10,7 @@ macro_rules! descriptor {
         (fn $name:ident;
         fields [$($field_id:literal => $field_name:literal: $field_mode:ident $field_decode:ident;)*]) => {
                 fn $name() -> NifResult<()> {
-                        build_fields(&[$(Field { id: $field_id, name: $field_name, repeated: repeated!($field_mode), decode: $field_decode},)*])
+                        build_fields(&[$(Field { id: $field_id, name: $field_name, repeated: repeated!($field_mode), decode: $field_decode },)*])
                 }
         };
 }
