@@ -158,6 +158,14 @@ defmodule RustQ.Codegen.Decoders.Expr do
     Super.parse_array_expr(values)
   end
 
+  @spec decode_expr_macro_repeat_expr(term()) :: R.nif_result(R.path(:Expr))
+  defrust decode_expr_macro_repeat_expr(term) do
+    expr = unwrap!(required_expr(term, "expr"))
+    separator = unwrap!(Super.string_field(term, "separator"))
+    operator = unwrap!(Super.string_field(term, "operator"))
+    Super.parse_macro_repeat_expr(expr, separator, operator)
+  end
+
   @spec decode_expr_closure(term()) :: R.nif_result(R.path(:Expr))
   defrust decode_expr_closure(term) do
     args = unwrap!(Super.decode_ident_list(unwrap!(required_field(term, "args"))))

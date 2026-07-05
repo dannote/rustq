@@ -52,6 +52,15 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ ~s|"Elixir.RustQ.Native"|
   end
 
+  test "Elixir renderer renders macro repeat expressions structurally" do
+    source =
+      %AST.MacroRepeatExpr{expr: A.var(:value), separator: ",", operator: "*"}
+      |> Render.render_expr()
+      |> IO.iodata_to_binary()
+
+    assert source == "$(value,)*"
+  end
+
   test "native decoder renders token-shaped macro item calls" do
     source =
       Native.render_ast(

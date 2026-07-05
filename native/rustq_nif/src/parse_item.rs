@@ -1,6 +1,6 @@
 use quote::{format_ident, quote, ToTokens};
 use rustler::{NifResult, Term};
-use syn::{Expr, Field, FnArg, Item, Stmt, Type};
+use syn::{punctuated::Punctuated, token, Expr, Field, FnArg, Item, Stmt, Type};
 
 use crate::{parse_syn, path_from_parts};
 
@@ -235,16 +235,37 @@ pub(crate) fn parse_item_function_args(
     stmts: Vec<Stmt>,
     attrs: Vec<syn::Attribute>,
 ) -> NifResult<syn::ItemFn> {
-    let inputs = args;
-    let block = parse_syn::<syn::Block>(quote!({ #(#stmts)* }))?;
+    let mut generics = syn::Generics::default();
 
     if let Some(lifetime) = lifetime {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        parse_syn(quote!(#(#attrs)* #vis fn #name <#lifetime> (#(#inputs),*) -> #returns #block))
-    } else {
-        parse_syn(quote!(#(#attrs)* #vis fn #name (#(#inputs),*) -> #returns #block))
+        generics.params.push(syn::GenericParam::Lifetime(
+            syn::LifetimeParam::new(lifetime),
+        ));
     }
+
+    Ok(syn::ItemFn {
+        attrs,
+        vis,
+        sig: syn::Signature {
+            constness: None,
+            asyncness: None,
+            unsafety: None,
+            abi: None,
+            fn_token: token::Fn::default(),
+            ident: name,
+            generics,
+            paren_token: token::Paren::default(),
+            inputs: Punctuated::from_iter(args),
+            variadic: None,
+            output: syn::ReturnType::Type(token::RArrow::default(), Box::new(returns)),
+        },
+        block: Box::new(syn::Block {
+            brace_token: token::Brace::default(),
+            stmts,
+        }),
+    })
 }
 
 pub(crate) fn parse_item_struct(

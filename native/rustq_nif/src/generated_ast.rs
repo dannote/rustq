@@ -68,6 +68,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TUPLE: &str = "Elixir.RustQ.Rust.AST.Tuple";
     pub(crate) const VEC_LITERAL: &str = "Elixir.RustQ.Rust.AST.VecLiteral";
     pub(crate) const ARRAY_LITERAL: &str = "Elixir.RustQ.Rust.AST.ArrayLiteral";
+    pub(crate) const MACRO_REPEAT_EXPR: &str = "Elixir.RustQ.Rust.AST.MacroRepeatExpr";
     pub(crate) const CLOSURE: &str = "Elixir.RustQ.Rust.AST.Closure";
     pub(crate) const LITERAL: &str = "Elixir.RustQ.Rust.AST.Literal";
     pub(crate) const BYTE_STRING: &str = "Elixir.RustQ.Rust.AST.ByteString";
@@ -288,6 +289,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::TUPLE => decode_expr_tuple(term),
         ast_modules::VEC_LITERAL => decode_expr_vec_literal(term),
         ast_modules::ARRAY_LITERAL => decode_expr_array_literal(term),
+        ast_modules::MACRO_REPEAT_EXPR => decode_expr_macro_repeat_expr(term),
         ast_modules::CLOSURE => decode_expr_closure(term),
         ast_modules::LITERAL => decode_expr_literal(term),
         ast_modules::BYTE_STRING => decode_expr_byte_string(term),
@@ -794,6 +796,13 @@ pub(crate) fn decode_expr_vec_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
 pub(crate) fn decode_expr_array_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
     let values = required_expr_list(term, "values")?;
     super::parse_array_expr(values)
+}
+
+pub(crate) fn decode_expr_macro_repeat_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
+    let expr = required_expr(term, "expr")?;
+    let separator = super::string_field(term, "separator")?;
+    let operator = super::string_field(term, "operator")?;
+    super::parse_macro_repeat_expr(expr, separator, operator)
 }
 
 pub(crate) fn decode_expr_closure<'a>(term: Term<'a>) -> NifResult<Expr> {

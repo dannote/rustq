@@ -1828,20 +1828,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_array_value(value, %Context{} = context), do: lower_expr(value, context)
 
   defp repeat_expression(_group, expression, %Context{} = context) do
-    rendered =
-      expression
-      |> lower_expr(context)
-      |> Render.render_expr()
-      |> IO.iodata_to_binary()
-      |> clean_macro_metavariable_spacing()
-
-    %AST.EscapeExpr{source: "$(#{rendered},)*"}
-  end
-
-  defp clean_macro_metavariable_spacing(source) do
-    source
-    |> String.replace(~r/\$([a-zA-Z_][a-zA-Z0-9_]*)\s+/, ~S|$\1|)
-    |> String.replace(" ?", "?")
+    %AST.MacroRepeatExpr{expr: lower_expr(expression, context), separator: ",", operator: "*"}
   end
 
   defp macro_var_fragment(name, macro_vars), do: Map.get(macro_vars, name)

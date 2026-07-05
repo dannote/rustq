@@ -103,6 +103,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:tuple), do: "(1, 2)"
   defp semantic_fragment(:vec_literal), do: "vec![1, 2]"
   defp semantic_fragment(:array_literal), do: "[1, 2]"
+  defp semantic_fragment(:macro_repeat_expr), do: ~s|macro_repeat!(value, ",", "*")|
   defp semantic_fragment(:closure), do: "|value| value"
   defp semantic_fragment(:literal), do: "1"
   defp semantic_fragment(:byte_string), do: ~s|b"ref"|
@@ -382,6 +383,12 @@ defmodule RustQ.ASTSamples do
 
   def sample_for(:array_literal),
     do: function_sample(:array_literal_sample, A.array([A.lit(1), A.lit(2)]), returns: "[i64; 2]")
+
+  def sample_for(:macro_repeat_expr),
+    do:
+      function_sample(:macro_repeat_expr_sample, %AST.MacroRepeatExpr{expr: A.var(:value)},
+        returns: "TokenStream"
+      )
 
   def sample_for(:closure),
     do:

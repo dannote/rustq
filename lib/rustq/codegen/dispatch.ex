@@ -258,6 +258,7 @@ defmodule RustQ.Codegen.Dispatch do
               :tuple,
               :vec_literal,
               :array_literal,
+              :macro_repeat_expr,
               :closure,
               :literal,
               :byte_string,

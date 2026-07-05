@@ -147,6 +147,7 @@ defmodule RustQ.Rust.AST do
           | Tuple.t()
           | VecLiteral.t()
           | ArrayLiteral.t()
+          | MacroRepeatExpr.t()
           | Closure.t()
           | Literal.t()
           | ByteString.t()
@@ -571,6 +572,10 @@ defmodule RustQ.Rust.AST do
 
   defnode(ArrayLiteral, :expr, [:values], type: quote(do: %__MODULE__{values: [AST.expr()]}))
 
+  defnode(MacroRepeatExpr, :expr, [:expr, separator: ",", operator: "*"],
+    type: quote(do: %__MODULE__{expr: AST.expr(), separator: String.t(), operator: String.t()})
+  )
+
   defnode(Closure, :expr, [:args, :body],
     type: quote(do: %__MODULE__{args: [atom()], body: AST.expr()})
   )
@@ -741,6 +746,7 @@ defmodule RustQ.Rust.AST do
       Tuple,
       VecLiteral,
       ArrayLiteral,
+      MacroRepeatExpr,
       Closure,
       Literal,
       ByteString,

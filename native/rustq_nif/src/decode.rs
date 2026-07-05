@@ -543,6 +543,16 @@ pub(crate) fn parse_array_expr(values: Vec<Expr>) -> NifResult<Expr> {
     parse_syn::<Expr>(quote!([#(#values),*]))
 }
 
+pub(crate) fn parse_macro_repeat_expr(
+    expr: Expr,
+    separator: String,
+    operator: String,
+) -> NifResult<Expr> {
+    let separator = proc_macro2::Literal::string(&separator);
+    let operator = proc_macro2::Literal::string(&operator);
+    parse_syn::<Expr>(quote!(macro_repeat!(#expr, #separator, #operator)))
+}
+
 pub(crate) fn parse_local_call(name: String, args: Vec<Expr>) -> NifResult<Expr> {
     if name.ends_with('!') {
         return Err(rustler::Error::BadArg);

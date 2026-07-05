@@ -26,6 +26,7 @@ defmodule RustQ.Rust.AST.Render do
     EnumVariant,
     Err,
     EscapeExpr,
+    MacroRepeatExpr,
     ExprStmt,
     Field,
     For,
@@ -572,6 +573,10 @@ defmodule RustQ.Rust.AST.Render do
   def render_expr(%Tuple{values: values}), do: ["(", render_args(values), ")"]
   def render_expr(%VecLiteral{values: values}), do: ["vec![", render_args(values), "]"]
   def render_expr(%ArrayLiteral{values: values}), do: ["[", render_args(values), "]"]
+
+  def render_expr(%MacroRepeatExpr{expr: expr, separator: separator, operator: operator}) do
+    ["$(", render_expr(expr), separator, ")", operator]
+  end
 
   def render_expr(%Closure{args: args, body: body}) do
     ["|", Elixir.Enum.map_join(args, ", ", &to_string/1), "| ", render_expr(body)]
