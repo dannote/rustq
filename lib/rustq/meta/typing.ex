@@ -103,7 +103,12 @@ defmodule RustQ.Meta.Typing do
   end
 
   def infer_downstream_let_types(expressions, %Env{} = env, callbacks) when is_map(callbacks) do
-    Inference.infer_downstream_let_types(expressions, env.vars, callbacks)
+    inferred = Inference.infer_downstream_let_types(expressions, env.vars, callbacks)
+    rhs_types = let_rhs_types(expressions, env)
+
+    Map.new(inferred, fn {name, type} ->
+      {name, inferred_binding_type(type, Map.get(rhs_types, name))}
+    end)
   end
 
   defp synth_method_call({{:., _, [receiver, function]}, _meta, args}, %Env{} = env)
@@ -132,6 +137,33 @@ defmodule RustQ.Meta.Typing do
       _no_tuple_match -> nil
     end
   end
+
+  defp inferred_binding_type(%Type{} = inferred, %Type{} = rhs) do
+    if propagated_rhs_for_inferred_binding?(rhs, inferred), do: inferred, else: rhs
+  end
+
+  defp inferred_binding_type(inferred, _rhs), do: inferred
+
+  defp propagated_rhs_for_inferred_binding?(%Type{} = rhs, %Type{} = inferred) do
+    Type.propagates?(rhs) and
+      (not Type.propagates?(inferred) or Type.compatible_with_expected?(Type.inner(rhs), inferred))
+  end
+
+  defp let_rhs_types(expressions, %Env{} = env) do
+    expressions
+    |> Enum.flat_map(&let_rhs_type(&1, env))
+    |> Map.new()
+  end
+
+  defp let_rhs_type({:=, _meta, [{name, _pattern_meta, context}, expression]}, %Env{} = env)
+       when is_atom(name) and is_atom(context) do
+    case synth(expression, env) do
+      %Type{} = type -> [{name, type}]
+      nil -> []
+    end
+  end
+
+  defp let_rhs_type(_expression, _env), do: []
 
   defp coercion(%Type{} = actual, %Type{} = expected) do
     cond do

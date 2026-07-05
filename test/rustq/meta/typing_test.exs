@@ -116,6 +116,47 @@ defmodule RustQ.Meta.TypingTest do
     assert Typing.struct_field_type(point, :missing) == nil
   end
 
+  test "downstream let inference stores value types for borrowed call arguments" do
+    value = type(:u32, "u32")
+
+    ref_value = %Type{
+      kind: :mut_ref,
+      rust: "&mut u32",
+      ast: %AST.TypeRef{inner: value.ast, mutable: true},
+      meta: %{inner: value}
+    }
+
+    env =
+      Typing.env(
+        vars: %{value: value},
+        callables: [
+          %Callable{
+            name: "touch",
+            kind: :function,
+            args: [%{name: "value", type: ref_value}],
+            returns: nil
+          }
+        ]
+      )
+
+    inferred =
+      Typing.infer_downstream_let_types(
+        [
+          quote(do: local = value),
+          quote(do: touch(local))
+        ],
+        env,
+        %{
+          local_argument_types: fn
+            :touch, 1 -> [ref_value]
+            _name, _arity -> nil
+          end
+        }
+      )
+
+    assert inferred == %{local: value}
+  end
+
   test "delegates downstream let inference through explicit env" do
     mode = type(:type, "Mode")
 

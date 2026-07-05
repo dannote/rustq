@@ -1,5 +1,5 @@
 defmodule RustQ.Corpus.Mutation.MutRef do
-  @moduledoc "mut_ref marks local bindings mutable."
+  @moduledoc "auto-borrowed mutable arguments mark local bindings mutable."
 
   use RustQ.Meta
 
@@ -13,7 +13,7 @@ defmodule RustQ.Corpus.Mutation.MutRef do
   @spec run(R.u32()) :: R.unit()
   defrust run(value) do
     local = value
-    touch(mut_ref(local))
+    touch(local)
     :ok
   end
 end
