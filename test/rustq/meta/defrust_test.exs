@@ -1233,6 +1233,76 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "auto_borrow_struct_field.rs")
   end
 
+  test "defrust checks with bodies against expected call argument type" do
+    defmodule AutoBorrowWithBodyCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec maybe_color(R.bool(), R.raw(:Color)) :: R.nif_result(R.raw(:Color))
+      defrust maybe_color(flag, color) do
+        if flag do
+          {:ok, color}
+        else
+          {:error, badarg()}
+        end
+      end
+
+      @spec use_color(R.ref(R.raw(:Color))) :: R.nif_result(R.unit())
+      defrust(use_color(_color), do: :ok)
+
+      @spec run(R.raw(:Color), R.bool()) :: R.nif_result(R.unit())
+      defrust run(color, flag) do
+        use_color(
+          with {:ok, value} <- maybe_color(flag, color) do
+            value
+          else
+            _reason -> color
+          end
+        )
+
+        :ok
+      end
+    end
+
+    source = AutoBorrowWithBodyCase.__rustq_source__()
+
+    assert source =~ "Ok(value) => &value"
+    assert source =~ "_reason => &color"
+    assert RustQ.valid?(source, "auto_borrow_with_body.rs")
+  end
+
+  test "defrust checks for reduce arms against expected accumulator type" do
+    defmodule AutoBorrowForReduceCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec use_color(R.ref(R.raw(:Color))) :: R.nif_result(R.unit())
+      defrust(use_color(_color), do: :ok)
+
+      @spec run(R.raw(:Color), R.vec(R.bool())) :: R.nif_result(R.unit())
+      defrust run(color, flags) do
+        use_color(
+          for flag <- flags, reduce: color do
+            acc ->
+              if flag do
+                acc
+              else
+                acc
+              end
+          end
+        )
+
+        :ok
+      end
+    end
+
+    source = AutoBorrowForReduceCase.__rustq_source__()
+
+    assert source =~ "let mut __rustq_reduce = &color;"
+    assert source =~ "if flag { acc } else { acc }"
+    assert RustQ.valid?(source, "auto_borrow_for_reduce.rs")
+  end
+
   test "defrust checks if branches against expected call argument type" do
     defmodule AutoBorrowIfBranchCase do
       use RustQ.Meta

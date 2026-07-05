@@ -285,6 +285,13 @@ defmodule RustQ.Meta.Lower do
        ),
        do: lower_if(condition, branches, %{context | position: :expr}, expected_type)
 
+  defp lower_expected_expr_context(
+         {:with, _, clauses},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_with(clauses, %{context | position: :expr}, expected_type)
+
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
     lower_checked_expr(expression, expected_type, context)
   end
@@ -645,21 +652,21 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
-  defp lower_with(clauses, %Context{} = context) do
+  defp lower_with(clauses, %Context{} = context, expected_type \\ nil) do
     {matches, body_opts} = Enum.split_while(clauses, &match?({:<-, _, _}, &1))
     body_opts = unwrap_with_body_opts(body_opts)
     body = Keyword.fetch!(body_opts, :do)
     else_clauses = Keyword.get(body_opts, :else, [])
 
-    lower_with_matches(matches, body, else_clauses, context)
+    lower_with_matches(matches, body, else_clauses, context, expected_type)
   end
 
   defp unwrap_with_body_opts([opts]) when is_list(opts), do: opts
   defp unwrap_with_body_opts(opts), do: opts
 
-  defp lower_with_matches([], body, _else_clauses, %Context{} = context) do
+  defp lower_with_matches([], body, _else_clauses, %Context{} = context, expected_type) do
     body
-    |> lower_clause_body(%{context | position: :return})
+    |> lower_clause_body(%{context | position: :return}, expected_type)
     |> block_expr()
   end
 
@@ -667,9 +674,19 @@ defmodule RustQ.Meta.Lower do
          [{:<-, _, [pattern, expression]} | rest],
          body,
          else_clauses,
-         %Context{} = context
+         %Context{} = context,
+         expected_type
        ) do
     with_value = :__rustq_with_value
+
+    match_type =
+      callable_return_type(expression,
+        callables: context.callables,
+        rust_modules: context.rust_modules,
+        vars: context.vars
+      )
+
+    body_context = context_with_match_pattern(pattern, match_type, context)
 
     %AST.Match{
       expr: lower_expr(expression, context),
@@ -677,27 +694,31 @@ defmodule RustQ.Meta.Lower do
         %AST.Arm{
           pattern: lower_match_pattern(pattern, nil),
           body: [
-            %AST.Return{expr: lower_with_matches(rest, body, else_clauses, context)}
+            %AST.Return{
+              expr: lower_with_matches(rest, body, else_clauses, body_context, expected_type)
+            }
           ]
         },
         %AST.Arm{
           pattern: %AST.PatVar{name: with_value},
-          body: [%AST.Return{expr: lower_with_else(with_value, else_clauses, context)}]
+          body: [
+            %AST.Return{expr: lower_with_else(with_value, else_clauses, context, expected_type)}
+          ]
         }
       ]
     }
   end
 
-  defp lower_with_else(value_name, [], _context), do: %AST.Var{name: value_name}
+  defp lower_with_else(value_name, [], _context, _expected_type), do: %AST.Var{name: value_name}
 
-  defp lower_with_else(value_name, else_clauses, %Context{} = context) do
+  defp lower_with_else(value_name, else_clauses, %Context{} = context, expected_type) do
     %AST.Match{
       expr: %AST.Var{name: value_name},
       arms:
         Enum.map(else_clauses, fn {:->, _, [[pattern], body]} ->
           %AST.Arm{
             pattern: lower_match_pattern(pattern, nil),
-            body: lower_clause_body(body, %{context | position: :return})
+            body: lower_clause_body(body, %{context | position: :return}, expected_type)
           }
         end)
     }
@@ -794,7 +815,7 @@ defmodule RustQ.Meta.Lower do
         %AST.Let{
           pattern: %AST.PatVar{name: acc},
           mutable: true,
-          expr: lower_return_expr(initial, acc_type, context)
+          expr: lower_reduce_initial(initial, acc_type, context)
         },
         %AST.For{
           pattern: lower_binding_pattern(pattern),
@@ -823,6 +844,14 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
+  defp lower_reduce_initial(initial, %Type{} = acc_type, %Context{} = context) do
+    if Type.propagates?(acc_type) do
+      lower_return_expr(initial, acc_type, context)
+    else
+      lower_expr(initial, acc_type, context)
+    end
+  end
+
   defp reduce_acc_type(:ok, %Type{kind: :nif_result}) do
     unit = %Type{kind: :unit, rust: "()", ast: %AST.TypeUnit{}}
 
@@ -840,9 +869,16 @@ defmodule RustQ.Meta.Lower do
     carry = :__rustq_reduce_value
 
     Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
+      body_context = context_with_match_pattern(pattern, return_type, context)
+
       %AST.Arm{
         pattern: lower_match_pattern(pattern, return_type),
-        body: lower_clause_body(body, %{context | position: :return, return_type: return_type})
+        body:
+          lower_clause_body(
+            body,
+            %{body_context | position: :return, return_type: return_type},
+            return_type
+          )
       }
     end) ++
       [
@@ -884,6 +920,16 @@ defmodule RustQ.Meta.Lower do
     body
     |> block_expressions()
     |> lower_expected_block(%{context | return_type: expected_type}, expected_type)
+  end
+
+  defp lower_clause_body(body, %Context{position: :return} = context, %Type{} = expected_type) do
+    if Type.propagates?(expected_type) do
+      lower_clause_body(body, context)
+    else
+      body
+      |> block_expressions()
+      |> lower_expected_block(%{context | return_type: expected_type}, expected_type)
+    end
   end
 
   defp lower_clause_body(body, %Context{} = context, _expected_type),
@@ -930,24 +976,51 @@ defmodule RustQ.Meta.Lower do
   defp split_guarded_pattern(pattern), do: {pattern, nil}
 
   defp context_with_match_pattern(pattern, %Type{kind: :option} = type, %Context{} = context) do
-    case {pattern, Type.inner(type)} do
-      {{name, _meta, ast_context}, %Type{} = inner} when is_atom(name) and is_atom(ast_context) ->
+    context_with_inner_pattern(pattern, Type.inner(type), [:some], context)
+  end
+
+  defp context_with_match_pattern(pattern, %Type{kind: kind} = type, %Context{} = context)
+       when kind in [:result, :nif_result] do
+    context_with_inner_pattern(pattern, Type.inner(type), [:ok], context)
+  end
+
+  defp context_with_match_pattern(
+         {name, _meta, ast_context},
+         %Type{} = type,
+         %Context{} = context
+       )
+       when is_atom(name) and is_atom(ast_context) do
+    %{context | vars: Map.put(context.vars, name, type)}
+  end
+
+  defp context_with_match_pattern(_pattern, _type, %Context{} = context), do: context
+
+  defp context_with_inner_pattern(pattern, %Type{} = inner, wrappers, %Context{} = context) do
+    case pattern do
+      {name, _meta, ast_context} when is_atom(name) and is_atom(ast_context) ->
         %{context | vars: Map.put(context.vars, name, inner)}
 
-      {{:some, {name, _meta, ast_context}}, %Type{} = inner}
-      when is_atom(name) and is_atom(ast_context) ->
-        %{context | vars: Map.put(context.vars, name, inner)}
+      {wrapper, {name, _meta, ast_context}} when is_atom(name) and is_atom(ast_context) ->
+        if wrapper in wrappers do
+          %{context | vars: Map.put(context.vars, name, inner)}
+        else
+          context
+        end
 
-      {{:{}, _, [:some, {name, _meta, ast_context}]}, %Type{} = inner}
+      {:{}, _, [wrapper, {name, _meta, ast_context}]}
       when is_atom(name) and is_atom(ast_context) ->
-        %{context | vars: Map.put(context.vars, name, inner)}
+        if wrapper in wrappers do
+          %{context | vars: Map.put(context.vars, name, inner)}
+        else
+          context
+        end
 
       _other ->
         context
     end
   end
 
-  defp context_with_match_pattern(_pattern, _type, %Context{} = context), do: context
+  defp context_with_inner_pattern(_pattern, _inner, _wrappers, %Context{} = context), do: context
 
   defp lower_guard_expr(nil, %Context{}), do: nil
   defp lower_guard_expr(guard, %Context{} = context), do: lower_expr(guard, context)
