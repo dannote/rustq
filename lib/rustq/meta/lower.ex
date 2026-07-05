@@ -167,83 +167,109 @@ defmodule RustQ.Meta.Lower do
            expression,
          %Context{} = context
        ) do
-    %AST.Return{expr: lower_for_reduce_expr(expression, context.return_type)}
+    %AST.Return{expr: lower_for_reduce_expr(expression, context)}
   end
 
   defp lower_return(expression, %Context{return_type: return_type} = context),
     do: %AST.Return{expr: lower_return_expr(expression, return_type, context)}
 
-  defp lower_return_expr(expression, return_type, %Context{} = context) do
-    with_lowering_context(context, fn -> lower_return_expr(expression, return_type) end)
-  end
+  defp lower_return_expr(expression, return_type, %Context{} = context),
+    do: lower_return_expr_context(expression, return_type, context)
 
-  defp lower_return_expr(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}), do: %AST.Ok{}
-  defp lower_return_expr(:ok, _return_type), do: %AST.Tuple{values: []}
-  defp lower_return_expr(nil, %Type{kind: :option}), do: %AST.None{}
+  defp lower_return_expr_context(
+         :ok,
+         %Type{kind: :nif_result, rust: "NifResult<()>"},
+         %Context{}
+       ),
+       do: %AST.Ok{}
 
-  defp lower_return_expr({:ok, value}, %Type{kind: kind} = return_type)
+  defp lower_return_expr_context(:ok, _return_type, %Context{}), do: %AST.Tuple{values: []}
+  defp lower_return_expr_context(nil, %Type{kind: :option}, %Context{}), do: %AST.None{}
+
+  defp lower_return_expr_context(
+         {:ok, value},
+         %Type{kind: kind} = return_type,
+         %Context{} = context
+       )
        when kind in [:result, :nif_result],
-       do: %AST.Ok{expr: lower_expr(value, Type.inner(return_type) || return_type)}
+       do: %AST.Ok{expr: lower_expr(value, Type.inner(return_type) || return_type, context)}
 
-  defp lower_return_expr({:error, value}, %Type{kind: :nif_result}),
-    do: %AST.Err{expr: lower_nif_error(value)}
+  defp lower_return_expr_context({:error, value}, %Type{kind: :nif_result}, %Context{} = context),
+    do: %AST.Err{expr: lower_nif_error(value, context)}
 
-  defp lower_return_expr({:error, value}, %Type{kind: :result}),
-    do: %AST.Err{expr: lower_expr(value)}
+  defp lower_return_expr_context({:error, value}, %Type{kind: :result}, %Context{} = context),
+    do: %AST.Err{expr: lower_expr(value, context)}
 
-  defp lower_return_expr(expression, %Type{kind: :option} = return_type) do
-    if infer_propagation?(expression, return_type) do
-      %AST.Try{expr: lower_expr(expression)}
+  defp lower_return_expr_context(
+         expression,
+         %Type{kind: :option} = return_type,
+         %Context{} = context
+       ) do
+    if infer_propagation?(expression, return_type, context) do
+      %AST.Try{expr: lower_expr(expression, context)}
     else
-      %AST.Some{expr: lower_expr(expression)}
+      %AST.Some{expr: lower_expr(expression, context)}
     end
   end
 
-  defp lower_return_expr(expression, %Type{} = return_type) do
-    if infer_propagation?(expression, return_type) do
-      %AST.Try{expr: lower_expr(expression)}
+  defp lower_return_expr_context(expression, %Type{} = return_type, %Context{} = context) do
+    if infer_propagation?(expression, return_type, context) do
+      %AST.Try{expr: lower_expr(expression, context)}
     else
-      lower_expr(expression)
+      lower_expr(expression, context)
     end
   end
 
-  defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
+  defp lower_return_expr_context(expression, _return_type, %Context{} = context),
+    do: lower_expr(expression, context)
 
   defp lower_expr(expression, %Context{} = context), do: lower_expr_context(expression, context)
 
-  defp lower_expr({:ref, _, [expression]}, %Type{} = expected_type) do
+  defp lower_expr(expression, expected_type),
+    do: lower_expected_expr_context(expression, expected_type, current_context())
+
+  defp lower_expr(expression, expected_type, %Context{} = context),
+    do: lower_expected_expr_context(expression, expected_type, context)
+
+  defp lower_expected_expr_context(
+         {:ref, _, [expression]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ) do
     expected_inner = Type.ref_inner(Type.expected_value(expected_type))
-    %AST.Ref{expr: lower_expr(expression, expected_inner || expected_type)}
+    %AST.Ref{expr: lower_expr(expression, expected_inner || expected_type, context)}
   end
 
-  defp lower_expr(
+  defp lower_expected_expr_context(
          {:for, _, [{:<-, _, [_pattern, _expression]}, [reduce: _initial], [do: _clauses]]} =
            expression,
-         %Type{} = expected_type
+         %Type{} = expected_type,
+         %Context{} = context
        ) do
-    lower_for_reduce_expr(expression, expected_type)
+    lower_for_reduce_expr(expression, expected_type, context)
   end
 
-  defp lower_expr({:struct_literal, _, [path, fields]}, %Type{} = expected_type) do
+  defp lower_expected_expr_context(
+         {:struct_literal, _, [path, fields]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ) do
     %AST.StructLiteral{
-      path: lower_struct_literal_path(path),
-      fields: lower_named_fields(fields, expected_type)
+      path: lower_struct_literal_path(path, context),
+      fields: lower_named_fields(fields, expected_type, context)
     }
   end
 
-  defp lower_expr(expression, %Type{} = expected_type) do
-    if infer_propagation?(expression, expected_type) do
-      %AST.Try{expr: lower_expr(expression)}
+  defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
+    if infer_propagation?(expression, expected_type, context) do
+      %AST.Try{expr: lower_expr(expression, context)}
     else
-      lower_expr(expression)
+      lower_expr(expression, context)
     end
   end
 
-  defp lower_expr(expression, _expected_type), do: lower_expr(expression)
-
-  defp lower_expr(expression, expected_type, %Context{} = context) do
-    with_lowering_context(context, fn -> lower_expr(expression, expected_type) end)
-  end
+  defp lower_expected_expr_context(expression, _expected_type, %Context{} = context),
+    do: lower_expr(expression, context)
 
   defp lower_expr_context({:unwrap!, _, [expression]}, %Context{} = context),
     do: %AST.Try{expr: lower_expr(expression, context)}
@@ -533,9 +559,7 @@ defmodule RustQ.Meta.Lower do
 
   defp same_wrapper_propagation?(_expression, _return_type, _context), do: false
 
-  defp infer_propagation?(expression, %Type{} = expected_type) do
-    context = current_context()
-
+  defp infer_propagation?(expression, %Type{} = expected_type, %Context{} = context) do
     with %Type{} <-
            callable_return_type(expression,
              callables: context.callables,
@@ -722,13 +746,6 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_for_reduce_expr(expression, %Context{return_type: %Type{} = return_type} = context),
     do: lower_for_reduce_expr(expression, return_type, context)
-
-  defp lower_for_reduce_expr(expression, %Type{} = return_type),
-    do:
-      lower_for_reduce_expr(expression, return_type, %{
-        current_context()
-        | return_type: return_type
-      })
 
   defp lower_for_reduce_expr(
          {:for, _, [{:<-, _, [pattern, expression]}, [reduce: initial], [do: clauses]]},
@@ -1096,8 +1113,6 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp lower_expr(expression), do: lower_expr(expression, current_context())
-
   defp lower_path_call_args(path, function, args, %Context{} = context) do
     path
     |> path_callable_argument_types(function, length(args), context)
@@ -1378,8 +1393,6 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
-  defp lower_nif_error(other), do: lower_nif_error(other, current_context())
   defp lower_nif_error(atom, %Context{}) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
   defp lower_nif_error(other, %Context{} = context), do: lower_expr(other, context)
 
@@ -1493,21 +1506,23 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp lower_struct_literal_path(path), do: lower_expr(path, current_context())
+  defp lower_struct_literal_path(path), do: lower_struct_literal_path(path, current_context())
+  defp lower_struct_literal_path(path, %Context{} = context), do: lower_expr(path, context)
 
   defp enum_variant_path(path, variant) do
     %AST.Path{parts: parts} = lower_expr(path, current_context())
     %AST.Path{parts: parts ++ [rust_variant(semantic_atom!(variant))]}
   end
 
-  defp lower_named_fields(fields) when is_list(fields) do
-    context = current_context()
+  defp lower_named_fields(fields) when is_list(fields),
+    do: lower_named_fields(fields, current_context())
+
+  defp lower_named_fields(fields, %Context{} = context) when is_list(fields) do
     Enum.map(fields, fn {name, expression} -> {name, lower_expr(expression, context)} end)
   end
 
-  defp lower_named_fields(fields, %Type{} = struct_type) when is_list(fields) do
-    context = current_context()
-
+  defp lower_named_fields(fields, %Type{} = struct_type, %Context{} = context)
+       when is_list(fields) do
     Enum.map(fields, fn {name, expression} ->
       {name, lower_expr(expression, Typing.struct_field_type(struct_type, name), context)}
     end)
