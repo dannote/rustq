@@ -33,7 +33,8 @@ Preferred order:
    - Keep growing the AST vocabulary rather than accumulating ad hoc string templates.
 
 4. **Use semantic Rusty-Elixir helpers before raw strings**
-   - Compose repeated Rusty-Elixir bodies with ordinary Elixir `defmacro`, `quote`, and `unquote`; do not invent RustQ-specific quoting unless normal Elixir macros are insufficient.
+   - Compose repeated Rusty-Elixir bodies with ordinary Elixir `defmacro`, helper functions returning quoted Rusty-Elixir, `quote`, `unquote`, and `unquote_splicing`; do not invent RustQ-specific quoting or DSL forms unless normal Elixir metaprogramming is demonstrably insufficient.
+   - Before adding any new RustQ syntax, lowering clause, pseudo-form, or macro-template construct, stop and try ordinary Elixir generation first. The maintainer burden is to make valid Elixir produce RustQ, not to grow a parallel language because quote/unquote was overlooked.
    - `expr!(...)` lowers valid Rusty-Elixir values such as `:ok` and `{:ok, value}` to a `syn::Expr`.
    - `Super.foo(...)` in `defrust` intentionally lowers to a Rust parent-module call such as `super::foo(...)`.
    - `Atoms.fill()`-style plural aliases automatically lower to snake-case Rust modules such as `atoms::fill()`; do not add fake `defrustmod` declarations for externally-owned modules.

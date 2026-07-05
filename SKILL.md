@@ -202,6 +202,13 @@ Use ordinary Elixir macros when you want reusable Rusty-Elixir source. They run
 while compiling the Elixir generator and do not intentionally leave a Rust macro
 in the output.
 
+For repeated generated bridge code, first use normal Elixir metaprogramming:
+helper functions that return quoted Rusty-Elixir, `defmacro`, `quote`, `unquote`,
+`unquote_splicing`, schema transforms, `Enum.map`, recursion, and pattern
+matching. RustQ is designed to lower valid Elixir-shaped Rusty-Elixir; do not
+invent a separate mini-language or string template when ordinary Elixir can
+produce the Rusty-Elixir you need.
+
 Use `defrustmacro` for the different case where repeated generated Rust should
 call one compact `macro_rules!` helper while the helper body remains
 Rusty-Elixir:
@@ -264,6 +271,10 @@ end
 Inside `defrustmacro`, declared captures such as `env`, `module_name`, and
 `field_id` lower to Rust macro variables (`$env`, `$module_name`, `$field_id`).
 `repeat fields do ... end` is a macro-template repetition, not a runtime loop.
+Use it only in the documented `defrustmacro` capture/template positions. If you
+need to assemble repeated Rusty-Elixir statements or helper bodies, prefer
+ordinary Elixir `quote`/`unquote_splicing` or helper macros at the authoring
+layer instead of adding new RustQ-specific syntax.
 
 ## Use the supported Rusty-Elixir surface
 
