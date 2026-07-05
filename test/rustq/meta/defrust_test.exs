@@ -1184,6 +1184,32 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Ok(())"
   end
 
+  test "defrust auto-borrows call arguments from expected ref types" do
+    defmodule AutoBorrowCallArgumentCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec use_color(R.ref(R.raw(:Color))) :: R.nif_result(R.unit())
+      defrust(use_color(_color), do: :ok)
+
+      @spec mutate_color(R.mut_ref(R.raw(:Color))) :: R.nif_result(R.unit())
+      defrust(mutate_color(_color), do: :ok)
+
+      @spec run(R.raw(:Color)) :: R.nif_result(R.unit())
+      defrust run(color) do
+        use_color(color)
+        mutate_color(color)
+        :ok
+      end
+    end
+
+    source = AutoBorrowCallArgumentCase.__rustq_source__()
+
+    assert source =~ "use_color(&color)?;"
+    assert source =~ "mutate_color(&mut color)?;"
+    assert RustQ.valid?(source, "auto_borrow_call_argument.rs")
+  end
+
   test "defrust specs can use explicit Rust path and raw type markers" do
     defmodule ExplicitRustTypeCase do
       use RustQ.Meta

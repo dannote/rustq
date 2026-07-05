@@ -254,11 +254,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
-    if infer_propagation?(expression, expected_type, context) do
-      %AST.Try{expr: lower_expr(expression, context)}
-    else
-      lower_expr(expression, context)
-    end
+    lower_checked_expr(expression, expected_type, context)
   end
 
   defp lower_expected_expr_context(expression, _expected_type, %Context{} = context),
@@ -553,18 +549,30 @@ defmodule RustQ.Meta.Lower do
   defp same_wrapper_propagation?(_expression, _return_type, _context), do: false
 
   defp infer_propagation?(expression, %Type{} = expected_type, %Context{} = context) do
-    with %Type{} <-
-           callable_return_type(expression,
-             callables: context.callables,
-             rust_modules: context.rust_modules,
-             vars: context.vars
-           ),
-         %Typing.Check{coercion: :propagate} <-
-           Typing.check(expression, expected_type, typing_env(context)) do
-      true
-    else
-      _unknown_or_not_propagating -> false
+    match?(%Typing.Check{coercion: :propagate}, typing_check(expression, expected_type, context))
+  end
+
+  defp lower_checked_expr(expression, %Type{} = expected_type, %Context{} = context) do
+    case typing_check(expression, expected_type, context) do
+      %Typing.Check{coercion: :propagate} ->
+        %AST.Try{expr: lower_expr(expression, context)}
+
+      %Typing.Check{coercion: :borrow} ->
+        %AST.Ref{expr: lower_expr(expression, context)}
+
+      %Typing.Check{coercion: :mut_borrow} ->
+        %AST.Ref{expr: lower_expr(expression, context), mutable: true}
+
+      %Typing.Check{coercion: :some} ->
+        %AST.Some{expr: lower_expr(expression, context)}
+
+      _unknown_or_none ->
+        lower_expr(expression, context)
     end
+  end
+
+  defp typing_check(expression, %Type{} = expected_type, %Context{} = context) do
+    Typing.check(expression, expected_type, typing_env(context))
   end
 
   defp lower_case(expression, clauses, %Context{} = context) do
@@ -576,7 +584,8 @@ defmodule RustQ.Meta.Lower do
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
         {pattern, guard} = split_guarded_pattern(pattern)
-        body = lower_clause_body(body, context)
+        body_context = context_with_match_pattern(pattern, case_type, context)
+        body = lower_clause_body(body, body_context)
         mutable_vars = body |> collect_mut_refs() |> MapSet.new()
 
         %AST.Arm{
@@ -878,6 +887,26 @@ defmodule RustQ.Meta.Lower do
 
   defp split_guarded_pattern({:when, _, [pattern, guard]}), do: {pattern, guard}
   defp split_guarded_pattern(pattern), do: {pattern, nil}
+
+  defp context_with_match_pattern(pattern, %Type{kind: :option} = type, %Context{} = context) do
+    case {pattern, Type.inner(type)} do
+      {{name, _meta, ast_context}, %Type{} = inner} when is_atom(name) and is_atom(ast_context) ->
+        %{context | vars: Map.put(context.vars, name, inner)}
+
+      {{:some, {name, _meta, ast_context}}, %Type{} = inner}
+      when is_atom(name) and is_atom(ast_context) ->
+        %{context | vars: Map.put(context.vars, name, inner)}
+
+      {{:{}, _, [:some, {name, _meta, ast_context}]}, %Type{} = inner}
+      when is_atom(name) and is_atom(ast_context) ->
+        %{context | vars: Map.put(context.vars, name, inner)}
+
+      _other ->
+        context
+    end
+  end
+
+  defp context_with_match_pattern(_pattern, _type, %Context{} = context), do: context
 
   defp lower_guard_expr(nil, %Context{}), do: nil
   defp lower_guard_expr(guard, %Context{} = context), do: lower_expr(guard, context)
