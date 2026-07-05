@@ -1184,6 +1184,55 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Ok(())"
   end
 
+  test "defrust auto-borrows fields reached through slice get unwrap" do
+    defmodule AutoBorrowSliceFieldCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @type kind :: R.enum(one: [], repeated: [])
+      @type field :: %{required(:kind) => kind()}
+
+      @spec use_kind(R.ref(kind())) :: R.nif_result(R.unit())
+      defrust(use_kind(_kind), do: :ok)
+
+      @spec run(R.slice(field()), R.usize()) :: R.nif_result(R.unit())
+      defrust run(fields, index) do
+        field = fields.get(index).unwrap()
+        use_kind(field.kind)
+        :ok
+      end
+    end
+
+    source = AutoBorrowSliceFieldCase.__rustq_source__()
+
+    assert source =~ "use_kind(&field.kind)?;"
+    assert RustQ.valid?(source, "auto_borrow_slice_field.rs")
+  end
+
+  test "defrust auto-borrows struct field access from expected ref types" do
+    defmodule AutoBorrowStructFieldCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @type kind :: R.enum(one: [], repeated: [])
+      @type field :: %{required(:kind) => kind()}
+
+      @spec use_kind(R.ref(kind())) :: R.nif_result(R.unit())
+      defrust(use_kind(_kind), do: :ok)
+
+      @spec run(field()) :: R.nif_result(R.unit())
+      defrust run(field) do
+        use_kind(field.kind)
+        :ok
+      end
+    end
+
+    source = AutoBorrowStructFieldCase.__rustq_source__()
+
+    assert source =~ "use_kind(&field.kind)?;"
+    assert RustQ.valid?(source, "auto_borrow_struct_field.rs")
+  end
+
   test "defrust auto-borrows call arguments from expected ref types" do
     defmodule AutoBorrowCallArgumentCase do
       use RustQ.Meta

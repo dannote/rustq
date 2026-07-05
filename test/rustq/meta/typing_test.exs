@@ -234,6 +234,29 @@ defmodule RustQ.Meta.TypingTest do
              Typing.check(quote(do: decode_filter()), into_option_filter, env)
   end
 
+  test "synthesizes field access from struct metadata" do
+    kind = type(:type, "KiwiSkipKind")
+
+    field = %Type{
+      kind: :struct,
+      rust: "KiwiSkipField",
+      ast: %AST.TypePath{parts: [:KiwiSkipField]},
+      meta: %{fields: [{:kind, kind, :required}]}
+    }
+
+    ref_field = %Type{
+      kind: :ref,
+      rust: "&KiwiSkipField",
+      ast: %AST.TypeRef{inner: field.ast},
+      meta: %{inner: field}
+    }
+
+    env = Typing.env(vars: %{field: field, ref_field: ref_field})
+
+    assert Typing.synth(quote(do: field.kind), env) == kind
+    assert Typing.synth(quote(do: ref_field.kind), env) == kind
+  end
+
   test "synthesizes method calls through receiver type" do
     paint = type(:type, "Paint")
     color = type(:type, "Color")

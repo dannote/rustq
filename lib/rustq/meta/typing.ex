@@ -77,7 +77,8 @@ defmodule RustQ.Meta.Typing do
 
   def expected_for_let(pattern, expression, %Env{} = env) do
     infer_pattern_type(pattern, env.vars) ||
-      infer_pattern_type_from_call(pattern, expression, env)
+      infer_pattern_type_from_call(pattern, expression, env) ||
+      synth(expression, env)
   end
 
   @spec struct_field_type(Type.t(), atom()) :: Type.t() | nil
@@ -104,14 +105,41 @@ defmodule RustQ.Meta.Typing do
 
   def infer_downstream_let_types(expressions, %Env{} = env, callbacks) when is_map(callbacks) do
     inferred = Inference.infer_downstream_let_types(expressions, env.vars, callbacks)
-    rhs_types = let_rhs_types(expressions, env)
+    rhs_types = non_propagating_let_rhs_types(expressions, env)
 
-    Map.new(inferred, fn {name, type} ->
-      {name, inferred_binding_type(type, Map.get(rhs_types, name))}
-    end)
+    inferred_types =
+      Map.new(inferred, fn {name, type} ->
+        {name, inferred_binding_type(type, Map.get(rhs_types, name))}
+      end)
+
+    Map.merge(rhs_types, inferred_types)
   end
 
-  defp synth_method_call({{:., _, [receiver, function]}, _meta, args}, %Env{} = env)
+  defp synth_method_call({{:., _, [receiver, :unwrap]}, _meta, []}, %Env{} = env) do
+    case synth(receiver, env) do
+      %Type{} = type -> Type.inner(type)
+      nil -> nil
+    end
+  end
+
+  defp synth_method_call({{:., _, [receiver, :get]}, _meta, [_index]}, %Env{} = env) do
+    receiver
+    |> synth(env)
+    |> slice_get_type()
+  end
+
+  defp synth_method_call({{:., _, [receiver, field]}, _meta, []} = ast, %Env{} = env)
+       when is_atom(field) do
+    field_type(synth(receiver, env), field) || synth_method_return(ast, env)
+  end
+
+  defp synth_method_call({{:., _, [_receiver, function]}, _meta, args} = ast, %Env{} = env)
+       when is_atom(function) and is_list(args),
+       do: synth_method_return(ast, env)
+
+  defp synth_method_call(_ast, _env), do: nil
+
+  defp synth_method_return({{:., _, [receiver, function]}, _meta, args}, %Env{} = env)
        when is_atom(function) and is_list(args) do
     receiver
     |> synth(env)
@@ -119,7 +147,41 @@ defmodule RustQ.Meta.Typing do
     |> then(&BindingIndex.return_type(env.callables, &1, function, length(args)))
   end
 
-  defp synth_method_call(_ast, _env), do: nil
+  defp field_type(%Type{} = type, field) when is_atom(field) do
+    type
+    |> field_receiver_type()
+    |> struct_field_type(field)
+  end
+
+  defp field_type(_type, _field), do: nil
+
+  defp field_receiver_type(%Type{} = type), do: Type.ref_inner(type) || type
+
+  defp slice_get_type(%Type{kind: :slice, meta: %{inner: %Type{} = inner}}),
+    do: option_type(ref_type(inner))
+
+  defp slice_get_type(%Type{ast: %AST.TypeRef{inner: %AST.TypeSlice{inner: inner}}}),
+    do: option_type(ref_type(%Type{kind: :type, ast: inner, rust: render_type(inner)}))
+
+  defp slice_get_type(_type), do: nil
+
+  defp ref_type(%Type{} = inner),
+    do: %Type{
+      kind: :ref,
+      rust: "&#{inner.rust}",
+      ast: %AST.TypeRef{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+
+  defp option_type(%Type{} = inner),
+    do: %Type{
+      kind: :option,
+      rust: "Option<#{inner.rust}>",
+      ast: %AST.TypeOption{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+
+  defp render_type(ast), do: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
 
   defp infer_pattern_type({name, _meta, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)
@@ -149,10 +211,11 @@ defmodule RustQ.Meta.Typing do
       (not Type.propagates?(inferred) or Type.compatible_with_expected?(Type.inner(rhs), inferred))
   end
 
-  defp let_rhs_types(expressions, %Env{} = env) do
+  defp non_propagating_let_rhs_types(expressions, %Env{} = env) do
     expressions
     |> Enum.flat_map(&let_rhs_type(&1, env))
     |> Map.new()
+    |> Map.reject(fn {_name, type} -> Type.propagates?(type) end)
   end
 
   defp let_rhs_type({:=, _meta, [{name, _pattern_meta, context}, expression]}, %Env{} = env)
