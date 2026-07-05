@@ -129,7 +129,7 @@ defmodule RustQ.Meta.Lower do
            expression,
          %Context{} = context
        ) do
-    %AST.ExprStmt{expr: lower_statement_expr(expression, context.return_type)}
+    %AST.ExprStmt{expr: lower_statement_expr(expression, context)}
   end
 
   defp lower_statement(
@@ -138,7 +138,7 @@ defmodule RustQ.Meta.Lower do
        ) do
     %AST.For{
       pattern: lower_binding_pattern(pattern),
-      expr: lower_expr(expression),
+      expr: lower_expr(expression, context),
       body: lower_clause_body(body, context)
     }
   end
@@ -340,7 +340,7 @@ defmodule RustQ.Meta.Lower do
         %AST.Arm{
           pattern:
             pattern |> lower_match_pattern(case_type) |> mark_mutable_pattern_vars(mutable_vars),
-          guard: lower_guard_expr(guard),
+          guard: lower_guard_expr(guard, context),
           body: body
         }
       end)
@@ -646,8 +646,8 @@ defmodule RustQ.Meta.Lower do
   defp split_guarded_pattern({:when, _, [pattern, guard]}), do: {pattern, guard}
   defp split_guarded_pattern(pattern), do: {pattern, nil}
 
-  defp lower_guard_expr(nil), do: nil
-  defp lower_guard_expr(guard), do: lower_expr(guard)
+  defp lower_guard_expr(nil, %Context{}), do: nil
+  defp lower_guard_expr(guard, %Context{} = context), do: lower_expr(guard, context)
 
   defp lower_match_pattern(:ok, %Type{kind: kind}) when kind in [:result, :nif_result],
     do: %AST.PatOk{pattern: %AST.PatTuple{patterns: []}}
@@ -780,59 +780,70 @@ defmodule RustQ.Meta.Lower do
 
   defp mark_mutable_pattern_vars(pattern, _mutable_vars), do: pattern
 
-  defp lower_expr({:unwrap!, _, [expression]}), do: %AST.Try{expr: lower_expr(expression)}
+  defp lower_expr({:unwrap!, _, [expression]}),
+    do: %AST.Try{expr: lower_expr(expression, current_context())}
 
   defp lower_expr({:ok_or!, _, [option, error]}) do
+    context = current_context()
+
     %AST.Try{
       expr: %AST.MethodCall{
-        receiver: lower_expr(option),
+        receiver: lower_expr(option, context),
         method: :ok_or,
-        args: [lower_nif_error(error)]
+        args: [lower_nif_error(error, context)]
       }
     }
   end
 
-  defp lower_expr({:|>, _, [left, right]}), do: lower_pipe(left, right)
+  defp lower_expr({:|>, _, [left, right]}), do: lower_pipe(left, right, current_context())
 
   defp lower_expr({:cast, _, [expression, type]}),
     do: %AST.Cast{expr: lower_cast_operand(expression), type: lower_type_arg(type)}
 
   defp lower_expr({:decode_as!, _, [expression, type_ast]}),
-    do: %AST.Try{expr: decode_as_expr(expression, type_ast)}
+    do: %AST.Try{expr: decode_as_expr(expression, type_ast, current_context())}
 
   defp lower_expr({:decode_as, _, [expression, type_ast]}),
-    do: decode_as_expr(expression, type_ast)
+    do: decode_as_expr(expression, type_ast, current_context())
 
-  defp lower_expr({:ref, _, [expression]}), do: %AST.Ref{expr: lower_expr(expression)}
+  defp lower_expr({:ref, _, [expression]}),
+    do: %AST.Ref{expr: lower_expr(expression, current_context())}
 
   defp lower_expr({:mut_ref, _, [expression]}),
-    do: %AST.Ref{expr: lower_expr(expression), mutable: true}
+    do: %AST.Ref{expr: lower_expr(expression, current_context()), mutable: true}
 
   defp lower_expr({:deref, _, [expression]}),
-    do: %AST.UnaryOp{op: :deref, expr: lower_expr(expression)}
+    do: %AST.UnaryOp{op: :deref, expr: lower_expr(expression, current_context())}
 
   defp lower_expr({:tuple_field, _, [expression, index]}) when is_integer(index),
-    do: %AST.Field{receiver: lower_expr(expression), field: index}
+    do: %AST.Field{receiver: lower_expr(expression, current_context()), field: index}
 
   defp lower_expr({:some, _, [expression]}),
     do: %AST.Some{expr: lower_wrapper_arg_expr(expression)}
 
   defp lower_expr({:none, _, []}), do: %AST.None{}
   defp lower_expr({:ok, _, []}), do: %AST.Ok{}
-  defp lower_expr({:ok, _, [expression]}), do: %AST.Ok{expr: lower_expr(expression)}
-  defp lower_expr({:err, _, [expression]}), do: %AST.Err{expr: lower_expr(expression)}
+
+  defp lower_expr({:ok, _, [expression]}),
+    do: %AST.Ok{expr: lower_expr(expression, current_context())}
+
+  defp lower_expr({:err, _, [expression]}),
+    do: %AST.Err{expr: lower_expr(expression, current_context())}
 
   defp lower_expr({:token_macro, _, [path, tokens]}),
     do: %AST.TokenMacro{path: lower_token_macro_path(path), tokens: tokens}
 
-  defp lower_expr({:fn, _, [{:->, _, [args, body]}]}), do: lower_closure_args(args, body)
+  defp lower_expr({:fn, _, [{:->, _, [args, body]}]}),
+    do: lower_closure_args(args, body, current_context())
 
   defp lower_expr({{:., _, [{:__aliases__, _, [:Enum]}, :map]}, _, [collection, mapper]}),
-    do: lower_enum_map(collection, mapper)
+    do: lower_enum_map(collection, mapper, current_context())
 
-  defp lower_expr({:expr!, _, [expression]}), do: lower_expr(expression)
+  defp lower_expr({:expr!, _, [expression]}), do: lower_expr(expression, current_context())
   defp lower_expr({:pat!, _, [pattern]}), do: lower_semantic_pat(pattern)
-  defp lower_expr({:stmt!, _, [expression]}), do: %AST.ExprStmt{expr: lower_expr(expression)}
+
+  defp lower_expr({:stmt!, _, [expression]}),
+    do: %AST.ExprStmt{expr: lower_expr(expression, current_context())}
 
   defp lower_expr({:raw_expr!, _, [tokens]}), do: parse_syn(:Expr, tokens)
   defp lower_expr({:raw_pat!, _, [tokens]}), do: parse_syn(:Pat, tokens)
@@ -877,47 +888,24 @@ defmodule RustQ.Meta.Lower do
     %AST.Index{receiver: lower_expr(receiver, context), index: lower_expr(index, context)}
   end
 
-  defp lower_expr({:==, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :eq, right: lower_expr(right)}
-
-  defp lower_expr({:!=, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :ne, right: lower_expr(right)}
-
-  defp lower_expr({:<, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :lt, right: lower_expr(right)}
-
-  defp lower_expr({:<=, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :lte, right: lower_expr(right)}
-
-  defp lower_expr({:>, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :gt, right: lower_expr(right)}
-
-  defp lower_expr({:>=, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :gte, right: lower_expr(right)}
-
-  defp lower_expr({:+, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :add, right: lower_expr(right)}
-
-  defp lower_expr({:-, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :sub, right: lower_expr(right)}
-
-  defp lower_expr({:*, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :mul, right: lower_expr(right)}
-
-  defp lower_expr({:/, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :div, right: lower_expr(right)}
-
-  defp lower_expr({:and, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :and, right: lower_expr(right)}
-
-  defp lower_expr({:or, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :or, right: lower_expr(right)}
+  defp lower_expr({:==, _, [left, right]}), do: lower_binary_op(left, :eq, right)
+  defp lower_expr({:!=, _, [left, right]}), do: lower_binary_op(left, :ne, right)
+  defp lower_expr({:<, _, [left, right]}), do: lower_binary_op(left, :lt, right)
+  defp lower_expr({:<=, _, [left, right]}), do: lower_binary_op(left, :lte, right)
+  defp lower_expr({:>, _, [left, right]}), do: lower_binary_op(left, :gt, right)
+  defp lower_expr({:>=, _, [left, right]}), do: lower_binary_op(left, :gte, right)
+  defp lower_expr({:+, _, [left, right]}), do: lower_binary_op(left, :add, right)
+  defp lower_expr({:-, _, [left, right]}), do: lower_binary_op(left, :sub, right)
+  defp lower_expr({:*, _, [left, right]}), do: lower_binary_op(left, :mul, right)
+  defp lower_expr({:/, _, [left, right]}), do: lower_binary_op(left, :div, right)
+  defp lower_expr({:and, _, [left, right]}), do: lower_binary_op(left, :and, right)
+  defp lower_expr({:or, _, [left, right]}), do: lower_binary_op(left, :or, right)
 
   defp lower_expr({{:., _, [{:__aliases__, _, [:Bitwise]}, :bsr]}, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :shr, right: lower_expr(right)}
+    do: lower_binary_op(left, :shr, right)
 
   defp lower_expr({{:., _, [{:__aliases__, _, [:Bitwise]}, :band]}, _, [left, right]}),
-    do: %AST.BinaryOp{left: lower_expr(left), op: :bitand, right: lower_expr(right)}
+    do: lower_binary_op(left, :bitand, right)
 
   defp lower_expr({:if, _, [condition, branches]}),
     do: lower_if(condition, branches, %{current_context() | position: :expr})
@@ -1170,38 +1158,57 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp decode_as_expr(expression, type_ast) do
+  defp decode_as_expr(expression, type_ast, %Context{} = context) do
     %AST.MethodCall{
-      receiver: lower_expr(expression, rustler_term_type()),
+      receiver: lower_expr(expression, rustler_term_type(), context),
       method: :decode,
       args: [],
       generics: [lower_type_arg(type_ast)]
     }
   end
 
-  defp lower_pipe(left, right) do
-    lower_pipe_call(lower_expr(left), right)
+  defp lower_pipe(left, right, %Context{} = context) do
+    lower_pipe_call(lower_expr(left, context), right, context)
   end
 
-  defp lower_pipe_call(receiver, {:cast, _, [type]}),
+  defp lower_pipe_call(receiver, {:cast, _, [type]}, %Context{}),
     do: %AST.Cast{expr: receiver, type: RustQ.Spec.type(type).ast}
 
-  defp lower_pipe_call(receiver, {{:., _, [{:__aliases__, _, [:Kernel]}, operator]}, _, [right]})
+  defp lower_pipe_call(
+         receiver,
+         {{:., _, [{:__aliases__, _, [:Kernel]}, operator]}, _, [right]},
+         %Context{} = context
+       )
        when operator in [:+, :-, :*, :/] do
-    %AST.BinaryOp{left: receiver, op: operator_op(operator), right: lower_expr(right)}
+    %AST.BinaryOp{left: receiver, op: operator_op(operator), right: lower_expr(right, context)}
   end
 
-  defp lower_pipe_call(receiver, {name, _, args}) when is_atom(name) and is_list(args) do
-    %AST.MethodCall{receiver: receiver, method: name, args: Enum.map(args, &lower_expr/1)}
+  defp lower_pipe_call(receiver, {name, _, args}, %Context{} = context)
+       when is_atom(name) and is_list(args) do
+    %AST.MethodCall{
+      receiver: receiver,
+      method: name,
+      args: Enum.map(args, &lower_expr(&1, context))
+    }
   end
 
-  defp lower_pipe_call(_receiver, other) do
+  defp lower_pipe_call(_receiver, other, %Context{}) do
     Diagnostic.lower(
       :unsupported_pipeline_step,
       other,
       "unsupported defrust pipeline step",
       suggestion: "Pipe into a method call, cast/1, or add an explicit lowering clause."
     )
+  end
+
+  defp lower_binary_op(left, op, right) do
+    context = current_context()
+
+    %AST.BinaryOp{
+      left: lower_expr(left, context),
+      op: op,
+      right: lower_expr(right, context)
+    }
   end
 
   defp operator_op(:+), do: :add
@@ -1211,15 +1218,15 @@ defmodule RustQ.Meta.Lower do
   defp operator_op(:bsr), do: :shr
   defp operator_op(:band), do: :bitand
 
-  defp lower_enum_map(collection, {:fn, _, [{:->, _, [args, body]}]}) do
+  defp lower_enum_map(collection, {:fn, _, [{:->, _, [args, body]}]}, %Context{} = context) do
     collection
-    |> lower_expr()
+    |> lower_expr(context)
     |> method_chain(:into_iter)
-    |> method_chain(:map, [lower_closure_args(args, body)])
+    |> method_chain(:map, [lower_closure_args(args, body, context)])
     |> method_chain(:collect)
   end
 
-  defp lower_enum_map(_collection, other) do
+  defp lower_enum_map(_collection, other, %Context{}) do
     Diagnostic.lower(
       :unsupported_enum_map_mapper,
       other,
@@ -1228,10 +1235,10 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp lower_closure_args(args, body) when is_list(args),
+  defp lower_closure_args(args, body, %Context{} = context) when is_list(args),
     do: %AST.Closure{
       args: Enum.map(args, &closure_arg!/1),
-      body: lower_expr(closure_body_expr(body))
+      body: lower_expr(closure_body_expr(body), context)
     }
 
   defp closure_arg!({name, _, context}) when is_atom(name) and is_atom(context), do: name
@@ -1335,7 +1342,9 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_nif_error(atom) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
-  defp lower_nif_error(other), do: lower_expr(other)
+  defp lower_nif_error(other), do: lower_nif_error(other, current_context())
+  defp lower_nif_error(atom, %Context{}) when is_atom(atom), do: %AST.NifRaiseAtom{name: atom}
+  defp lower_nif_error(other, %Context{} = context), do: lower_expr(other, context)
 
   defp lower_semantic_pat({:ident, _, [name]}), do: %AST.PatVar{name: semantic_atom!(name)}
 
@@ -1385,7 +1394,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr_path(%AST.Path{} = path), do: path
 
   defp lower_expr_path(expression) do
-    case lower_expr(expression) do
+    case lower_expr(expression, current_context()) do
       %AST.Path{} = path ->
         path
 
