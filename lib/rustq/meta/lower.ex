@@ -278,6 +278,13 @@ defmodule RustQ.Meta.Lower do
        ),
        do: lower_case(expression, clauses, %{context | position: :expr}, expected_type)
 
+  defp lower_expected_expr_context(
+         {:if, _, [condition, branches]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_if(condition, branches, %{context | position: :expr}, expected_type)
+
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
     lower_checked_expr(expression, expected_type, context)
   end
@@ -627,14 +634,14 @@ defmodule RustQ.Meta.Lower do
   defp normalize_case_clauses({:__block__, _meta, clauses}), do: clauses
   defp normalize_case_clauses(clauses), do: clauses
 
-  defp lower_if(condition, branches, %Context{} = context) do
+  defp lower_if(condition, branches, %Context{} = context, expected_type \\ nil) do
     then_body = Keyword.fetch!(branches, :do)
     else_body = Keyword.get(branches, :else)
 
     %AST.If{
       condition: lower_expr(condition, context),
-      then: lower_clause_body(then_body, context),
-      else: lower_clause_body(else_body, context)
+      then: lower_clause_body(then_body, context, expected_type),
+      else: lower_clause_body(else_body, context, expected_type)
     }
   end
 
