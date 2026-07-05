@@ -5,14 +5,14 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
-  alias RustQ.Meta.Inference
-  alias RustQ.Meta.Pattern
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
+  alias RustQ.Meta.Typing
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.AST.Walk
 
-  defmodule Context do
+  defmodule Env do
     @moduledoc """
     Tracks return type, variables, aliases, callable metadata, and position while lowering a body.
     """
@@ -26,6 +26,8 @@ defmodule RustQ.Meta.Lower do
       rust_macros: %{}
     ]
   end
+
+  alias __MODULE__.Env, as: Context
 
   @spec quoted_body(Macro.t(), Type.t() | nil, map(), keyword()) :: [struct()]
   def quoted_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
@@ -63,13 +65,10 @@ defmodule RustQ.Meta.Lower do
   """
   @spec callable_return_type(Macro.t(), keyword()) :: Type.t() | nil
   def callable_return_type(call_ast, opts \\ []) do
-    callables =
-      case Keyword.fetch(opts, :callables) do
-        {:ok, callables} -> BindingIndex.new(callables)
-        :error -> current_callables()
-      end
+    callables = opts |> Keyword.get(:callables, []) |> BindingIndex.new()
+    rust_modules = Keyword.get(opts, :rust_modules, %{})
 
-    callable_return_type_from_index(call_ast, callables)
+    callable_return_type_from_index(call_ast, callables, rust_modules)
   end
 
   defp lower_block(expressions, %Context{} = context) do
@@ -101,7 +100,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_statement({:=, _, [pattern, expression]}, %Context{} = context) do
-    expected_type = infer_let_expected_type(pattern, expression, context.vars)
+    expected_type = infer_let_expected_type(pattern, expression, context)
     %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression, expected_type)}
   end
 
@@ -173,8 +172,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_return_expr(:ok, _return_type), do: %AST.Tuple{values: []}
   defp lower_return_expr(nil, %Type{kind: :option}), do: %AST.None{}
 
-  defp lower_return_expr({:ok, value}, %Type{kind: kind}) when kind in [:result, :nif_result],
-    do: %AST.Ok{expr: lower_expr(value)}
+  defp lower_return_expr({:ok, value}, %Type{kind: kind} = return_type)
+       when kind in [:result, :nif_result],
+       do: %AST.Ok{expr: lower_expr(value, Type.inner(return_type) || return_type)}
 
   defp lower_return_expr({:error, value}, %Type{kind: :nif_result}),
     do: %AST.Err{expr: lower_nif_error(value)}
@@ -211,6 +211,13 @@ defmodule RustQ.Meta.Lower do
          %Type{} = expected_type
        ) do
     lower_for_reduce_expr(expression, expected_type)
+  end
+
+  defp lower_expr({:struct_literal, _, [path, fields]}, %Type{} = expected_type) do
+    %AST.StructLiteral{
+      path: lower_struct_literal_path(path),
+      fields: lower_named_fields(fields, expected_type)
+    }
   end
 
   defp lower_expr(expression, %Type{} = expected_type) do
@@ -253,8 +260,19 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
+  defp lower_cast_operand(expression) do
+    if same_wrapper_propagation?(expression, current_return_type()) do
+      %AST.Try{expr: lower_expr(expression)}
+    else
+      lower_expr(expression)
+    end
+  end
+
   defp same_wrapper_propagation?(expression, %Type{} = return_type) do
-    case callable_return_type(expression) do
+    case callable_return_type(expression,
+           callables: current_callables(),
+           rust_modules: current_rust_modules()
+         ) do
       %Type{kind: kind} = call_type ->
         Type.propagates?(call_type) and Type.propagates?(return_type) and kind == return_type.kind
 
@@ -266,15 +284,16 @@ defmodule RustQ.Meta.Lower do
   defp same_wrapper_propagation?(_expression, _return_type), do: false
 
   defp infer_propagation?(expression, %Type{} = expected_type) do
-    case callable_return_type(expression) do
-      %Type{} = call_type ->
-        expected_value = Type.expected_value(expected_type)
-
-        Type.propagates?(call_type) and call_type.kind != expected_value.kind and
-          Type.compatible_with_expected?(Type.inner(call_type), expected_type)
-
-      _unknown_or_plain ->
-        false
+    with %Type{} <-
+           callable_return_type(expression,
+             callables: current_callables(),
+             rust_modules: current_rust_modules()
+           ),
+         %Typing.Check{coercion: :propagate} <-
+           Typing.check(expression, expected_type, typing_env()) do
+      true
+    else
+      _unknown_or_not_propagating -> false
     end
   end
 
@@ -518,7 +537,7 @@ defmodule RustQ.Meta.Lower do
   defp block_expr([%AST.Return{expr: expr}]), do: expr
 
   defp block_expr(statements) do
-    %AST.If{condition: %AST.Literal{value: true}, then: statements, else: []}
+    %AST.BlockExpr{body: statements}
   end
 
   defp lower_clause_body(body, %Context{position: :statement} = context) do
@@ -615,6 +634,17 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_match_pattern({:{}, _, [:some, pattern]}, %Type{kind: :option}),
     do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
+
+  defp lower_match_pattern({:enum_variant, _, [path, variant]}, _case_type) do
+    %AST.PatPath{path: enum_variant_path(path, variant)}
+  end
+
+  defp lower_match_pattern({:enum_variant, _, [path, variant | patterns]}, _case_type) do
+    %AST.PatPathTuple{
+      path: enum_variant_path(path, variant),
+      patterns: Enum.map(patterns, &lower_match_pattern(&1, nil))
+    }
+  end
 
   defp lower_match_pattern({:%, _, [{:__aliases__, _, [module]}, {:%{}, _, fields}]}, %Type{
          kind: :tuple_enum,
@@ -722,7 +752,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({:|>, _, [left, right]}), do: lower_pipe(left, right)
 
   defp lower_expr({:cast, _, [expression, type]}),
-    do: %AST.Cast{expr: lower_expr(expression), type: lower_type_arg(type)}
+    do: %AST.Cast{expr: lower_cast_operand(expression), type: lower_type_arg(type)}
 
   defp lower_expr({:decode_as!, _, [expression, type_ast]}),
     do: %AST.Try{expr: decode_as_expr(expression, type_ast)}
@@ -1002,19 +1032,27 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp callable_argument_types(target, function, arity) do
-    BindingIndex.argument_types(current_callables(), target, function, arity)
+    callable_argument_types(current_callables(), target, function, arity)
+  end
+
+  defp callable_argument_types(%BindingIndex{} = callables, target, function, arity) do
+    BindingIndex.argument_types(callables, target, function, arity)
   end
 
   defp path_callable_argument_types(path, function, arity) do
+    path_callable_argument_types(path, function, arity, current_callables())
+  end
+
+  defp path_callable_argument_types(path, function, arity, %BindingIndex{} = callables) do
     target_parts = Enum.drop(path, -1)
 
     target_parts
     |> exact_callable_target_candidates()
-    |> Enum.find_value(&callable_argument_types(&1, function, arity)) ||
-      callable_argument_types(nil, function, arity) ||
+    |> Enum.find_value(&callable_argument_types(callables, &1, function, arity)) ||
+      callable_argument_types(callables, nil, function, arity) ||
       target_parts
       |> callable_target_candidates()
-      |> Enum.find_value(&callable_argument_types(&1, function, arity))
+      |> Enum.find_value(&callable_argument_types(callables, &1, function, arity))
   end
 
   defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
@@ -1031,7 +1069,21 @@ defmodule RustQ.Meta.Lower do
   defp callable_target_from_ast(%AST.TypePath{parts: [_ | _] = parts}),
     do: parts |> List.last() |> to_string()
 
+  defp callable_target_from_ast(%AST.TypeRaw{source: source}),
+    do: raw_callable_target(source)
+
   defp callable_target_from_ast(_ast), do: nil
+
+  defp raw_callable_target(source) when is_binary(source) do
+    source
+    |> String.replace(~r/^&\s*(mut\s+)?/, "")
+    |> String.replace(~r/<.*$/, "")
+    |> String.trim()
+    |> case do
+      "" -> nil
+      target -> target
+    end
+  end
 
   defp decode_as_expr(expression, type_ast) do
     %AST.MethodCall{
@@ -1121,10 +1173,14 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_macro_call(name, args) do
+    lower_macro_call(name, args, current_rust_macros())
+  end
+
+  defp lower_macro_call(name, args, rust_macros) do
     part = macro_call_part(name)
     path = %AST.Path{parts: [part]}
 
-    case Map.get(current_rust_macros(), part) do
+    case Map.get(rust_macros, part) do
       nil ->
         %AST.MacroCall{path: path, args: Enum.map(args, &lower_expr/1)}
 
@@ -1150,10 +1206,14 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_remote_macro_call(receiver, function, args) do
+    lower_remote_macro_call(receiver, function, args, current_rust_modules())
+  end
+
+  defp lower_remote_macro_call(receiver, function, args, rust_modules) do
     path_parts =
       cond do
         super_alias_ast?(receiver) -> [:super, macro_call_part(function)]
-        alias_ast?(receiver) -> alias_parts(receiver) ++ [macro_call_part(function)]
+        alias_ast?(receiver) -> alias_parts(receiver, rust_modules) ++ [macro_call_part(function)]
         true -> nil
       end
 
@@ -1312,6 +1372,12 @@ defmodule RustQ.Meta.Lower do
     Enum.map(fields, fn {name, expression} -> {name, lower_expr(expression)} end)
   end
 
+  defp lower_named_fields(fields, %Type{} = struct_type) when is_list(fields) do
+    Enum.map(fields, fn {name, expression} ->
+      {name, lower_expr(expression, Typing.struct_field_type(struct_type, name))}
+    end)
+  end
+
   defp lower_token_macro_path(atom) when is_atom(atom), do: %AST.Path{parts: [atom]}
   defp lower_token_macro_path({:__aliases__, _, parts}), do: %AST.Path{parts: parts}
 
@@ -1324,25 +1390,8 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp infer_let_expected_type(pattern, expression, vars) do
-    infer_pattern_type(pattern, vars) || infer_pattern_type_from_call(pattern, expression)
-  end
-
-  defp infer_pattern_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
-    do: Map.get(vars, name)
-
-  defp infer_pattern_type(_pattern, _vars), do: nil
-
-  defp infer_pattern_type_from_call(pattern, expression) do
-    with [_ | _] = elements <- Pattern.tuple_elements(pattern),
-         %Type{} = call_type <- callable_return_type(expression),
-         true <- Type.propagates?(call_type),
-         %Type{kind: :tuple, meta: %{elements: types}} = inner <- Type.inner(call_type),
-         true <- length(elements) == length(types) do
-      inner
-    else
-      _no_tuple_match -> nil
-    end
+  defp infer_let_expected_type(pattern, expression, %Context{} = context) do
+    Typing.expected_for_let(pattern, expression, typing_env(context))
   end
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
@@ -1352,33 +1401,37 @@ defmodule RustQ.Meta.Lower do
 
   defp context_with_downstream_let_types(expressions, %Context{} = context) do
     inferred =
-      Inference.infer_downstream_let_types(
+      Typing.infer_downstream_let_types(
         expressions,
-        context.vars,
-        Map.put(inference_callbacks(), :block_return_type, context.return_type)
+        typing_env(context),
+        Map.put(inference_callbacks(context), :block_return_type, context.return_type)
       )
 
     %{context | vars: Map.merge(context.vars, inferred)}
   end
 
-  defp inference_callbacks do
+  defp inference_callbacks(%Context{} = context) do
+    callables = context.callables
+
     %{
-      return_type: &callable_return_type/1,
-      local_argument_types: fn name, arity -> callable_argument_types(nil, name, arity) end,
+      return_type: &callable_return_type(&1, callables: callables),
+      local_argument_types: fn name, arity ->
+        callable_argument_types(callables, nil, name, arity)
+      end,
       path_argument_types: fn parts, function, arity ->
-        path = alias_parts({:__aliases__, [], parts}) ++ [function]
-        path_callable_argument_types(path, function, arity)
+        path = alias_parts({:__aliases__, [], parts}, context.rust_modules) ++ [function]
+        path_callable_argument_types(path, function, arity, callables)
       end,
       method_argument_types: fn target, function, arity ->
-        callable_argument_types(target, function, arity)
+        callable_argument_types(callables, target, function, arity)
       end,
       target_type: &callable_target_from_type/1,
-      method_receiver_type: &method_receiver_type/2
+      method_receiver_type: &method_receiver_type(&1, &2, callables)
     }
   end
 
-  defp method_receiver_type(function, arity) do
-    case BindingIndex.method_targets(current_callables(), function, arity) do
+  defp method_receiver_type(function, arity, %BindingIndex{} = callables) do
+    case BindingIndex.method_targets(callables, function, arity) do
       [target] -> type_for_callable_target(target)
       _ambiguous_or_missing -> nil
     end
@@ -1408,199 +1461,50 @@ defmodule RustQ.Meta.Lower do
 
   defp infer_mutability(body) do
     mutable_vars = body |> collect_mutable_let_refs() |> MapSet.new()
-    Enum.map(body, &mark_mutable_lets(&1, mutable_vars))
+
+    Walk.postwalk(body, fn
+      %AST.Let{pattern: %AST.PatVar{name: name}} = let ->
+        %{let | mutable: MapSet.member?(mutable_vars, name)}
+
+      other ->
+        other
+    end)
   end
 
-  defp mark_mutable_lets(%AST.Let{pattern: %AST.PatVar{name: name}} = let, mutable_vars) do
-    %{
-      let
-      | mutable: MapSet.member?(mutable_vars, name),
-        expr: mark_mutable_expr(let.expr, mutable_vars)
-    }
+  defp collect_mut_refs(term) do
+    Walk.reduce(term, [], fn
+      %AST.Ref{mutable: true, expr: %AST.Var{name: name}}, acc -> [name | acc]
+      _other, acc -> acc
+    end)
   end
 
-  defp mark_mutable_lets(%AST.Let{} = let, mutable_vars),
-    do: %{let | expr: mark_mutable_expr(let.expr, mutable_vars)}
-
-  defp mark_mutable_lets(%AST.Assign{} = stmt, mutable_vars),
-    do: %{
-      stmt
-      | target: mark_mutable_expr(stmt.target, mutable_vars),
-        expr: mark_mutable_expr(stmt.expr, mutable_vars)
-    }
-
-  defp mark_mutable_lets(%AST.AssignOp{} = stmt, mutable_vars),
-    do: %{
-      stmt
-      | target: mark_mutable_expr(stmt.target, mutable_vars),
-        expr: mark_mutable_expr(stmt.expr, mutable_vars)
-    }
-
-  defp mark_mutable_lets(%AST.IfLet{} = stmt, mutable_vars) do
-    %{
-      stmt
-      | expr: mark_mutable_expr(stmt.expr, mutable_vars),
-        then: Enum.map(stmt.then, &mark_mutable_lets(&1, mutable_vars)),
-        else: Enum.map(stmt.else, &mark_mutable_lets(&1, mutable_vars))
-    }
+  defp collect_mutable_let_refs(term) do
+    Walk.reduce(term, [], fn
+      %AST.ExprStmt{expr: %AST.MethodCall{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
+      %AST.Assign{target: %AST.Var{name: name}}, acc -> [name | acc]
+      %AST.AssignOp{target: %AST.Var{name: name}}, acc -> [name | acc]
+      %AST.Assign{target: %AST.Index{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
+      %AST.AssignOp{target: %AST.Index{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
+      %AST.Ref{mutable: true, expr: %AST.Var{name: name}}, acc -> [name | acc]
+      _other, acc -> acc
+    end)
   end
 
-  defp mark_mutable_lets(%AST.ExprStmt{} = stmt, mutable_vars),
-    do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
-
-  defp mark_mutable_lets(%AST.Return{} = stmt, mutable_vars),
-    do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
-
-  defp mark_mutable_lets(%AST.EarlyReturn{} = stmt, mutable_vars),
-    do: %{stmt | expr: mark_mutable_expr(stmt.expr, mutable_vars)}
-
-  defp mark_mutable_lets(%AST.For{} = stmt, mutable_vars) do
-    %{
-      stmt
-      | expr: mark_mutable_expr(stmt.expr, mutable_vars),
-        body: Enum.map(stmt.body, &mark_mutable_lets(&1, mutable_vars))
-    }
+  defp typing_env do
+    Typing.env(
+      vars: current_vars(),
+      callables: current_callables(),
+      rust_modules: current_rust_modules()
+    )
   end
 
-  defp mark_mutable_expr(%AST.Match{} = match, mutable_vars) do
-    arms =
-      Enum.map(match.arms, fn %AST.Arm{} = arm ->
-        %{arm | body: Enum.map(arm.body, &mark_mutable_lets(&1, mutable_vars))}
-      end)
-
-    %{match | expr: mark_mutable_expr(match.expr, mutable_vars), arms: arms}
+  defp typing_env(%Context{} = context) do
+    Typing.env(
+      vars: context.vars,
+      callables: context.callables,
+      rust_modules: context.rust_modules
+    )
   end
-
-  defp mark_mutable_expr(%AST.If{} = expr, mutable_vars) do
-    %{
-      expr
-      | condition: mark_mutable_expr(expr.condition, mutable_vars),
-        then: Enum.map(expr.then, &mark_mutable_lets(&1, mutable_vars)),
-        else: Enum.map(expr.else, &mark_mutable_lets(&1, mutable_vars))
-    }
-  end
-
-  defp mark_mutable_expr(expr, mutable_vars), do: mark_mutable_expr_fallback(expr, mutable_vars)
-
-  defp mark_mutable_expr_fallback(%AST.PathCall{} = expr, mutable_vars),
-    do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
-
-  defp mark_mutable_expr_fallback(%AST.MethodCall{} = expr, mutable_vars) do
-    %{
-      expr
-      | receiver: mark_mutable_expr(expr.receiver, mutable_vars),
-        args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))
-    }
-  end
-
-  defp mark_mutable_expr_fallback(%AST.LocalCall{} = expr, mutable_vars),
-    do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
-
-  defp mark_mutable_expr_fallback(%AST.MacroCall{} = expr, mutable_vars),
-    do: %{expr | args: Enum.map(expr.args, &mark_mutable_expr(&1, mutable_vars))}
-
-  defp mark_mutable_expr_fallback(%AST.Field{} = expr, mutable_vars),
-    do: %{expr | receiver: mark_mutable_expr(expr.receiver, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(%AST.Index{} = expr, mutable_vars),
-    do: %{
-      expr
-      | receiver: mark_mutable_expr(expr.receiver, mutable_vars),
-        index: mark_mutable_expr(expr.index, mutable_vars)
-    }
-
-  defp mark_mutable_expr_fallback(%AST.Ref{} = expr, mutable_vars),
-    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(%AST.Try{} = expr, mutable_vars),
-    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(%AST.Tuple{} = expr, mutable_vars),
-    do: %{expr | values: Enum.map(expr.values, &mark_mutable_expr(&1, mutable_vars))}
-
-  defp mark_mutable_expr_fallback(%AST.VecLiteral{} = expr, mutable_vars),
-    do: %{expr | values: Enum.map(expr.values, &mark_mutable_expr(&1, mutable_vars))}
-
-  defp mark_mutable_expr_fallback(%AST.Closure{} = expr, mutable_vars),
-    do: %{expr | body: mark_mutable_expr(expr.body, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(%AST.Some{} = expr, mutable_vars),
-    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(%AST.Ok{expr: nil} = expr, _mutable_vars), do: expr
-
-  defp mark_mutable_expr_fallback(%AST.Ok{} = expr, mutable_vars),
-    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(%AST.Err{} = expr, mutable_vars),
-    do: %{expr | expr: mark_mutable_expr(expr.expr, mutable_vars)}
-
-  defp mark_mutable_expr_fallback(expr, _mutable_vars), do: expr
-
-  defp collect_mut_refs(term), do: do_collect_mut_refs(term, [])
-
-  defp collect_mutable_let_refs(term), do: do_collect_mutable_let_refs(term, [])
-
-  defp do_collect_mutable_let_refs(
-         %AST.ExprStmt{expr: %AST.MethodCall{receiver: %AST.Var{name: name}}} = stmt,
-         acc
-       ) do
-    do_collect_mutable_let_refs(stmt.expr, [name | acc])
-  end
-
-  defp do_collect_mutable_let_refs(%AST.Assign{target: %AST.Var{name: name}} = assign, acc) do
-    do_collect_mutable_let_refs(assign.expr, [name | acc])
-  end
-
-  defp do_collect_mutable_let_refs(%AST.AssignOp{target: %AST.Var{name: name}} = assign, acc) do
-    do_collect_mutable_let_refs(assign.expr, [name | acc])
-  end
-
-  defp do_collect_mutable_let_refs(
-         %AST.Assign{target: %AST.Index{receiver: %AST.Var{name: name}}} = assign,
-         acc
-       ) do
-    do_collect_mutable_let_refs(assign.expr, [name | acc])
-  end
-
-  defp do_collect_mutable_let_refs(
-         %AST.AssignOp{target: %AST.Index{receiver: %AST.Var{name: name}}} = assign,
-         acc
-       ) do
-    do_collect_mutable_let_refs(assign.expr, [name | acc])
-  end
-
-  defp do_collect_mutable_let_refs(%AST.Ref{mutable: true, expr: %AST.Var{name: name}} = ref, acc) do
-    do_collect_mutable_let_refs(ref.expr, [name | acc])
-  end
-
-  defp do_collect_mutable_let_refs(%{__struct__: _struct} = term, acc) do
-    term
-    |> Map.from_struct()
-    |> Map.values()
-    |> Enum.reduce(acc, &do_collect_mutable_let_refs/2)
-  end
-
-  defp do_collect_mutable_let_refs(list, acc) when is_list(list),
-    do: Enum.reduce(list, acc, &do_collect_mutable_let_refs/2)
-
-  defp do_collect_mutable_let_refs(_other, acc), do: acc
-
-  defp do_collect_mut_refs(%AST.Ref{mutable: true, expr: %AST.Var{name: name}} = ref, acc) do
-    do_collect_mut_refs(ref.expr, [name | acc])
-  end
-
-  defp do_collect_mut_refs(%{__struct__: _struct} = term, acc) do
-    term
-    |> Map.from_struct()
-    |> Map.values()
-    |> Enum.reduce(acc, &do_collect_mut_refs/2)
-  end
-
-  defp do_collect_mut_refs(list, acc) when is_list(list),
-    do: Enum.reduce(list, acc, &do_collect_mut_refs/2)
-
-  defp do_collect_mut_refs(_other, acc), do: acc
 
   defp alias_ast?({:__aliases__, _, _parts}), do: true
   defp alias_ast?(_other), do: false
@@ -1620,10 +1524,15 @@ defmodule RustQ.Meta.Lower do
 
   defp rust_variant(name), do: RustQ.Atom.identifier!(Macro.camelize(Atom.to_string(name)))
 
-  defp alias_parts({:__aliases__, _, parts}),
-    do: mapped_alias_parts(parts)
+  defp alias_parts(ast), do: alias_parts(ast, current_rust_modules())
 
-  defp alias_path_parts(ast), do: ast |> raw_alias_path_parts() |> mapped_alias_parts()
+  defp alias_parts({:__aliases__, _, parts}, rust_modules),
+    do: mapped_alias_parts(parts, rust_modules)
+
+  defp alias_path_parts(ast), do: alias_path_parts(ast, current_rust_modules())
+
+  defp alias_path_parts(ast, rust_modules),
+    do: ast |> raw_alias_path_parts() |> mapped_alias_parts(rust_modules)
 
   defp raw_alias_path_parts(ast), do: raw_alias_path_parts(ast, [])
 
@@ -1641,13 +1550,13 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp mapped_alias_parts(parts) do
-    modules = current_rust_modules()
+  defp mapped_alias_parts(parts), do: mapped_alias_parts(parts, current_rust_modules())
 
+  defp mapped_alias_parts(parts, rust_modules) do
     parts
     |> alias_prefixes()
     |> Enum.find_value(fn {prefix, suffix} ->
-      mapped = Map.get(modules, prefix)
+      mapped = Map.get(rust_modules, prefix)
       if mapped, do: mapped ++ suffix
     end) || automatic_rust_alias_parts(parts)
   end
@@ -1677,25 +1586,30 @@ defmodule RustQ.Meta.Lower do
   defp rust_module_part(part),
     do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
 
-  defp callable_return_type_from_index({name, _meta, args}, %BindingIndex{} = callables)
+  defp callable_return_type_from_index(
+         {name, _meta, args},
+         %BindingIndex{} = callables,
+         _rust_modules
+       )
        when is_atom(name) and is_list(args) do
     BindingIndex.return_type(callables, nil, name, length(args))
   end
 
   defp callable_return_type_from_index(
          {{:., _, [{:__aliases__, _, parts}, function]}, _meta, args},
-         %BindingIndex{} = callables
+         %BindingIndex{} = callables,
+         rust_modules
        )
        when is_atom(function) and is_list(args) do
     arity = length(args)
 
-    parts
-    |> callable_return_type_for_path(function, arity, callables)
+    callable_return_type_for_path(parts, function, arity, callables, rust_modules)
   end
 
   defp callable_return_type_from_index(
          {{:., _, [receiver, function]}, _meta, args},
-         %BindingIndex{} = callables
+         %BindingIndex{} = callables,
+         _rust_modules
        )
        when is_atom(function) and is_list(args) do
     target =
@@ -1706,17 +1620,26 @@ defmodule RustQ.Meta.Lower do
     BindingIndex.return_type(callables, target, function, length(args))
   end
 
-  defp callable_return_type_from_index(_call_ast, %BindingIndex{}), do: nil
+  defp callable_return_type_from_index(_call_ast, %BindingIndex{}, _rust_modules), do: nil
 
-  defp callable_return_type_for_path(parts, function, arity, callables) do
+  defp callable_return_type_for_path(
+         parts,
+         function,
+         arity,
+         callables,
+         rust_modules
+       ) do
     parts
-    |> callable_target_candidates()
+    |> callable_target_candidates(rust_modules)
     |> Enum.find_value(&BindingIndex.return_type(callables, &1, function, arity)) ||
       BindingIndex.return_type(callables, nil, function, arity)
   end
 
-  defp exact_callable_target_candidates(parts) do
-    mapped = mapped_alias_parts(parts)
+  defp exact_callable_target_candidates(parts),
+    do: exact_callable_target_candidates(parts, current_rust_modules())
+
+  defp exact_callable_target_candidates(parts, rust_modules) do
+    mapped = mapped_alias_parts(parts, rust_modules)
 
     [
       Enum.map_join(mapped, "::", &to_string/1),
@@ -1727,8 +1650,11 @@ defmodule RustQ.Meta.Lower do
     |> Enum.uniq()
   end
 
-  defp callable_target_candidates(parts) do
-    mapped = mapped_alias_parts(parts)
+  defp callable_target_candidates(parts),
+    do: callable_target_candidates(parts, current_rust_modules())
+
+  defp callable_target_candidates(parts, rust_modules) do
+    mapped = mapped_alias_parts(parts, rust_modules)
     mapped_last = List.last(mapped)
     parts_last = List.last(parts)
 
@@ -1831,5 +1757,6 @@ defmodule RustQ.Meta.Lower do
   defp current_return_type, do: Process.get({__MODULE__, :return_type})
   defp current_macro_vars, do: Process.get({__MODULE__, :macro_vars}, %{})
   defp current_rust_macros, do: Process.get({__MODULE__, :rust_macros}, %{})
-  defp macro_var_fragment(name), do: Map.get(current_macro_vars(), name)
+  defp macro_var_fragment(name), do: macro_var_fragment(name, current_macro_vars())
+  defp macro_var_fragment(name, macro_vars), do: Map.get(macro_vars, name)
 end
