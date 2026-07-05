@@ -17,7 +17,7 @@ defmodule RustQ.MixProject do
       docs: docs(),
       elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: [plt_add_apps: [:mix, :reach]],
-      test_ignore_filters: [~r|test/support/|],
+      test_ignore_filters: [~r|test/support/|, ~r|test/corpus/|],
       deps: deps()
     ]
   end
@@ -35,6 +35,7 @@ defmodule RustQ.MixProject do
 
   defp deps do
     [
+      {:pi_bridge, "== 0.6.21", only: :dev},
       {:rustler, "~> 0.37", runtime: false},
       {:json_codec, "~> 0.1"},
       {:nimble_options, "~> 1.1"},
@@ -58,6 +59,7 @@ defmodule RustQ.MixProject do
         "rust.check",
         "rust.clippy",
         "rustq.gen --check",
+        "rustq.corpus",
         "rustq.templates.check",
         "test",
         "credo --strict",
