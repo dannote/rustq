@@ -943,40 +943,42 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expr({{:., _meta, [receiver, function]}, _, args}) do
+    context = current_context()
+
     cond do
       macro_call_name?(function) ->
-        lower_remote_macro_call(receiver, function, args)
+        lower_remote_macro_call(receiver, function, args, context)
 
       super_alias_ast?(receiver) ->
         %AST.PathCall{
           path: %AST.Path{parts: [:super, function]},
-          args: lower_call_args(nil, function, args)
+          args: lower_call_args(nil, function, args, context)
         }
 
       rust_constructor_alias?(receiver) ->
-        path = alias_parts(receiver) ++ [rust_variant(function)]
+        path = alias_parts(receiver, context.rust_modules) ++ [rust_variant(function)]
 
         %AST.PathCall{
           path: %AST.Path{parts: path},
-          args: lower_path_call_args(path, function, args)
+          args: lower_path_call_args(path, function, args, context)
         }
 
       alias_ast?(receiver) ->
-        path = alias_parts(receiver) ++ [function]
+        path = alias_parts(receiver, context.rust_modules) ++ [function]
 
         %AST.PathCall{
           path: %AST.Path{parts: path},
-          args: lower_path_call_args(path, function, args)
+          args: lower_path_call_args(path, function, args, context)
         }
 
       true ->
-        receiver_type = infer_expr_type(receiver, current_vars())
+        receiver_type = infer_expr_type(receiver, context.vars)
         target = callable_target_from_type(receiver_type)
 
         %AST.MethodCall{
-          receiver: lower_expr(receiver),
+          receiver: lower_expr(receiver, context),
           method: function,
-          args: lower_method_call_args(receiver_type, target, function, args)
+          args: lower_method_call_args(receiver_type, target, function, args, context)
         }
     end
   end
@@ -987,10 +989,12 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr({left, right}), do: %AST.Tuple{values: [lower_expr(left), lower_expr(right)]}
 
   defp lower_expr({name, _, args}) when is_atom(name) and is_list(args) do
+    context = current_context()
+
     if macro_call_name?(name) do
-      lower_macro_call(name, args)
+      lower_macro_call(name, args, context.rust_macros, context)
     else
-      %AST.LocalCall{name: name, args: lower_call_args(nil, name, args)}
+      %AST.LocalCall{name: name, args: lower_call_args(nil, name, args, context)}
     end
   end
 
@@ -1032,58 +1036,76 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp lower_path_call_args(path, function, args) do
+  defp lower_path_call_args(path, function, args, %Context{} = context) do
     path
-    |> path_callable_argument_types(function, length(args))
-    |> lower_call_args(args)
+    |> path_callable_argument_types(function, length(args), context)
+    |> lower_args_with_expected(args, context)
   end
 
-  defp lower_call_args(target, function, args) do
+  defp lower_call_args(target, function, args, %Context{} = context) do
     target
-    |> callable_argument_types(function, length(args))
-    |> lower_call_args(args)
+    |> callable_argument_types(function, length(args), context)
+    |> lower_args_with_expected(args, context)
   end
 
-  defp lower_method_call_args(%Type{} = receiver_type, _target, :push, [arg]) do
+  defp lower_method_call_args(
+         %Type{} = receiver_type,
+         _target,
+         :push,
+         [arg],
+         %Context{} = context
+       ) do
     case Type.vec_inner(receiver_type) do
-      %Type{} = inner -> lower_call_args([inner], [arg])
-      nil -> [lower_expr(arg)]
+      %Type{} = inner -> lower_args_with_expected([inner], [arg], context)
+      nil -> [lower_expr(arg, context)]
     end
   end
 
-  defp lower_method_call_args(_receiver_type, target, function, args) do
-    lower_call_args(target, function, args)
+  defp lower_method_call_args(_receiver_type, target, function, args, %Context{} = context) do
+    lower_call_args(target, function, args, context)
   end
 
-  defp lower_call_args(nil, args), do: Enum.map(args, &lower_expr/1)
+  defp lower_args_with_expected(nil, args, %Context{} = context),
+    do: Enum.map(args, &lower_expr(&1, context))
 
-  defp lower_call_args(expected_types, args) when is_list(expected_types) do
+  defp lower_args_with_expected(expected_types, args, %Context{} = context)
+       when is_list(expected_types) do
     args
     |> Enum.zip(expected_types)
-    |> Enum.map(fn {arg, expected_type} -> lower_expr(arg, expected_type) end)
+    |> Enum.map(fn {arg, expected_type} -> lower_expr(arg, expected_type, context) end)
   end
 
-  defp callable_argument_types(target, function, arity) do
-    callable_argument_types(current_callables(), target, function, arity)
+  defp callable_argument_types(target, function, arity, %Context{callables: callables}) do
+    callable_argument_types(callables, target, function, arity)
   end
 
   defp callable_argument_types(%BindingIndex{} = callables, target, function, arity) do
     BindingIndex.argument_types(callables, target, function, arity)
   end
 
-  defp path_callable_argument_types(path, function, arity) do
-    path_callable_argument_types(path, function, arity, current_callables())
+  defp path_callable_argument_types(path, function, arity, %Context{} = context) do
+    path_callable_argument_types(path, function, arity, context.callables, context.rust_modules)
   end
 
   defp path_callable_argument_types(path, function, arity, %BindingIndex{} = callables) do
+    path_callable_argument_types(path, function, arity, callables, current_rust_modules())
+  end
+
+  defp path_callable_argument_types(
+         path,
+         function,
+         arity,
+         %BindingIndex{} = callables,
+         rust_modules
+       ) do
     target_parts = Enum.drop(path, -1)
 
     target_parts
-    |> exact_callable_target_candidates()
+    |> exact_callable_target_candidates(rust_modules)
     |> Enum.find_value(&callable_argument_types(callables, &1, function, arity)) ||
       callable_argument_types(callables, nil, function, arity) ||
       target_parts
-      |> callable_target_candidates()
+      |> callable_target_candidates(rust_modules)
       |> Enum.find_value(&callable_argument_types(callables, &1, function, arity))
   end
 
@@ -1204,17 +1226,13 @@ defmodule RustQ.Meta.Lower do
     RustQ.Atom.identifier!(String.trim_trailing(Atom.to_string(name), "!"))
   end
 
-  defp lower_macro_call(name, args) do
-    lower_macro_call(name, args, current_rust_macros())
-  end
-
-  defp lower_macro_call(name, args, rust_macros) do
+  defp lower_macro_call(name, args, rust_macros, %Context{} = context) do
     part = macro_call_part(name)
     path = %AST.Path{parts: [part]}
 
     case Map.get(rust_macros, part) do
       nil ->
-        %AST.MacroCall{path: path, args: Enum.map(args, &lower_expr/1)}
+        %AST.MacroCall{path: path, args: Enum.map(args, &lower_expr(&1, context))}
 
       %RustMacro.Definition{} = macro_definition ->
         fragments = RustMacro.fragments(macro_definition)
@@ -1232,16 +1250,18 @@ defmodule RustQ.Meta.Lower do
           tokens:
             args
             |> Enum.zip(fragments)
-            |> Enum.map_join(", ", fn {arg, fragment} -> macro_call_arg_tokens(arg, fragment) end)
+            |> Enum.map_join(", ", fn {arg, fragment} ->
+              macro_call_arg_tokens(arg, fragment, context)
+            end)
         }
     end
   end
 
-  defp lower_remote_macro_call(receiver, function, args) do
-    lower_remote_macro_call(receiver, function, args, current_rust_modules())
+  defp lower_remote_macro_call(receiver, function, args, %Context{} = context) do
+    lower_remote_macro_call(receiver, function, args, context.rust_modules, context)
   end
 
-  defp lower_remote_macro_call(receiver, function, args, rust_modules) do
+  defp lower_remote_macro_call(receiver, function, args, rust_modules, %Context{} = context) do
     path_parts =
       cond do
         super_alias_ast?(receiver) -> [:super, macro_call_part(function)]
@@ -1252,7 +1272,7 @@ defmodule RustQ.Meta.Lower do
     if path_parts do
       %AST.MacroCall{
         path: %AST.Path{parts: path_parts},
-        args: Enum.map(args, &lower_expr/1)
+        args: Enum.map(args, &lower_expr(&1, context))
       }
     else
       Diagnostic.lower(
@@ -1264,16 +1284,17 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
-  defp macro_call_arg_tokens(arg, :expr),
-    do: arg |> lower_expr() |> Render.render_expr() |> IO.iodata_to_binary()
+  defp macro_call_arg_tokens(arg, :expr, %Context{} = context),
+    do: arg |> lower_expr(context) |> Render.render_expr() |> IO.iodata_to_binary()
 
-  defp macro_call_arg_tokens(arg, :ty),
+  defp macro_call_arg_tokens(arg, :ty, %Context{}),
     do: arg |> lower_type_arg() |> Render.render_type() |> IO.iodata_to_binary()
 
-  defp macro_call_arg_tokens(arg, fragment) when fragment in [:ident, :literal],
-    do: arg |> lower_expr() |> Render.render_expr() |> IO.iodata_to_binary()
+  defp macro_call_arg_tokens(arg, fragment, %Context{} = context)
+       when fragment in [:ident, :literal],
+       do: arg |> lower_expr(context) |> Render.render_expr() |> IO.iodata_to_binary()
 
-  defp macro_call_arg_tokens(arg, fragment) do
+  defp macro_call_arg_tokens(arg, fragment, %Context{}) do
     Diagnostic.lower(
       :unsupported_macro_call_fragment,
       arg,
@@ -1667,9 +1688,6 @@ defmodule RustQ.Meta.Lower do
       BindingIndex.return_type(callables, nil, function, arity)
   end
 
-  defp exact_callable_target_candidates(parts),
-    do: exact_callable_target_candidates(parts, current_rust_modules())
-
   defp exact_callable_target_candidates(parts, rust_modules) do
     mapped = mapped_alias_parts(parts, rust_modules)
 
@@ -1681,9 +1699,6 @@ defmodule RustQ.Meta.Lower do
     ]
     |> Enum.uniq()
   end
-
-  defp callable_target_candidates(parts),
-    do: callable_target_candidates(parts, current_rust_modules())
 
   defp callable_target_candidates(parts, rust_modules) do
     mapped = mapped_alias_parts(parts, rust_modules)
