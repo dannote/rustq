@@ -176,6 +176,9 @@ defmodule RustQ.Meta do
       def __rustq_macro_items__, do: unquote(Macro.escape(macro_items))
 
       @doc false
+      def __rustq_macro_definitions__, do: unquote(Macro.escape(rust_macros))
+
+      @doc false
       def __rustq_types__, do: unquote(Macro.escape(type_aliases))
 
       @doc false

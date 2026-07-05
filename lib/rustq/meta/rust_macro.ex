@@ -102,6 +102,83 @@ defmodule RustQ.Meta.RustMacro do
     end)
   end
 
+  @doc false
+  @spec item_call(Definition.t(), keyword()) :: AST.MacroItemCall.t()
+  def item_call(%Definition{name: name, args: args}, values) when is_list(values) do
+    value_map = Map.new(values)
+
+    %AST.MacroItemCall{
+      path: %AST.Path{parts: [name]},
+      tokens: args |> item_call_tokens(value_map) |> List.flatten()
+    }
+  end
+
+  defp item_call_tokens(args, values) do
+    Enum.map(args, &item_call_arg(&1, values))
+  end
+
+  defp item_call_arg({:labeled, :fn, name, fragment}, values) do
+    ["\n    fn ", call_labeled_value!(values, :fn, name, fragment), ";"]
+  end
+
+  defp item_call_arg({:labeled, label, name, fragment}, values) do
+    [
+      "\n    ",
+      Atom.to_string(label),
+      " ",
+      call_labeled_value!(values, label, name, fragment),
+      ";"
+    ]
+  end
+
+  defp item_call_arg({name, fragment}, values) do
+    ["\n    ", call_value!(values, name, fragment), ";"]
+  end
+
+  defp item_call_arg({:repeat, name, captures}, values) do
+    rows = Map.fetch!(values, name)
+
+    [
+      "\n    ",
+      Atom.to_string(name),
+      " [\n",
+      rows
+      |> Enum.map(&["        ", item_call_repeat_row(name, captures, Map.new(&1))])
+      |> Enum.intersperse("\n"),
+      "\n    ]"
+    ]
+  end
+
+  defp item_call_repeat_row(name, captures, row) do
+    name
+    |> repeat_row_layout(captures)
+    |> Enum.map(fn
+      {:capture, capture} -> capture_value(row, capture)
+      token -> token
+    end)
+  end
+
+  defp capture_value(row, {name, fragment}), do: call_value!(row, name, fragment)
+
+  defp call_labeled_value!(values, label, name, fragment) do
+    value =
+      if Map.has_key?(values, label),
+        do: Map.fetch!(values, label),
+        else: Map.fetch!(values, name)
+
+    render_call_value(value, fragment)
+  end
+
+  defp call_value!(values, name, fragment),
+    do: render_call_value(Map.fetch!(values, name), fragment)
+
+  defp render_call_value(value, :literal) when is_binary(value), do: inspect(value)
+  defp render_call_value(value, :literal), do: to_string(value)
+  defp render_call_value(value, :ident) when is_list(value), do: IO.iodata_to_binary(value)
+  defp render_call_value(value, :ident), do: to_string(value)
+  defp render_call_value(value, _fragment) when is_list(value), do: IO.iodata_to_binary(value)
+  defp render_call_value(value, _fragment), do: to_string(value)
+
   defp item(%Definition{} = definition, rust_modules, env, callables, index) do
     ast =
       case item_macro_body(definition.body_ast, definition, rust_modules, callables, index) do
@@ -368,30 +445,105 @@ defmodule RustQ.Meta.RustMacro do
   defp item_pattern_arg({:labeled, label, name, fragment}), do: "#{label} $#{name}:#{fragment};"
   defp item_pattern_arg({name, fragment}), do: "$#{name}:#{fragment};"
 
-  defp item_pattern_arg({:repeat, :skip_fields, [field_id, repeated, bytes, skip]}) do
-    "skip_fields [$(#{capture_pattern(field_id)} => #{capture_pattern(repeated)} #{capture_pattern(bytes)} #{capture_pattern(skip)};)*]"
+  defp item_pattern_arg({:repeat, name, args}) do
+    pattern =
+      name
+      |> repeat_row_layout(args)
+      |> Enum.map_join(fn
+        {:capture, capture} -> capture_pattern(capture)
+        token -> token
+      end)
+
+    "#{name} [$(#{pattern})*]"
   end
 
-  defp item_pattern_arg({:repeat, :fields, args}) do
-    case args do
+  defp repeat_row_layout(:skip_fields, [field_id, repeated, bytes, skip]) do
+    [capture(field_id), " => ", capture(repeated), " ", capture(bytes), " ", capture(skip), ";"]
+  end
+
+  defp repeat_row_layout(:fields, captures) do
+    case captures do
+      [field_expr] ->
+        [capture(field_expr), ";"]
+
+      [field_mode, field_skip] ->
+        [capture(field_mode), " ", capture(field_skip), ";"]
+
+      [{:field_id, :literal} = field_id, field_mode, field_skip] ->
+        [capture(field_id), " => ", capture(field_mode), " ", capture(field_skip), ";"]
+
+      [
+        {:field_id, :literal} = field_id,
+        {:field_index, :literal} = field_index,
+        field_repeated,
+        field_decode
+      ] ->
+        [
+          capture(field_id),
+          " => ",
+          capture(field_index),
+          ": ",
+          capture(field_repeated),
+          " ",
+          capture(field_decode),
+          ";"
+        ]
+
       [field_name, field_mode, field_decode] ->
-        "fields [$(#{capture_pattern(field_name)} #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
+        [capture(field_name), " ", capture(field_mode), " ", capture(field_decode), ";"]
 
       [field_id, field_name, field_mode, field_decode] ->
-        "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)};)*]"
+        [
+          capture(field_id),
+          " => ",
+          capture(field_name),
+          ": ",
+          capture(field_mode),
+          " ",
+          capture(field_decode),
+          ";"
+        ]
 
       [field_id, field_name, field_mode, field_decode, skip_mode, field_skip] ->
-        "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)}; #{capture_pattern(skip_mode)} #{capture_pattern(field_skip)};)*]"
+        [
+          capture(field_id),
+          " => ",
+          capture(field_name),
+          ": ",
+          capture(field_mode),
+          " ",
+          capture(field_decode),
+          "; ",
+          capture(skip_mode),
+          " ",
+          capture(field_skip),
+          ";"
+        ]
 
       [field_id, field_name, field_mode, field_decode, skip_repeated, skip_bytes, field_skip] ->
-        "fields [$(#{capture_pattern(field_id)} => #{capture_pattern(field_name)}: #{capture_pattern(field_mode)} #{capture_pattern(field_decode)}; #{capture_pattern(skip_repeated)} #{capture_pattern(skip_bytes)} #{capture_pattern(field_skip)};)*]"
+        [
+          capture(field_id),
+          " => ",
+          capture(field_name),
+          ": ",
+          capture(field_mode),
+          " ",
+          capture(field_decode),
+          "; ",
+          capture(skip_repeated),
+          " ",
+          capture(skip_bytes),
+          " ",
+          capture(field_skip),
+          ";"
+        ]
     end
   end
 
-  defp item_pattern_arg({:repeat, name, args}) do
-    captures = Enum.map_join(args, " ", &capture_pattern/1)
-    "#{name} [$(#{captures};)*]"
-  end
+  defp repeat_row_layout(_name, captures),
+    do: captures |> Enum.map(&capture/1) |> Enum.intersperse(" ") |> Kernel.++([";"])
+
+  defp capture(capture), do: {:capture, capture}
 
   defp capture_pattern({name, fragment}), do: "$#{name}:#{fragment}"
 
@@ -416,54 +568,6 @@ defmodule RustQ.Meta.RustMacro do
     stmt
     |> Render.render_stmt()
     |> IO.iodata_to_binary()
-    |> format_repeated_array_call()
-  end
-
-  defp format_repeated_array_call(source) do
-    Regex.replace(
-      ~r/^([a-zA-Z_][a-zA-Z0-9_]*)\((.*), &\[\$\((.*)\)\*\]\)$/,
-      source,
-      fn _all, function, prefix, repeated ->
-        args = split_top_level_args(prefix)
-
-        [
-          function,
-          "(\n",
-          args |> Enum.map(&["    ", &1, ","]) |> Enum.intersperse("\n"),
-          "\n    &[\n",
-          "        $(",
-          repeated,
-          ")*\n",
-          "    ],\n",
-          ")"
-        ]
-        |> IO.iodata_to_binary()
-      end
-    )
-  end
-
-  defp split_top_level_args(source), do: split_top_level_args(String.graphemes(source), [], [], 0)
-
-  defp split_top_level_args([], current, acc, _depth) do
-    [current | acc]
-    |> Enum.reverse()
-    |> Enum.map(&(&1 |> Enum.reverse() |> Enum.join() |> String.trim()))
-    |> Enum.reject(&(&1 == ""))
-  end
-
-  defp split_top_level_args(["," | rest], current, acc, 0),
-    do: split_top_level_args(rest, [], [current | acc], 0)
-
-  defp split_top_level_args([char | rest], current, acc, depth) when char in ["(", "[", "{"] do
-    split_top_level_args(rest, [char | current], acc, depth + 1)
-  end
-
-  defp split_top_level_args([char | rest], current, acc, depth) when char in [")", "]", "}"] do
-    split_top_level_args(rest, [char | current], acc, max(depth - 1, 0))
-  end
-
-  defp split_top_level_args([char | rest], current, acc, depth) do
-    split_top_level_args(rest, [char | current], acc, depth)
   end
 
   defp macro_capture_source({name, _meta, args}, macro_vars)

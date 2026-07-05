@@ -290,6 +290,196 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "defrustmacro_skip_field.rs")
   end
 
+  test "builds semantic item macro calls from defrustmacro metadata" do
+    defmodule DefrustMacroItemCallCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @type field :: %{
+              required(:id) => R.u32(),
+              required(:repeated) => R.bool(),
+              required(:decode) => R.raw(:DecodeFn)
+            }
+
+      @spec build(R.slice(R.path(:Field))) :: R.nif_result(R.unit())
+      defrust(build(_fields), do: :ok)
+
+      defrustmacro descriptor(
+                     fn: name(:ident),
+                     env: env(:ident),
+                     fields:
+                       repeat do
+                         field_id(:literal)
+                         field_repeated(:literal)
+                         field_decode(:ident)
+                       end
+                   ) do
+        @spec name(R.path(:Env, R.lifetime(:a))) :: R.nif_result(R.unit())
+        defrust name(_env) do
+          build(
+            ref(
+              array([
+                repeat fields do
+                  struct_literal(Field,
+                    id: field_id,
+                    repeated: field_repeated,
+                    decode: field_decode
+                  )
+                end
+              ])
+            )
+          )
+        end
+      end
+    end
+
+    call =
+      RustQ.Meta.AST.macro_call(DefrustMacroItemCallCase, :descriptor,
+        fn: :decode_user,
+        env: :env,
+        fields: [
+          [field_id: 1, field_repeated: false, field_decode: :decode_name],
+          [field_id: 2, field_repeated: true, field_decode: :decode_tags]
+        ]
+      )
+
+    source =
+      [
+        RustQ.Meta.AST.macro_item(DefrustMacroItemCallCase, :descriptor),
+        call
+      ]
+      |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
+
+    assert source =~ "macro_rules! descriptor"
+    assert source =~ "descriptor!"
+    assert source =~ "fn decode_user;"
+    assert source =~ "env env;"
+    assert source =~ "1 => false decode_name;"
+    assert source =~ "2 => true decode_tags;"
+    assert RustQ.valid?(source, "defrustmacro_item_call.rs")
+  end
+
+  test "semantic defrustmacro item calls support full message field rows" do
+    defmodule DefrustMacroFullMessageItemCallCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @type field :: %{
+              required(:id) => R.u32(),
+              required(:index) => R.usize(),
+              required(:repeated) => R.bool(),
+              required(:decode) => R.raw(:DecodeFn)
+            }
+
+      @spec build(R.slice(R.path(:Field))) :: R.nif_result(R.unit())
+      defrust(build(_fields), do: :ok)
+
+      defrustmacro descriptor(
+                     fn: name(:ident),
+                     fields:
+                       repeat do
+                         field_id(:literal)
+                         field_index(:literal)
+                         field_repeated(:literal)
+                         field_decode(:ident)
+                       end
+                   ) do
+        @spec name() :: R.nif_result(R.unit())
+        defrust name() do
+          build(
+            ref(
+              array([
+                repeat fields do
+                  struct_literal(Field,
+                    id: field_id,
+                    index: field_index,
+                    repeated: field_repeated,
+                    decode: field_decode
+                  )
+                end
+              ])
+            )
+          )
+        end
+      end
+    end
+
+    call =
+      RustQ.Meta.AST.macro_call(DefrustMacroFullMessageItemCallCase, :descriptor,
+        fn: :decode_message,
+        fields: [
+          [field_id: 1, field_index: 1, field_repeated: false, field_decode: :decode_id],
+          [field_id: 2, field_index: 2, field_repeated: true, field_decode: :decode_children]
+        ]
+      )
+
+    source =
+      [
+        RustQ.Meta.AST.macro_item(DefrustMacroFullMessageItemCallCase, :descriptor),
+        call
+      ]
+      |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
+
+    assert source =~
+             "$field_id:literal => $field_index:literal: $field_repeated:literal $field_decode:ident;"
+
+    assert source =~ "1 => 1: false decode_id;"
+    assert source =~ "2 => 2: true decode_children;"
+    assert RustQ.valid?(source, "defrustmacro_full_message_item_call.rs")
+  end
+
+  test "semantic defrustmacro item calls support one-capture field repetitions" do
+    defmodule DefrustMacroOneCaptureItemCallCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec build(R.slice(R.u32())) :: R.nif_result(R.unit())
+      defrust(build(_fields), do: :ok)
+
+      defrustmacro descriptor(
+                     fn: name(:ident),
+                     fields:
+                       repeat do
+                         field_expr(:expr)
+                       end
+                   ) do
+        @spec name() :: R.nif_result(R.unit())
+        defrust name() do
+          build(
+            ref(
+              array([
+                repeat fields do
+                  field_expr
+                end
+              ])
+            )
+          )
+        end
+      end
+    end
+
+    call =
+      RustQ.Meta.AST.macro_call(DefrustMacroOneCaptureItemCallCase, :descriptor,
+        fn: :decode_values,
+        fields: [
+          [field_expr: "1 + 2"],
+          [field_expr: "3 + 4"]
+        ]
+      )
+
+    source =
+      [
+        RustQ.Meta.AST.macro_item(DefrustMacroOneCaptureItemCallCase, :descriptor),
+        call
+      ]
+      |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
+
+    assert source =~ "fields [$("
+    assert source =~ "1 + 2;"
+    assert source =~ "3 + 4;"
+    assert RustQ.valid?(source, "defrustmacro_one_capture_item_call.rs")
+  end
+
   test "selects defrustmacro items by name" do
     defmodule DefrustMacroSelectorCase do
       use RustQ.Meta

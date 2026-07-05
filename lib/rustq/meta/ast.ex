@@ -7,6 +7,7 @@ defmodule RustQ.Meta.AST do
   alias RustQ.Diagnostic
   alias RustQ.Meta.Decoder
   alias RustQ.Meta.Lower
+  alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
   alias RustQ.Rust
   alias RustQ.Rust.AST
@@ -42,6 +43,15 @@ defmodule RustQ.Meta.AST do
     do: Enum.map(names, &macro_item(module, &1))
 
   @doc false
+  @spec macro_call(module(), atom(), keyword()) :: Rust.Fragment.t()
+  def macro_call(module, name, args) when is_atom(module) and is_atom(name) and is_list(args) do
+    module
+    |> macro_definition!(name)
+    |> RustMacro.item_call(args)
+    |> Rust.ast_item()
+  end
+
+  @doc false
   @spec ast!(module(), atom()) :: AST.Function.t()
   def ast!(module, name) when is_atom(module) and is_atom(name) do
     Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
@@ -55,6 +65,17 @@ defmodule RustQ.Meta.AST do
     |> Enum.find(&(&1.name == name))
     |> case do
       %{ast: %AST.MacroItem{} = ast} -> ast
+      nil -> raise ArgumentError, "#{inspect(module)} has no defrustmacro item named #{name}"
+    end
+  end
+
+  @doc false
+  @spec macro_definition!(module(), atom()) :: RustMacro.Definition.t()
+  def macro_definition!(module, name) when is_atom(module) and is_atom(name) do
+    module.__rustq_macro_definitions__()
+    |> Enum.find(&(&1.name == name))
+    |> case do
+      %RustMacro.Definition{} = definition -> definition
       nil -> raise ArgumentError, "#{inspect(module)} has no defrustmacro item named #{name}"
     end
   end
