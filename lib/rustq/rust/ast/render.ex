@@ -242,8 +242,14 @@ defmodule RustQ.Rust.AST.Render do
     ["$(", render_macro_tokens(tokens), ")", separator || "", Atom.to_string(operator)]
   end
 
+  defp render_macro_token(%Literal{} = literal), do: render_expr(literal)
+  defp render_macro_token(%Path{} = path), do: render_expr(path)
   defp render_macro_token(token) when is_atom(token), do: Atom.to_string(token)
   defp render_macro_token(token) when is_binary(token), do: token
+
+  def render_macro_item_call(%MacroItemCall{path: path, tokens: tokens}) when is_list(tokens) do
+    [render_expr(path), "! { ", render_macro_tokens(tokens), " }"]
+  end
 
   def render_macro_item_call(%MacroItemCall{path: path, args: args}) do
     [render_expr(path), "! { ", Elixir.Enum.map_join(args, ", ", &render_macro_arg/1), ", }"]

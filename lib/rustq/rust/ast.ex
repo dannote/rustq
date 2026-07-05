@@ -266,6 +266,8 @@ defmodule RustQ.Rust.AST do
   @type macro_token ::
           String.t()
           | atom()
+          | Literal.t()
+          | Path.t()
           | MacroVar.t()
           | MacroCapture.t()
           | MacroRepeat.t()
@@ -302,12 +304,13 @@ defmodule RustQ.Rust.AST do
       )
   )
 
-  defnode(MacroItemCall, :item, [:path, args: []],
+  defnode(MacroItemCall, :item, [:path, args: [], tokens: nil],
     type:
       quote(
         do: %__MODULE__{
           path: Path.t(),
-          args: [atom() | String.t() | {atom() | String.t(), String.t()}]
+          args: [atom() | String.t() | {atom() | String.t(), String.t()}],
+          tokens: [AST.macro_token()] | nil
         }
       )
   )

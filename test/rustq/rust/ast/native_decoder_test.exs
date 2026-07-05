@@ -52,6 +52,36 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert source =~ ~s|"Elixir.RustQ.Native"|
   end
 
+  test "native decoder renders token-shaped macro item calls" do
+    source =
+      Native.render_ast(
+        A.macro_item_token_call(:fig_scene_skip_field_decoder, [
+          "fn ",
+          A.path(:skip_fig_message_field),
+          "; decoder ",
+          A.path(:decoder),
+          "; field ",
+          A.path(:field),
+          "; definition ",
+          A.lit("scene summary"),
+          "; skip_fields [",
+          A.lit(1),
+          " => ",
+          A.lit(false),
+          " ",
+          A.lit(true),
+          " ",
+          A.path(:skip_blob_from_decoder),
+          ";]"
+        ])
+      )
+
+    assert source =~ "fig_scene_skip_field_decoder!"
+    assert source =~ "fn skip_fig_message_field"
+    assert source =~ ~s|definition "scene summary"|
+    assert source =~ "1 => false true skip_blob_from_decoder"
+  end
+
   test "dogfooded item and type decoders render use, module, macro, constants, structs, and enums" do
     use_source = Native.render_ast(%AST.Use{tree: "std::fmt"})
 

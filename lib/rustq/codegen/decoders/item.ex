@@ -120,8 +120,14 @@ defmodule RustQ.Codegen.Decoders.Item do
   defrust decode_ast_macro_item_call(term) do
     unwrap!(expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItemCall"))
     path = unwrap!(required_path(term, "path"))
-    args = unwrap!(Super.decode_macro_item_arg_list(unwrap!(required_field(term, "args"))))
-    Super.parse_macro_item_call(path, args)
+    tokens = unwrap!(required_field(term, "tokens"))
+
+    if unwrap!(is_nil(tokens)) do
+      args = unwrap!(Super.decode_macro_item_arg_list(unwrap!(required_field(term, "args"))))
+      Super.parse_macro_item_call(path, args)
+    else
+      Super.parse_macro_item_token_call(path, tokens)
+    end
   end
 
   @spec decode_ast_macro_rules(term()) :: R.nif_result(R.path(:Item))

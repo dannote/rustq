@@ -141,6 +141,12 @@ fn macro_token_source(term: Term) -> NifResult<String> {
             crate::generated_ast::ast_modules::MACRO_VAR => macro_var_source(term),
             crate::generated_ast::ast_modules::MACRO_CAPTURE => macro_capture_source(term),
             crate::generated_ast::ast_modules::MACRO_REPEAT => macro_repeat_source(term),
+            crate::generated_ast::ast_modules::LITERAL
+            | crate::generated_ast::ast_modules::PATH => {
+                Ok(crate::generated_ast::decode_ast_expr(term)?
+                    .to_token_stream()
+                    .to_string())
+            }
             _ => Err(rustler::Error::BadArg),
         };
     }
@@ -212,6 +218,12 @@ fn decode_macro_item_arg(term: Term) -> NifResult<MacroItemArg> {
 
 pub(crate) fn parse_macro_item_call(path: syn::Path, args: Vec<MacroItemArg>) -> NifResult<Item> {
     parse_syn(quote!(#path! { #(#args),* }))
+}
+
+pub(crate) fn parse_macro_item_token_call(path: syn::Path, tokens: Term) -> NifResult<Item> {
+    let path = path.to_token_stream().to_string();
+    let tokens = macro_token_list_source(tokens)?;
+    parse_macro_item(format!("{path}! {{ {tokens} }}"))
 }
 
 pub(crate) fn parse_item_function_args(

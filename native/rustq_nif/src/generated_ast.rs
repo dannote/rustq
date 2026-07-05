@@ -410,8 +410,13 @@ pub(crate) fn decode_ast_macro_item<'a>(term: Term<'a>) -> NifResult<Item> {
 pub(crate) fn decode_ast_macro_item_call<'a>(term: Term<'a>) -> NifResult<Item> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItemCall")?;
     let path = required_path(term, "path")?;
-    let args = super::decode_macro_item_arg_list(required_field(term, "args")?)?;
-    super::parse_macro_item_call(path, args)
+    let tokens = required_field(term, "tokens")?;
+    if is_nil(tokens)? {
+        let args = super::decode_macro_item_arg_list(required_field(term, "args")?)?;
+        super::parse_macro_item_call(path, args)
+    } else {
+        super::parse_macro_item_token_call(path, tokens)
+    }
 }
 
 pub(crate) fn decode_ast_macro_rules<'a>(term: Term<'a>) -> NifResult<Item> {

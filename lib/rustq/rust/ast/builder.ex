@@ -173,6 +173,9 @@ defmodule RustQ.Rust.AST.Builder do
   def macro_item(source), do: %MacroItem{source: source}
   def macro_item_call(path, args \\ []), do: %MacroItemCall{path: expr_path(path), args: args}
 
+  def macro_item_token_call(path, tokens),
+    do: %MacroItemCall{path: expr_path(path), tokens: flatten(tokens)}
+
   def macro_rules(name, rules, opts \\ []),
     do: %MacroRules{name: name, rules: List.wrap(rules), attrs: Keyword.get(opts, :attrs, [])}
 
