@@ -92,16 +92,20 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_statement({:assign!, _, [target, expression]}, %Context{} = context) do
     expected_type = infer_expr_type(target, context.vars)
-    lower_assignment(target, expression, expected_type)
+    lower_assignment(target, expression, expected_type, context)
   end
 
-  defp lower_statement({:return!, _, [expression]}, %Context{return_type: return_type}) do
-    %AST.EarlyReturn{expr: lower_return_expr(expression, return_type)}
+  defp lower_statement({:return!, _, [expression]}, %Context{return_type: return_type} = context) do
+    %AST.EarlyReturn{expr: lower_return_expr(expression, return_type, context)}
   end
 
   defp lower_statement({:=, _, [pattern, expression]}, %Context{} = context) do
     expected_type = infer_let_expected_type(pattern, expression, context)
-    %AST.Let{pattern: lower_binding_pattern(pattern), expr: lower_expr(expression, expected_type)}
+
+    %AST.Let{
+      pattern: lower_binding_pattern(pattern),
+      expr: lower_expr(expression, expected_type, context)
+    }
   end
 
   defp lower_statement({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
@@ -141,8 +145,8 @@ defmodule RustQ.Meta.Lower do
   defp lower_statement(:ok, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
   defp lower_statement(nil, %Context{}), do: %AST.ExprStmt{expr: %AST.Tuple{values: []}}
 
-  defp lower_statement(expression, %Context{return_type: return_type}) do
-    %AST.ExprStmt{expr: lower_statement_expr(expression, return_type)}
+  defp lower_statement(expression, %Context{} = context) do
+    %AST.ExprStmt{expr: lower_statement_expr(expression, context)}
   end
 
   defp lower_return({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
@@ -165,8 +169,12 @@ defmodule RustQ.Meta.Lower do
     %AST.Return{expr: lower_for_reduce_expr(expression, context.return_type)}
   end
 
-  defp lower_return(expression, %Context{return_type: return_type}),
-    do: %AST.Return{expr: lower_return_expr(expression, return_type)}
+  defp lower_return(expression, %Context{return_type: return_type} = context),
+    do: %AST.Return{expr: lower_return_expr(expression, return_type, context)}
+
+  defp lower_return_expr(expression, return_type, %Context{} = context) do
+    with_lowering_context(context, fn -> lower_return_expr(expression, return_type) end)
+  end
 
   defp lower_return_expr(:ok, %Type{kind: :nif_result, rust: "NifResult<()>"}), do: %AST.Ok{}
   defp lower_return_expr(:ok, _return_type), do: %AST.Tuple{values: []}
@@ -200,6 +208,10 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_return_expr(expression, _return_type), do: lower_expr(expression)
 
+  defp lower_expr(expression, %Context{} = context) do
+    with_lowering_context(context, fn -> lower_expr(expression) end)
+  end
+
   defp lower_expr({:ref, _, [expression]}, %Type{} = expected_type) do
     expected_inner = Type.ref_inner(Type.expected_value(expected_type))
     %AST.Ref{expr: lower_expr(expression, expected_inner || expected_type)}
@@ -230,23 +242,27 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr(expression, _expected_type), do: lower_expr(expression)
 
+  defp lower_expr(expression, expected_type, %Context{} = context) do
+    with_lowering_context(context, fn -> lower_expr(expression, expected_type) end)
+  end
+
   defp lower_statement_expr(
          {:for, _, [{:<-, _, [_pattern, _expression]}, [reduce: _initial], [do: _clauses]]} =
            expression,
-         %Type{} = return_type
+         %Context{return_type: %Type{}} = context
        ) do
-    %AST.Try{expr: lower_for_reduce_expr(expression, return_type)}
+    %AST.Try{expr: lower_for_reduce_expr(expression, context)}
   end
 
-  defp lower_statement_expr(expression, %Type{} = return_type) do
+  defp lower_statement_expr(expression, %Context{return_type: %Type{} = return_type} = context) do
     if infer_statement_propagation?(expression, return_type) do
-      %AST.Try{expr: lower_expr(expression)}
+      %AST.Try{expr: lower_expr(expression, context)}
     else
-      lower_expr(expression)
+      lower_expr(expression, context)
     end
   end
 
-  defp lower_statement_expr(expression, _return_type), do: lower_expr(expression)
+  defp lower_statement_expr(expression, %Context{} = context), do: lower_expr(expression, context)
 
   defp infer_statement_propagation?(expression, %Type{} = return_type) do
     same_wrapper_propagation?(expression, return_type)
@@ -317,7 +333,7 @@ defmodule RustQ.Meta.Lower do
         }
       end)
 
-    %AST.Match{expr: lower_expr(expression), arms: arms}
+    %AST.Match{expr: lower_expr(expression, context), arms: arms}
   end
 
   defp normalize_case_clauses({:__block__, _meta, clauses}), do: clauses
@@ -328,7 +344,7 @@ defmodule RustQ.Meta.Lower do
     else_body = Keyword.get(branches, :else)
 
     %AST.If{
-      condition: lower_expr(condition),
+      condition: lower_expr(condition, context),
       then: lower_clause_body(then_body, context),
       else: lower_clause_body(else_body, context)
     }
@@ -361,7 +377,7 @@ defmodule RustQ.Meta.Lower do
     with_value = :__rustq_with_value
 
     %AST.Match{
-      expr: lower_expr(expression),
+      expr: lower_expr(expression, context),
       arms: [
         %AST.Arm{
           pattern: lower_match_pattern(pattern, nil),
@@ -392,38 +408,42 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
-  defp lower_assignment(target, {op, _meta, [left, right]}, expected_type)
+  defp lower_assignment(target, {op, _meta, [left, right]}, expected_type, %Context{} = context)
        when op in [:+, :-, :*, :/] do
-    lower_assignment_op(target, op, left, right, expected_type)
+    lower_assignment_op(target, op, left, right, expected_type, context)
   end
 
   defp lower_assignment(
          target,
          {{:., _, [{:__aliases__, _, [:Bitwise]}, op]}, _, [left, right]},
-         expected_type
+         expected_type,
+         %Context{} = context
        )
        when op in [:bsr, :band] do
-    lower_assignment_op(target, op, left, right, expected_type)
+    lower_assignment_op(target, op, left, right, expected_type, context)
   end
 
-  defp lower_assignment(target, expression, expected_type) do
-    %AST.Assign{target: lower_expr(target), expr: lower_expr(expression, expected_type)}
+  defp lower_assignment(target, expression, expected_type, %Context{} = context) do
+    %AST.Assign{
+      target: lower_expr(target, context),
+      expr: lower_expr(expression, expected_type, context)
+    }
   end
 
-  defp lower_assignment_op(target, op, left, right, expected_type) do
-    lowered_target = lower_expr(target)
-    lowered_left = lower_expr(left)
+  defp lower_assignment_op(target, op, left, right, expected_type, %Context{} = context) do
+    lowered_target = lower_expr(target, context)
+    lowered_left = lower_expr(left, context)
 
     if lowered_target == lowered_left do
       %AST.AssignOp{
         target: lowered_target,
         op: operator_op(op),
-        expr: lower_expr(right, expected_type)
+        expr: lower_expr(right, expected_type, context)
       }
     else
       %AST.Assign{
         target: lowered_target,
-        expr: lower_expr({op, [], [left, right]}, expected_type)
+        expr: lower_expr({op, [], [left, right]}, expected_type, context)
       }
     end
   end
@@ -439,7 +459,7 @@ defmodule RustQ.Meta.Lower do
           some_pattern
           |> lower_match_pattern(%Type{kind: :option})
           |> mark_mutable_pattern_vars(mutable_vars),
-        expr: lower_expr(expression, %Type{kind: :option}),
+        expr: lower_expr(expression, %Type{kind: :option}, context),
         then: then_body
       }
     else
@@ -463,9 +483,20 @@ defmodule RustQ.Meta.Lower do
     |> Enum.all?(&(&1 in [:ok, nil]))
   end
 
+  defp lower_for_reduce_expr(expression, %Context{return_type: %Type{} = return_type} = context),
+    do: lower_for_reduce_expr(expression, return_type, context)
+
+  defp lower_for_reduce_expr(expression, %Type{} = return_type),
+    do:
+      lower_for_reduce_expr(expression, return_type, %{
+        current_context()
+        | return_type: return_type
+      })
+
   defp lower_for_reduce_expr(
          {:for, _, [{:<-, _, [pattern, expression]}, [reduce: initial], [do: clauses]]},
-         %Type{} = return_type
+         %Type{} = return_type,
+         %Context{} = context
        ) do
     acc = :__rustq_reduce
     acc_type = reduce_acc_type(initial, return_type)
@@ -475,17 +506,17 @@ defmodule RustQ.Meta.Lower do
         %AST.Let{
           pattern: %AST.PatVar{name: acc},
           mutable: true,
-          expr: lower_return_expr(initial, acc_type)
+          expr: lower_return_expr(initial, acc_type, context)
         },
         %AST.For{
           pattern: lower_binding_pattern(pattern),
-          expr: lower_expr(expression),
+          expr: lower_expr(expression, context),
           body: [
             %AST.Assign{
               target: %AST.Var{name: acc},
               expr: %AST.Match{
                 expr: %AST.Var{name: acc},
-                arms: lower_for_reduce_arms(clauses, acc_type)
+                arms: lower_for_reduce_arms(clauses, acc_type, context)
               }
             }
           ]
@@ -495,7 +526,7 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
-  defp lower_for_reduce_expr(other, _return_type) do
+  defp lower_for_reduce_expr(other, _return_type, _context) do
     Diagnostic.lower(
       :unsupported_for_reduce,
       other,
@@ -517,13 +548,13 @@ defmodule RustQ.Meta.Lower do
 
   defp reduce_acc_type(_initial, %Type{} = return_type), do: return_type
 
-  defp lower_for_reduce_arms(clauses, %Type{} = return_type) do
+  defp lower_for_reduce_arms(clauses, %Type{} = return_type, %Context{} = context) do
     carry = :__rustq_reduce_value
 
     Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
       %AST.Arm{
         pattern: lower_match_pattern(pattern, return_type),
-        body: lower_clause_body(body, %Context{position: :return, return_type: return_type})
+        body: lower_clause_body(body, %{context | position: :return, return_type: return_type})
       }
     end) ++
       [
@@ -870,18 +901,19 @@ defmodule RustQ.Meta.Lower do
     do: %AST.BinaryOp{left: lower_expr(left), op: :bitand, right: lower_expr(right)}
 
   defp lower_expr({:if, _, [condition, branches]}),
-    do: lower_if(condition, branches, %Context{position: :expr})
+    do: lower_if(condition, branches, %{current_context() | position: :expr})
 
   defp lower_expr({:case, _, [expression, [do: clauses]]}),
-    do: lower_case(expression, clauses, %Context{position: :expr})
+    do: lower_case(expression, clauses, %{current_context() | position: :expr})
 
-  defp lower_expr({:with, _, clauses}), do: lower_with(clauses, %Context{position: :expr})
+  defp lower_expr({:with, _, clauses}),
+    do: lower_with(clauses, %{current_context() | position: :expr})
 
   defp lower_expr(
          {:for, _, [{:<-, _, [_pattern, _expression]}, [reduce: _initial], [do: _clauses]]} =
            expression
        ),
-       do: lower_for_reduce_expr(expression, current_return_type())
+       do: lower_for_reduce_expr(expression, current_context())
 
   defp lower_expr({{:., _meta, [receiver, field_or_function]}, call_meta, []}) do
     no_parens? = Keyword.get(call_meta, :no_parens, false)
@@ -1749,6 +1781,17 @@ defmodule RustQ.Meta.Lower do
     source
     |> String.replace(~r/\$([a-zA-Z_][a-zA-Z0-9_]*)\s+/, ~S|$\1|)
     |> String.replace(" ?", "?")
+  end
+
+  defp current_context do
+    %Context{
+      rust_modules: current_rust_modules(),
+      callables: current_callables(),
+      vars: current_vars(),
+      return_type: current_return_type(),
+      macro_vars: current_macro_vars(),
+      rust_macros: current_rust_macros()
+    }
   end
 
   defp current_rust_modules, do: Process.get({__MODULE__, :rust_modules}, %{})
