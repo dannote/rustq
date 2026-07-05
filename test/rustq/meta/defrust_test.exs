@@ -1233,6 +1233,34 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "auto_borrow_struct_field.rs")
   end
 
+  test "defrust checks case arms against expected call argument type" do
+    defmodule AutoBorrowCaseArmCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec use_color(R.ref(R.raw(:Color))) :: R.nif_result(R.unit())
+      defrust(use_color(_color), do: :ok)
+
+      @spec run(R.raw(:Color), R.u32()) :: R.nif_result(R.unit())
+      defrust run(color, flag) do
+        use_color(
+          case flag do
+            0 -> color
+            1 -> color
+          end
+        )
+
+        :ok
+      end
+    end
+
+    source = AutoBorrowCaseArmCase.__rustq_source__()
+
+    assert source =~ "0i64 => &color"
+    assert source =~ "1i64 => &color"
+    assert RustQ.valid?(source, "auto_borrow_case_arm.rs")
+  end
+
   test "defrust auto-borrows call arguments from expected ref types" do
     defmodule AutoBorrowCallArgumentCase do
       use RustQ.Meta

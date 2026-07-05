@@ -111,6 +111,24 @@ defmodule RustQ.Meta.TypeTest do
              "skia_safe::path_1d_path_effect::Style"
   end
 
+  test "enriches explicit Rust paths from matching local aliases" do
+    %{aliases: aliases} =
+      Spec.declarations(
+        quote do
+          @type kiwi_skip_kind :: R.enum(one: [], repeated: [])
+          @type kiwi_skip_field :: %{required(:kind) => kiwi_skip_kind()}
+        end
+      )
+
+    assert %Type{kind: :struct, meta: %{fields: [{:kind, %Type{kind: :rust_enum}, :required}]}} =
+             Spec.type(quote(do: R.path(:KiwiSkipField)), aliases)
+
+    assert %Type{kind: :slice, meta: %{inner: %Type{kind: :struct, meta: %{fields: fields}}}} =
+             Spec.type(quote(do: R.slice(R.path(:KiwiSkipField))), aliases)
+
+    assert [{:kind, %Type{kind: :rust_enum}, :required}] = fields
+  end
+
   test "keeps external Elixir origin metadata" do
     assert %Type{
              rust: "skia_safe::Canvas",

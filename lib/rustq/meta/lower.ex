@@ -81,6 +81,17 @@ defmodule RustQ.Meta.Lower do
       [lower_return(final, return_context)]
   end
 
+  defp lower_expected_block(expressions, %Context{} = context, %Type{} = expected_type) do
+    context = context_with_downstream_let_types(expressions, context)
+
+    {statements, final} = split_final(expressions)
+    statement_context = %{context | position: :statement}
+    return_context = %{context | position: :return}
+
+    Enum.map(statements, &lower_statement(&1, statement_context)) ++
+      [%AST.Return{expr: lower_expr(final, expected_type, return_context)}]
+  end
+
   defp split_final([]), do: {[], :ok}
   defp split_final(expressions), do: {Enum.drop(expressions, -1), List.last(expressions)}
 
@@ -147,7 +158,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_return({:case, _, [expression, [do: clauses]]}, %Context{} = context) do
-    %AST.Return{expr: lower_case(expression, clauses, context)}
+    %AST.Return{expr: lower_case(expression, clauses, context, context.return_type)}
   end
 
   defp lower_return({:if, _, [condition, branches]}, %Context{} = context) do
@@ -225,6 +236,13 @@ defmodule RustQ.Meta.Lower do
     do: lower_expected_expr_context(expression, expected_type, context)
 
   defp lower_expected_expr_context(
+         {:__block__, _, [expression]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_expected_expr_context(expression, expected_type, context)
+
+  defp lower_expected_expr_context(
          {:ref, _, [expression]},
          %Type{} = expected_type,
          %Context{} = context
@@ -252,6 +270,13 @@ defmodule RustQ.Meta.Lower do
       fields: lower_named_fields(fields, expected_type, context)
     }
   end
+
+  defp lower_expected_expr_context(
+         {:case, _, [expression, [do: clauses]]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_case(expression, clauses, %{context | position: :expr}, expected_type)
 
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
     lower_checked_expr(expression, expected_type, context)
@@ -575,7 +600,7 @@ defmodule RustQ.Meta.Lower do
     Typing.check(expression, expected_type, typing_env(context))
   end
 
-  defp lower_case(expression, clauses, %Context{} = context) do
+  defp lower_case(expression, clauses, %Context{} = context, expected_type \\ nil) do
     clauses = normalize_case_clauses(clauses)
 
     case_type =
@@ -585,7 +610,7 @@ defmodule RustQ.Meta.Lower do
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
         {pattern, guard} = split_guarded_pattern(pattern)
         body_context = context_with_match_pattern(pattern, case_type, context)
-        body = lower_clause_body(body, body_context)
+        body = lower_clause_body(body, body_context, expected_type)
         mutable_vars = body |> collect_mut_refs() |> MapSet.new()
 
         %AST.Arm{
@@ -847,6 +872,15 @@ defmodule RustQ.Meta.Lower do
     |> block_expressions()
     |> lower_block(%{context | return_type: nil})
   end
+
+  defp lower_clause_body(body, %Context{position: :expr} = context, %Type{} = expected_type) do
+    body
+    |> block_expressions()
+    |> lower_expected_block(%{context | return_type: expected_type}, expected_type)
+  end
+
+  defp lower_clause_body(body, %Context{} = context, _expected_type),
+    do: lower_clause_body(body, context)
 
   defp infer_case_type_from_patterns(clauses) do
     if Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> option_pattern?(pattern) end) do

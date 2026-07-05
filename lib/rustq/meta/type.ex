@@ -545,8 +545,8 @@ defmodule RustQ.Meta.Type do
   defp parse_rust_type(:usize, [], _aliases), do: type(:usize, path(:usize))
   defp parse_rust_type(:unit, [], _aliases), do: type(:unit, %AST.TypeUnit{})
 
-  defp parse_rust_type(:path, [parts], _aliases), do: type(:type, spec_path!(parts, nil))
-  defp parse_rust_type(:path, [parts, opts], _aliases), do: type(:type, spec_path!(parts, opts))
+  defp parse_rust_type(:path, [parts], aliases), do: parse_path_type(parts, nil, aliases)
+  defp parse_rust_type(:path, [parts, opts], aliases), do: parse_path_type(parts, opts, aliases)
 
   defp parse_rust_type(:lifetime, [name], _aliases),
     do: type(:lifetime, {:raw, "'#{spec_path_part!(name)}"})
@@ -627,6 +627,21 @@ defmodule RustQ.Meta.Type do
   end
 
   defp parse_external_type(_module, function, _args, _aliases), do: type(:type, path(function))
+
+  defp parse_path_type(parts, opts, aliases) do
+    ast = spec_path!(parts, opts)
+    path_alias_type(ast, aliases) || type(:type, ast)
+  end
+
+  defp path_alias_type(%AST.TypePath{} = ast, aliases) do
+    rust = ast |> Render.render_type() |> IO.iodata_to_binary()
+
+    Enum.find_value(aliases, fn
+      {_key, %__MODULE__{meta: %{rust_name: ^rust}} = alias_type} -> alias_type
+      {_key, %__MODULE__{rust: ^rust} = alias_type} -> alias_type
+      _alias -> nil
+    end)
+  end
 
   defp spec_path!({:__block__, _, [parts]}, opts), do: spec_path!(parts, opts)
 
