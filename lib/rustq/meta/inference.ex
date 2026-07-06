@@ -41,16 +41,18 @@ defmodule RustQ.Meta.Inference do
   end
 
   defp infer_downstream_let_type(
-         {:=, _, [{name, _, context}, _rhs]},
+         {:=, _, [{name, _, context}, rhs]},
          expressions,
          index,
          vars,
          callbacks
        )
        when is_atom(name) and is_atom(context) do
+    rhs_success_type = rhs_success_type(rhs, callbacks)
+
     expressions
     |> Enum.drop(index + 1)
-    |> Enum.find_value(&expected_type_for_var(name, &1, vars, callbacks))
+    |> Enum.find_value(&expected_type_for_var(name, &1, vars, callbacks, rhs_success_type))
     |> case do
       %Type{} = type -> %{name => type}
       nil -> %{}
@@ -83,7 +85,18 @@ defmodule RustQ.Meta.Inference do
     end
   end
 
-  defp expected_type_for_var(name, ast, vars, callbacks) do
+  defp rhs_success_type({:unwrap!, _, [call]}, callbacks), do: rhs_success_type(call, callbacks)
+
+  defp rhs_success_type(call, %{return_type: return_type}) when is_function(return_type, 1) do
+    case return_type.(call) do
+      %Type{} = type -> Type.inner(type)
+      nil -> nil
+    end
+  end
+
+  defp rhs_success_type(_call, _callbacks), do: nil
+
+  defp expected_type_for_var(name, ast, vars, callbacks, rhs_success_type) do
     call_expected_type =
       ast
       |> downstream_call_arg_types(vars, callbacks)
@@ -91,9 +104,35 @@ defmodule RustQ.Meta.Inference do
         expected_type_for_arg(name, args, expected_types)
       end)
 
-    call_expected_type || expected_receiver_type_for_var(name, ast, callbacks) ||
+    call_expected_type || expected_comparison_type_for_var(name, ast, rhs_success_type) ||
+      expected_receiver_type_for_var(name, ast, callbacks, rhs_success_type) ||
       expected_return_type_for_var(name, ast, callbacks[:block_return_type])
   end
+
+  defp expected_comparison_type_for_var(name, ast, %Type{} = rhs_success_type) do
+    {_ast, comparisons} = Macro.prewalk(ast, [], &collect_var_comparison(&1, &2, name))
+
+    case comparisons do
+      [_ | _] -> rhs_success_type
+      [] -> nil
+    end
+  end
+
+  defp expected_comparison_type_for_var(_name, _ast, _rhs_success_type), do: nil
+
+  defp collect_var_comparison({op, _meta, [left, right]} = ast, comparisons, name)
+       when op in [:==, :!=, :<, :>, :<=, :>=] do
+    if var_expr?(left, name) or var_expr?(right, name) do
+      {ast, [op | comparisons]}
+    else
+      {ast, comparisons}
+    end
+  end
+
+  defp collect_var_comparison(ast, comparisons, _name), do: {ast, comparisons}
+
+  defp var_expr?({name, _meta, context}, name) when is_atom(context), do: true
+  defp var_expr?(_expr, _name), do: false
 
   defp expected_type_for_arg(name, args, expected_types)
        when is_list(args) and is_list(expected_types) do
@@ -125,6 +164,13 @@ defmodule RustQ.Meta.Inference do
        )
        when name == var_name and is_atom(context),
        do: receiver_type_for_as_slice_argument(type)
+
+  defp expected_type_for_arg_expr(name, {:ref, _meta, [arg]}, %Type{} = type) do
+    case Type.ref_inner(type) do
+      %Type{} = inner -> expected_type_for_arg_expr(name, arg, inner)
+      nil -> expected_type_for_arg_expr(name, arg, Type.expected_value(type))
+    end
+  end
 
   defp expected_type_for_arg_expr(name, tuple, %Type{} = type) do
     expected_type_for_tuple_arg(name, tuple, Type.expected_value(type))
@@ -261,11 +307,12 @@ defmodule RustQ.Meta.Inference do
 
   defp expected_type_for_return_expr(_name, _expression, _type), do: nil
 
-  defp expected_receiver_type_for_var(name, ast, callbacks) do
+  defp expected_receiver_type_for_var(name, ast, callbacks, rhs_success_type) do
     {_ast, receiver_types} =
       Macro.prewalk(ast, [], &collect_downstream_receiver_type(&1, &2, name, callbacks))
 
-    Enum.find(receiver_types, &match?(%Type{}, &1))
+    Enum.find(receiver_types, &match?(%Type{}, &1)) ||
+      if(Enum.any?(receiver_types, &(&1 == :unknown_receiver)), do: rhs_success_type)
   end
 
   defp collect_downstream_receiver_type(
@@ -275,7 +322,8 @@ defmodule RustQ.Meta.Inference do
          callbacks
        )
        when name == var_name and is_atom(context) and is_atom(function) and is_list(args) do
-    {ast, [callbacks.method_receiver_type.(function, length(args)) | receiver_types]}
+    receiver_type = callbacks.method_receiver_type.(function, length(args)) || :unknown_receiver
+    {ast, [receiver_type | receiver_types]}
   end
 
   defp collect_downstream_receiver_type(ast, receiver_types, _name, _callbacks),
@@ -320,28 +368,104 @@ defmodule RustQ.Meta.Inference do
     target = callbacks.target_type.(target_type)
 
     expected_types =
-      method_expected_types(target_type, target, function, length(args), callbacks)
+      method_expected_types(target_type, target, function, args, callbacks)
 
     {ast, maybe_add_downstream_call(calls, args, expected_types)}
   end
 
   defp collect_downstream_call_arg_types(ast, calls, _vars, _callbacks), do: {ast, calls}
 
-  defp method_expected_types(%Type{} = receiver_type, _target, :push, 1, _callbacks) do
+  defp method_expected_types(%Type{} = receiver_type, _target, :push, [_arg], _callbacks) do
+    receiver_type = Type.ref_inner(receiver_type) || receiver_type
+
     case Type.vec_inner(receiver_type) do
       %Type{} = inner -> [inner]
       nil -> nil
     end
   end
 
-  defp method_expected_types(_receiver_type, target, function, arity, callbacks) do
-    callbacks.method_argument_types.(target, function, arity)
+  defp method_expected_types(
+         %Type{} = receiver_type,
+         _target,
+         :binary_search_by_key,
+         [_key_arg, closure],
+         _callbacks
+       ) do
+    with %Type{} = item_type <- slice_item_type(receiver_type),
+         %Type{} = key_type <- closure_field_return_type(closure, item_type) do
+      [ref_type(key_type), nil]
+    else
+      _no_key_type -> nil
+    end
+  end
+
+  defp method_expected_types(_receiver_type, target, function, args, callbacks) do
+    callbacks.method_argument_types.(target, function, length(args))
   end
 
   defp maybe_add_downstream_call(calls, args, [_ | _] = expected_types),
     do: [{args, expected_types} | calls]
 
   defp maybe_add_downstream_call(calls, _args, _expected_types), do: calls
+
+  defp slice_item_type(%Type{} = type) do
+    type
+    |> Type.ref_inner()
+    |> Kernel.||(type)
+    |> case do
+      %Type{kind: :slice, meta: %{inner: %Type{} = inner}} -> inner
+      %Type{ast: %AST.TypeSlice{inner: inner}} -> ast_type(inner)
+      _other -> nil
+    end
+  end
+
+  defp closure_field_return_type(
+         {:fn, _meta, [{:->, _, [[{name, _, context}], body]}]},
+         %Type{} = item_type
+       )
+       when is_atom(name) and is_atom(context) do
+    closure_binding_field_type(body, name, item_type)
+  end
+
+  defp closure_field_return_type(_closure, _item_type), do: nil
+
+  defp closure_binding_field_type(
+         {{:., _, [{name, _, context}, field]}, _meta, []},
+         name,
+         item_type
+       )
+       when is_atom(name) and is_atom(context) and is_atom(field) do
+    struct_field_type(item_type, field)
+  end
+
+  defp closure_binding_field_type(_body, _name, _item_type), do: nil
+
+  defp struct_field_type(%Type{meta: %{fields: fields}}, field) when is_list(fields) do
+    fields
+    |> Enum.find_value(fn
+      {^field, %Type{} = type, _presence} -> type
+      {^field, %Type{} = type} -> type
+      _other -> nil
+    end)
+  end
+
+  defp struct_field_type(%Type{}, _field), do: nil
+
+  defp ref_type(%Type{} = inner) do
+    %Type{
+      kind: :ref,
+      rust: "&#{inner.rust}",
+      ast: %AST.TypeRef{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+  end
+
+  defp ast_type(ast),
+    do: %Type{
+      kind: :type,
+      ast: ast,
+      rust: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
+    }
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)

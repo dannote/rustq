@@ -61,8 +61,12 @@ defmodule RustQ.Meta.Typing do
   end
 
   def synth(call_ast, %Env{} = env) do
-    Lower.callable_return_type(call_ast, callables: env.callables, rust_modules: env.rust_modules) ||
-      synth_method_call(call_ast, env)
+    Lower.callable_return_type(
+      call_ast,
+      callables: env.callables,
+      rust_modules: env.rust_modules,
+      vars: env.vars
+    ) || synth_method_call(call_ast, env)
   end
 
   def synth(ast, opts) when is_list(opts), do: synth(ast, env(opts))

@@ -1253,6 +1253,62 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "with_callback(|| &color)?;"
   end
 
+  test "defrust propagates let RHS through downstream comparisons" do
+    defmodule PropagateLetComparisonCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @type field :: %{required(:id) => R.u32()}
+
+      @spec read_id() :: R.nif_result(R.u32())
+      defrust(read_id(), do: {:ok, 0})
+
+      @spec run(R.slice(field())) :: R.nif_result(R.unit())
+      defrust run(fields) do
+        field_id = read_id()
+
+        if field_id == 0 do
+          :ok
+        else
+          case fields.binary_search_by_key(ref(field_id), fn field -> field.id end) do
+            {:ok, _index} -> :ok
+            {:error, _index} -> {:error, badarg()}
+          end
+        end
+      end
+    end
+
+    source = PropagateLetComparisonCase.__rustq_source__()
+
+    assert source =~ "let field_id = read_id()?;"
+    assert source =~ "fields.binary_search_by_key(&field_id, |field| field.id)"
+    assert RustQ.valid?(source, "propagate_let_comparison.rs")
+  end
+
+  test "defrust propagates call arguments through mutable vec push" do
+    defmodule PropagateMutRefVecPushCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode_value() :: R.nif_result(term())
+      defrust(decode_value(), do: {:ok, make_term()})
+
+      @spec make_term() :: term()
+      defrust(make_term(), do: 0)
+
+      @spec run(R.mut_ref(R.vec(term()))) :: R.nif_result(R.unit())
+      defrust run(values) do
+        values.push(decode_value())
+        :ok
+      end
+    end
+
+    source = PropagateMutRefVecPushCase.__rustq_source__()
+
+    assert source =~ "values.push(decode_value()?);"
+    assert RustQ.valid?(source, "propagate_mut_ref_vec_push.rs")
+  end
+
   test "defrust auto-borrows configured generated static items" do
     defmodule AutoBorrowConfiguredStaticCase do
       use RustQ.Meta, static_types: [GUID_ATOM: RustQ.Type.raw(:"OnceLock<Atom>")]

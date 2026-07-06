@@ -1273,6 +1273,8 @@ defmodule RustQ.Meta.Lower do
          [arg],
          %Context{} = context
        ) do
+    receiver_type = Type.ref_inner(receiver_type) || receiver_type
+
     case Type.vec_inner(receiver_type) do
       %Type{} = inner -> lower_args_with_expected([inner], [arg], context)
       nil -> [lower_expr(arg, context)]
@@ -1739,7 +1741,7 @@ defmodule RustQ.Meta.Lower do
     callables = context.callables
 
     %{
-      return_type: &callable_return_type(&1, callables: callables),
+      return_type: &callable_return_type(&1, callables: callables, vars: context.vars),
       local_argument_types: fn name, arity ->
         callable_argument_types(callables, nil, name, arity)
       end,
