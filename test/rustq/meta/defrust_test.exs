@@ -854,6 +854,25 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "syn_external_method.rs")
   end
 
+  test "__rustq_callables__ exports local specs without duplicating external metadata" do
+    defmodule ExternalMetadataExportCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/external_callables.rs"]
+
+      alias RustQ.Type, as: R
+
+      @spec decode_color(R.term()) :: R.nif_result(R.path(:Color))
+      defrust decode_color(term) do
+        color = decode_as!(term, R.u32())
+        {:ok, Color.from_argb(255, 0, 0, color)}
+      end
+    end
+
+    names = Enum.map(ExternalMetadataExportCase.__rustq_callables__(), & &1.name)
+
+    assert "decode_color" in names
+    refute "stroke_paint" in names
+  end
+
   test "defrust can use callable metadata from other RustQ modules" do
     defmodule CallableProducerCase do
       use RustQ.Meta

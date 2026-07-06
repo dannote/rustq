@@ -200,7 +200,7 @@ defmodule RustQ.Meta do
       def __rustq_items__, do: unquote(Macro.escape(items))
 
       @doc false
-      def __rustq_callables__, do: unquote(Macro.escape(callables))
+      def __rustq_callables__, do: unquote(Macro.escape(local_callables))
 
       @doc false
       def __rustq_source__, do: unquote(source)
