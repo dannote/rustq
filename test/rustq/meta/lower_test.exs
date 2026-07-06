@@ -1298,6 +1298,53 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "does not propagate option call arguments in nif result context" do
+    path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
+
+    option_path = %Type{
+      kind: :option,
+      rust: "Option<Path>",
+      ast: %AST.TypeOption{inner: path_type.ast},
+      meta: %{inner: path_type}
+    }
+
+    nif_unit = %Type{
+      kind: :nif_result,
+      rust: "NifResult<()>",
+      ast: %AST.TypeNifResult{inner: %AST.TypeUnit{}},
+      meta: %{inner: unit_type()}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          draw_path(maybe_path())
+          :ok
+        end,
+        nif_unit,
+        %{},
+        callables: [
+          %Callable{name: "maybe_path", kind: :function, args: [], returns: option_path},
+          %Callable{
+            name: "draw_path",
+            kind: :function,
+            args: [%{name: "path", type: path_type, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{
+                 name: :draw_path,
+                 args: [%AST.LocalCall{name: :maybe_path}]
+               }
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "infers remote call argument propagation from free-function callable metadata" do
     mode_type = %Type{kind: :type, rust: "Mode", ast: %AST.TypePath{parts: [:Mode]}}
 

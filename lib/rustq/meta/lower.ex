@@ -620,8 +620,12 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_checked_expr(expression, %Type{} = expected_type, %Context{} = context) do
     case typing_check(expression, expected_type, context) do
-      %Typing.Check{coercion: :propagate} ->
-        %AST.Try{expr: lower_expr(expression, context)}
+      %Typing.Check{coercion: :propagate} = check ->
+        if option_propagation_in_result_context?(check, context) do
+          lower_expr(expression, context)
+        else
+          %AST.Try{expr: lower_expr(expression, context)}
+        end
 
       %Typing.Check{coercion: :borrow} ->
         %AST.Ref{expr: lower_expr(expression, context)}
@@ -636,6 +640,15 @@ defmodule RustQ.Meta.Lower do
         lower_expr(expression, context)
     end
   end
+
+  defp option_propagation_in_result_context?(
+         %Typing.Check{type: %Type{kind: :option}},
+         %Context{return_type: %Type{kind: kind}}
+       )
+       when kind in [:result, :nif_result],
+       do: true
+
+  defp option_propagation_in_result_context?(%Typing.Check{}, %Context{}), do: false
 
   defp typing_check(expression, %Type{} = expected_type, %Context{} = context) do
     Typing.check(expression, expected_type, typing_env(context))
