@@ -1542,11 +1542,42 @@ defmodule RustQ.Meta.Lower do
     target_parts
     |> exact_callable_target_candidates(rust_modules)
     |> Enum.find_value(&callable_argument_types(callables, &1, function, arity)) ||
-      callable_argument_types(callables, nil, function, arity) ||
+      path_module_fallback_argument_types(target_parts, function, arity, callables) ||
       target_parts
       |> callable_target_candidates(rust_modules)
       |> Enum.find_value(&callable_argument_types(callables, &1, function, arity))
   end
+
+  defp path_module_fallback_argument_types(
+         target_parts,
+         function,
+         arity,
+         %BindingIndex{} = callables
+       ) do
+    if rust_module_path?(target_parts) do
+      callable_argument_types(callables, nil, function, arity)
+    end
+  end
+
+  defp path_module_fallback_return_type(
+         target_parts,
+         function,
+         arity,
+         %BindingIndex{} = callables
+       ) do
+    if rust_module_path?(target_parts) do
+      BindingIndex.return_type(callables, nil, function, arity)
+    end
+  end
+
+  defp rust_module_path?([_ | _] = parts) do
+    parts
+    |> List.last()
+    |> to_string()
+    |> String.match?(~r/^[a-z_]/)
+  end
+
+  defp rust_module_path?(_parts), do: false
 
   defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
        when kind in [:ref, :mut_ref],
@@ -2171,7 +2202,7 @@ defmodule RustQ.Meta.Lower do
     parts
     |> callable_target_candidates(rust_modules)
     |> Enum.find_value(&BindingIndex.return_type(callables, &1, function, arity)) ||
-      BindingIndex.return_type(callables, nil, function, arity)
+      path_module_fallback_return_type(parts, function, arity, callables)
   end
 
   defp exact_callable_target_candidates(parts, rust_modules) do
