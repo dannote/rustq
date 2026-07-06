@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add corpus coverage for semantic `defrustmacro` item call fragments.
+
 ## v0.9.0 - 2026-07-06
 
 This release is a large Rusty-Elixir self-hosting and downstream dogfooding
