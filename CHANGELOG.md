@@ -10,6 +10,8 @@
 - Add regression coverage for remote associated functions that expect slices.
 - Avoid treating capitalized associated-function paths as unqualified free
   functions during callable lookup.
+- Prefer downstream call-argument evidence over receiver-method evidence when
+  inferring local binding types.
 
 ## v0.9.0 - 2026-07-06
 

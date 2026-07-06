@@ -52,7 +52,7 @@ defmodule RustQ.Meta.Inference do
 
     expressions
     |> Enum.drop(index + 1)
-    |> Enum.find_value(&expected_type_for_var(name, &1, vars, callbacks, rhs_success_type))
+    |> expected_type_for_var(name, vars, callbacks, rhs_success_type)
     |> case do
       %Type{} = type -> %{name => type}
       nil -> %{}
@@ -96,17 +96,25 @@ defmodule RustQ.Meta.Inference do
 
   defp rhs_success_type(_call, _callbacks), do: nil
 
-  defp expected_type_for_var(name, ast, vars, callbacks, rhs_success_type) do
-    call_expected_type =
-      ast
-      |> downstream_call_arg_types(vars, callbacks)
-      |> Enum.find_value(fn {args, expected_types} ->
-        expected_type_for_arg(name, args, expected_types)
-      end)
+  defp expected_type_for_var(expressions, name, vars, callbacks, rhs_success_type) do
+    call_expected_type_for_var(expressions, name, vars, callbacks) ||
+      Enum.find_value(expressions, &expected_comparison_type_for_var(name, &1, rhs_success_type)) ||
+      Enum.find_value(
+        expressions,
+        &expected_receiver_type_for_var(name, &1, callbacks, rhs_success_type)
+      ) ||
+      Enum.find_value(
+        expressions,
+        &expected_return_type_for_var(name, &1, callbacks[:block_return_type])
+      )
+  end
 
-    call_expected_type || expected_comparison_type_for_var(name, ast, rhs_success_type) ||
-      expected_receiver_type_for_var(name, ast, callbacks, rhs_success_type) ||
-      expected_return_type_for_var(name, ast, callbacks[:block_return_type])
+  defp call_expected_type_for_var(expressions, name, vars, callbacks) do
+    expressions
+    |> Enum.flat_map(&downstream_call_arg_types(&1, vars, callbacks))
+    |> Enum.find_value(fn {args, expected_types} ->
+      expected_type_for_arg(name, args, expected_types)
+    end)
   end
 
   defp expected_comparison_type_for_var(name, ast, %Type{} = rhs_success_type) do
