@@ -319,12 +319,57 @@ defmodule RustQ.Meta.Lower do
     if slice_type?(expected_type), do: %AST.Ref{expr: array}, else: array
   end
 
+  defp lower_expected_expr_context(
+         {:some, _, [expression]},
+         %Type{kind: :option} = expected_type,
+         %Context{} = context
+       ) do
+    inner_expected = Type.inner(expected_type)
+
+    %AST.Some{expr: lower_option_some_expr(expression, inner_expected, context)}
+  end
+
+  defp lower_expected_expr_context(
+         {:{}, _, values},
+         %Type{kind: :tuple, meta: %{elements: types}},
+         %Context{} = context
+       )
+       when length(values) == length(types) do
+    lower_expected_tuple(values, types, context)
+  end
+
+  defp lower_expected_expr_context(
+         tuple,
+         %Type{kind: :tuple, meta: %{elements: types}},
+         %Context{} = context
+       )
+       when is_tuple(tuple) and tuple_size(tuple) == length(types) do
+    tuple
+    |> Tuple.to_list()
+    |> lower_expected_tuple(types, context)
+  end
+
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
     lower_checked_expr(expression, expected_type, context)
   end
 
   defp lower_expected_expr_context(expression, _expected_type, %Context{} = context),
     do: lower_expr(expression, context)
+
+  defp lower_option_some_expr(expression, %Type{} = inner_expected, %Context{} = context),
+    do: lower_expr(expression, inner_expected, context)
+
+  defp lower_option_some_expr(expression, _inner_expected, %Context{} = context),
+    do: lower_wrapper_arg_expr(expression, context)
+
+  defp lower_expected_tuple(values, types, %Context{} = context) do
+    %AST.Tuple{
+      values:
+        values
+        |> Enum.zip(types)
+        |> Enum.map(fn {value, type} -> lower_expr(value, type, context) end)
+    }
+  end
 
   defp lower_expr_context({:unwrap!, _, [expression]}, %Context{} = context),
     do: %AST.Try{expr: lower_expr(expression, context)}
