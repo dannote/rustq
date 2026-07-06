@@ -1,13 +1,13 @@
 fn decode_a<'a>(term: Term<'a>) -> NifResult<u32> {
     match term {
-        1i64 => Ok(10),
+        1 => Ok(10),
         _ => Err(rustler::Error::BadArg),
     }
 }
 
 fn decode_b<'a>(term: Term<'a>) -> NifResult<u32> {
     match term {
-        2i64 => Ok(20),
+        2 => Ok(20),
         _ => Err(rustler::Error::BadArg),
     }
 }
