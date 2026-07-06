@@ -1,6 +1,6 @@
 use quote::{format_ident, quote, ToTokens};
 use rustler::{NifResult, Term};
-use syn::{Arm, Expr, Field, Item, Pat, Stmt, Type};
+use syn::{Arm, Expr, Field, Item, LitInt, Pat, Stmt, Type};
 
 use crate::generated_ast::{
     atom, atom_key, decode_arm, decode_ast_expr, decode_ast_item, decode_ast_pat, decode_ast_stmt,
@@ -713,7 +713,10 @@ pub(crate) fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {
     match decode_literal_term(term)? {
         LiteralTerm::Bool(true) => parse_syn::<Pat>(quote!(true)),
         LiteralTerm::Bool(false) => parse_syn::<Pat>(quote!(false)),
-        LiteralTerm::I64(value) => parse_syn::<Pat>(quote!(#value)),
+        LiteralTerm::I64(value) => {
+            let literal = LitInt::new(&value.to_string(), proc_macro2::Span::call_site());
+            parse_syn::<Pat>(quote!(#literal))
+        }
         LiteralTerm::F64(value) => parse_syn::<Pat>(quote!(#value)),
         LiteralTerm::String(value) | LiteralTerm::Atom(value) => parse_syn::<Pat>(quote!(#value)),
     }

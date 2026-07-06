@@ -720,9 +720,10 @@ defmodule RustQ.Meta.Lower do
   defp lower_case(expression, clauses, %Context{} = context, expected_type \\ nil) do
     clauses = normalize_case_clauses(clauses)
 
-    case_type =
-      infer_expr_type(expression, context.vars) || Typing.synth(expression, typing_env(context)) ||
-        infer_case_type_from_patterns(clauses)
+    expression_type =
+      infer_expr_type(expression, context.vars) || Typing.synth(expression, typing_env(context))
+
+    {case_type, match_expr} = case_scrutinee(expression, expression_type, clauses, context)
 
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
@@ -739,8 +740,35 @@ defmodule RustQ.Meta.Lower do
         }
       end)
 
-    %AST.Match{expr: lower_expr(expression, context), arms: arms}
+    %AST.Match{expr: match_expr, arms: arms}
   end
+
+  defp case_scrutinee(expression, %Type{} = expression_type, clauses, %Context{} = context) do
+    if propagate_case_scrutinee?(expression_type, clauses) do
+      inner = Type.inner(expression_type)
+      {inner, lower_checked_expr(expression, inner, context)}
+    else
+      {expression_type, lower_expr(expression, context)}
+    end
+  end
+
+  defp case_scrutinee(expression, _expression_type, clauses, %Context{} = context) do
+    {infer_case_type_from_patterns(clauses), lower_expr(expression, context)}
+  end
+
+  defp propagate_case_scrutinee?(%Type{} = expression_type, clauses) do
+    Type.propagates?(expression_type) and not wrapper_case_patterns?(expression_type, clauses)
+  end
+
+  defp wrapper_case_patterns?(%Type{kind: kind}, clauses) when kind in [:result, :nif_result] do
+    Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> result_pattern?(pattern) end)
+  end
+
+  defp wrapper_case_patterns?(%Type{kind: :option}, clauses) do
+    Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> option_pattern?(pattern) end)
+  end
+
+  defp wrapper_case_patterns?(%Type{}, _clauses), do: false
 
   defp normalize_case_clauses({:__block__, _meta, clauses}), do: clauses
   defp normalize_case_clauses(clauses), do: clauses
@@ -1052,6 +1080,14 @@ defmodule RustQ.Meta.Lower do
   defp option_pattern?({:some, _pattern}), do: true
   defp option_pattern?({:{}, _, [:some, _pattern]}), do: true
   defp option_pattern?(_pattern), do: false
+
+  defp result_pattern?({:ok, _pattern}), do: true
+  defp result_pattern?({:error, _pattern}), do: true
+  defp result_pattern?({:{}, _, [:ok, _pattern]}), do: true
+  defp result_pattern?({:{}, _, [:error, _pattern]}), do: true
+  defp result_pattern?(ok: _pattern), do: true
+  defp result_pattern?(error: _pattern), do: true
+  defp result_pattern?(_pattern), do: false
 
   defp reject_unit_statements(statements) do
     Enum.reject(statements, fn

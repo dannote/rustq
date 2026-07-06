@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Add corpus coverage for semantic `defrustmacro` item call fragments.
+- Propagate fallible `case` scrutinees before matching inner patterns.
+- Render integer match patterns as unsuffixed literals so they can match the
+  scrutinee integer type.
 
 ## v0.9.0 - 2026-07-06
 

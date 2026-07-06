@@ -72,7 +72,7 @@ defmodule RustQ.Meta.DefrustTest do
     source = MacroGeneratedCaseClauseCase.__rustq_source__()
 
     assert source =~ "match value"
-    assert source =~ "1i64 => Ok(10)"
+    assert source =~ "1 => Ok(10)"
     assert source =~ "other => Ok(other)"
     assert RustQ.valid?(source, "macro_generated_case_clause.rs")
   end
@@ -1511,8 +1511,8 @@ defmodule RustQ.Meta.DefrustTest do
 
     source = AutoBorrowCaseArmCase.__rustq_source__()
 
-    assert source =~ "0i64 => &color"
-    assert source =~ "1i64 => &color"
+    assert source =~ "0 => &color"
+    assert source =~ "1 => &color"
     assert RustQ.valid?(source, "auto_borrow_case_arm.rs")
   end
 
@@ -2084,8 +2084,8 @@ defmodule RustQ.Meta.DefrustTest do
 
     source = IntegerMatchCase.__rustq_source__()
 
-    assert source =~ "1i64 =>"
-    assert source =~ "2i64 =>"
+    assert source =~ "1 =>"
+    assert source =~ "2 =>"
   end
 
   test "lowers Rust tuple field access from defrust valid Elixir" do
