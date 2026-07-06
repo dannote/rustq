@@ -60,6 +60,13 @@ defmodule RustQ.Meta.Typing do
     RustQ.Spec.type(type_ast)
   end
 
+  def synth({:unwrap!, _meta, [expression]}, %Env{} = env) do
+    case synth(expression, env) do
+      %Type{} = type -> Type.inner(type)
+      nil -> nil
+    end
+  end
+
   def synth(call_ast, %Env{} = env) do
     Lower.callable_return_type(
       call_ast,
@@ -132,6 +139,12 @@ defmodule RustQ.Meta.Typing do
     end
   end
 
+  defp synth_method_call({{:., _, [receiver, :as_ref]}, _meta, []}, %Env{} = env) do
+    receiver
+    |> synth(env)
+    |> option_as_ref_type()
+  end
+
   defp synth_method_call({{:., _, [receiver, :get]}, _meta, [_index]}, %Env{} = env) do
     receiver
     |> synth(env)
@@ -190,6 +203,15 @@ defmodule RustQ.Meta.Typing do
       ast: %AST.TypeOption{inner: inner.ast},
       meta: %{inner: inner}
     }
+
+  defp option_as_ref_type(%Type{kind: :option} = type) do
+    case Type.inner(type) do
+      %Type{} = inner -> option_type(ref_type(inner))
+      nil -> nil
+    end
+  end
+
+  defp option_as_ref_type(_type), do: nil
 
   defp render_type(ast), do: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
 

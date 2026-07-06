@@ -645,7 +645,8 @@ defmodule RustQ.Meta.Lower do
     clauses = normalize_case_clauses(clauses)
 
     case_type =
-      infer_expr_type(expression, context.vars) || infer_case_type_from_patterns(clauses)
+      infer_expr_type(expression, context.vars) || Typing.synth(expression, typing_env(context)) ||
+        infer_case_type_from_patterns(clauses)
 
     arms =
       Enum.map(clauses, fn {:->, _, [[pattern], body]} ->
@@ -794,7 +795,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_option_if_let_statement(expression, clauses, %Context{} = context) do
     with [{:some, some_pattern, some_body}, {:none, none_body}] <- option_if_let_clauses(clauses),
          true <- unit_body?(none_body) do
-      then_body = lower_clause_body(some_body, context)
+      option_type = Typing.synth(expression, typing_env(context)) || %Type{kind: :option}
+      then_context = context_with_match_pattern(some_pattern, option_type, context)
+      then_body = lower_clause_body(some_body, then_context)
       mutable_vars = then_body |> collect_mut_refs() |> MapSet.new()
 
       %AST.IfLet{
@@ -802,7 +805,7 @@ defmodule RustQ.Meta.Lower do
           some_pattern
           |> lower_match_pattern(%Type{kind: :option})
           |> mark_mutable_pattern_vars(mutable_vars),
-        expr: lower_expr(expression, %Type{kind: :option}, context),
+        expr: lower_expr(expression, option_type, context),
         then: then_body
       }
     else
@@ -1058,6 +1061,7 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern(nil, %Type{kind: :option}), do: %AST.PatNone{}
   defp lower_match_pattern(:none, %Type{kind: :option}), do: %AST.PatNone{}
   defp lower_match_pattern(nil, _case_type), do: %AST.PatNone{}
+  defp lower_match_pattern(:none, _case_type), do: %AST.PatNone{}
   defp lower_match_pattern({:_, _, _}, _case_type), do: %AST.PatWildcard{}
 
   defp lower_match_pattern(value, _case_type) when is_binary(value) or is_integer(value),
@@ -1078,7 +1082,13 @@ defmodule RustQ.Meta.Lower do
   defp lower_match_pattern({:some, pattern}, %Type{kind: :option}),
     do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
 
+  defp lower_match_pattern({:some, pattern}, _case_type),
+    do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
+
   defp lower_match_pattern({:{}, _, [:some, pattern]}, %Type{kind: :option}),
+    do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
+
+  defp lower_match_pattern({:{}, _, [:some, pattern]}, _case_type),
     do: %AST.PatSome{pattern: lower_match_pattern(pattern, nil)}
 
   defp lower_match_pattern({:enum_variant, _, [path, variant]}, _case_type) do
