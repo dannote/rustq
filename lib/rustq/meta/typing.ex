@@ -277,6 +277,9 @@ defmodule RustQ.Meta.Typing do
       ref_inner_compatible?(actual, expected) ->
         borrow_coercion(expected)
 
+      vec_slice_compatible?(actual, expected) ->
+        :borrow
+
       Type.compatible_with_expected?(actual, expected) ->
         :none
 
