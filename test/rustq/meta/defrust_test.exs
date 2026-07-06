@@ -1233,6 +1233,26 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "auto_borrow_struct_field.rs")
   end
 
+  test "defrust auto-borrows external static items from rust source metadata" do
+    defmodule AutoBorrowExternalStaticCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/external_statics.rs"]
+      alias RustQ.Type, as: R
+
+      @spec cached_atom(R.ref(R.raw(:"OnceLock<Atom>"))) :: R.nif_result(R.unit())
+      defrust(cached_atom(_cell), do: :ok)
+
+      @spec run() :: R.nif_result(R.unit())
+      defrust run() do
+        cached_atom(GUID_ATOM)
+        :ok
+      end
+    end
+
+    source = AutoBorrowExternalStaticCase.__rustq_source__()
+
+    assert source =~ "cached_atom(&GUID_ATOM)?;"
+  end
+
   test "defrust checks with bodies against expected call argument type" do
     defmodule AutoBorrowWithBodyCase do
       use RustQ.Meta

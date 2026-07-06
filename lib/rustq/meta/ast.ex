@@ -123,6 +123,7 @@ defmodule RustQ.Meta.AST do
         rust_modules,
         env,
         external_callables \\ [],
+        external_static_types \\ %{},
         rust_macros \\ %{}
       )
 
@@ -133,6 +134,7 @@ defmodule RustQ.Meta.AST do
         rust_modules,
         env,
         external_callables,
+        external_static_types,
         rust_macros
       ),
       do:
@@ -143,6 +145,7 @@ defmodule RustQ.Meta.AST do
           rust_modules,
           env,
           external_callables,
+          external_static_types,
           rust_macros
         )
 
@@ -153,6 +156,7 @@ defmodule RustQ.Meta.AST do
         rust_modules,
         env,
         external_callables,
+        external_static_types,
         rust_macros
       ),
       do:
@@ -163,6 +167,7 @@ defmodule RustQ.Meta.AST do
           rust_modules,
           env,
           external_callables,
+          external_static_types,
           rust_macros
         )
 
@@ -173,6 +178,7 @@ defmodule RustQ.Meta.AST do
         rust_modules,
         env,
         external_callables,
+        external_static_types,
         rust_macros
       ) do
     do_build_ast(
@@ -182,6 +188,7 @@ defmodule RustQ.Meta.AST do
       rust_modules,
       env,
       external_callables,
+      external_static_types,
       rust_macros
     )
   rescue
@@ -245,6 +252,7 @@ defmodule RustQ.Meta.AST do
          rust_modules,
          env,
          external_callables,
+         external_static_types,
          rust_macros
        ) do
     {name, _meta, arg_asts} = call_ast
@@ -257,8 +265,10 @@ defmodule RustQ.Meta.AST do
 
     body_ast = expand_body_macros(body_ast, env)
 
+    vars = Map.merge(external_static_types, Map.new(Enum.zip(arg_names, arg_types)))
+
     body =
-      Lower.quoted_body(body_ast, return_type, Map.new(Enum.zip(arg_names, arg_types)),
+      Lower.quoted_body(body_ast, return_type, vars,
         rust_modules: rust_modules,
         callables: spec_callables(specs, type_aliases) ++ external_callables,
         rust_macros: rust_macros

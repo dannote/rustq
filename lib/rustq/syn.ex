@@ -213,6 +213,31 @@ defmodule RustQ.Syn do
           }
   end
 
+  defmodule Static do
+    @moduledoc "Rust static item metadata."
+    defstruct [
+      :name,
+      :visibility,
+      :source_line,
+      :source_path,
+      :type,
+      :type_ast,
+      mutable: false,
+      docs: []
+    ]
+
+    @type t :: %__MODULE__{
+            name: String.t(),
+            visibility: :public | :private,
+            source_line: pos_integer() | nil,
+            source_path: Path.t() | nil,
+            type: String.t(),
+            type_ast: RustQ.Syn.type(),
+            mutable: boolean(),
+            docs: [String.t()]
+          }
+  end
+
   defmodule TypeAlias do
     @moduledoc "Rust `type` alias metadata."
     defstruct [:name, :visibility, :source_line, :source_path, :type, :type_ast, docs: []]
@@ -419,6 +444,7 @@ defmodule RustQ.Syn do
   @type item ::
           RustQ.Syn.Enum.t()
           | RustQ.Syn.Use.t()
+          | RustQ.Syn.Static.t()
           | RustQ.Syn.TypeAlias.t()
           | RustQ.Syn.Struct.t()
           | RustQ.Syn.Function.t()
@@ -483,6 +509,11 @@ defmodule RustQ.Syn do
   @spec uses(RustQ.Syn.File.t()) :: [RustQ.Syn.Use.t()]
   def uses(%RustQ.Syn.File{items: items}),
     do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Use{}, &1))
+
+  @doc "Returns top-level Rust static item metadata from a parsed file."
+  @spec statics(RustQ.Syn.File.t()) :: [RustQ.Syn.Static.t()]
+  def statics(%RustQ.Syn.File{items: items}),
+    do: Elixir.Enum.filter(items, &match?(%RustQ.Syn.Static{}, &1))
 
   @doc "Returns top-level Rust type alias metadata from a parsed file."
   @spec type_aliases(RustQ.Syn.File.t()) :: [RustQ.Syn.TypeAlias.t()]
@@ -633,6 +664,18 @@ defmodule RustQ.Syn do
       visibility: decode_visibility!(visibility),
       source_line: source_line,
       docs: docs
+    }
+  end
+
+  defp decode_item!({"static", name, visibility, source_line, docs, {type, type_ast, mutable}}) do
+    %RustQ.Syn.Static{
+      name: name,
+      visibility: decode_visibility!(visibility),
+      source_line: source_line,
+      docs: docs,
+      type: type,
+      type_ast: decode_type!(type_ast),
+      mutable: mutable
     }
   end
 

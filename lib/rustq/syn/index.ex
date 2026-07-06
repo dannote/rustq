@@ -212,6 +212,23 @@ defmodule RustQ.Syn.Index do
     end
   end
 
+  @doc "Returns all indexed top-level static items."
+  @spec statics(t()) :: [RustQ.Syn.Static.t()]
+  def statics(%__MODULE__{files: files}) do
+    files
+    |> Map.values()
+    |> Enum.flat_map(&RustQ.Syn.statics/1)
+  end
+
+  @doc "Fetches a top-level static item by name."
+  @spec static(t(), String.t()) :: {:ok, RustQ.Syn.Static.t()} | :error
+  def static(%__MODULE__{} = index, name) when is_binary(name) do
+    case Enum.find(statics(index), &(&1.name == name)) do
+      nil -> :error
+      static -> {:ok, static}
+    end
+  end
+
   @doc "Returns all indexed top-level type aliases."
   @spec type_aliases(t()) :: [RustQ.Syn.TypeAlias.t()]
   def type_aliases(%__MODULE__{files: files}) do

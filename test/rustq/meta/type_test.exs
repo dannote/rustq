@@ -141,6 +141,18 @@ defmodule RustQ.Meta.TypeTest do
            } = RustQ.Spec.type(quote(do: SkiaSafe.Canvas.borrowed()))
   end
 
+  test "parses Rust static item metadata" do
+    assert [static] =
+             "test/fixtures/external_statics.rs"
+             |> RustQ.Syn.parse_file!()
+             |> RustQ.Syn.statics()
+
+    assert %RustQ.Syn.Static{name: "GUID_ATOM", type: "OnceLock < Atom >", mutable: false} =
+             static
+
+    assert %RustQ.Syn.Type.Path{name: "OnceLock"} = static.type_ast
+  end
+
   test "converts Syn type metadata to RustQ meta types" do
     assert %Type{kind: :f32, rust: "f32"} =
              Type.from_syn(%SynType.Path{code: "f32", name: "f32", segments: ["f32"]})

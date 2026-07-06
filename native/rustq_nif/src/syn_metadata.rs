@@ -201,6 +201,19 @@ fn item_terms<'a>(env: Env<'a>, item: Item, module_path: Vec<String>) -> Vec<Ter
                     .encode(env)]
             })
         }
+        Item::Static(item) => vec![(
+            "static",
+            item.ident.to_string(),
+            visibility(&item.vis),
+            line(item.ident.span()),
+            docs(&item.attrs),
+            (
+                type_string(&item.ty),
+                type_metadata(env, &item.ty),
+                matches!(item.mutability, syn::StaticMutability::Mut(_)),
+            ),
+        )
+            .encode(env)],
         Item::Type(item) => vec![(
             "type_alias",
             item.ident.to_string(),

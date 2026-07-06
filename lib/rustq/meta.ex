@@ -133,6 +133,7 @@ defmodule RustQ.Meta do
 
     local_callables = AST.callables_from_specs(specs, type_aliases)
     external_callables = Source.external_callables(env.module)
+    external_static_types = Source.external_static_types(env.module)
     callables = local_callables ++ external_callables
 
     rust_macros = RustMacro.definitions(macro_defs)
@@ -149,6 +150,7 @@ defmodule RustQ.Meta do
           rust_modules,
           env,
           external_callables,
+          external_static_types,
           rust_macro_index
         )
       )

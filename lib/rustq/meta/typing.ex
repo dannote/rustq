@@ -50,6 +50,12 @@ defmodule RustQ.Meta.Typing do
     Map.get(vars, name)
   end
 
+  def synth({:__aliases__, _meta, parts}, %Env{vars: vars}) when is_list(parts) do
+    parts
+    |> List.last()
+    |> then(&Map.get(vars, &1))
+  end
+
   def synth({:cast, _meta, [_expression, type_ast]}, %Env{}) do
     RustQ.Spec.type(type_ast)
   end

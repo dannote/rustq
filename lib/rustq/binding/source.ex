@@ -23,6 +23,14 @@ defmodule RustQ.Binding.Source do
       callable_module_callables(module)
   end
 
+  @doc "Resolves external static item types configured on a `use RustQ.Meta` module."
+  @spec external_static_types(module()) :: %{optional(atom()) => Type.t()}
+  def external_static_types(module) when is_atom(module) do
+    module
+    |> rust_source_paths_for_module()
+    |> cached_rust_source_static_types()
+  end
+
   @doc "Expands Rust source paths relative to the current project working directory."
   @spec rust_source_paths([Path.t()] | Path.t() | nil) :: [Path.t()]
   def rust_source_paths(paths) do
@@ -36,14 +44,17 @@ defmodule RustQ.Binding.Source do
   end
 
   defp rust_source_callables_for_module(module) do
-    paths =
-      module
-      |> Module.get_attribute(:rustq_rust_sources)
-      |> List.wrap()
-      |> List.flatten()
-      |> Enum.uniq()
+    module
+    |> rust_source_paths_for_module()
+    |> cached_rust_source_callables()
+  end
 
-    cached_rust_source_callables(paths)
+  defp rust_source_paths_for_module(module) do
+    module
+    |> Module.get_attribute(:rustq_rust_sources)
+    |> List.wrap()
+    |> List.flatten()
+    |> Enum.uniq()
   end
 
   defp callable_module_callables(module) do
@@ -82,6 +93,23 @@ defmodule RustQ.Binding.Source do
     end
   end
 
+  defp cached_rust_source_static_types([]), do: %{}
+
+  defp cached_rust_source_static_types(paths) do
+    fingerprint = rust_sources_fingerprint(paths)
+    cache_key = {__MODULE__, :static_types, {:rust_sources, paths}}
+
+    case :persistent_term.get(cache_key, :missing) do
+      {:rust_sources, ^fingerprint, static_types} ->
+        static_types
+
+      _missing_or_stale ->
+        static_types = rust_source_static_types(paths)
+        :persistent_term.put(cache_key, {:rust_sources, fingerprint, static_types})
+        static_types
+    end
+  end
+
   defp cached_rust_source_callables([]), do: []
 
   defp cached_rust_source_callables(paths) do
@@ -97,6 +125,32 @@ defmodule RustQ.Binding.Source do
         :persistent_term.put(cache_key, {:rust_sources, fingerprint, callables})
         callables
     end
+  end
+
+  defp rust_source_static_types(paths) do
+    Enum.each(paths, &validate_rust_source!/1)
+
+    index =
+      try do
+        Syn.Index.from_paths(paths)
+      rescue
+        error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
+          Diagnostic.defrust(
+            :rust_source_parse_failed,
+            paths,
+            "configured Rust sources could not be parsed",
+            details: %{paths: paths, error: error}
+          )
+      end
+
+    conversions = from_conversions(index)
+
+    index
+    |> Syn.Index.statics()
+    |> Map.new(fn static ->
+      {RustQ.Atom.identifier!(static.name),
+       annotate_type(Spec.from_syn(static.type_ast), index, conversions)}
+    end)
   end
 
   defp rust_sources_fingerprint(paths) do
