@@ -60,7 +60,8 @@ defmodule RustQ.Meta do
     %{
       rust_sources: rust_sources,
       rust_packages: rust_packages,
-      callable_modules: callable_modules
+      callable_modules: callable_modules,
+      static_types: static_types
     } =
       Options.validate!(opts, __CALLER__)
 
@@ -73,10 +74,12 @@ defmodule RustQ.Meta do
       Module.register_attribute(__MODULE__, :rustq_rust_sources, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_rust_packages, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_callable_modules, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_static_types, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_current_rust_mod, accumulate: false)
       @rustq_rust_sources unquote(Macro.escape(List.wrap(rust_sources)))
       @rustq_rust_packages unquote(Macro.escape(List.wrap(rust_packages)))
       @rustq_callable_modules unquote(Macro.escape(List.wrap(callable_modules)))
+      @rustq_static_types unquote(Macro.escape(List.wrap(static_types)))
       Module.register_attribute(__MODULE__, :nif, accumulate: false)
       Module.register_attribute(__MODULE__, :allow, accumulate: true)
       @before_compile RustQ.Meta
@@ -133,7 +136,11 @@ defmodule RustQ.Meta do
 
     local_callables = AST.callables_from_specs(specs, type_aliases)
     external_callables = Source.external_callables(env.module)
-    external_static_types = Source.external_static_types(env.module)
+    configured_static_types = configured_static_types(env.module, type_aliases)
+
+    external_static_types =
+      Map.merge(Source.external_static_types(env.module), configured_static_types)
+
     callables = local_callables ++ external_callables
 
     rust_macros = RustMacro.definitions(macro_defs)
@@ -198,6 +205,14 @@ defmodule RustQ.Meta do
       @doc false
       def __rustq_source__, do: unquote(source)
     end
+  end
+
+  defp configured_static_types(module, type_aliases) do
+    module
+    |> Module.get_attribute(:rustq_static_types)
+    |> List.wrap()
+    |> List.flatten()
+    |> Map.new(fn {name, type_ast} -> {name, RustQ.Spec.type(type_ast, type_aliases)} end)
   end
 
   defp rust_module_mapping!(alias_ast, opts) do

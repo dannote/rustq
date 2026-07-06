@@ -292,6 +292,13 @@ defmodule RustQ.Meta.Lower do
        ),
        do: lower_with(clauses, %{context | position: :expr}, expected_type)
 
+  defp lower_expected_expr_context(
+         {:fn, _, [{:->, _, [args, body]}]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_closure_args(args, body, context, closure_return_type(expected_type))
+
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
     lower_checked_expr(expression, expected_type, context)
   end
@@ -1421,11 +1428,13 @@ defmodule RustQ.Meta.Lower do
     )
   end
 
-  defp lower_closure_args(args, body, %Context{} = context) when is_list(args),
-    do: %AST.Closure{
+  defp lower_closure_args(args, body, %Context{} = context, expected_return_type \\ nil)
+       when is_list(args) do
+    %AST.Closure{
       args: Enum.map(args, &closure_arg!/1),
-      body: lower_expr(closure_body_expr(body), context)
+      body: lower_expr(closure_body_expr(body), expected_return_type, context)
     }
+  end
 
   defp closure_arg!({name, _, context}) when is_atom(name) and is_atom(context), do: name
 
@@ -1440,6 +1449,34 @@ defmodule RustQ.Meta.Lower do
 
   defp closure_body_expr([expression]), do: expression
   defp closure_body_expr(expression), do: expression
+
+  defp closure_return_type(%Type{rust: rust}) when is_binary(rust) do
+    case Regex.run(~r/->\s*(.+)$/, rust) do
+      [_match, return_type] -> rust_string_type(return_type)
+      nil -> nil
+    end
+  end
+
+  defp closure_return_type(%Type{}), do: nil
+
+  defp rust_string_type("&mut " <> inner), do: rust_ref_string_type(inner, true)
+  defp rust_string_type("&" <> inner), do: rust_ref_string_type(inner, false)
+
+  defp rust_string_type(source) do
+    source = String.trim(source)
+    %Type{kind: :type, rust: source, ast: %AST.TypeRaw{source: source}}
+  end
+
+  defp rust_ref_string_type(inner, mutable) do
+    inner_type = rust_string_type(inner)
+
+    %Type{
+      kind: if(mutable, do: :mut_ref, else: :ref),
+      rust: "&#{if(mutable, do: "mut ", else: "")}#{inner_type.rust}",
+      ast: %AST.TypeRef{inner: inner_type.ast, mutable: mutable},
+      meta: %{inner: inner_type}
+    }
+  end
 
   defp method_chain(receiver, method, args \\ []),
     do: %AST.MethodCall{receiver: receiver, method: method, args: args}

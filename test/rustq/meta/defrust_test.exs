@@ -1233,6 +1233,46 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "auto_borrow_struct_field.rs")
   end
 
+  test "defrust checks closure bodies against expected callback return type" do
+    defmodule AutoBorrowClosureReturnCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec with_callback(R.raw(:"fn() -> &Color")) :: R.nif_result(R.unit())
+      defrust(with_callback(_callback), do: :ok)
+
+      @spec run(R.raw(:Color)) :: R.nif_result(R.unit())
+      defrust run(color) do
+        with_callback(fn -> color end)
+        :ok
+      end
+    end
+
+    source = AutoBorrowClosureReturnCase.__rustq_source__()
+
+    assert source =~ "with_callback(|| &color)?;"
+  end
+
+  test "defrust auto-borrows configured generated static items" do
+    defmodule AutoBorrowConfiguredStaticCase do
+      use RustQ.Meta, static_types: [GUID_ATOM: RustQ.Type.raw(:"OnceLock<Atom>")]
+      alias RustQ.Type, as: R
+
+      @spec cached_atom(R.ref(R.raw(:"OnceLock<Atom>"))) :: R.nif_result(R.unit())
+      defrust(cached_atom(_cell), do: :ok)
+
+      @spec run() :: R.nif_result(R.unit())
+      defrust run() do
+        cached_atom(GUID_ATOM)
+        :ok
+      end
+    end
+
+    source = AutoBorrowConfiguredStaticCase.__rustq_source__()
+
+    assert source =~ "cached_atom(&GUID_ATOM)?;"
+  end
+
   test "defrust auto-borrows external static items from rust source metadata" do
     defmodule AutoBorrowExternalStaticCase do
       use RustQ.Meta, rust_sources: ["test/fixtures/external_statics.rs"]

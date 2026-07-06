@@ -13,7 +13,8 @@ defmodule RustQ.Meta.Options do
   @type t :: %{
           rust_sources: [Path.t()],
           rust_packages: [Source.rust_package()],
-          callable_modules: [module()]
+          callable_modules: [module()],
+          static_types: keyword(Macro.t())
         }
 
   @doc "Validates and normalizes options passed to `use RustQ.Meta`."
@@ -67,6 +68,19 @@ defmodule RustQ.Meta.Options do
     end
   end
 
+  def validate_static_types(nil), do: {:ok, []}
+
+  def validate_static_types(value) when is_list(value) do
+    if Enum.all?(value, fn {name, _type_ast} -> is_atom(name) end) do
+      {:ok, value}
+    else
+      {:error, "expected keyword list of static name to RustQ type spec"}
+    end
+  end
+
+  def validate_static_types(_value),
+    do: {:error, "expected keyword list of static name to RustQ type spec"}
+
   defp diagnostic_key(%NimbleOptions.ValidationError{} = error) do
     error
     |> Map.fetch!(:key)
@@ -90,6 +104,11 @@ defmodule RustQ.Meta.Options do
         type: {:custom, __MODULE__, :validate_callable_modules, [caller]},
         default: [],
         doc: "RustQ modules whose __rustq_callables__/0 metadata should be imported"
+      ],
+      static_types: [
+        type: {:custom, __MODULE__, :validate_static_types, []},
+        default: [],
+        doc: "Keyword list of generated Rust static item names to RustQ type specs"
       ]
     ]
   end
