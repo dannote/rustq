@@ -1281,6 +1281,19 @@ defmodule RustQ.Meta.Lower do
     end
   end
 
+  defp lower_method_call_args(
+         %Type{} = receiver_type,
+         _target,
+         :binary_search_by_key,
+         [_key_arg, _closure] = args,
+         %Context{} = context
+       ) do
+    case binary_search_by_key_arg_types(receiver_type, args) do
+      [_key_type, nil] = expected_types -> lower_args_with_expected(expected_types, args, context)
+      nil -> Enum.map(args, &lower_expr(&1, context))
+    end
+  end
+
   defp lower_method_call_args(_receiver_type, target, function, args, %Context{} = context) do
     lower_call_args(target, function, args, context)
   end
@@ -1294,6 +1307,65 @@ defmodule RustQ.Meta.Lower do
     |> Enum.zip(expected_types)
     |> Enum.map(fn {arg, expected_type} -> lower_expr(arg, expected_type, context) end)
   end
+
+  defp binary_search_by_key_arg_types(%Type{} = receiver_type, [_key_arg, closure]) do
+    with %Type{} = item_type <- slice_item_type(receiver_type),
+         %Type{} = key_type <- closure_field_return_type(closure, item_type) do
+      [ref_type(key_type), nil]
+    else
+      _no_key_type -> nil
+    end
+  end
+
+  defp slice_item_type(%Type{kind: :slice, meta: %{inner: %Type{} = inner}}), do: inner
+
+  defp slice_item_type(%Type{} = type) do
+    type
+    |> Type.ref_inner()
+    |> Kernel.||(type)
+    |> case do
+      %Type{kind: :slice, meta: %{inner: %Type{} = inner}} -> inner
+      %Type{ast: %AST.TypeSlice{inner: inner}} -> ast_type(inner)
+      _other -> nil
+    end
+  end
+
+  defp closure_field_return_type(
+         {:fn, _meta, [{:->, _, [[{name, _, context}], body]}]},
+         %Type{} = item_type
+       )
+       when is_atom(name) and is_atom(context) do
+    closure_binding_field_type(body, name, item_type)
+  end
+
+  defp closure_field_return_type(_closure, _item_type), do: nil
+
+  defp closure_binding_field_type(
+         {{:., _, [{name, _, context}, field]}, _meta, []},
+         name,
+         item_type
+       )
+       when is_atom(name) and is_atom(context) and is_atom(field) do
+    Typing.struct_field_type(item_type, field)
+  end
+
+  defp closure_binding_field_type(_body, _name, _item_type), do: nil
+
+  defp ref_type(%Type{} = inner) do
+    %Type{
+      kind: :ref,
+      rust: "&#{inner.rust}",
+      ast: %AST.TypeRef{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+  end
+
+  defp ast_type(ast),
+    do: %Type{
+      kind: :type,
+      ast: ast,
+      rust: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
+    }
 
   defp callable_argument_types(target, function, arity, %Context{callables: callables}) do
     callable_argument_types(callables, target, function, arity)

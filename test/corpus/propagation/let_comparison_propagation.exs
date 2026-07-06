@@ -17,7 +17,7 @@ defmodule RustQ.Corpus.Propagation.LetComparisonPropagation do
     if field_id == 0 do
       :ok
     else
-      case fields.binary_search_by_key(ref(field_id), fn field -> field.id end) do
+      case fields.binary_search_by_key(field_id, fn field -> field.id end) do
         {:ok, _index} -> :ok
         {:error, _index} -> {:error, badarg()}
       end

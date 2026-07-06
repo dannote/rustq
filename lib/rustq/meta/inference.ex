@@ -147,7 +147,7 @@ defmodule RustQ.Meta.Inference do
 
   defp expected_type_for_arg_expr(name, {var_name, _, context}, %Type{} = type)
        when name == var_name and is_atom(context),
-       do: Type.into_iterator_vec(type) || Type.expected_value(type)
+       do: Type.into_iterator_vec(type) || Type.ref_inner(type) || Type.expected_value(type)
 
   defp expected_type_for_arg_expr(
          name,
@@ -407,6 +407,8 @@ defmodule RustQ.Meta.Inference do
     do: [{args, expected_types} | calls]
 
   defp maybe_add_downstream_call(calls, _args, _expected_types), do: calls
+
+  defp slice_item_type(%Type{kind: :slice, meta: %{inner: %Type{} = inner}}), do: inner
 
   defp slice_item_type(%Type{} = type) do
     type
