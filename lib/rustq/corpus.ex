@@ -32,7 +32,7 @@ defmodule RustQ.Corpus do
     end
 
     modules
-    |> Enum.map_join("\n", & &1.__rustq_source__())
+    |> Enum.map_join("\n", &render_module!/1)
     |> maybe_format_rust(Keyword.get(opts, :rustfmt, true), source_path)
   end
 
@@ -97,6 +97,15 @@ defmodule RustQ.Corpus do
     |> Path.relative_to(root)
     |> Path.split()
     |> List.first()
+  end
+
+  defp render_module!(module) do
+    if function_exported?(module, :__rustq_corpus_fragments__, 0) do
+      module.__rustq_corpus_fragments__()
+      |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
+    else
+      module.__rustq_source__()
+    end
   end
 
   defp maybe_format_rust(source, false, _source_path), do: source
