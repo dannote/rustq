@@ -7,6 +7,7 @@
 - Render integer match patterns as unsuffixed literals so they can match the
   scrutinee integer type.
 - Auto-borrow `Vec<T>` values passed where `&[T]` slices are expected.
+- Add regression coverage for remote associated functions that expect slices.
 
 ## v0.9.0 - 2026-07-06
 
