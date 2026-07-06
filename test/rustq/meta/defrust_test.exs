@@ -1253,6 +1253,27 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "with_callback(|| &color)?;"
   end
 
+  test "defrust auto-borrows array literals for expected slices" do
+    defmodule AutoBorrowArraySliceCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec use_values(R.slice(R.u32())) :: R.nif_result(R.unit())
+      defrust(use_values(_values), do: :ok)
+
+      @spec run() :: R.nif_result(R.unit())
+      defrust run() do
+        use_values(array([1, 2, 3]))
+        :ok
+      end
+    end
+
+    source = AutoBorrowArraySliceCase.__rustq_source__()
+
+    assert source =~ "use_values(&[1, 2, 3])?;"
+    assert RustQ.valid?(source, "auto_borrow_array_slice.rs")
+  end
+
   test "defrust propagates let RHS through downstream comparisons" do
     defmodule PropagateLetComparisonCase do
       use RustQ.Meta

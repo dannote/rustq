@@ -248,7 +248,17 @@ defmodule RustQ.Meta.Lower do
          %Context{} = context
        ) do
     expected_inner = Type.ref_inner(Type.expected_value(expected_type))
-    %AST.Ref{expr: lower_expr(expression, expected_inner || expected_type, context)}
+
+    inner_expected =
+      unless array_expr?(expression) and slice_type?(expected_inner), do: expected_inner
+
+    expr =
+      case inner_expected do
+        %Type{} = type -> lower_expr(expression, type, context)
+        _none -> lower_expr(expression, context)
+      end
+
+    %AST.Ref{expr: expr}
   end
 
   defp lower_expected_expr_context(
@@ -298,6 +308,16 @@ defmodule RustQ.Meta.Lower do
          %Context{} = context
        ),
        do: lower_closure_args(args, body, context, closure_return_type(expected_type))
+
+  defp lower_expected_expr_context(
+         {:array, _, [values]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ) do
+    array = %AST.ArrayLiteral{values: Enum.map(values, &lower_array_value(&1, context))}
+
+    if slice_type?(expected_type), do: %AST.Ref{expr: array}, else: array
+  end
 
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
     lower_checked_expr(expression, expected_type, context)
@@ -1366,6 +1386,15 @@ defmodule RustQ.Meta.Lower do
       ast: ast,
       rust: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
     }
+
+  defp array_expr?({:array, _, [_values]}), do: true
+  defp array_expr?(_expression), do: false
+
+  defp slice_type?(%Type{kind: :slice}), do: true
+  defp slice_type?(%Type{ast: %AST.TypeSlice{}}), do: true
+  defp slice_type?(%Type{ast: %AST.TypeRef{inner: %AST.TypeSlice{}}}), do: true
+  defp slice_type?(%Type{}), do: false
+  defp slice_type?(_type), do: false
 
   defp callable_argument_types(target, function, arity, %Context{callables: callables}) do
     callable_argument_types(callables, target, function, arity)
