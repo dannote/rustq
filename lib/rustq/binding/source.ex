@@ -247,7 +247,76 @@ defmodule RustQ.Binding.Source do
   end
 
   defp impl_callables(%Syn.Impl{} = impl) do
-    Enum.map(impl.methods, &Callable.from_syn_method(&1, target: impl.target))
+    self_type = Spec.from_syn(impl.target_ast)
+
+    Enum.map(impl.methods, fn method ->
+      method
+      |> Callable.from_syn_method(target: impl.target)
+      |> resolve_self_types(self_type)
+    end)
+  end
+
+  defp resolve_self_types(%Callable{} = callable, %Type{} = self_type) do
+    %{
+      callable
+      | args: Enum.map(callable.args, &resolve_self_arg(&1, self_type)),
+        returns: resolve_self_type(callable.returns, self_type)
+    }
+  end
+
+  defp resolve_self_arg(%{type: %Type{} = type} = arg, %Type{} = self_type),
+    do: %{arg | type: resolve_self_type(type, self_type)}
+
+  defp resolve_self_arg(arg, _self_type), do: arg
+
+  defp resolve_self_type(%Type{rust: "Self"}, %Type{} = self_type), do: self_type
+
+  defp resolve_self_type(
+         %Type{kind: kind, meta: %{inner: %Type{} = inner} = meta} = type,
+         self_type
+       )
+       when kind in [:option, :ref, :mut_ref, :vec] do
+    %{type | meta: Map.put(meta, :inner, resolve_self_type(inner, self_type))}
+  end
+
+  defp resolve_self_type(
+         %Type{kind: :tuple, meta: %{elements: elements} = meta} = type,
+         self_type
+       ) do
+    %{
+      type
+      | meta: Map.put(meta, :elements, Enum.map(elements, &resolve_self_type(&1, self_type)))
+    }
+  end
+
+  defp resolve_self_type(%Type{kind: :result} = type, self_type) do
+    meta =
+      type.meta
+      |> resolve_self_meta_type(:ok, self_type)
+      |> resolve_self_meta_type(:error, self_type)
+
+    %{type | meta: meta}
+  end
+
+  defp resolve_self_type(
+         %Type{kind: :impl_trait, meta: %{traits: traits} = meta} = type,
+         self_type
+       ) do
+    %{type | meta: Map.put(meta, :traits, Enum.map(traits, &resolve_self_type(&1, self_type)))}
+  end
+
+  defp resolve_self_type(%Type{meta: %{args: args} = meta} = type, self_type)
+       when is_list(args) do
+    %{type | meta: Map.put(meta, :args, Enum.map(args, &resolve_self_type(&1, self_type)))}
+  end
+
+  defp resolve_self_type(type, _self_type), do: type
+
+  defp resolve_self_meta_type(meta, key, self_type) do
+    case Map.fetch(meta, key) do
+      {:ok, %Type{} = type} -> Map.put(meta, key, resolve_self_type(type, self_type))
+      _missing_or_other -> meta
+    end
   end
 
   defp annotate_callable_types(%Callable{} = callable, %Syn.Index{} = index, conversions) do
