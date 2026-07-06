@@ -37,6 +37,20 @@ defmodule RustQ.Binding.IndexTest do
     assert Index.method_targets(index, :draw_rect, 1) == ["Canvas"]
   end
 
+  test "indexes qualified targets by their last path segment" do
+    callable = %Callable{
+      name: "new_copy",
+      kind: :function,
+      target: "skia_safe::Data",
+      args: [arg("data")],
+      returns: nil
+    }
+
+    index = Index.new([callable])
+
+    assert Index.argument_types(index, :Data, :new_copy, 1) == [type(:type, "Term")]
+  end
+
   test "returns unique method receiver targets by receiverless call arity" do
     index =
       Index.new([

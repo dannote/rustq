@@ -114,29 +114,42 @@ defmodule RustQ.Meta.Type do
 
   def slice_inner(%__MODULE__{}), do: nil
 
-  @doc "Returns the vector type that can satisfy a slice expectation."
-  @spec vec_for_slice(t()) :: t() | nil
-  def vec_for_slice(%__MODULE__{} = type) do
-    case slice_inner(type) do
-      %__MODULE__{} = inner -> vec_type(inner)
-      nil -> nil
-    end
+  @doc "Constructs `Vec<T>` type metadata."
+  @spec vec(t()) :: t()
+  def vec(%__MODULE__{} = inner) do
+    type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
   end
 
-  @doc "Returns the vector type that can satisfy an `IntoIterator<Item = T>` expectation."
-  @spec into_iterator_vec(t()) :: t() | nil
-  def into_iterator_vec(%__MODULE__{kind: :impl_trait, meta: %{traits: traits}}) do
+  @doc """
+  Returns the natural Rusty-Elixir input type for a callable expected type.
+
+  This normalizes Rust adapter types into the value shape an author should pass
+  before call-site coercions are emitted. For example, `&T` expects an authored
+  `T`, `&[T]` expects an authored `Vec<T>`, and `impl IntoIterator<Item = T>`
+  expects an authored `Vec<T>`.
+  """
+  @spec expected_input(t()) :: t()
+  def expected_input(%__MODULE__{kind: :impl_trait, meta: %{traits: traits}} = type) do
     traits
     |> Enum.find_value(fn
+      %__MODULE__{meta: %{syn_name: "Into", args: [%__MODULE__{} = inner]}} ->
+        expected_input(inner)
+
       %__MODULE__{meta: %{syn_name: "IntoIterator", assoc: %{"Item" => %__MODULE__{} = item}}} ->
-        vec_type(item)
+        vec(item)
 
       _trait ->
         nil
-    end)
+    end) || type
   end
 
-  def into_iterator_vec(%__MODULE__{}), do: nil
+  def expected_input(%__MODULE__{} = type) do
+    cond do
+      slice_inner(type) -> vec(slice_inner(type))
+      ref_inner(type) -> expected_input(ref_inner(type))
+      true -> type
+    end
+  end
 
   @doc """
   Returns the concrete value type expected by a callable argument.
@@ -804,10 +817,6 @@ defmodule RustQ.Meta.Type do
   defp tuple_type(tuple_types) do
     rendered = Enum.map_join(tuple_types, ", ", & &1.rust)
     type(:tuple, %AST.TypeRaw{source: "(#{rendered})"}, %{elements: tuple_types})
-  end
-
-  defp vec_type(%__MODULE__{} = inner) do
-    type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
   end
 
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),

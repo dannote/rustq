@@ -119,8 +119,9 @@ defmodule RustQ.Binding.Index do
 
   defp target_keys(target) do
     target = target_part(target)
+    base = base_target_part(target)
 
-    [target, base_target_part(target)]
+    [target, base, last_target_part(base)]
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
   end
@@ -135,6 +136,18 @@ defmodule RustQ.Binding.Index do
       base -> base
     end
   end
+
+  defp last_target_part(target) when is_binary(target) do
+    target
+    |> String.split("::")
+    |> List.last()
+    |> case do
+      "" -> nil
+      part -> part
+    end
+  end
+
+  defp last_target_part(_target), do: nil
 
   defp key(nil, name, arity), do: {nil, name_part(name), arity}
   defp key(target, name, arity), do: {target_part(target), name_part(name), arity}

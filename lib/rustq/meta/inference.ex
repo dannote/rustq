@@ -147,8 +147,7 @@ defmodule RustQ.Meta.Inference do
 
   defp expected_type_for_arg_expr(name, {var_name, _, context}, %Type{} = type)
        when name == var_name and is_atom(context),
-       do:
-         Type.into_iterator_vec(type) || Type.vec_for_slice(type) || Type.ref_inner(type) || type
+       do: Type.expected_input(type)
 
   defp expected_type_for_arg_expr(
          name,
@@ -233,21 +232,12 @@ defmodule RustQ.Meta.Inference do
          meta: %{inner: %Type{kind: :slice, meta: %{inner: inner}}}
        })
        when kind in [:ref, :mut_ref],
-       do: vec_type(inner)
+       do: Type.vec(inner)
 
   defp receiver_type_for_as_slice_argument(%Type{kind: :slice, meta: %{inner: inner}}),
-    do: vec_type(inner)
+    do: Type.vec(inner)
 
   defp receiver_type_for_as_slice_argument(_type), do: nil
-
-  defp vec_type(%Type{} = inner) do
-    %Type{
-      kind: :vec,
-      rust: "Vec<#{inner.rust}>",
-      ast: %AST.TypeVec{inner: inner.ast},
-      meta: %{inner: inner}
-    }
-  end
 
   defp expected_return_type_for_var(name, expression, %Type{} = return_type) do
     expression
