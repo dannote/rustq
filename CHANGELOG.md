@@ -6,6 +6,7 @@
 - Propagate fallible `case` scrutinees before matching inner patterns.
 - Render integer match patterns as unsuffixed literals so they can match the
   scrutinee integer type.
+- Auto-borrow `Vec<T>` values passed where `&[T]` slices are expected.
 
 ## v0.9.0 - 2026-07-06
 

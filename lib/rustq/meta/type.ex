@@ -768,7 +768,9 @@ defmodule RustQ.Meta.Type do
 
   defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
 
-  defp ast_type(ast), do: type(ast_type_kind(ast), ast)
+  @doc false
+  @spec ast_type(AST.type()) :: t()
+  def ast_type(ast), do: type(ast_type_kind(ast), ast)
 
   defp ast_type_kind(%AST.TypeNifResult{}), do: :nif_result
   defp ast_type_kind(%AST.TypeResult{}), do: :result

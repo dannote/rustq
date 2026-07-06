@@ -308,10 +308,23 @@ defmodule RustQ.Meta.Typing do
 
   defp ref_inner_compatible?(%Type{} = actual, %Type{} = expected) do
     case Type.ref_inner(expected) do
-      %Type{} = inner -> Type.compatible?(actual, inner)
+      %Type{} = inner -> Type.compatible?(actual, inner) or vec_slice_compatible?(actual, inner)
       nil -> false
     end
   end
+
+  defp vec_slice_compatible?(%Type{} = actual, %Type{} = expected_inner) do
+    with %Type{} = vec_inner <- Type.vec_inner(actual),
+         %Type{} = slice_inner <- slice_inner(expected_inner) do
+      Type.compatible?(vec_inner, slice_inner)
+    else
+      _other -> false
+    end
+  end
+
+  defp slice_inner(%Type{kind: :slice, meta: %{inner: %Type{} = inner}}), do: inner
+  defp slice_inner(%Type{ast: %AST.TypeSlice{inner: inner}}), do: Type.ast_type(inner)
+  defp slice_inner(%Type{}), do: nil
 
   defp borrow_coercion(%Type{kind: :mut_ref}), do: :mut_borrow
   defp borrow_coercion(%Type{}), do: :borrow
