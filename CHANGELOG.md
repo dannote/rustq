@@ -2,34 +2,86 @@
 
 ## Unreleased
 
+## v0.9.0 - 2026-07-06
+
+This release is a large Rusty-Elixir self-hosting and downstream dogfooding
+release. It expands structural Rust generation, improves type-driven lowering,
+and fixes a major compile-time performance regression exposed by Skia dogfood.
+
+### Added
+
 - Add Rust type item generation from `@type` aliases, including type aliases,
   structs, enums, and Rust-only support records that do not force generated
   Rustler term decoders.
 - Add `R.enum(...)` for explicit Rust enum type items and fix zero-arity type
   alias resolution for bare `@type name :: ...` declarations.
 - Add structural `macro_rules!` AST support and native validation/rendering for
-  macro variables, captures, and repetitions.
-- Extend `defrustmacro` with identifier/literal captures, item-generating inner
-  `defrust` bodies, multiple generated item bodies, and `repeat ... do`
-  macro-template repetitions, including compact field-row item patterns.
+  macro variables, captures, repetitions, and macro repeat expressions.
+- Add AST walking utilities for RustQ AST traversal and mutation analysis.
+- Add golden corpus tooling for Rusty-Elixir lowering, with coverage reporting
+  by category.
 - Add semantic `enum_variant(Type, :variant, ...)` lowering for constructing
   Rust enum variants from Rusty-Elixir without token macros.
-- Add `defrustmacro` support for compact `skip_fields` descriptor row patterns.
-- Document item-generating `defrustmacro` patterns for compact generated Rust
-  that keeps implementation logic in Rusty-Elixir.
+- Add semantic item-producing `defrustmacro` calls and macro item call support.
+- Add `defrustmacro` support for compact `skip_fields` and sparse struct field
+  descriptor row patterns.
 - Add idiomatic Clippy lint paths for Rust-facing attributes, such as
   `@allow Clippy.redundant_field_names` rendering to
   `#[allow(clippy::redundant_field_names)]`.
-- Add `defrustmacro` for defining compact Rust `macro_rules!` helpers from
-  Rusty-Elixir bodies, with `:expr` arguments by default and `:ty` annotations
-  for type fragments.
-- Lower calls to known `defrustmacro` helpers as generated Rust macro
-  invocations, and support remote Rust macro calls such as `Debug.trace!(value)`.
-- Document when to use ordinary Elixir `defmacro` for authoring-layer reuse
-  versus `defrustmacro` for intentionally reducing generated Rust size.
 - Add dev-only RustQ Reach smell checks and dogfood them in strict mode for raw
   Rust escapes, low-level Rusty-Elixir control flow, trivial `defrust` wrappers,
   and blockless `defrustmod` aliases.
+
+### Changed
+
+- Extend `defrustmacro` with identifier/literal captures, item-generating inner
+  `defrust` bodies, multiple generated item bodies, and `repeat ... do`
+  macro-template repetitions.
+- Lower calls to known `defrustmacro` helpers as generated Rust macro
+  invocations, and support remote Rust macro calls such as `Debug.trace!(value)`.
+- Replace ad hoc macro metavariable spacing cleanup with structural macro repeat
+  expression rendering.
+- Remove the process dictionary from Rusty-Elixir lowering; lowering state is now
+  threaded explicitly through expression, call-argument, alias, array,
+  control-flow, return, and expected-expression lowering.
+- Make context-aware expression lowering the primary lowering path.
+- Expand type-driven checking for expected expression positions, including
+  returns, call arguments, struct fields, `case` arms, `if` branches,
+  `with`/`for reduce` bodies, closures, field access, statics, array literals,
+  and option `some(...)` wrappers.
+- Infer downstream types through value uses such as comparisons,
+  `binary_search_by_key`, receiver method calls, mutable `Vec::push`, option
+  case bindings, option adapters, package free functions, and `Self`-based impl
+  callables.
+- Import free functions from configured Cargo packages in addition to impl
+  methods.
+- Resolve `Self` types in impl callable metadata to the concrete impl target.
+- Keep `__rustq_callables__/0` exports limited to local RustQ callables instead
+  of embedding all external/package callables into every module. External
+  callables are still available during compilation through cached source/package
+  resolution.
+- Document item-generating `defrustmacro` patterns for compact generated Rust
+  that keeps implementation logic in Rusty-Elixir.
+- Document when to use ordinary Elixir `defmacro` for authoring-layer reuse
+  versus `defrustmacro` for intentionally reducing generated Rust size.
+
+### Fixed
+
+- Parse Rust bare function pointer types structurally through `syn` metadata
+  instead of regexing rendered Rust type strings.
+- Mark function pointer types as non-decodable where Rustler decoding cannot be
+  derived safely.
+- Auto-borrow binary-search keys, array literals expected as slices, call
+  arguments, option `some(...)` inners, option adapter inners, external statics,
+  and several downstream value-use patterns.
+- Avoid applying `?` to `Option<T>` values in `Result`/`NifResult` contexts where
+  Rust does not support that propagation boundary.
+- Infer external static types and generated static types for auto-borrowing.
+- Preserve explicit `R.raw(...)` as an escape hatch while using structured `syn`
+  metadata where available.
+- Fix zero-cost package metadata reuse after Skia dogfood: generated checks that
+  previously ballooned to roughly 75–80 seconds now avoid duplicating thousands
+  of external callables into every module.
 
 ## v0.8.3 - 2026-06-28
 
