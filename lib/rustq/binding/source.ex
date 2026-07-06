@@ -185,20 +185,7 @@ defmodule RustQ.Binding.Source do
 
     conversions = from_conversions(index)
 
-    function_callables =
-      index.files
-      |> Map.values()
-      |> Enum.flat_map(&Syn.functions/1)
-      |> Enum.map(&Callable.from_syn_function/1)
-      |> Enum.map(&annotate_callable_types(&1, index, conversions))
-
-    method_callables =
-      index
-      |> Syn.Index.impls()
-      |> Enum.flat_map(&impl_callables/1)
-      |> Enum.map(&annotate_callable_types(&1, index, conversions))
-
-    function_callables ++ method_callables
+    index_callables(index, conversions)
   end
 
   defp validate_rust_source!(path) do
@@ -220,6 +207,9 @@ defmodule RustQ.Binding.Source do
   defp cached_rust_package_callables(config),
     do: cached_callables({:rust_package, config}, fn -> rust_package_callables(config) end)
 
+  defp rust_package_callables(package) when is_binary(package),
+    do: rust_package_callables({package, []})
+
   defp rust_package_callables({package, opts}) when is_binary(package) and is_list(opts) do
     index =
       try do
@@ -236,14 +226,25 @@ defmodule RustQ.Binding.Source do
 
     conversions = from_conversions(index)
 
-    index
-    |> Syn.Index.impls()
-    |> Enum.flat_map(&impl_callables/1)
-    |> Enum.map(&annotate_callable_types(&1, index, conversions))
+    index_callables(index, conversions)
   end
 
-  defp rust_package_callables(package) when is_binary(package),
-    do: rust_package_callables({package, []})
+  defp index_callables(index, conversions) do
+    function_callables =
+      index.files
+      |> Map.values()
+      |> Enum.flat_map(&Syn.functions/1)
+      |> Enum.map(&Callable.from_syn_function/1)
+      |> Enum.map(&annotate_callable_types(&1, index, conversions))
+
+    method_callables =
+      index
+      |> Syn.Index.impls()
+      |> Enum.flat_map(&impl_callables/1)
+      |> Enum.map(&annotate_callable_types(&1, index, conversions))
+
+    function_callables ++ method_callables
+  end
 
   defp impl_callables(%Syn.Impl{} = impl) do
     Enum.map(impl.methods, &Callable.from_syn_method(&1, target: impl.target))
