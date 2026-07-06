@@ -1298,6 +1298,85 @@ defmodule RustQ.Meta.LowerTest do
            ] = statements
   end
 
+  test "auto-borrows option some inners for impl Into option arguments" do
+    rect_type = %Type{kind: :type, rust: "Rect", ast: %AST.TypePath{parts: [:Rect]}}
+
+    constraint_type = %Type{
+      kind: :type,
+      rust: "Constraint",
+      ast: %AST.TypePath{parts: [:Constraint]}
+    }
+
+    ref_rect_type = %Type{
+      kind: :ref,
+      rust: "&Rect",
+      ast: %AST.TypeRef{inner: rect_type.ast},
+      meta: %{inner: rect_type}
+    }
+
+    tuple_type = %Type{
+      kind: :tuple,
+      rust: "(&Rect, Constraint)",
+      ast: %AST.TypeRaw{source: "(&Rect, Constraint)"},
+      meta: %{elements: [ref_rect_type, constraint_type]}
+    }
+
+    option_tuple = %Type{
+      kind: :option,
+      rust: "Option<(&Rect, Constraint)>",
+      ast: %AST.TypeOption{inner: tuple_type.ast},
+      meta: %{inner: tuple_type}
+    }
+
+    into_option_tuple = %Type{
+      kind: :impl_trait,
+      rust: "impl Into<Option<(&Rect, Constraint)>>",
+      ast: %AST.TypeRaw{source: "impl Into<Option<(&Rect, Constraint)>>"},
+      meta: %{traits: [%Type{meta: %{syn_name: "Into", args: [option_tuple]}}]}
+    }
+
+    statements =
+      Lower.quoted_body(
+        quote do
+          draw_option(some({rect, constraint}))
+          draw_option(src)
+          :ok
+        end,
+        unit_type(),
+        %{rect: rect_type, constraint: constraint_type, src: option_tuple},
+        callables: [
+          %Callable{
+            name: "draw_option",
+            kind: :function,
+            args: [%{name: "source", type: into_option_tuple, syn: nil}],
+            returns: unit_type()
+          }
+        ]
+      )
+
+    assert [
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{
+                 name: :draw_option,
+                 args: [
+                   %AST.Some{
+                     expr: %AST.Tuple{
+                       values: [
+                         %AST.Ref{expr: %AST.Var{name: :rect}},
+                         %AST.Var{name: :constraint}
+                       ]
+                     }
+                   }
+                 ]
+               }
+             },
+             %AST.ExprStmt{
+               expr: %AST.LocalCall{name: :draw_option, args: [%AST.Var{name: :src}]}
+             },
+             %AST.Return{}
+           ] = statements
+  end
+
   test "does not propagate option call arguments in nif result context" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
 

@@ -321,12 +321,16 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expected_expr_context(
          {:some, _, [expression]},
-         %Type{kind: :option} = expected_type,
+         %Type{} = expected_type,
          %Context{} = context
        ) do
-    inner_expected = Type.inner(expected_type)
+    case expected_option_inner(expected_type) do
+      %Type{} = inner_expected ->
+        %AST.Some{expr: lower_option_some_expr(expression, inner_expected, context)}
 
-    %AST.Some{expr: lower_option_some_expr(expression, inner_expected, context)}
+      nil ->
+        lower_checked_expr({:some, [], [expression]}, expected_type, context)
+    end
   end
 
   defp lower_expected_expr_context(
@@ -356,11 +360,25 @@ defmodule RustQ.Meta.Lower do
   defp lower_expected_expr_context(expression, _expected_type, %Context{} = context),
     do: lower_expr(expression, context)
 
+  defp expected_option_inner(%Type{kind: :option} = type), do: Type.inner(type)
+
+  defp expected_option_inner(%Type{kind: :impl_trait, meta: %{traits: traits}}) do
+    Enum.find_value(traits, fn
+      %Type{meta: %{syn_name: "Into", args: [%Type{kind: :option} = option]}} ->
+        Type.inner(option)
+
+      %Type{} = trait ->
+        expected_option_inner(trait)
+
+      _trait ->
+        nil
+    end)
+  end
+
+  defp expected_option_inner(%Type{}), do: nil
+
   defp lower_option_some_expr(expression, %Type{} = inner_expected, %Context{} = context),
     do: lower_expr(expression, inner_expected, context)
-
-  defp lower_option_some_expr(expression, _inner_expected, %Context{} = context),
-    do: lower_wrapper_arg_expr(expression, context)
 
   defp lower_expected_tuple(values, types, %Context{} = context) do
     %AST.Tuple{

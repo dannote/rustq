@@ -265,6 +265,9 @@ defmodule RustQ.Meta.Typing do
       Type.compatible?(actual, expected) ->
         :none
 
+      option_adapter_compatible?(actual, expected) ->
+        :none
+
       Type.propagates?(actual) and Type.compatible_with_expected?(Type.inner(actual), expected) ->
         :propagate
 
@@ -283,6 +286,25 @@ defmodule RustQ.Meta.Typing do
   end
 
   defp coercion(_actual, _expected), do: :unknown
+
+  defp option_adapter_compatible?(%Type{} = actual, %Type{} = expected) do
+    case expected_option_type(expected) do
+      %Type{} = option -> Type.compatible?(actual, option)
+      nil -> false
+    end
+  end
+
+  defp expected_option_type(%Type{kind: :option} = type), do: type
+
+  defp expected_option_type(%Type{kind: :impl_trait, meta: %{traits: traits}}) do
+    Enum.find_value(traits, fn
+      %Type{meta: %{syn_name: "Into", args: [%Type{kind: :option} = option]}} -> option
+      %Type{} = trait -> expected_option_type(trait)
+      _trait -> nil
+    end)
+  end
+
+  defp expected_option_type(%Type{}), do: nil
 
   defp ref_inner_compatible?(%Type{} = actual, %Type{} = expected) do
     case Type.ref_inner(expected) do

@@ -147,7 +147,7 @@ defmodule RustQ.Meta.Inference do
 
   defp expected_type_for_arg_expr(name, {var_name, _, context}, %Type{} = type)
        when name == var_name and is_atom(context),
-       do: Type.into_iterator_vec(type) || Type.ref_inner(type) || Type.expected_value(type)
+       do: Type.into_iterator_vec(type) || Type.ref_inner(type) || type
 
   defp expected_type_for_arg_expr(
          name,
