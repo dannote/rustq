@@ -166,6 +166,17 @@ defmodule RustQ.Syn do
       @type t :: %__MODULE__{code: String.t()}
     end
 
+    defmodule Fn do
+      @moduledoc "Rust bare function pointer type metadata."
+      defstruct [:code, args: [], returns: nil]
+
+      @type t :: %__MODULE__{
+              code: String.t(),
+              args: [RustQ.Syn.type()],
+              returns: RustQ.Syn.type() | nil
+            }
+    end
+
     defmodule Raw do
       @moduledoc "Fallback Rust type metadata for type forms RustQ does not model structurally yet."
       defstruct [:code]
@@ -439,6 +450,7 @@ defmodule RustQ.Syn do
           | RustQ.Syn.Type.Slice.t()
           | RustQ.Syn.Type.Array.t()
           | RustQ.Syn.Type.Self.t()
+          | RustQ.Syn.Type.Fn.t()
           | RustQ.Syn.Type.Raw.t()
 
   @type item ::
@@ -846,6 +858,15 @@ defmodule RustQ.Syn do
   end
 
   defp decode_type!({"self", code}), do: %RustQ.Syn.Type.Self{code: code}
+
+  defp decode_type!({"fn", code, args, returns}) do
+    %RustQ.Syn.Type.Fn{
+      code: code,
+      args: Elixir.Enum.map(args, &decode_type!/1),
+      returns: if(is_nil(returns), do: nil, else: decode_type!(returns))
+    }
+  end
+
   defp decode_type!({"raw", code}), do: %RustQ.Syn.Type.Raw{code: code}
 
   defp decode_path_type!(code, segments, args, assoc) do

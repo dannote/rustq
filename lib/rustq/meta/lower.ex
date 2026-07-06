@@ -1450,32 +1450,33 @@ defmodule RustQ.Meta.Lower do
   defp closure_body_expr([expression]), do: expression
   defp closure_body_expr(expression), do: expression
 
-  defp closure_return_type(%Type{rust: rust}) when is_binary(rust) do
-    case Regex.run(~r/->\s*(.+)$/, rust) do
-      [_match, return_type] -> rust_string_type(return_type)
-      nil -> nil
-    end
+  defp closure_return_type(%Type{kind: :fn, meta: %{returns: %Type{} = returns}}), do: returns
+
+  defp closure_return_type(%Type{ast: %AST.TypeRaw{source: source}}) do
+    source
+    |> parse_raw_fn_type()
+    |> closure_return_type()
   end
 
   defp closure_return_type(%Type{}), do: nil
+  defp closure_return_type(nil), do: nil
 
-  defp rust_string_type("&mut " <> inner), do: rust_ref_string_type(inner, true)
-  defp rust_string_type("&" <> inner), do: rust_ref_string_type(inner, false)
+  defp parse_raw_fn_type(source) do
+    case RustQ.Syn.parse("type __RustQ = #{source};") do
+      {:ok, file} ->
+        file
+        |> RustQ.Syn.type_aliases()
+        |> case do
+          [%RustQ.Syn.TypeAlias{type_ast: %RustQ.Syn.Type.Fn{} = type_ast}] ->
+            Type.from_syn(type_ast)
 
-  defp rust_string_type(source) do
-    source = String.trim(source)
-    %Type{kind: :type, rust: source, ast: %AST.TypeRaw{source: source}}
-  end
+          _other ->
+            nil
+        end
 
-  defp rust_ref_string_type(inner, mutable) do
-    inner_type = rust_string_type(inner)
-
-    %Type{
-      kind: if(mutable, do: :mut_ref, else: :ref),
-      rust: "&#{if(mutable, do: "mut ", else: "")}#{inner_type.rust}",
-      ast: %AST.TypeRef{inner: inner_type.ast, mutable: mutable},
-      meta: %{inner: inner_type}
-    }
+      {:error, _errors} ->
+        nil
+    end
   end
 
   defp method_chain(receiver, method, args \\ []),

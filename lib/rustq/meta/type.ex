@@ -276,6 +276,13 @@ defmodule RustQ.Meta.Type do
     type(:array, %AST.TypeRaw{source: code}, %{inner: inner})
   end
 
+  def from_syn(%SynType.Fn{code: code, args: args, returns: returns}) do
+    args = Enum.map(args, &from_syn/1)
+    returns = if is_nil(returns), do: nil, else: from_syn(returns)
+
+    type(:fn, %AST.TypeRaw{source: code}, %{args: args, returns: returns})
+  end
+
   def from_syn(%SynType.Self{code: code}), do: type(:type, %AST.TypeRaw{source: code})
   def from_syn(%SynType.Raw{code: code}), do: type(:type, %AST.TypeRaw{source: code})
 

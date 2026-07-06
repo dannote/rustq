@@ -403,6 +403,20 @@ fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
             .encode(env),
         Type::Slice(slice) => ("slice", code, type_metadata(env, &slice.elem)).encode(env),
         Type::Array(array) => ("array", code, type_metadata(env, &array.elem)).encode(env),
+        Type::BareFn(function) => (
+            "fn",
+            code,
+            function
+                .inputs
+                .iter()
+                .map(|arg| type_metadata(env, &arg.ty))
+                .collect::<Vec<_>>(),
+            match &function.output {
+                ReturnType::Default => None,
+                ReturnType::Type(_arrow, ty) => Some(type_metadata(env, ty)),
+            },
+        )
+            .encode(env),
         _ => ("raw", code).encode(env),
     }
 }

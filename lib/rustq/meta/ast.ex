@@ -522,6 +522,7 @@ defmodule RustQ.Meta.AST do
   defp decodable_struct_field?({_name, %Type{} = type, _presence}), do: decodable_type?(type)
 
   defp decodable_type?(%Type{kind: :type, ast: %AST.TypeRaw{}}), do: false
+  defp decodable_type?(%Type{kind: :fn}), do: false
   defp decodable_type?(%Type{kind: :rust_enum}), do: false
   defp decodable_type?(%Type{kind: :alias, meta: %{target: target}}), do: decodable_type?(target)
   defp decodable_type?(%Type{}), do: true
