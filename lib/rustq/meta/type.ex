@@ -104,6 +104,25 @@ defmodule RustQ.Meta.Type do
   def vec_inner(%__MODULE__{ast: %AST.TypeVec{inner: inner}}), do: ast_type(inner)
   def vec_inner(%__MODULE__{}), do: nil
 
+  @doc "Returns the element type for `[T]` / `&[T]` metadata."
+  @spec slice_inner(t()) :: t() | nil
+  def slice_inner(%__MODULE__{kind: :slice, meta: %{inner: %__MODULE__{} = inner}}), do: inner
+  def slice_inner(%__MODULE__{ast: %AST.TypeSlice{inner: inner}}), do: ast_type(inner)
+
+  def slice_inner(%__MODULE__{ast: %AST.TypeRef{inner: %AST.TypeSlice{inner: inner}}}),
+    do: ast_type(inner)
+
+  def slice_inner(%__MODULE__{}), do: nil
+
+  @doc "Returns the vector type that can satisfy a slice expectation."
+  @spec vec_for_slice(t()) :: t() | nil
+  def vec_for_slice(%__MODULE__{} = type) do
+    case slice_inner(type) do
+      %__MODULE__{} = inner -> vec_type(inner)
+      nil -> nil
+    end
+  end
+
   @doc "Returns the vector type that can satisfy an `IntoIterator<Item = T>` expectation."
   @spec into_iterator_vec(t()) :: t() | nil
   def into_iterator_vec(%__MODULE__{kind: :impl_trait, meta: %{traits: traits}}) do
