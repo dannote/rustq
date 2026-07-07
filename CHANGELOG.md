@@ -2,16 +2,10 @@
 
 ## Unreleased
 
-- Add corpus coverage for semantic `defrustmacro` item call fragments.
-- Propagate fallible `case` scrutinees before matching inner patterns.
-- Render integer match patterns as unsuffixed literals so they can match the
-  scrutinee integer type.
-- Auto-borrow `Vec<T>` values passed where `&[T]` slices are expected.
-- Add regression coverage for remote associated functions that expect slices.
-- Avoid treating capitalized associated-function paths as unqualified free
-  functions during callable lookup.
-- Prefer downstream call-argument evidence over receiver-method evidence when
-  inferring local binding types.
+- Improve expected-input inference for callable arguments, including fallible
+  `case` scrutinees, associated calls, and slice/`Vec` borrow adaptation.
+- Add corpus coverage for semantic `defrustmacro` item calls and recent
+  propagation/borrow inference regressions.
 
 ## v0.9.0 - 2026-07-06
 
