@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v0.9.3 - 2026-07-06
+
+- Infer `Option<T>` author input for expected `Option<&T>` adapter arguments,
+  including fallible `NifResult<Option<T>>` values passed to
+  `impl Into<Option<&T>>` Rust methods.
+- Preserve owned option locals while emitting `.as_ref()` at the eventual call
+  site to avoid borrowing from temporaries.
+
 ## v0.9.2 - 2026-07-06
 
 - Improve Rusty-Elixir propagation and borrow inference for fallible option
