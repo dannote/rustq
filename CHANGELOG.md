@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v0.9.2 - 2026-07-06
+
+- Improve Rusty-Elixir propagation and borrow inference for fallible option
+  cases, `some(...)`, `unwrap_or`, `decode_as!`, `map_get`, fallible reference
+  access, list/slice arguments, loop bindings, and method arguments.
+- Improve callable metadata lookup for qualified method receivers and add corpus
+  coverage for `impl Into<Option<T>>` argument propagation.
+- Refresh README, guide, skill, and module docs around inference-first authoring
+  with less explicit `unwrap!`, `ref`, and `mut_ref` boilerplate.
+
 ## v0.9.1 - 2026-07-06
 
 - Improve expected-input inference for callable arguments, including fallible
