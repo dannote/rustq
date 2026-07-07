@@ -70,7 +70,7 @@ end
 If `find_path/0` is known to return `Option<Path>`, RustQ can propagate/shape the
 return according to the expected return type.
 
-### Argument propagation
+### Argument propagation and borrow inference
 
 ```elixir
 @spec decode_color(R.term()) :: R.nif_result(Color.t())
@@ -88,6 +88,20 @@ end
 If `stroke_paint/3` expects a `Color` and returns `NifResult<Paint>`, RustQ can
 render `decode_color(term)?` and propagate the final call.
 
+Expected reference and slice arguments can often be written as ordinary values:
+
+```elixir
+@spec draw_path(R.ref(Canvas.t()), R.vec(R.term())) :: R.nif_result(R.unit())
+defrust draw_path(canvas, args) do
+  path = build_path(deref(args.first().ok_or(badarg())))
+  canvas.draw_path(path, fill_paint(Color.BLACK))
+  :ok
+end
+```
+
+With callable metadata, RustQ can infer `?`, `&`, and `&mut` at the call sites
+instead of requiring `unwrap!(...)`, `ref(...)`, or `mut_ref(...)` in the source.
+
 ### Downstream local inference
 
 RustQ can infer the expected type of a binding from later uses:
@@ -103,6 +117,28 @@ end
 
 The later `draw_color/1` call can tell RustQ that `color` should be the unwrapped
 `Color`, not `NifResult<Color>`.
+
+This also works through common wrapper construction and fallible access patterns:
+
+```elixir
+@spec maybe_bounds(R.option(R.term())) :: R.nif_result(R.option(Rect.t()))
+defrust maybe_bounds(term) do
+  case term do
+    {:some, term} -> some(rect_from_term(term))
+    :none -> none()
+  end
+end
+
+@spec decode_name(R.term()) :: R.nif_result(String.t())
+defrust decode_name(term) do
+  name = decode_as!(term.map_get(Atoms.name()), String.t())
+  {:ok, name}
+end
+```
+
+Those can lower to `Some(rect_from_term(term)?)` and
+`term.map_get(atoms::name())?.decode::<String>()?` when the relevant types are
+known.
 
 ### When to use `unwrap!`
 
@@ -124,6 +160,11 @@ value = unwrap!(legacy_decoder(term))
 ```
 
 Do not use it reflexively around every fallible call. Prefer giving RustQ enough metadata to infer. If metadata is available but RustQ still cannot infer, treat that as a RustQ improvement candidate rather than normal downstream style.
+
+Likewise, use explicit `ref(...)`, `mut_ref(...)`, `.as_ref()`, `.as_deref()`,
+and `.as_slice()` when they are semantically meaningful, but do not add them just
+because the generated Rust needs a borrow. RustQ can infer many borrows for
+`&T`, `&mut T`, `&[T]`, `impl AsRef<T>`, and `impl Into<Option<T>>` arguments.
 
 Use `ok_or!` for explicit `Option<T>` to `Result`/`NifResult` conversion:
 

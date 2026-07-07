@@ -68,7 +68,9 @@ RustQ can infer propagation from:
 - Rust free functions and impl methods parsed from `rust_sources` / `rust_packages`
 - receiver method calls when the receiver type is known
 - downstream uses of previously-bound locals
-- vector pushes and iterator-like argument expectations in supported cases
+- case scrutinees, `some(...)`, `decode_as!`, `map_get`, and fallible ref access
+- vector/slice borrows, list literals, vector pushes, and iterator-like argument expectations
+- common adapters such as `impl AsRef<T>` and `impl Into<Option<T>>`
 
 Before reaching for `unwrap!`, check:
 

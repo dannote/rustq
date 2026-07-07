@@ -20,7 +20,7 @@ typed macro metalanguage for generating real Rust safely.
 Add RustQ to `mix.exs`:
 
 ```elixir
-{:rustq, "~> 0.1", only: [:dev, :test], runtime: false}
+{:rustq, "~> 0.9", only: [:dev, :test], runtime: false}
 ```
 
 RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available
@@ -68,10 +68,9 @@ defmodule MyApp.Native.GeneratedShapes do
 
   defmacro with_fill_paint(do: body) do
     quote do
-      case unwrap!(opt_fill_paint(var!(raw_opts), Atoms.fill())) do
+      case opt_fill_paint(var!(raw_opts), Atoms.fill()) do
         {:some, var!(paint)} ->
-          var!(paint) = var!(paint)
-          unwrap!(apply_blend_mode(mut_ref(var!(paint)), var!(raw_opts)))
+          apply_blend_mode(var!(paint), var!(raw_opts))
           unquote(body)
 
         :none ->
@@ -82,11 +81,9 @@ defmodule MyApp.Native.GeneratedShapes do
 
   defmacro with_stroke_paint(width, do: body) do
     quote do
-      case unwrap!(opt_color(var!(raw_opts), Atoms.stroke())) do
+      case opt_color(var!(raw_opts), Atoms.stroke()) do
         {:some, var!(color)} ->
-          var!(stroke_paint_value) =
-            unwrap!(stroke_paint(var!(color), unquote(width), var!(raw_opts)))
-
+          var!(stroke_paint_value) = stroke_paint(var!(color), unquote(width), var!(raw_opts))
           unquote(body)
 
         :none ->
@@ -104,11 +101,11 @@ defmodule MyApp.Native.GeneratedShapes do
     center = Point.new(opts.x, opts.y)
 
     with_fill_paint do
-      canvas.draw_circle(center, opts.radius, ref(paint))
+      canvas.draw_circle(center, opts.radius, paint)
     end
 
     with_stroke_paint opts.stroke_width.unwrap_or(1.0) do
-      canvas.draw_circle(center, opts.radius, ref(stroke_paint_value))
+      canvas.draw_circle(center, opts.radius, stroke_paint_value)
     end
 
     :ok
@@ -165,14 +162,17 @@ Current `defrust` lowering supports a growing valid-Elixir subset:
 - `case` lowers to Rust `match`
 - Option cases can be written as `{:some, value}` and `:none`
 - Result cases can be written as `{:ok, value}` and `{:error, reason}`
-- `unwrap!(expr)` spells Rust `expr?`
+- fallible calls in argument, return, case-scrutinee, `some(...)`, `decode_as!`,
+  and many local-binding positions can infer Rust `?` from type metadata
+- `unwrap!(expr)` explicitly spells Rust `expr?`; prefer inference when metadata
+  is available
 - `ok_or!(option_expr, error_expr)` spells Rust
   `option_expr.ok_or(error_expr)?`; use it for explicit `Option<T>` to
   `Result<T, E>` boundaries such as `ok_or!(paint.shader(), badarg())`
 - `assign!(target, expr)` spells Rust assignment for explicit mutation, and
   `return!(expr)` spells early return
-- `ref(expr)`, `mut_ref(expr)`, and `deref(expr)` spell Rust borrows and
-  dereference
+- `ref(expr)`, `mut_ref(expr)`, and `deref(expr)` explicitly spell Rust borrows
+  and dereference; many ordinary calls infer borrows from expected argument types
 - `decode_as(term, type)` and `decode_as!(term, type)` spell Rustler typed
   decode probes and required decodes
 - `array([...])`, `index(collection, index)`, and `struct_literal(Path, fields)`
