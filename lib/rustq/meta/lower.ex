@@ -748,12 +748,22 @@ defmodule RustQ.Meta.Lower do
       %Typing.Check{coercion: :propagate_mut_borrow} ->
         %AST.Ref{expr: %AST.Try{expr: lower_expr(expression, context)}, mutable: true}
 
+      %Typing.Check{coercion: :as_ref} ->
+        option_as_ref_expr(lower_expr(expression, context))
+
+      %Typing.Check{coercion: :propagate_as_ref} ->
+        option_as_ref_expr(%AST.Try{expr: lower_expr(expression, context)})
+
       %Typing.Check{coercion: :some} ->
         %AST.Some{expr: lower_expr(expression, context)}
 
       _unknown_or_none ->
         lower_expr(expression, context)
     end
+  end
+
+  defp option_as_ref_expr(expr) do
+    %AST.MethodCall{receiver: expr, method: :as_ref, args: []}
   end
 
   defp option_propagation_in_result_context?(

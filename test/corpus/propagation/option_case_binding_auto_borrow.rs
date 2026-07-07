@@ -19,3 +19,11 @@ fn run_as_ref(color: Option<Color>) -> NifResult<()> {
     }
     Ok(())
 }
+
+fn run_method_case(bounds: Option<Rect>) -> SaveLayerRec {
+    let rec = SaveLayerRec::default();
+    match bounds {
+        Some(bounds) => rec.bounds(&bounds),
+        None => rec,
+    }
+}

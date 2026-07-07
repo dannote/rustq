@@ -15,4 +15,14 @@ defmodule RustQ.Corpus.Propagation.ImplIntoOptionPropagation do
     paint.set_image_filter(decode_filter(term))
     :ok
   end
+
+  @spec optional_matrix(term()) :: R.nif_result(R.option(R.path(:Matrix)))
+  defrust optional_matrix(_term) do
+    {:ok, nil}
+  end
+
+  @spec run_ref_option(R.ref(R.path(:RuntimeEffect)), term()) :: R.nif_result(R.path(:Shader))
+  defrust run_ref_option(effect, term) do
+    ok_or!(effect.make_shader(optional_matrix(term)), badarg())
+  end
 end

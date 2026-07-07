@@ -1,7 +1,7 @@
 defmodule RustQ.Corpus.Propagation.OptionCaseBindingAutoBorrow do
   @moduledoc "Option case binding types auto-borrow downstream call arguments."
 
-  use RustQ.Meta
+  use RustQ.Meta, rust_sources: ["test/fixtures/option_ref_method.rs"]
 
   alias RustQ.Type, as: R
 
@@ -31,5 +31,15 @@ defmodule RustQ.Corpus.Propagation.OptionCaseBindingAutoBorrow do
     end
 
     :ok
+  end
+
+  @spec run_method_case(R.option(R.path(:Rect))) :: R.path(:SaveLayerRec)
+  defrust run_method_case(bounds) do
+    rec = SaveLayerRec.default()
+
+    case bounds do
+      {:some, bounds} -> rec.bounds(bounds)
+      :none -> rec
+    end
   end
 end

@@ -146,6 +146,17 @@ defmodule RustQ.Meta.Type do
     end) || type
   end
 
+  def expected_input(%__MODULE__{kind: :option} = type) do
+    case inner(type) do
+      %__MODULE__{} = inner ->
+        expected_inner = expected_input(inner)
+        type(:option, %AST.TypeOption{inner: expected_inner.ast}, %{inner: expected_inner})
+
+      nil ->
+        type
+    end
+  end
+
   def expected_input(%__MODULE__{} = type) do
     cond do
       slice_inner(type) -> vec(slice_inner(type))

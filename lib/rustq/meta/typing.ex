@@ -38,6 +38,8 @@ defmodule RustQ.Meta.Typing do
             | :mut_borrow
             | :propagate_borrow
             | :propagate_mut_borrow
+            | :as_ref
+            | :propagate_as_ref
             | :unknown
     @type t :: %__MODULE__{type: Type.t() | nil, coercion: coercion()}
   end
@@ -346,8 +348,14 @@ defmodule RustQ.Meta.Typing do
       Type.compatible?(actual, expected) ->
         :none
 
+      option_ref_adapter_compatible?(actual, expected) ->
+        :as_ref
+
       option_adapter_compatible?(actual, expected) ->
         :none
+
+      Type.propagates?(actual) and option_ref_adapter_compatible?(Type.inner(actual), expected) ->
+        :propagate_as_ref
 
       Type.propagates?(actual) and Type.compatible_with_expected?(Type.inner(actual), expected) ->
         :propagate
@@ -380,6 +388,18 @@ defmodule RustQ.Meta.Typing do
       nil -> false
     end
   end
+
+  defp option_ref_adapter_compatible?(%Type{kind: :option} = actual, %Type{} = expected) do
+    with %Type{} = expected_option <- expected_option_type(expected),
+         %Type{kind: :ref} = expected_inner <- Type.inner(expected_option),
+         %Type{} = actual_inner <- Type.inner(actual) do
+      Type.compatible?(actual_inner, Type.ref_inner(expected_inner))
+    else
+      _other -> false
+    end
+  end
+
+  defp option_ref_adapter_compatible?(_actual, _expected), do: false
 
   defp expected_option_type(%Type{kind: :option} = type), do: type
 
