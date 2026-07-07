@@ -200,6 +200,9 @@ defmodule RustQ.Meta.Typing do
     |> slice_get_type()
   end
 
+  defp synth_method_call({{:., _, [_receiver, :map_get]}, _meta, [_key]}, %Env{}),
+    do: result_type(RustQ.Spec.type(quote(do: RustQ.Type.term())))
+
   defp synth_method_call({{:., _, [receiver, field]}, _meta, []} = ast, %Env{} = env)
        when is_atom(field) do
     field_type(synth(receiver, env), field) || synth_method_return(ast, env)

@@ -21,4 +21,10 @@ defmodule RustQ.Corpus.Propagation.FallibleRefAccess do
     term = deref(args.first().ok_or(badarg()))
     use_term(term)
   end
+
+  @spec decode_map_field(term()) :: R.nif_result(R.path(:String))
+  defrust decode_map_field(term) do
+    value = decode_as!(term.map_get(Atoms.value()), R.path(:String))
+    {:ok, value}
+  end
 end
