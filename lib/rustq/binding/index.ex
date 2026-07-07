@@ -45,10 +45,14 @@ defmodule RustQ.Binding.Index do
   @spec get(t(), String.t() | atom() | nil, String.t() | atom(), non_neg_integer()) ::
           Callable.t() | nil
   def get(%__MODULE__{} = index, target, name, arity) do
-    case fetch(index, target, name, arity) do
-      {:ok, callable} -> callable
-      :error -> nil
-    end
+    target
+    |> target_lookup_keys()
+    |> Enum.find_value(fn target_key ->
+      case fetch(index, target_key, name, arity) do
+        {:ok, callable} -> callable
+        :error -> nil
+      end
+    end)
   end
 
   @doc "Returns the return type for a callable lookup or `nil` when unknown/unit."
@@ -125,6 +129,9 @@ defmodule RustQ.Binding.Index do
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
   end
+
+  defp target_lookup_keys(nil), do: [nil]
+  defp target_lookup_keys(target), do: target_keys(target)
 
   defp base_target_part(target) when is_binary(target) do
     target

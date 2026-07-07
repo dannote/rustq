@@ -51,6 +51,24 @@ defmodule RustQ.Binding.IndexTest do
     assert Index.argument_types(index, :Data, :new_copy, 1) == [type(:type, "Term")]
   end
 
+  test "looks up unqualified targets through qualified type paths" do
+    callable = %Callable{
+      name: "draw_vertices",
+      kind: :method,
+      target: "Canvas",
+      args: [arg("self"), arg("vertices"), arg("mode"), arg("paint")],
+      returns: nil
+    }
+
+    index = Index.new([callable])
+
+    assert Index.argument_types(index, "skia_safe::Canvas", :draw_vertices, 3) == [
+             type(:type, "Term"),
+             type(:type, "Term"),
+             type(:type, "Term")
+           ]
+  end
+
   test "returns unique method receiver targets by receiverless call arity" do
     index =
       Index.new([
