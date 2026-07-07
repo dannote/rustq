@@ -905,7 +905,8 @@ defmodule RustQ.Meta.Lower do
   defp lower_option_if_let_statement(expression, clauses, %Context{} = context) do
     with [{:some, some_pattern, some_body}, {:none, none_body}] <- option_if_let_clauses(clauses),
          true <- unit_body?(none_body) do
-      option_type = Typing.synth(expression, typing_env(context)) || %Type{kind: :option}
+      expression_type = Typing.synth(expression, typing_env(context)) || %Type{kind: :option}
+      option_type = propagated_option_type(expression_type) || expression_type
       then_context = context_with_match_pattern(some_pattern, option_type, context)
       then_body = lower_clause_body(some_body, then_context)
       mutable_vars = then_body |> collect_mut_refs() |> MapSet.new()
@@ -915,11 +916,34 @@ defmodule RustQ.Meta.Lower do
           some_pattern
           |> lower_match_pattern(%Type{kind: :option})
           |> mark_mutable_pattern_vars(mutable_vars),
-        expr: lower_expr(expression, option_type, context),
+        expr: lower_option_case_scrutinee(expression, expression_type, option_type, context),
         then: then_body
       }
     else
       _other -> nil
+    end
+  end
+
+  defp propagated_option_type(%Type{} = expression_type) do
+    case Type.inner(expression_type) do
+      %Type{kind: :option} = option_type ->
+        if Type.propagates?(expression_type), do: option_type
+
+      _not_fallible_option ->
+        nil
+    end
+  end
+
+  defp lower_option_case_scrutinee(
+         expression,
+         %Type{} = expression_type,
+         %Type{} = option_type,
+         context
+       ) do
+    if Type.propagates?(expression_type) and Type.inner(expression_type) == option_type do
+      lower_checked_expr(expression, option_type, context)
+    else
+      lower_expr(expression, option_type, context)
     end
   end
 
