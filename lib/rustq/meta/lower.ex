@@ -1365,7 +1365,9 @@ defmodule RustQ.Meta.Lower do
         }
 
       true ->
-        receiver_type = infer_expr_type(receiver, context.vars)
+        receiver_type =
+          infer_expr_type(receiver, context.vars) || Typing.synth(receiver, typing_env(context))
+
         target = callable_target_from_type(receiver_type)
 
         %AST.MethodCall{

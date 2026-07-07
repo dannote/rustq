@@ -138,6 +138,9 @@ defmodule RustQ.Meta.Type do
       %__MODULE__{meta: %{syn_name: "IntoIterator", assoc: %{"Item" => %__MODULE__{} = item}}} ->
         vec(item)
 
+      %__MODULE__{meta: %{syn_name: "AsRef", args: [%__MODULE__{} = inner]}} ->
+        expected_input(inner)
+
       _trait ->
         nil
     end) || type
@@ -163,6 +166,9 @@ defmodule RustQ.Meta.Type do
     traits
     |> Enum.find_value(fn
       %__MODULE__{meta: %{syn_name: "Into", args: [%__MODULE__{} = inner]}} ->
+        expected_value(inner)
+
+      %__MODULE__{meta: %{syn_name: "AsRef", args: [%__MODULE__{} = inner]}} ->
         expected_value(inner)
 
       _trait ->
