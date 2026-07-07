@@ -153,6 +153,12 @@ defmodule RustQ.Meta.Typing do
     |> option_as_ref_type()
   end
 
+  defp synth_method_call({{:., _, [receiver, :ok_or]}, _meta, [_error]}, %Env{} = env) do
+    receiver
+    |> synth(env)
+    |> option_ok_or_type()
+  end
+
   defp synth_method_call({{:., _, [receiver, :get]}, _meta, [_index]}, %Env{} = env) do
     receiver
     |> synth(env)
@@ -212,6 +218,14 @@ defmodule RustQ.Meta.Typing do
       meta: %{inner: inner}
     }
 
+  defp result_type(%Type{} = ok),
+    do: %Type{
+      kind: :result,
+      rust: "Result<#{ok.rust}, rustler::Error>",
+      ast: %AST.TypeResult{ok: ok.ast, error: %AST.TypeRaw{source: "rustler::Error"}},
+      meta: %{ok: ok}
+    }
+
   defp option_as_ref_type(%Type{kind: :option} = type) do
     case Type.inner(type) do
       %Type{} = inner -> option_type(ref_type(inner))
@@ -220,6 +234,15 @@ defmodule RustQ.Meta.Typing do
   end
 
   defp option_as_ref_type(_type), do: nil
+
+  defp option_ok_or_type(%Type{kind: :option} = type) do
+    case Type.inner(type) do
+      %Type{} = inner -> result_type(inner)
+      nil -> nil
+    end
+  end
+
+  defp option_ok_or_type(_type), do: nil
 
   defp render_type(ast), do: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
 
