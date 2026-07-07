@@ -147,6 +147,12 @@ defmodule RustQ.Meta.Typing do
     end
   end
 
+  defp synth_method_call({{:., _, [receiver, :unwrap_or]}, _meta, [_default]}, %Env{} = env) do
+    receiver
+    |> synth(env)
+    |> option_unwrap_type()
+  end
+
   defp synth_method_call({{:., _, [receiver, :as_ref]}, _meta, []}, %Env{} = env) do
     receiver
     |> synth(env)
@@ -243,6 +249,20 @@ defmodule RustQ.Meta.Typing do
   end
 
   defp option_ok_or_type(_type), do: nil
+
+  defp option_unwrap_type(%Type{kind: :option} = type), do: Type.inner(type)
+
+  defp option_unwrap_type(%Type{} = type) do
+    case Type.inner(type) do
+      %Type{kind: :option} = option_type ->
+        if Type.propagates?(type), do: Type.inner(option_type)
+
+      _other ->
+        nil
+    end
+  end
+
+  defp option_unwrap_type(_type), do: nil
 
   defp render_type(ast), do: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
 

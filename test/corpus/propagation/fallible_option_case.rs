@@ -9,3 +9,7 @@ fn apply_size(key: Atom) -> NifResult<f32> {
     }
     Ok(value)
 }
+
+fn default_size(key: Atom) -> NifResult<f32> {
+    Ok(maybe_size(key)?.unwrap_or(1.0))
+}

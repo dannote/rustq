@@ -1395,12 +1395,29 @@ defmodule RustQ.Meta.Lower do
         target = callable_target_from_type(receiver_type)
 
         %AST.MethodCall{
-          receiver: lower_expr(receiver, context),
+          receiver: lower_method_receiver(receiver, receiver_type, function, context),
           method: function,
           args: lower_method_call_args(receiver_type, target, function, args, context)
         }
     end
   end
+
+  defp lower_method_receiver(receiver, %Type{} = receiver_type, :unwrap_or, %Context{} = context) do
+    case Type.inner(receiver_type) do
+      %Type{kind: :option} = option_type ->
+        if Type.propagates?(receiver_type) do
+          lower_checked_expr(receiver, option_type, context)
+        else
+          lower_expr(receiver, context)
+        end
+
+      _other ->
+        lower_expr(receiver, context)
+    end
+  end
+
+  defp lower_method_receiver(receiver, _receiver_type, _function, %Context{} = context),
+    do: lower_expr(receiver, context)
 
   defp lower_local_or_macro_call(name, args, %Context{} = context) do
     if macro_call_name?(name) do

@@ -21,4 +21,9 @@ defmodule RustQ.Corpus.Propagation.FallibleOptionCase do
 
     {:ok, value}
   end
+
+  @spec default_size(atom()) :: R.nif_result(R.f32())
+  defrust default_size(key) do
+    {:ok, maybe_size(key).unwrap_or(1.0)}
+  end
 end
