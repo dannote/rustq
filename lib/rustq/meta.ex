@@ -36,8 +36,15 @@ defmodule RustQ.Meta do
       calls such as `atoms::fill()`
     * ordinary Elixir macros are expanded before lowering, so reusable body
       fragments can use `defmacro`, `quote`, and `unquote`
-    * `unwrap!(expression)` is the explicit spelling for Rust `expression?`
-    * `ref(expression)` / `mut_ref(expression)` spell Rust borrows; `deref(expression)` spells Rust dereference
+    * fallible calls in argument, return, case-scrutinee, `some(...)`,
+      `decode_as!`, and many local-binding positions can infer Rust `?` from
+      type metadata
+    * `unwrap!(expression)` is the explicit spelling for Rust `expression?`;
+      prefer inference when callable metadata is available
+    * `ref(expression)` / `mut_ref(expression)` spell explicit Rust borrows;
+      many ordinary calls infer borrows from expected argument types
+    * `deref(expression)` spells Rust dereference and can propagate fallible
+      reference access such as `args.first().ok_or(badarg())`
     * Option branching should use Elixir `case`, for example
       `case maybe do {:some, value} -> ...; :none -> ... end`; do not introduce
       Rust-shaped `if_let` syntax at the authoring layer
