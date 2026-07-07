@@ -456,7 +456,7 @@ defmodule RustQ.Meta.Lower do
        do: %AST.Field{receiver: lower_expr(expression, context), field: index}
 
   defp lower_expr_context({:some, _, [expression]}, %Context{} = context),
-    do: %AST.Some{expr: lower_wrapper_arg_expr(expression, context)}
+    do: %AST.Some{expr: lower_some_arg_expr(expression, context)}
 
   defp lower_expr_context({:none, _, []}, %Context{}), do: %AST.None{}
   defp lower_expr_context({:ok, _, []}, %Context{}), do: %AST.Ok{}
@@ -675,6 +675,27 @@ defmodule RustQ.Meta.Lower do
       %AST.Try{expr: lower_expr(expression, context)}
     else
       lower_expr(expression, context)
+    end
+  end
+
+  defp lower_some_arg_expr(expression, %Context{} = context) do
+    cond do
+      fallible_expression?(expression, context) and propagation_allowed?(context.return_type) ->
+        %AST.Try{expr: lower_expr(expression, context)}
+
+      true ->
+        lower_wrapper_arg_expr(expression, context)
+    end
+  end
+
+  defp propagation_allowed?(%Type{} = type), do: Type.propagates?(type)
+  defp propagation_allowed?(nil), do: true
+  defp propagation_allowed?(_type), do: false
+
+  defp fallible_expression?(expression, %Context{} = context) do
+    case Typing.synth(expression, typing_env(context)) do
+      %Type{} = type -> Type.propagates?(type)
+      nil -> false
     end
   end
 

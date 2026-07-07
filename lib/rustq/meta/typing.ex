@@ -78,6 +78,19 @@ defmodule RustQ.Meta.Typing do
     |> result_type()
   end
 
+  def synth({:some, _meta, [expression]}, %Env{} = env) do
+    case synth(expression, env) do
+      %Type{} = type when type.kind in [:result, :nif_result] ->
+        type |> Type.inner() |> option_type()
+
+      %Type{} = type ->
+        option_type(type)
+
+      nil ->
+        nil
+    end
+  end
+
   def synth({:unwrap!, _meta, [expression]}, %Env{} = env) do
     case synth(expression, env) do
       %Type{} = type -> Type.inner(type)
