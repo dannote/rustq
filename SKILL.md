@@ -359,9 +359,9 @@ end
 ```
 
 Type items are available through `__rustq_type_items__/0`; use them in
-generators just like `defrust` items from `__rustq_items__/0` /
-`RustQ.Meta.AST.item/2`. This is the preferred path for support structs such as
-small descriptor records used by generated `defrust` helpers.
+generators just like generated `defrust` items from `__rustq_items__/0`. This is
+the preferred path for support structs such as small descriptor records used by
+generated `defrust` helpers.
 
 ## AST/builders for generated structure
 
