@@ -438,8 +438,18 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr_context({:mut_ref, _, [expression]}, %Context{} = context),
     do: %AST.Ref{expr: lower_expr(expression, context), mutable: true}
 
-  defp lower_expr_context({:deref, _, [expression]}, %Context{} = context),
-    do: %AST.UnaryOp{op: :deref, expr: lower_expr(expression, context)}
+  defp lower_expr_context({:deref, _, [expression]}, %Context{} = context) do
+    expr =
+      expression
+      |> Typing.synth(typing_env(context))
+      |> deref_expected_type()
+      |> case do
+        %Type{} = expected -> lower_checked_expr(expression, expected, context)
+        nil -> lower_expr(expression, context)
+      end
+
+    %AST.UnaryOp{op: :deref, expr: expr}
+  end
 
   defp lower_expr_context({:tuple_field, _, [expression, index]}, %Context{} = context)
        when is_integer(index),
@@ -1598,6 +1608,12 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
+  defp deref_expected_type(%Type{} = type) do
+    if Type.propagates?(type), do: Type.inner(type)
+  end
+
+  defp deref_expected_type(_type), do: nil
+
   defp ast_type(ast),
     do: %Type{
       kind: :type,
@@ -1707,12 +1723,28 @@ defmodule RustQ.Meta.Lower do
 
   defp decode_as_expr(expression, type_ast, %Context{} = context) do
     %AST.MethodCall{
-      receiver: lower_expr(expression, rustler_term_type(), context),
+      receiver: lower_decode_receiver(expression, context),
       method: :decode,
       args: [],
       generics: [lower_type_arg(type_ast, context)]
     }
   end
+
+  defp lower_decode_receiver(expression, %Context{} = context) do
+    expression
+    |> Typing.synth(typing_env(context))
+    |> decode_receiver_expected_type()
+    |> case do
+      %Type{} = expected -> lower_checked_expr(expression, expected, context)
+      nil -> lower_expr(expression, rustler_term_type(), context)
+    end
+  end
+
+  defp decode_receiver_expected_type(%Type{} = type) do
+    if Type.propagates?(type), do: Type.inner(type)
+  end
+
+  defp decode_receiver_expected_type(_type), do: nil
 
   defp lower_pipe(left, right, %Context{} = context) do
     lower_pipe_call(lower_expr(left, context), right, context)

@@ -181,6 +181,12 @@ defmodule RustQ.Meta.Typing do
     |> slice_get_type()
   end
 
+  defp synth_method_call({{:., _, [receiver, :first]}, _meta, []}, %Env{} = env) do
+    receiver
+    |> synth(env)
+    |> slice_get_type()
+  end
+
   defp synth_method_call({{:., _, [receiver, field]}, _meta, []} = ast, %Env{} = env)
        when is_atom(field) do
     field_type(synth(receiver, env), field) || synth_method_return(ast, env)
@@ -210,13 +216,13 @@ defmodule RustQ.Meta.Typing do
 
   defp field_receiver_type(%Type{} = type), do: Type.ref_inner(type) || type
 
-  defp slice_get_type(%Type{kind: :slice, meta: %{inner: %Type{} = inner}}),
-    do: option_type(ref_type(inner))
-
-  defp slice_get_type(%Type{ast: %AST.TypeRef{inner: %AST.TypeSlice{inner: inner}}}),
-    do: option_type(ref_type(%Type{kind: :type, ast: inner, rust: render_type(inner)}))
-
-  defp slice_get_type(_type), do: nil
+  defp slice_get_type(%Type{} = type) do
+    cond do
+      inner = Type.vec_inner(type) -> option_type(ref_type(inner))
+      inner = Type.slice_inner(type) -> option_type(ref_type(inner))
+      true -> nil
+    end
+  end
 
   defp ref_type(%Type{} = inner),
     do: %Type{
@@ -273,8 +279,6 @@ defmodule RustQ.Meta.Typing do
   end
 
   defp option_unwrap_type(_type), do: nil
-
-  defp render_type(ast), do: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
 
   defp infer_pattern_type({name, _meta, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)
