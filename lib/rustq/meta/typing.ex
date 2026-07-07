@@ -30,7 +30,15 @@ defmodule RustQ.Meta.Typing do
     @moduledoc "Result of checking an expression against an expected type."
     defstruct [:type, :coercion]
 
-    @type coercion :: :none | :propagate | :some | :borrow | :mut_borrow | :unknown
+    @type coercion ::
+            :none
+            | :propagate
+            | :some
+            | :borrow
+            | :mut_borrow
+            | :propagate_borrow
+            | :propagate_mut_borrow
+            | :unknown
     @type t :: %__MODULE__{type: Type.t() | nil, coercion: coercion()}
   end
 
@@ -271,6 +279,9 @@ defmodule RustQ.Meta.Typing do
       Type.propagates?(actual) and Type.compatible_with_expected?(Type.inner(actual), expected) ->
         :propagate
 
+      Type.propagates?(actual) and ref_inner_compatible?(Type.inner(actual), expected) ->
+        propagate_borrow_coercion(expected)
+
       expected.kind == :option and Type.compatible?(actual, Type.inner(expected)) ->
         :some
 
@@ -327,6 +338,9 @@ defmodule RustQ.Meta.Typing do
 
   defp borrow_coercion(%Type{kind: :mut_ref}), do: :mut_borrow
   defp borrow_coercion(%Type{}), do: :borrow
+
+  defp propagate_borrow_coercion(%Type{kind: :mut_ref}), do: :propagate_mut_borrow
+  defp propagate_borrow_coercion(%Type{}), do: :propagate_borrow
 
   defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
        when kind in [:ref, :mut_ref],

@@ -696,6 +696,12 @@ defmodule RustQ.Meta.Lower do
       %Typing.Check{coercion: :mut_borrow} ->
         %AST.Ref{expr: lower_expr(expression, context), mutable: true}
 
+      %Typing.Check{coercion: :propagate_borrow} ->
+        %AST.Ref{expr: %AST.Try{expr: lower_expr(expression, context)}}
+
+      %Typing.Check{coercion: :propagate_mut_borrow} ->
+        %AST.Ref{expr: %AST.Try{expr: lower_expr(expression, context)}, mutable: true}
+
       %Typing.Check{coercion: :some} ->
         %AST.Some{expr: lower_expr(expression, context)}
 
