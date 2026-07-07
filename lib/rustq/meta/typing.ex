@@ -68,6 +68,16 @@ defmodule RustQ.Meta.Typing do
     RustQ.Spec.type(type_ast)
   end
 
+  def synth({:decode_as!, _meta, [_expression, type_ast]}, %Env{}) do
+    RustQ.Spec.type(type_ast)
+  end
+
+  def synth({:decode_as, _meta, [_expression, type_ast]}, %Env{}) do
+    type_ast
+    |> RustQ.Spec.type()
+    |> result_type()
+  end
+
   def synth({:unwrap!, _meta, [expression]}, %Env{} = env) do
     case synth(expression, env) do
       %Type{} = type -> Type.inner(type)
@@ -365,9 +375,21 @@ defmodule RustQ.Meta.Typing do
 
   defp ref_inner_compatible?(%Type{} = actual, %Type{} = expected) do
     case Type.ref_inner(expected) do
-      %Type{} = inner -> Type.compatible?(actual, inner) or vec_slice_compatible?(actual, inner)
-      nil -> false
+      %Type{} = inner ->
+        Type.compatible?(actual, inner) or vec_slice_compatible?(actual, inner) or
+          string_str_compatible?(actual, inner)
+
+      nil ->
+        false
     end
+  end
+
+  defp string_str_compatible?(%Type{} = actual, %Type{} = expected) do
+    type_name(actual) == "String" and type_name(expected) == "str"
+  end
+
+  defp type_name(%Type{} = type) do
+    type.meta[:syn_name] || type.rust || type.ast |> callable_target_from_ast()
   end
 
   defp vec_slice_compatible?(%Type{} = actual, %Type{} = expected_inner) do

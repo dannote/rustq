@@ -26,4 +26,12 @@ defmodule RustQ.Corpus.Propagation.FallibleOptionCase do
   defrust default_size(key) do
     {:ok, maybe_size(key).unwrap_or(1.0)}
   end
+
+  @spec guarded_result_case(atom()) :: R.nif_result(R.f32())
+  defrust guarded_result_case(key) do
+    case maybe_size(key) do
+      {:ok, {:some, size}} when size > 0.0 -> {:ok, size}
+      _ -> {:ok, 0.0}
+    end
+  end
 end

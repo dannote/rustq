@@ -13,3 +13,10 @@ fn apply_size(key: Atom) -> NifResult<f32> {
 fn default_size(key: Atom) -> NifResult<f32> {
     Ok(maybe_size(key)?.unwrap_or(1.0))
 }
+
+fn guarded_result_case(key: Atom) -> NifResult<f32> {
+    match maybe_size(key) {
+        Ok(Some(size)) if size > 0.0 => Ok(size),
+        _ => Ok(0.0),
+    }
+}

@@ -5,12 +5,17 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
+  alias RustQ.Meta.Pattern
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
   alias RustQ.Meta.Typing
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Walk
+
+  defguardp macro_call_tuple?(tuple)
+            when tuple_size(tuple) == 3 and is_atom(elem(tuple, 0)) and is_list(elem(tuple, 1)) and
+                   is_list(elem(tuple, 2))
 
   defmodule Env do
     @moduledoc """
@@ -143,10 +148,12 @@ defmodule RustQ.Meta.Lower do
          {:for, _, [{:<-, _, [pattern, expression]}, [do: body]]},
          %Context{} = context
        ) do
+    body_context = context_with_for_pattern(pattern, expression, context)
+
     %AST.For{
       pattern: lower_binding_pattern(pattern),
       expr: lower_expr(expression, context),
-      body: lower_clause_body(body, context)
+      body: lower_clause_body(body, body_context)
     }
   end
 
@@ -319,6 +326,13 @@ defmodule RustQ.Meta.Lower do
     if slice_type?(expected_type), do: %AST.Ref{expr: array}, else: array
   end
 
+  defp lower_expected_expr_context(values, %Type{} = expected_type, %Context{} = context)
+       when is_list(values) do
+    vec = %AST.VecLiteral{values: Enum.map(values, &lower_array_value(&1, context))}
+
+    if slice_type?(expected_type), do: %AST.Ref{expr: vec}, else: vec
+  end
+
   defp lower_expected_expr_context(
          {:some, _, [expression]},
          %Type{} = expected_type,
@@ -347,7 +361,8 @@ defmodule RustQ.Meta.Lower do
          %Type{kind: :tuple, meta: %{elements: types}},
          %Context{} = context
        )
-       when is_tuple(tuple) and tuple_size(tuple) == length(types) do
+       when is_tuple(tuple) and tuple_size(tuple) == length(types) and
+              not macro_call_tuple?(tuple) do
     tuple
     |> Tuple.to_list()
     |> lower_expected_tuple(types, context)
@@ -767,11 +782,15 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp wrapper_case_patterns?(%Type{kind: kind}, clauses) when kind in [:result, :nif_result] do
-    Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> result_pattern?(pattern) end)
+    Enum.any?(clauses, fn {:->, _, [[pattern], _body]} ->
+      pattern |> split_guarded_pattern() |> elem(0) |> result_pattern?()
+    end)
   end
 
   defp wrapper_case_patterns?(%Type{kind: :option}, clauses) do
-    Enum.any?(clauses, fn {:->, _, [[pattern], _body]} -> option_pattern?(pattern) end)
+    Enum.any?(clauses, fn {:->, _, [[pattern], _body]} ->
+      pattern |> split_guarded_pattern() |> elem(0) |> option_pattern?()
+    end)
   end
 
   defp wrapper_case_patterns?(%Type{}, _clauses), do: false
@@ -1165,7 +1184,35 @@ defmodule RustQ.Meta.Lower do
     %{context | vars: Map.put(context.vars, name, type)}
   end
 
+  defp context_with_match_pattern(pattern, %Type{kind: :tuple, meta: %{elements: types}}, context) do
+    case Pattern.tuple_elements(pattern) do
+      elements when is_list(elements) and length(elements) == length(types) ->
+        elements
+        |> Enum.zip(types)
+        |> Enum.reduce(context, fn {element, type}, acc ->
+          context_with_match_pattern(element, type, acc)
+        end)
+
+      _not_tuple ->
+        context
+    end
+  end
+
   defp context_with_match_pattern(_pattern, _type, %Context{} = context), do: context
+
+  defp context_with_for_pattern(pattern, expression, %Context{} = context) do
+    expression
+    |> infer_expr_type(context.vars)
+    |> Kernel.||(Typing.synth(expression, typing_env(context)))
+    |> for_item_type()
+    |> case do
+      %Type{} = item_type -> context_with_match_pattern(pattern, item_type, context)
+      nil -> context
+    end
+  end
+
+  defp for_item_type(%Type{} = type), do: Type.vec_inner(type) || Type.slice_inner(type)
+  defp for_item_type(_type), do: nil
 
   defp context_with_inner_pattern(pattern, %Type{} = inner, wrappers, %Context{} = context) do
     case pattern do
