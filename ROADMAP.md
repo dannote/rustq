@@ -176,6 +176,37 @@ ones; and Rusty Elixir reads as clean as the Rust it emits.
     types into lowered bindings instead of pure heuristics. Not full borrowck —
     just "this arg is `&mut` so the binding is `mut_ref`". Closes gap F.
 
+### Post-0.9.3 downstream adapter audit
+
+Skia, Figler, and Kiwi Codec now dogfood released RustQ `~> 0.9.3` instead of
+local path dependencies. A sweep of remaining `unwrap!`, `ref(...)`,
+`mut_ref(...)`, `.as_ref()`, `.as_slice()`, and `.as_deref()` sites found that
+most remaining occurrences are deliberate boundaries rather than easy cleanup:
+
+- **Type metadata:** `R.ref(...)` and `R.mut_ref(...)` in specs/types remain the
+  correct way to express Rust references in Elixir typespecs.
+- **Stored/lifetime borrows:** Skia `SaveLayerRec` needs `bounds.as_ref()`
+  because `SaveLayerRec::bounds(&'a Rect)` stores the reference; borrowing an
+  owned `Rect` inside a match arm is invalid.
+- **Indexed storage borrows:** Figler `ref(index(scene.nodes, node_index))`
+  avoids moving out of indexed scene storage. This should stay explicit unless
+  RustQ learns a borrow-preserving indexed-access model.
+- **Slice/option adapter APIs:** Skia gradient colors, positions,
+  path-effect intervals, shader matrices/tile rects, and similar Rust APIs
+  require exact slice/option-reference adapter shapes.
+- **Term map arrays:** Figler/Kiwi Codec `ref(keys)` / `ref(values)` around
+  generated temporary arrays are API-bound helper calls. Future cleanup would
+  need richer helper callable metadata, not blind removal.
+- **Entrypoint propagation leftovers:** Skia `CommandDomain` still has macro-
+  generated `unwrap!(decode_args/1)`, `unwrap!(decode_opts/1)`, and generated
+  opts decoder calls. These are plausible future cleanup candidates because they
+  are local helper calls, but they should be covered by a focused corpus fixture
+  before migration.
+
+Future inference work should target one of the explicit "future candidate"
+classes above with corpus coverage first. Do not chase the lifetime/API-required
+adapter sites as cosmetic noise.
+
 ## Wave 4 — Crate-level generation & ecosystem (polish & reach)
 
 Goal: RustQ graduates from "a file generator" to "a crate generator" and proves
