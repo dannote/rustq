@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.9.1 - 2026-07-06
+
 - Improve expected-input inference for callable arguments, including fallible
   `case` scrutinees, associated calls, and slice/`Vec` borrow adaptation.
 - Add corpus coverage for semantic `defrustmacro` item calls and recent
