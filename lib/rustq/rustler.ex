@@ -179,6 +179,15 @@ defmodule RustQ.Rustler do
   def term_decoder(name, opts), do: Term.decoder(name, opts)
 
   @doc """
+  Builds a `rustler::Encoder` implementation for a struct's atom-keyed fields.
+
+  Fields may be atoms or `{key, field}` pairs when the atom key and Rust field
+  names differ. Pass `:target_lifetimes` for lifetime-bearing adapter structs.
+  """
+  @spec term_encoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  def term_encoder(name, opts), do: Term.encoder(name, opts)
+
+  @doc """
   Builds common map/term helper functions used by generated decoders.
   """
   @spec term_helpers(keyword()) :: [Rust.Fragment.t()]

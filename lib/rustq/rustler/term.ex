@@ -17,6 +17,7 @@ defmodule RustQ.Rustler.Term do
   alias RustQ.Rustler.HelperSelection
   alias RustQ.Type, as: R
 
+  require A
   require I
 
   @builder_names [:map_from_terms, :struct_from_terms]
@@ -299,12 +300,52 @@ defmodule RustQ.Rustler.Term do
     ])
   end
 
+  @spec encoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  def encoder(name, opts) do
+    fields = opts |> Keyword.fetch!(:fields) |> Enum.map(&encoder_field/1)
+
+    function = %AST.Function{
+      name: :encode,
+      lifetime: :a,
+      args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
+      returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
+      body: [A.return(A.method(encoder_map_call(fields), :unwrap))]
+    }
+
+    target =
+      A.type_path(ident_atom(name), lifetimes: Keyword.get(opts, :target_lifetimes, []))
+
+    Rust.ast_item(
+      A.impl(target,
+        trait: A.type_path([:rustler, :Encoder]),
+        items: [function]
+      )
+    )
+  end
+
   @spec helpers(keyword()) :: [Rust.Fragment.t()]
   def helpers(opts \\ []) do
     opts
     |> HelperSelection.names(@helper_names)
     |> Enum.map(&helper_item/1)
   end
+
+  defp encoder_field(field) when is_atom(field), do: {field, field}
+  defp encoder_field({key, field}) when is_atom(key) and is_atom(field), do: {key, field}
+
+  defp encoder_map_call(fields) do
+    keys = Enum.map(fields, fn {key, _field} -> encoded_atom(key) end)
+    values = Enum.map(fields, fn {_key, field} -> encoded_field(field) end)
+
+    A.path_call([:Term, :map_from_arrays], [
+      :env,
+      A.ref(A.array(keys)),
+      A.ref(A.array(values))
+    ])
+  end
+
+  defp encoded_atom(key), do: A.method(A.path_call([:atoms, key]), :encode, [:env])
+  defp encoded_field(field), do: A.method(A.field(:self, field), :encode, [:env])
 
   defp builder_item(name) do
     function_name = Map.fetch!(@builder_function_names, name)

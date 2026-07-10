@@ -390,6 +390,27 @@ defmodule RustQ.RustlerTest do
     refute code =~ "fn type_atom"
   end
 
+  test "builds atom-keyed term encoder implementations" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("term_encoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_encoder(:EncodedLoc,
+              fields: [:start, {:end_, :end}],
+              target_lifetimes: [:_]
+            )
+        ]
+      )
+
+    assert code =~ "impl rustler::Encoder for EncodedLoc<'_>"
+    assert code =~ "fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a>"
+    assert code =~ "atoms::start().encode(env)"
+    assert code =~ "atoms::end_().encode(env)"
+    assert code =~ "self.end.encode(env)"
+    assert code =~ "Term::map_from_arrays"
+  end
+
   test "builds forgiving optional map decoders" do
     code =
       "__rq_items!();"
