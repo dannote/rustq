@@ -200,10 +200,7 @@ defmodule RustQ.Rustler.Term do
             decoded
 
           {:error, _reason} ->
-            case value.atom_to_string() do
-              {:ok, decoded} -> decoded
-              {:error, _reason} -> nil
-            end
+            value.atom_to_string().ok()
         end
 
       :none ->

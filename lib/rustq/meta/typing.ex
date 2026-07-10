@@ -198,6 +198,9 @@ defmodule RustQ.Meta.Typing do
     |> option_ok_or_type()
   end
 
+  defp synth_method_call({{:., _, [_receiver, :atom_to_string]}, _meta, []}, %Env{}),
+    do: result_type(RustQ.Spec.type(quote(do: String.t())))
+
   defp synth_method_call({{:., _, [receiver, :get]}, _meta, [_index]}, %Env{} = env) do
     receiver
     |> synth(env)
