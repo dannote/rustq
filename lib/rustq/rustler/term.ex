@@ -14,11 +14,18 @@ defmodule RustQ.Rustler.Term do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Rust.AST.PatternBuilder, as: P
   alias RustQ.Rustler.HelperSelection
   alias RustQ.Type, as: R
 
   require A
   require I
+
+  defmodule EncoderField do
+    @moduledoc false
+    @enforce_keys [:key, :field, :mode]
+    defstruct [:key, :field, :mode]
+  end
 
   @builder_names [:map_from_terms, :struct_from_terms]
   @builder_function_names %{
@@ -309,7 +316,7 @@ defmodule RustQ.Rustler.Term do
       lifetime: :a,
       args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
       returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
-      body: [A.return(A.method(encoder_map_call(fields), :unwrap))]
+      body: encoder_body(fields)
     }
 
     target =
@@ -330,18 +337,52 @@ defmodule RustQ.Rustler.Term do
     |> Enum.map(&helper_item/1)
   end
 
-  defp encoder_field(field) when is_atom(field), do: {field, field}
-  defp encoder_field({key, field}) when is_atom(key) and is_atom(field), do: {key, field}
+  defp encoder_field(field) when is_atom(field),
+    do: %EncoderField{key: field, field: field, mode: :required}
 
-  defp encoder_map_call(fields) do
-    keys = Enum.map(fields, fn {key, _field} -> encoded_atom(key) end)
-    values = Enum.map(fields, fn {_key, field} -> encoded_field(field) end)
+  defp encoder_field({key, field}) when is_atom(key) and is_atom(field),
+    do: %EncoderField{key: key, field: field, mode: :required}
 
-    A.path_call([:Term, :map_from_arrays], [
-      :env,
-      A.ref(A.array(keys)),
-      A.ref(A.array(values))
-    ])
+  defp encoder_field({key, opts}) when is_atom(key) and is_list(opts) do
+    mode = if Keyword.get(opts, :when_some, false), do: :when_some, else: :required
+    %EncoderField{key: key, field: Keyword.get(opts, :field, key), mode: mode}
+  end
+
+  defp encoder_body(fields) do
+    {conditional, required} = Enum.split_with(fields, &(&1.mode == :when_some))
+
+    if conditional == [] do
+      [A.return(A.method(encoder_map_call(required, :array), :unwrap))]
+    else
+      [
+        A.let_mut(:keys, A.vec(Enum.map(required, &encoded_atom(&1.key)))),
+        A.let_mut(:values, A.vec(Enum.map(required, &encoded_field(&1.field))))
+        | Enum.map(conditional, &conditional_encoder_field/1)
+      ] ++ [A.return(A.method(encoder_map_call([], :vectors), :unwrap))]
+    end
+  end
+
+  defp conditional_encoder_field(%EncoderField{key: key, field: field}) do
+    A.if_let(
+      P.some(P.var(:value)),
+      A.method(A.field(:self, field), :as_ref),
+      [
+        %AST.ExprStmt{expr: A.method(:keys, :push, [encoded_atom(key)])},
+        %AST.ExprStmt{expr: A.method(:values, :push, [A.method(:value, :encode, [:env])])}
+      ]
+    )
+  end
+
+  defp encoder_map_call(fields, :array) do
+    keys = Enum.map(fields, &encoded_atom(&1.key))
+    values = Enum.map(fields, &encoded_field(&1.field))
+    encoder_map_call(A.array(keys), A.array(values))
+  end
+
+  defp encoder_map_call([], :vectors), do: encoder_map_call(:keys, :values)
+
+  defp encoder_map_call(keys, values) do
+    A.path_call([:Term, :map_from_arrays], [:env, A.ref(keys), A.ref(values)])
   end
 
   defp encoded_atom(key), do: A.method(A.path_call([:atoms, key]), :encode, [:env])

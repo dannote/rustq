@@ -411,6 +411,26 @@ defmodule RustQ.RustlerTest do
     assert code =~ "Term::map_from_arrays"
   end
 
+  test "builds term encoders with conditional option fields" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("term_encoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_encoder(:EncodedError,
+              fields: [:message, code: [when_some: true]],
+              target_lifetimes: [:_]
+            )
+        ]
+      )
+
+    assert code =~ "let mut keys = vec![atoms::message().encode(env)]"
+    assert code =~ "if let Some(value) = self.code.as_ref()"
+    assert code =~ "keys.push(atoms::code().encode(env))"
+    assert code =~ "values.push(value.encode(env))"
+    assert code =~ "Term::map_from_arrays(env, &keys, &values)"
+  end
+
   test "builds forgiving optional map decoders" do
     code =
       "__rq_items!();"
