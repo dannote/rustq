@@ -128,21 +128,7 @@ defmodule RustQ.Binding.Source do
   end
 
   defp rust_source_static_types(paths) do
-    Enum.each(paths, &validate_rust_source!/1)
-
-    index =
-      try do
-        Syn.Index.from_paths(paths)
-      rescue
-        error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
-          Diagnostic.defrust(
-            :rust_source_parse_failed,
-            paths,
-            "configured Rust sources could not be parsed",
-            details: %{paths: paths, error: error}
-          )
-      end
-
+    index = rust_source_index!(paths)
     conversions = from_conversions(index)
 
     index
@@ -168,24 +154,24 @@ defmodule RustQ.Binding.Source do
   end
 
   defp rust_source_callables(paths) do
+    index = rust_source_index!(paths)
+    index_callables(index, from_conversions(index))
+  end
+
+  defp rust_source_index!(paths) do
     Enum.each(paths, &validate_rust_source!/1)
 
-    index =
-      try do
-        Syn.Index.from_paths(paths)
-      rescue
-        error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
-          Diagnostic.defrust(
-            :rust_source_parse_failed,
-            paths,
-            "configured Rust sources could not be parsed",
-            details: %{paths: paths, error: error}
-          )
-      end
-
-    conversions = from_conversions(index)
-
-    index_callables(index, conversions)
+    try do
+      Syn.Index.from_paths(paths)
+    rescue
+      error in [RustQ.Error, File.Error, ArgumentError, RuntimeError] ->
+        Diagnostic.defrust(
+          :rust_source_parse_failed,
+          paths,
+          "configured Rust sources could not be parsed",
+          details: %{paths: paths, error: error}
+        )
+    end
   end
 
   defp validate_rust_source!(path) do
@@ -396,7 +382,13 @@ defmodule RustQ.Binding.Source do
   end
 
   defp from_trait?("From"), do: true
-  defp from_trait?("From" <> rest), do: String.match?(rest, ~r/^\s*</)
+
+  defp from_trait?("From" <> rest) do
+    rest
+    |> String.trim_leading()
+    |> String.starts_with?("<")
+  end
+
   defp from_trait?(_trait), do: false
 
   defp annotate_from_conversion_type(%Type{} = type, conversions) do

@@ -74,6 +74,39 @@ defmodule RustQ.Syn.IndexTest do
              RustQ.Syn.functions(Map.fetch!(second.files, lib_path))
   end
 
+  test "refreshes cached package indexes when a source file is added" do
+    dir =
+      Path.join(System.tmp_dir!(), "rustq_syn_package_add_#{System.unique_integer([:positive])}")
+
+    manifest_path = Path.join(dir, "Cargo.toml")
+    lib_path = Path.join([dir, "src", "lib.rs"])
+    added_path = Path.join([dir, "src", "added.rs"])
+
+    File.mkdir_p!(Path.dirname(lib_path))
+
+    on_exit(fn ->
+      Index.clear_cached_package("rustq_package_add_fixture", manifest_path: manifest_path)
+      File.rm_rf(dir)
+    end)
+
+    File.write!(manifest_path, """
+    [package]
+    name = "rustq_package_add_fixture"
+    version = "0.1.0"
+    edition = "2021"
+    """)
+
+    File.write!(lib_path, "pub fn first() {}\n")
+    first = Index.cached_package("rustq_package_add_fixture", manifest_path: manifest_path)
+    refute Map.has_key?(first.files, added_path)
+
+    File.write!(added_path, "pub fn added() {}\n")
+    second = Index.cached_package("rustq_package_add_fixture", manifest_path: manifest_path)
+
+    assert [%RustQ.Syn.Function{name: "added"}] =
+             RustQ.Syn.functions(Map.fetch!(second.files, added_path))
+  end
+
   test "indexes enums by name" do
     path =
       write_source!("""

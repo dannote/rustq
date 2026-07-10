@@ -16,6 +16,18 @@ defmodule RustQ.Meta.TypeTest do
     assert RustQ.Spec.type(quote(do: binary())).rust == "Vec<u8>"
   end
 
+  test "extracts vector elements from Syn-derived type paths" do
+    item = %Type{kind: :type, rust: "Item", ast: %RustQ.Rust.AST.TypePath{parts: [:Item]}}
+
+    vector = %Type{
+      kind: :type,
+      rust: "Vec<Item>",
+      ast: %RustQ.Rust.AST.TypePath{parts: [:Vec], generics: [item.ast]}
+    }
+
+    assert %Type{rust: "Item"} = Type.vec_inner(vector)
+  end
+
   test "compares equivalent Rust type aliases structurally" do
     internal = %Type{
       kind: :type,

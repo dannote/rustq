@@ -43,11 +43,8 @@ defmodule RustQ.Syn.Index do
   def from_package(package_name, opts \\ []) when is_binary(package_name) do
     package = RustQ.Cargo.package!(package_name, opts)
 
-    package.manifest_path
-    |> Path.dirname()
-    |> Path.join("**/*.rs")
-    |> Path.wildcard()
-    |> Enum.sort()
+    package
+    |> package_source_paths()
     |> from_paths(package: package)
   end
 
@@ -142,8 +139,20 @@ defmodule RustQ.Syn.Index do
   end
 
   defp package_fingerprint_paths(%__MODULE__{files: files, package: package}, opts) do
-    Map.keys(files) ++ package_manifest_paths(package) ++ project_manifest_paths(opts)
+    Map.keys(files) ++
+      package_source_paths(package) ++
+      package_manifest_paths(package) ++ project_manifest_paths(opts)
   end
+
+  defp package_source_paths(%RustQ.Cargo.Package{manifest_path: manifest_path}) do
+    manifest_path
+    |> Path.dirname()
+    |> Path.join("**/*.rs")
+    |> Path.wildcard()
+    |> Enum.sort()
+  end
+
+  defp package_source_paths(nil), do: []
 
   defp package_manifest_paths(%RustQ.Cargo.Package{manifest_path: manifest_path}) do
     [manifest_path]

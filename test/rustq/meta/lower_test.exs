@@ -1880,7 +1880,12 @@ defmodule RustQ.Meta.LowerTest do
              ],
              returns: %RustQ.Rust.AST.TypeNifResult{
                inner: %RustQ.Rust.AST.TypePath{parts: [:String]}
-             }
+             },
+             body: [
+               %RustQ.Rust.AST.Return{
+                 expr: %MethodCall{method: :atom_to_string, receiver: %RustQ.Rust.AST.Try{}}
+               }
+             ]
            } = Enum.find(helpers, &(&1.name == :atom_key))
 
     assert %Function{name: :optional_atom_key, body: optional_body} =
@@ -1931,8 +1936,6 @@ defmodule RustQ.Meta.LowerTest do
 
     assert %Function{
              body: [
-               %RustQ.Rust.AST.Let{},
-               %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{path: %RustQ.Rust.AST.Path{parts: ref_parts}}
                }
@@ -2012,7 +2015,6 @@ defmodule RustQ.Meta.LowerTest do
     assert %Function{
              name: :decode_expr_try,
              body: [
-               %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
                    path: %RustQ.Rust.AST.Path{parts: [:super, :parse_try_expr]}
@@ -2024,7 +2026,6 @@ defmodule RustQ.Meta.LowerTest do
     assert %Function{
              name: :decode_pat_some,
              body: [
-               %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
                    path: %RustQ.Rust.AST.Path{parts: [:super, :parse_some_pat]}
@@ -2048,7 +2049,6 @@ defmodule RustQ.Meta.LowerTest do
     assert %Function{
              name: :decode_stmt_return,
              body: [
-               %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.Ok{
                    expr: %RustQ.Rust.AST.PathCall{
@@ -2062,7 +2062,6 @@ defmodule RustQ.Meta.LowerTest do
     assert %Function{
              name: :decode_expr_ok,
              body: [
-               %RustQ.Rust.AST.Let{},
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.PathCall{
                    path: %RustQ.Rust.AST.Path{parts: [:super, :parse_ok_expr]}

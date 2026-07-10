@@ -132,17 +132,7 @@ defmodule RustQ.Meta.Typing do
   end
 
   @spec struct_field_type(Type.t(), atom()) :: Type.t() | nil
-  def struct_field_type(%Type{meta: %{fields: fields}}, field)
-      when is_atom(field) and is_list(fields) do
-    fields
-    |> Enum.find_value(fn
-      {^field, %Type{} = type, _presence} -> type
-      {^field, %Type{} = type} -> type
-      _other -> nil
-    end)
-  end
-
-  def struct_field_type(%Type{}, _field), do: nil
+  def struct_field_type(%Type{} = type, field), do: Type.field_type(type, field)
 
   @spec infer_downstream_let_types([Macro.t()], env_source(), map()) :: %{
           optional(atom()) => Type.t()
@@ -154,6 +144,7 @@ defmodule RustQ.Meta.Typing do
   end
 
   def infer_downstream_let_types(expressions, %Env{} = env, callbacks) when is_map(callbacks) do
+    callbacks = Map.merge(default_inference_callbacks(), callbacks)
     inferred = Inference.infer_downstream_let_types(expressions, env.vars, callbacks)
     rhs_types = non_propagating_let_rhs_types(expressions, env)
 
@@ -163,6 +154,17 @@ defmodule RustQ.Meta.Typing do
       end)
 
     Map.merge(rhs_types, inferred_types)
+  end
+
+  defp default_inference_callbacks do
+    %{
+      return_type: fn _call -> nil end,
+      local_argument_types: fn _name, _arity -> nil end,
+      path_argument_types: fn _parts, _name, _arity -> nil end,
+      method_argument_types: fn _target, _name, _arity -> nil end,
+      target_type: fn _type -> nil end,
+      method_receiver_type: fn _name, _arity -> nil end
+    }
   end
 
   defp synth_method_call({{:., _, [receiver, :unwrap]}, _meta, []}, %Env{} = env) do
@@ -242,21 +244,8 @@ defmodule RustQ.Meta.Typing do
     end
   end
 
-  defp ref_type(%Type{} = inner),
-    do: %Type{
-      kind: :ref,
-      rust: "&#{inner.rust}",
-      ast: %AST.TypeRef{inner: inner.ast},
-      meta: %{inner: inner}
-    }
-
-  defp option_type(%Type{} = inner),
-    do: %Type{
-      kind: :option,
-      rust: "Option<#{inner.rust}>",
-      ast: %AST.TypeOption{inner: inner.ast},
-      meta: %{inner: inner}
-    }
+  defp ref_type(%Type{} = inner), do: Type.ref(inner)
+  defp option_type(%Type{} = inner), do: Type.option(inner)
 
   defp result_type(%Type{} = ok),
     do: %Type{
@@ -344,43 +333,46 @@ defmodule RustQ.Meta.Typing do
   defp let_rhs_type(_expression, _env), do: []
 
   defp coercion(%Type{} = actual, %Type{} = expected) do
-    cond do
-      Type.compatible?(actual, expected) ->
-        :none
-
-      option_ref_adapter_compatible?(actual, expected) ->
-        :as_ref
-
-      option_adapter_compatible?(actual, expected) ->
-        :none
-
-      Type.propagates?(actual) and option_ref_adapter_compatible?(Type.inner(actual), expected) ->
-        :propagate_as_ref
-
-      Type.propagates?(actual) and Type.compatible_with_expected?(Type.inner(actual), expected) ->
-        :propagate
-
-      Type.propagates?(actual) and ref_inner_compatible?(Type.inner(actual), expected) ->
-        propagate_borrow_coercion(expected)
-
-      expected.kind == :option and Type.compatible?(actual, Type.inner(expected)) ->
-        :some
-
-      ref_inner_compatible?(actual, expected) ->
-        borrow_coercion(expected)
-
-      vec_slice_compatible?(actual, expected) ->
-        :borrow
-
-      Type.compatible_with_expected?(actual, expected) ->
-        :none
-
-      true ->
-        :unknown
-    end
+    direct_coercion(actual, expected) ||
+      propagation_coercion(actual, expected) ||
+      value_coercion(actual, expected) || :unknown
   end
 
   defp coercion(_actual, _expected), do: :unknown
+
+  defp direct_coercion(actual, expected) do
+    cond do
+      Type.compatible?(actual, expected) -> :none
+      option_ref_adapter_compatible?(actual, expected) -> :as_ref
+      option_adapter_compatible?(actual, expected) -> :none
+      true -> nil
+    end
+  end
+
+  defp propagation_coercion(actual, expected) do
+    if Type.propagates?(actual) do
+      propagated_coercion(Type.inner(actual), expected)
+    end
+  end
+
+  defp propagated_coercion(actual, expected) do
+    cond do
+      option_ref_adapter_compatible?(actual, expected) -> :propagate_as_ref
+      Type.compatible_with_expected?(actual, expected) -> :propagate
+      ref_inner_compatible?(actual, expected) -> propagate_borrow_coercion(expected)
+      true -> nil
+    end
+  end
+
+  defp value_coercion(actual, expected) do
+    cond do
+      expected.kind == :option and Type.compatible?(actual, Type.inner(expected)) -> :some
+      ref_inner_compatible?(actual, expected) -> borrow_coercion(expected)
+      vec_slice_compatible?(actual, expected) -> :borrow
+      Type.compatible_with_expected?(actual, expected) -> :none
+      true -> nil
+    end
+  end
 
   defp option_adapter_compatible?(%Type{} = actual, %Type{} = expected) do
     case expected_option_type(expected) do
@@ -429,7 +421,7 @@ defmodule RustQ.Meta.Typing do
   end
 
   defp type_name(%Type{} = type) do
-    type.meta[:syn_name] || type.rust || type.ast |> callable_target_from_ast()
+    type.meta[:syn_name] || type.rust || Type.callable_target(type)
   end
 
   defp vec_slice_compatible?(%Type{} = actual, %Type{} = expected_inner) do
@@ -447,34 +439,6 @@ defmodule RustQ.Meta.Typing do
   defp propagate_borrow_coercion(%Type{kind: :mut_ref}), do: :propagate_mut_borrow
   defp propagate_borrow_coercion(%Type{}), do: :propagate_borrow
 
-  defp callable_target_from_type(%Type{kind: kind, meta: %{inner: %Type{} = inner}})
-       when kind in [:ref, :mut_ref],
-       do: callable_target_from_type(inner)
-
-  defp callable_target_from_type(%Type{meta: %{syn_name: name}}) when is_binary(name), do: name
-
-  defp callable_target_from_type(%Type{ast: %AST.TypeRef{inner: inner}}),
-    do: callable_target_from_ast(inner)
-
-  defp callable_target_from_type(%Type{ast: ast}), do: callable_target_from_ast(ast)
+  defp callable_target_from_type(%Type{} = type), do: Type.callable_target(type)
   defp callable_target_from_type(_type), do: nil
-
-  defp callable_target_from_ast(%AST.TypePath{parts: [_ | _] = parts}),
-    do: Enum.map_join(parts, "::", &to_string/1)
-
-  defp callable_target_from_ast(%AST.TypeRaw{source: source}),
-    do: raw_callable_target(source)
-
-  defp callable_target_from_ast(_ast), do: nil
-
-  defp raw_callable_target(source) when is_binary(source) do
-    source
-    |> String.replace(~r/^&\s*(mut\s+)?/, "")
-    |> String.replace(~r/<.*$/, "")
-    |> String.trim()
-    |> case do
-      "" -> nil
-      target -> target
-    end
-  end
 end

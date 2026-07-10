@@ -3,7 +3,19 @@ defmodule RustQ.Codegen.DefrustModule do
   Compile-time bridge for modules that define native support helpers with `defrust`.
   """
 
+  @native_sources [
+    "native/rustq_nif/src/decode.rs",
+    "native/rustq_nif/src/parse.rs",
+    "native/rustq_nif/src/parse_item.rs",
+    "native/rustq_nif/src/parse_type.rs"
+  ]
+
   defmacro __using__(opts) do
+    opts =
+      Keyword.update(opts, :rust_sources, @native_sources, fn sources ->
+        (@native_sources ++ List.wrap(sources)) |> Enum.uniq()
+      end)
+
     quote do
       use RustQ.Meta, unquote(opts)
 

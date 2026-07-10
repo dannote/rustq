@@ -22,8 +22,7 @@ defmodule RustQ.Corpus do
     modules =
       source_path
       |> Code.require_file()
-      |> List.wrap()
-      |> Enum.map(&elem(&1, 0))
+      |> required_modules(source_path)
       |> Enum.filter(&function_exported?(&1, :__rustq_source__, 0))
       |> Enum.sort_by(&Atom.to_string/1)
 
@@ -34,6 +33,25 @@ defmodule RustQ.Corpus do
     modules
     |> Enum.map_join("\n", &render_module!/1)
     |> maybe_format_rust(Keyword.get(opts, :rustfmt, true), source_path)
+  end
+
+  defp required_modules(modules, source_path) when modules in [nil, []],
+    do: source_modules(source_path)
+
+  defp required_modules(modules, _source_path), do: Enum.map(modules, &elem(&1, 0))
+
+  defp source_modules(source_path) do
+    source_path
+    |> File.read!()
+    |> Code.string_to_quoted!()
+    |> Macro.prewalk([], fn
+      {:defmodule, _meta, [{:__aliases__, _, parts}, _body]} = node, modules ->
+        {node, [Module.concat(parts) | modules]}
+
+      node, modules ->
+        {node, modules}
+    end)
+    |> elem(1)
   end
 
   @spec stale_cases(Path.t()) :: [{Path.t(), String.t(), String.t()}]

@@ -30,12 +30,10 @@ defmodule RustQ.MixProject do
     [preferred_envs: [ci: :test]]
   end
 
-  defp elixirc_paths(env) when env in [:dev, :test], do: ["lib", "dev/reach"]
   defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do
     [
-      {:pi_bridge, "== 0.6.21", only: :dev},
       {:rustler, "~> 0.37", runtime: false},
       {:json_codec, "~> 0.1"},
       {:nimble_options, "~> 1.1"},
@@ -45,7 +43,7 @@ defmodule RustQ.MixProject do
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.0", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.0", only: [:dev, :test], runtime: false},
+      {:reach, "~> 2.0", runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
@@ -111,6 +109,7 @@ defmodule RustQ.MixProject do
         "README.md",
         "SKILL.md",
         "guides/using-rustq-well.md",
+        "guides/reach-plugin.md",
         "CHANGELOG.md",
         "LICENSE"
       ]
@@ -123,6 +122,7 @@ defmodule RustQ.MixProject do
       extras: [
         "README.md",
         "guides/using-rustq-well.md",
+        "guides/reach-plugin.md",
         "SKILL.md",
         "CHANGELOG.md",
         "LICENSE"
@@ -140,24 +140,7 @@ defmodule Mix.Tasks.Compile.RustqNative do
 
   @impl true
   def run(_args) do
-    if File.exists?(native_artifact_path()) do
-      {:noop, []}
-    else
-      Rustler.Compiler.compile_crate(:rustq, [crate: "rustq_nif"], [])
-      {:ok, []}
-    end
-  end
-
-  defp native_artifact_path do
-    Mix.Project.app_path()
-    |> Path.join(["priv", "native", "rustq_nif#{library_extension()}"])
-  end
-
-  defp library_extension do
-    case :os.type() do
-      {:win32, _} -> ".dll"
-      {:unix, :darwin} -> ".dylib"
-      {:unix, _} -> ".so"
-    end
+    Rustler.Compiler.compile_crate(:rustq, [crate: "rustq_nif"], [])
+    {:ok, []}
   end
 end

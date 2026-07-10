@@ -3,11 +3,12 @@ defmodule RustQ.Codegen.Helpers do
   General Rust helper functions emitted into RustQ's native support crate.
   """
 
-  use RustQ.Codegen.DefrustModule
+  use RustQ.Codegen.DefrustModule,
+    callable_modules: [RustQ.Codegen.ModuleHelpers]
 
   @spec required_field(term(), R.str()) :: R.nif_result(term())
   defrust required_field(term, key) do
-    term.map_get(unwrap!(atom(term.get_env(), key)))
+    term.map_get(atom(term.get_env(), key))
   end
 
   @spec optional_map_get(term(), R.str()) :: R.nif_result(R.option(term()))
@@ -20,8 +21,7 @@ defmodule RustQ.Codegen.Helpers do
 
   @spec atom_key(term(), R.str()) :: R.nif_result(String.t())
   defrust atom_key(term, key) do
-    value = unwrap!(term.map_get(unwrap!(atom(term.get_env(), key))))
-    value.atom_to_string()
+    term.map_get(atom(term.get_env(), key)).atom_to_string()
   end
 
   @spec optional_atom_key(term(), R.str()) :: R.nif_result(R.option(String.t()))
@@ -42,8 +42,7 @@ defmodule RustQ.Codegen.Helpers do
 
   @spec struct_name(term()) :: R.nif_result(String.t())
   defrust struct_name(term) do
-    value = unwrap!(term.map_get(unwrap!(atom(term.get_env(), "__struct__"))))
-    value.atom_to_string()
+    term.map_get(atom(term.get_env(), "__struct__")).atom_to_string()
   end
 
   @spec expect_struct(term(), R.str()) :: R.nif_result(R.unit())

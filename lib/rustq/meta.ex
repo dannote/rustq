@@ -134,40 +134,16 @@ defmodule RustQ.Meta do
     end
   end
 
-  defmacro __before_compile__(env) do
-    defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
-    macro_defs = Module.get_attribute(env.module, :rustq_macros) |> List.wrap() |> Enum.reverse()
-    specs = Module.get_attribute(env.module, :spec) |> List.wrap()
-    type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
-    rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
+  defmacro __before_compile__(env), do: build_before_compile(env)
 
-    local_callables = AST.callables_from_specs(specs, type_aliases)
-    external_callables = Source.external_callables(env.module)
-    configured_static_types = configured_static_types(env.module, type_aliases)
-
-    external_static_types =
-      Map.merge(Source.external_static_types(env.module), configured_static_types)
-
-    callables = local_callables ++ external_callables
-
-    rust_macros = RustMacro.definitions(macro_defs)
-    rust_macro_index = RustMacro.index!(rust_macros)
-    built_macros = RustMacro.items(rust_macros, rust_modules, env, callables, rust_macro_index)
-
-    built_asts =
-      Enum.map(
-        defs,
-        &AST.build_ast(
-          &1,
-          specs,
-          type_aliases,
-          rust_modules,
-          env,
-          external_callables,
-          external_static_types,
-          rust_macro_index
-        )
-      )
+  defp build_before_compile(env) do
+    %{
+      built_asts: built_asts,
+      built_macros: built_macros,
+      local_callables: local_callables,
+      rust_macros: rust_macros,
+      type_aliases: type_aliases
+    } = compile_context(env)
 
     asts = Enum.map(built_asts, & &1.ast)
     macro_items = Enum.map(built_macros, &Map.take(&1, [:name, :ast, :rust_module]))
@@ -184,34 +160,81 @@ defmodule RustQ.Meta do
 
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
+    exports(
+      asts: asts,
+      macro_items: macro_items,
+      rust_macros: rust_macros,
+      type_aliases: type_aliases,
+      type_asts: type_asts,
+      type_items: type_items,
+      items: items,
+      local_callables: local_callables,
+      source: source
+    )
+  end
+
+  defp exports(values) do
+    definitions = [
+      {:__rustq_asts__, values[:asts]},
+      {:__rustq_macro_items__, values[:macro_items]},
+      {:__rustq_macro_definitions__, values[:rust_macros]},
+      {:__rustq_types__, values[:type_aliases]},
+      {:__rustq_type_asts__, values[:type_asts]},
+      {:__rustq_type_items__, values[:type_items]},
+      {:__rustq_items__, values[:items]},
+      {:__rustq_callables__, values[:local_callables]},
+      {:__rustq_source__, values[:source]}
+    ]
+
+    {:__block__, [], Enum.map(definitions, &export_definition/1)}
+  end
+
+  defp export_definition({name, value}) do
     quote do
       @doc false
-      def __rustq_asts__, do: unquote(Macro.escape(asts))
-
-      @doc false
-      def __rustq_macro_items__, do: unquote(Macro.escape(macro_items))
-
-      @doc false
-      def __rustq_macro_definitions__, do: unquote(Macro.escape(rust_macros))
-
-      @doc false
-      def __rustq_types__, do: unquote(Macro.escape(type_aliases))
-
-      @doc false
-      def __rustq_type_asts__, do: unquote(Macro.escape(type_asts))
-
-      @doc false
-      def __rustq_type_items__, do: unquote(Macro.escape(type_items))
-
-      @doc false
-      def __rustq_items__, do: unquote(Macro.escape(items))
-
-      @doc false
-      def __rustq_callables__, do: unquote(Macro.escape(local_callables))
-
-      @doc false
-      def __rustq_source__, do: unquote(source)
+      def unquote(name)(), do: unquote(Macro.escape(value))
     end
+  end
+
+  defp compile_context(env) do
+    defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
+    macro_defs = Module.get_attribute(env.module, :rustq_macros) |> List.wrap() |> Enum.reverse()
+    specs = Module.get_attribute(env.module, :spec) |> List.wrap()
+    type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
+    rust_modules = env.module |> Module.get_attribute(:rustq_mod_aliases) |> rust_module_map()
+    local_callables = AST.callables_from_specs(specs, type_aliases)
+    external_callables = Source.external_callables(env.module)
+
+    external_static_types =
+      Map.merge(
+        Source.external_static_types(env.module),
+        configured_static_types(env.module, type_aliases)
+      )
+
+    rust_macros = RustMacro.definitions(macro_defs)
+    rust_macro_index = RustMacro.index!(rust_macros)
+    callables = local_callables ++ external_callables
+
+    %{
+      built_asts:
+        Enum.map(
+          defs,
+          &AST.build_ast(
+            &1,
+            specs,
+            type_aliases,
+            rust_modules,
+            env,
+            external_callables,
+            external_static_types,
+            rust_macro_index
+          )
+        ),
+      built_macros: RustMacro.items(rust_macros, rust_modules, env, callables, rust_macro_index),
+      local_callables: local_callables,
+      rust_macros: rust_macros,
+      type_aliases: type_aliases
+    }
   end
 
   defp configured_static_types(module, type_aliases) do

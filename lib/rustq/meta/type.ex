@@ -98,10 +98,80 @@ defmodule RustQ.Meta.Type do
   def ref_inner(%__MODULE__{ast: %AST.TypeRef{inner: inner}}), do: ast_type(inner)
   def ref_inner(%__MODULE__{}), do: nil
 
+  @doc "Constructs reference type metadata for an inner type."
+  @spec ref(t()) :: t()
+  def ref(%__MODULE__{} = inner) do
+    %__MODULE__{
+      kind: :ref,
+      rust: "&#{inner.rust}",
+      ast: %AST.TypeRef{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+  end
+
+  @doc "Constructs option type metadata for an inner type."
+  @spec option(t()) :: t()
+  def option(%__MODULE__{} = inner) do
+    %__MODULE__{
+      kind: :option,
+      rust: "Option<#{inner.rust}>",
+      ast: %AST.TypeOption{inner: inner.ast},
+      meta: %{inner: inner}
+    }
+  end
+
+  @doc "Returns a named structural field type, when available."
+  @spec field_type(t(), atom()) :: t() | nil
+  def field_type(%__MODULE__{meta: %{fields: fields}}, field)
+      when is_atom(field) and is_list(fields) do
+    Enum.find_value(fields, fn
+      {^field, %__MODULE__{} = type, _presence} -> type
+      {^field, %__MODULE__{} = type} -> type
+      _other -> nil
+    end)
+  end
+
+  def field_type(%__MODULE__{}, _field), do: nil
+
+  @doc "Returns a callable lookup target normalized from structural type metadata."
+  @spec callable_target(t()) :: String.t() | nil
+  def callable_target(%__MODULE__{kind: kind, meta: %{inner: %__MODULE__{} = inner}})
+      when kind in [:ref, :mut_ref],
+      do: callable_target(inner)
+
+  def callable_target(%__MODULE__{meta: %{syn_name: name}}) when is_binary(name), do: name
+
+  def callable_target(%__MODULE__{ast: %AST.TypeRef{inner: inner}}),
+    do: callable_target(ast_type(inner))
+
+  def callable_target(%__MODULE__{ast: %AST.TypePath{parts: [_ | _] = parts}}),
+    do: parts |> List.last() |> to_string()
+
+  def callable_target(%__MODULE__{ast: %AST.TypeRaw{source: source}}) when is_binary(source) do
+    source
+    |> String.trim_leading()
+    |> String.trim_leading("&")
+    |> String.trim_leading()
+    |> String.trim_leading("mut ")
+    |> String.split("<", parts: 2)
+    |> hd()
+    |> String.trim()
+    |> case do
+      "" -> nil
+      target -> target
+    end
+  end
+
+  def callable_target(%__MODULE__{}), do: nil
+
   @doc "Returns the element type for `Vec<T>` metadata."
   @spec vec_inner(t()) :: t() | nil
   def vec_inner(%__MODULE__{kind: :vec, meta: %{inner: %__MODULE__{} = inner}}), do: inner
   def vec_inner(%__MODULE__{ast: %AST.TypeVec{inner: inner}}), do: ast_type(inner)
+
+  def vec_inner(%__MODULE__{ast: %AST.TypePath{parts: [:Vec], generics: [inner]}}),
+    do: ast_type(inner)
+
   def vec_inner(%__MODULE__{}), do: nil
 
   @doc "Returns the element type for `[T]` / `&[T]` metadata."
@@ -201,10 +271,30 @@ defmodule RustQ.Meta.Type do
     expected_value = expected_value(expected)
 
     compatible?(value, expected_value) or
+      as_ref_compatible?(value, expected) or
       (expected_value.kind == :option and compatible?(value, inner(expected_value)))
   end
 
   def compatible_with_expected?(_value, _expected), do: false
+
+  defp as_ref_compatible?(%__MODULE__{} = value, %__MODULE__{
+         kind: :impl_trait,
+         meta: %{traits: traits}
+       }) do
+    Enum.any?(traits, fn
+      %__MODULE__{meta: %{syn_name: "AsRef", args: [%__MODULE__{} = inner]}} ->
+        compatible?(value, inner) or string_as_ref?(value, inner)
+
+      _trait ->
+        false
+    end)
+  end
+
+  defp as_ref_compatible?(_value, _expected), do: false
+
+  defp string_as_ref?(%__MODULE__{} = value, %__MODULE__{} = inner) do
+    value.rust == "String" and inner.rust == "str"
+  end
 
   @doc "Returns true when two lowered types are semantically compatible."
   @spec compatible?(t() | nil, t() | nil) :: boolean()

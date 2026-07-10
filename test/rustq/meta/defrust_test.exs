@@ -827,6 +827,30 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "syn_external_callable.rs")
   end
 
+  test "defrust infers propagation through parent-module Rust calls" do
+    defmodule SynParentCallableCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/external_callables.rs"]
+
+      alias RustQ.Type, as: R
+
+      @spec decode_color(R.term()) :: R.nif_result(R.path(:Color))
+      defrust decode_color(term) do
+        color = decode_as!(term, R.u32())
+        {:ok, Color.from_argb(255, 0, 0, color)}
+      end
+
+      @spec draw(R.term(), R.slice({R.atom(), R.term()})) :: R.nif_result(R.path(:Paint))
+      defrust draw(term, opts) do
+        Super.stroke_paint(decode_color(term), 1.0, opts)
+      end
+    end
+
+    source = SynParentCallableCase.__rustq_source__()
+
+    assert source =~ "super::stroke_paint(decode_color(term)?, 1.0, opts)"
+    assert RustQ.valid?(source, "syn_parent_callable.rs")
+  end
+
   test "defrust can use Syn-derived external method metadata" do
     defmodule SynExternalMethodCase do
       use RustQ.Meta, rust_sources: ["test/fixtures/external_methods.rs"]
@@ -1409,9 +1433,8 @@ defmodule RustQ.Meta.DefrustTest do
       @spec run(R.raw(:Color), R.bool()) :: R.nif_result(R.unit())
       defrust run(color, flag) do
         use_color(
-          with {:ok, value} <- maybe_color(flag, color) do
-            value
-          else
+          case maybe_color(flag, color) do
+            {:ok, value} -> value
             _reason -> color
           end
         )

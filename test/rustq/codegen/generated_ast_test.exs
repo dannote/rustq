@@ -25,7 +25,6 @@ defmodule RustQ.Codegen.GeneratedASTTest do
     Path,
     PathCall,
     PatPath,
-    PatVar,
     Return,
     Try,
     TypeNifResult,
@@ -184,7 +183,6 @@ defmodule RustQ.Codegen.GeneratedASTTest do
              Enum.find(item_decoders, &(&1.name == :decode_ast_function))
 
     assert %ExprStmt{expr: %Try{}} = hd(function_body)
-    assert %Let{pattern: %PatVar{name: :args}} = Enum.at(function_body, 3)
 
     assert %Return{
              expr: %PathCall{path: %Path{parts: [:super, :parse_item_function_args]}}

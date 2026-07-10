@@ -2,6 +2,8 @@ defmodule RustQ.Reach.SmellsTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Reach.Smells.BlocklessDefrustmod
+  alias RustQ.Reach.Smells.DefrustMissingSpec
+  alias RustQ.Reach.Smells.DynamicRawRustEscape
   alias RustQ.Reach.Smells.LowLevelControlFlow
   alias RustQ.Reach.Smells.RawRustEscape
   alias RustQ.Reach.Smells.TrivialDefrustWrapper
@@ -32,6 +34,56 @@ defmodule RustQ.Reach.SmellsTest do
     """
 
     assert [] = run_check(RawRustEscape, source)
+  end
+
+  test "detects dynamic raw Rust escapes" do
+    source = """
+    defmodule Sample.DynamicRawEscape do
+      def build(source), do: raw_expr!(source)
+    end
+    """
+
+    assert [%{kind: :rustq_dynamic_raw_rust_escape}] = run_check(DynamicRawRustEscape, source)
+  end
+
+  test "allows literal raw Rust escapes" do
+    source = """
+    defmodule Sample.LiteralRawEscape do
+      def build, do: raw_expr!(\"unsafe { value }\")
+    end
+    """
+
+    assert [] = run_check(DynamicRawRustEscape, source)
+  end
+
+  test "detects defrust declarations without specs" do
+    source = """
+    defmodule Sample.MissingSpec do
+      use RustQ.Meta
+
+      defrust decode(term) do
+        term
+      end
+    end
+    """
+
+    assert [%{kind: :rustq_defrust_missing_spec}] = run_check(DefrustMissingSpec, source)
+  end
+
+  test "accepts typed defrust declarations" do
+    source = """
+    defmodule Sample.TypedDefrust do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode(R.term()) :: R.nif_result(R.term())
+      defrust decode(term) do
+        {:ok, term}
+      end
+    end
+    """
+
+    assert [] = run_check(DefrustMissingSpec, source)
   end
 
   test "detects low-level control flow in defrust bodies" do

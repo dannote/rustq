@@ -75,6 +75,25 @@ defmodule RustQ.Binding.Index do
     end
   end
 
+  @doc "Returns an unqualified free-function signature only when it is unambiguous."
+  @spec unqualified_argument_types(t(), String.t() | atom(), non_neg_integer()) ::
+          [Type.t()] | nil
+  def unqualified_argument_types(%__MODULE__{} = index, name, arity) do
+    case unqualified_functions(index, name, arity) do
+      [%Callable{} = callable] -> argument_types_for_arity(callable, arity)
+      _ambiguous_or_missing -> nil
+    end
+  end
+
+  @doc "Returns an unqualified free-function return type only when it is unambiguous."
+  @spec unqualified_return_type(t(), String.t() | atom(), non_neg_integer()) :: Type.t() | nil
+  def unqualified_return_type(%__MODULE__{} = index, name, arity) do
+    case unqualified_functions(index, name, arity) do
+      [%Callable{returns: %Type{} = type}] -> type
+      _ambiguous_missing_or_unit -> nil
+    end
+  end
+
   @doc "Returns method receiver targets for a method name and Elixir-style call arity."
   @spec method_targets(t(), String.t() | atom(), non_neg_integer()) :: [String.t()]
   def method_targets(%__MODULE__{} = index, name, arity) do
@@ -116,6 +135,15 @@ defmodule RustQ.Binding.Index do
     end
   end
 
+  defp unqualified_functions(%__MODULE__{by_key: by_key}, name, arity) do
+    name = name_part(name)
+
+    by_key
+    |> Map.values()
+    |> Enum.uniq_by(&{&1.target, &1.name, length(&1.args)})
+    |> Enum.filter(&(&1.kind == :function and &1.name == name and length(&1.args) == arity))
+  end
+
   defp receiver_arg?(%{name: "self"}), do: true
   defp receiver_arg?(_arg), do: false
 
@@ -135,7 +163,7 @@ defmodule RustQ.Binding.Index do
 
   defp base_target_part(target) when is_binary(target) do
     target
-    |> String.replace(~r/\s+/, "")
+    |> String.replace([" ", "\t", "\n", "\r"], "")
     |> String.split("<", parts: 2)
     |> hd()
     |> case do

@@ -240,9 +240,11 @@ pub(crate) fn parse_item_function_args(
     if let Some(lifetime) = lifetime {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        generics.params.push(syn::GenericParam::Lifetime(
-            syn::LifetimeParam::new(lifetime),
-        ));
+        generics
+            .params
+            .push(syn::GenericParam::Lifetime(syn::LifetimeParam::new(
+                lifetime,
+            )));
     }
 
     Ok(syn::ItemFn {

@@ -14,8 +14,31 @@ defmodule RustQ.Syn.Doc do
 
   @doc "Normalizes one Rust doc line for Markdown output."
   @spec line(String.t()) :: String.t()
-  def line(line) when is_binary(line) do
-    line
-    |> String.replace(~r/\[`(?:crate::)?([^\]]+)`\]/, "`\\1`")
+  def line(line) when is_binary(line), do: normalize_links(line)
+
+  defp normalize_links(line) do
+    case :binary.match(line, "[`") do
+      :nomatch -> line
+      {start, _length} -> normalize_link_at(line, start)
+    end
   end
+
+  defp normalize_link_at(line, start) do
+    prefix = binary_part(line, 0, start)
+    rest = binary_part(line, start + 2, byte_size(line) - start - 2)
+    {target, rest} = strip_crate_prefix(rest)
+
+    case :binary.match(rest, "`]") do
+      {finish, _length} when finish > 0 ->
+        link = binary_part(target, 0, finish)
+        suffix = binary_part(rest, finish + 2, byte_size(rest) - finish - 2)
+        prefix <> "`" <> link <> "`" <> normalize_links(suffix)
+
+      _not_a_link ->
+        prefix <> "[`" <> normalize_links(rest)
+    end
+  end
+
+  defp strip_crate_prefix("crate::" <> rest), do: {rest, rest}
+  defp strip_crate_prefix(rest), do: {rest, rest}
 end

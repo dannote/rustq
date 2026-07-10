@@ -17,6 +17,34 @@ defmodule RustQ.Binding.IndexTest do
     assert Index.return_type(index, nil, "decode", 2) == nil
   end
 
+  test "looks up a uniquely named free function without its module target" do
+    return = type(:result, "Result<Expr, Error>")
+
+    callable = %Callable{
+      name: "parse_expr",
+      kind: :function,
+      target: "parse",
+      args: [arg("source")],
+      returns: return
+    }
+
+    index = Index.new([callable])
+
+    assert Index.unqualified_argument_types(index, :parse_expr, 1) == [type(:type, "Term")]
+    assert Index.unqualified_return_type(index, :parse_expr, 1) == return
+  end
+
+  test "does not guess between free functions in different modules" do
+    index =
+      Index.new([
+        %Callable{name: "parse", kind: :function, target: "expr", args: [arg("source")]},
+        %Callable{name: "parse", kind: :function, target: "type", args: [arg("source")]}
+      ])
+
+    assert Index.unqualified_argument_types(index, :parse, 1) == nil
+    assert Index.unqualified_return_type(index, :parse, 1) == nil
+  end
+
   test "indexes methods by Rust arity and receiverless call arity" do
     return = type(:ref, "&Self")
 

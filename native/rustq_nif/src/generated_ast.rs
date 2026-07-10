@@ -115,8 +115,7 @@ pub(crate) fn optional_map_get<'a>(term: Term<'a>, key: &str) -> NifResult<Optio
 }
 
 pub(crate) fn atom_key<'a>(term: Term<'a>, key: &str) -> NifResult<String> {
-    let value = term.map_get(atom(term.get_env(), key)?)?;
-    value.atom_to_string()
+    term.map_get(atom(term.get_env(), key)?)?.atom_to_string()
 }
 
 pub(crate) fn optional_atom_key<'a>(term: Term<'a>, key: &str) -> NifResult<Option<String>> {
@@ -133,8 +132,8 @@ pub(crate) fn is_nil<'a>(term: Term<'a>) -> NifResult<bool> {
 }
 
 pub(crate) fn struct_name<'a>(term: Term<'a>) -> NifResult<String> {
-    let value = term.map_get(atom(term.get_env(), "__struct__")?)?;
-    value.atom_to_string()
+    term.map_get(atom(term.get_env(), "__struct__")?)?
+        .atom_to_string()
 }
 
 pub(crate) fn expect_struct<'a>(term: Term<'a>, expected: &str) -> NifResult<()> {
@@ -330,58 +329,69 @@ pub(crate) fn decode_ast_use<'a>(term: Term<'a>) -> NifResult<ItemUse> {
 pub(crate) fn decode_ast_module<'a>(term: Term<'a>) -> NifResult<ItemMod> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Module")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    let items = required_item_list(term, "items")?;
-    super::parse_item_module(name, vis, items)
+    super::parse_item_module(
+        name,
+        super::decode_vis(required_field(term, "vis")?)?,
+        required_item_list(term, "items")?,
+    )
 }
 
 pub(crate) fn decode_ast_impl<'a>(term: Term<'a>) -> NifResult<ItemImpl> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Impl")?;
-    let target = required_type(term, "target")?;
-    let trait_path = super::decode_optional_type_field(term, "trait")?;
-    let impl_items = required_item_list(term, "items")?;
-    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
-    let lifetimes = decode_lifetime_list(required_field(term, "lifetimes")?)?;
-    super::parse_item_impl(target, trait_path, impl_items, attrs, lifetimes)
+    super::parse_item_impl(
+        required_type(term, "target")?,
+        super::decode_optional_type_field(term, "trait")?,
+        required_item_list(term, "items")?,
+        super::decode_attribute_list(required_field(term, "attrs")?)?,
+        decode_lifetime_list(required_field(term, "lifetimes")?)?,
+    )
 }
 
 pub(crate) fn decode_ast_const<'a>(term: Term<'a>) -> NifResult<ItemConst> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Const")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let ty = required_type(term, "type")?;
-    let expr = required_expr(term, "expr")?;
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    super::parse_item_const(name, ty, expr, vis)
+    super::parse_item_const(
+        name,
+        required_type(term, "type")?,
+        required_expr(term, "expr")?,
+        super::decode_vis(required_field(term, "vis")?)?,
+    )
 }
 
 pub(crate) fn decode_ast_type_alias<'a>(term: Term<'a>) -> NifResult<ItemType> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.TypeAlias")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let ty = required_type(term, "type")?;
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    super::parse_item_type(name, ty, vis)
+    super::parse_item_type(
+        name,
+        required_type(term, "type")?,
+        super::decode_vis(required_field(term, "vis")?)?,
+    )
 }
 
 pub(crate) fn decode_ast_static<'a>(term: Term<'a>) -> NifResult<ItemStatic> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Static")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let ty = required_type(term, "type")?;
-    let expr = required_expr(term, "expr")?;
-    let mutable = required_field(term, "mutable")?.decode()?;
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    super::parse_item_static(name, ty, expr, mutable, vis)
+    super::parse_item_static(
+        name,
+        required_type(term, "type")?,
+        required_expr(term, "expr")?,
+        required_field(term, "mutable")?.decode::<bool>()?,
+        super::decode_vis(required_field(term, "vis")?)?,
+    )
 }
 
 pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Function")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    let args = required_function_arg_list(term, "args")?;
-    let returns = required_type(term, "returns")?;
-    let lifetime = optional_atom_key(term, "lifetime")?;
-    let stmts = required_stmt_list(term, "body")?;
-    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
-    super::parse_item_function_args(name, vis, args, returns, lifetime, stmts, attrs)
+    super::parse_item_function_args(
+        name,
+        super::decode_vis(required_field(term, "vis")?)?,
+        required_function_arg_list(term, "args")?,
+        required_type(term, "returns")?,
+        optional_atom_key(term, "lifetime")?,
+        required_stmt_list(term, "body")?,
+        super::decode_attribute_list(required_field(term, "attrs")?)?,
+    )
 }
 
 pub(crate) fn decode_derive_path_list<'a>(term: Term<'a>) -> NifResult<Vec<Path>> {
@@ -395,18 +405,19 @@ pub(crate) fn decode_derive_path_list<'a>(term: Term<'a>) -> NifResult<Vec<Path>
 pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Struct")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    let derive = super::decode_derive(required_field(term, "derive")?)?;
-    let lifetime = optional_atom_key(term, "lifetime")?;
-    let fields = required_struct_field_list(term, "fields")?;
-    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
-    super::parse_item_struct(name, vis, derive, lifetime, fields, attrs)
+    super::parse_item_struct(
+        name,
+        super::decode_vis(required_field(term, "vis")?)?,
+        super::decode_derive(required_field(term, "derive")?)?,
+        optional_atom_key(term, "lifetime")?,
+        required_struct_field_list(term, "fields")?,
+        super::decode_attribute_list(required_field(term, "attrs")?)?,
+    )
 }
 
 pub(crate) fn decode_ast_macro_item<'a>(term: Term<'a>) -> NifResult<Item> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.MacroItem")?;
-    let source = super::string_field(term, "source")?;
-    super::parse_macro_item(source)
+    super::parse_macro_item(super::string_field(term, "source")?)
 }
 
 pub(crate) fn decode_ast_macro_item_call<'a>(term: Term<'a>) -> NifResult<Item> {
@@ -414,8 +425,10 @@ pub(crate) fn decode_ast_macro_item_call<'a>(term: Term<'a>) -> NifResult<Item> 
     let path = required_path(term, "path")?;
     let tokens = required_field(term, "tokens")?;
     if is_nil(tokens)? {
-        let args = super::decode_macro_item_arg_list(required_field(term, "args")?)?;
-        super::parse_macro_item_call(path, args)
+        super::parse_macro_item_call(
+            path,
+            super::decode_macro_item_arg_list(required_field(term, "args")?)?,
+        )
     } else {
         super::parse_macro_item_token_call(path, tokens)
     }
@@ -429,11 +442,13 @@ pub(crate) fn decode_ast_macro_rules<'a>(term: Term<'a>) -> NifResult<Item> {
 pub(crate) fn decode_ast_enum<'a>(term: Term<'a>) -> NifResult<ItemEnum> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.Enum")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    let derive = super::decode_derive(required_field(term, "derive")?)?;
-    let variants = required_enum_variant_list(term, "variants")?;
-    let attrs = super::decode_attribute_list(required_field(term, "attrs")?)?;
-    super::parse_item_enum(name, vis, derive, variants, attrs)
+    super::parse_item_enum(
+        name,
+        super::decode_vis(required_field(term, "vis")?)?,
+        super::decode_derive(required_field(term, "derive")?)?,
+        required_enum_variant_list(term, "variants")?,
+        super::decode_attribute_list(required_field(term, "attrs")?)?,
+    )
 }
 
 pub(crate) fn decode_function_arg<'a>(term: Term<'a>) -> NifResult<FnArg> {
@@ -443,25 +458,29 @@ pub(crate) fn decode_function_arg<'a>(term: Term<'a>) -> NifResult<FnArg> {
     if receiver {
         super::parse_function_receiver(mutable)
     } else {
-        let name = super::format_ident_value(atom_key(term, "name")?);
-        let ty = required_type(term, "type")?;
-        super::parse_function_arg(name, ty)
+        super::parse_function_arg(
+            super::format_ident_value(atom_key(term, "name")?),
+            required_type(term, "type")?,
+        )
     }
 }
 
 pub(crate) fn decode_struct_field<'a>(term: Term<'a>) -> NifResult<Field> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.StructField")?;
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let ty = required_type(term, "type")?;
-    let vis = super::decode_vis(required_field(term, "vis")?)?;
-    super::parse_struct_field(name, ty, vis)
+    super::parse_struct_field(
+        name,
+        required_type(term, "type")?,
+        super::decode_vis(required_field(term, "vis")?)?,
+    )
 }
 
 pub(crate) fn decode_enum_variant<'a>(term: Term<'a>) -> NifResult<Variant> {
     expect_struct(term, "Elixir.RustQ.Rust.AST.EnumVariant")?;
-    let name = super::format_ident_value(atom_key(term, "name")?);
-    let tuple = required_type_list(term, "tuple")?;
-    super::parse_enum_variant(name, tuple)
+    super::parse_enum_variant(
+        super::format_ident_value(atom_key(term, "name")?),
+        required_type_list(term, "tuple")?,
+    )
 }
 
 pub(crate) fn path_parts<'a>(term: Term<'a>) -> NifResult<String> {
@@ -485,52 +504,47 @@ pub(crate) fn decode_type_unit<'a>(term: Term<'a>) -> NifResult<Type> {
 }
 
 pub(crate) fn decode_type_raw<'a>(term: Term<'a>) -> NifResult<Type> {
-    let source = required_field(term, "source")?.decode()?;
+    let source = required_field(term, "source")?.decode::<String>()?;
     super::parse_type_raw(source)
 }
 
 pub(crate) fn decode_type_ref<'a>(term: Term<'a>) -> NifResult<Type> {
     let inner = required_type(term, "inner")?;
-    let mutable = required_field(term, "mutable")?.decode()?;
+    let mutable = required_field(term, "mutable")?.decode::<bool>()?;
     let lifetime = optional_atom_key(term, "lifetime")?;
     super::parse_type_ref(inner, mutable, lifetime)
 }
 
 pub(crate) fn decode_type_option<'a>(term: Term<'a>) -> NifResult<Type> {
-    let inner = required_type(term, "inner")?;
-    super::parse_type_generic("Option", vec![inner])
+    super::parse_type_generic("Option", vec![required_type(term, "inner")?])
 }
 
 pub(crate) fn decode_type_result<'a>(term: Term<'a>) -> NifResult<Type> {
-    let ok = required_type(term, "ok")?;
-    let error = required_type(term, "error")?;
-    super::parse_type_generic("Result", vec![ok, error])
+    super::parse_type_generic(
+        "Result",
+        vec![required_type(term, "ok")?, required_type(term, "error")?],
+    )
 }
 
 pub(crate) fn decode_type_nif_result<'a>(term: Term<'a>) -> NifResult<Type> {
-    let inner = required_type(term, "inner")?;
-    super::parse_type_generic("NifResult", vec![inner])
+    super::parse_type_generic("NifResult", vec![required_type(term, "inner")?])
 }
 
 pub(crate) fn decode_type_vec<'a>(term: Term<'a>) -> NifResult<Type> {
-    let inner = required_type(term, "inner")?;
-    super::parse_type_generic("Vec", vec![inner])
+    super::parse_type_generic("Vec", vec![required_type(term, "inner")?])
 }
 
 pub(crate) fn decode_type_slice<'a>(term: Term<'a>) -> NifResult<Type> {
-    let inner = required_type(term, "inner")?;
-    super::parse_type_slice(inner)
+    super::parse_type_slice(required_type(term, "inner")?)
 }
 
 pub(crate) fn decode_type_array<'a>(term: Term<'a>) -> NifResult<Type> {
-    let inner = required_type(term, "inner")?;
-    let size = required_field(term, "size")?;
-    super::parse_type_array(inner, size)
+    super::parse_type_array(required_type(term, "inner")?, required_field(term, "size")?)
 }
 
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {
     let ident = super::format_ident_value(atom_key(term, "name")?);
-    let mutable = required_field(term, "mutable")?.decode()?;
+    let mutable = required_field(term, "mutable")?.decode::<bool>()?;
     super::parse_var_pat(ident, mutable)
 }
 
@@ -543,8 +557,7 @@ pub(crate) fn decode_pat_none<'a>(term: Term<'a>) -> NifResult<Pat> {
 }
 
 pub(crate) fn decode_pat_path<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = required_path(term, "path")?;
-    super::parse_path_pat(path)
+    super::parse_path_pat(required_path(term, "path")?)
 }
 
 pub(crate) fn decode_pat_literal<'a>(term: Term<'a>) -> NifResult<Pat> {
@@ -552,88 +565,83 @@ pub(crate) fn decode_pat_literal<'a>(term: Term<'a>) -> NifResult<Pat> {
 }
 
 pub(crate) fn decode_pat_some<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let pat = required_pat(term, "pattern")?;
-    super::parse_some_pat(pat)
+    super::parse_some_pat(required_pat(term, "pattern")?)
 }
 
 pub(crate) fn decode_pat_ok<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let pat = required_pat(term, "pattern")?;
-    super::parse_ok_pat(pat)
+    super::parse_ok_pat(required_pat(term, "pattern")?)
 }
 
 pub(crate) fn decode_pat_err<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let pat = required_pat(term, "pattern")?;
-    super::parse_err_pat(pat)
+    super::parse_err_pat(required_pat(term, "pattern")?)
 }
 
 pub(crate) fn decode_pat_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let patterns = required_pat_list(term, "patterns")?;
-    super::parse_tuple_pat(patterns)
+    super::parse_tuple_pat(required_pat_list(term, "patterns")?)
 }
 
 pub(crate) fn decode_pat_path_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = required_path(term, "path")?;
-    let patterns = required_pat_list(term, "patterns")?;
-    super::parse_path_tuple_pat(path, patterns)
+    super::parse_path_tuple_pat(
+        required_path(term, "path")?,
+        required_pat_list(term, "patterns")?,
+    )
 }
 
 pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
-    let path = required_path(term, "path")?;
-    let fields = super::decode_pat_struct_fields(required_field(term, "fields")?)?;
-    super::parse_struct_pat(path, fields)
+    super::parse_struct_pat(
+        required_path(term, "path")?,
+        super::decode_pat_struct_fields(required_field(term, "fields")?)?,
+    )
 }
 
 pub(crate) fn decode_stmt_assign<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let target = required_expr(term, "target")?;
-    let expr = required_expr(term, "expr")?;
-    super::parse_assign_stmt(target, expr)
+    super::parse_assign_stmt(required_expr(term, "target")?, required_expr(term, "expr")?)
 }
 
 pub(crate) fn decode_stmt_assign_op<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let target = required_expr(term, "target")?;
     let op = required_field(term, "op")?.atom_to_string()?;
-    let expr = required_expr(term, "expr")?;
-    super::parse_assign_op_stmt(target, op.as_str(), expr)
+    super::parse_assign_op_stmt(
+        required_expr(term, "target")?,
+        op.as_str(),
+        required_expr(term, "expr")?,
+    )
 }
 
 pub(crate) fn decode_stmt_expr_stmt<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let expr = required_expr(term, "expr")?;
-    super::parse_expr_stmt(expr)
+    super::parse_expr_stmt(required_expr(term, "expr")?)
 }
 
 pub(crate) fn decode_stmt_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let expr = required_expr(term, "expr")?;
-    Ok(Stmt::Expr(expr, None))
+    Ok(Stmt::Expr(required_expr(term, "expr")?, None))
 }
 
 pub(crate) fn decode_stmt_early_return<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let expr = required_expr(term, "expr")?;
-    super::parse_return_stmt(expr)
+    super::parse_return_stmt(required_expr(term, "expr")?)
 }
 
 pub(crate) fn decode_stmt_if_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let pattern = required_pat(term, "pattern")?;
-    let expr = required_expr(term, "expr")?;
-    let then_block = super::decode_block(required_field(term, "then")?)?;
-    let else_block = super::decode_optional_block_field(term, "else")?;
-    super::parse_if_let_stmt(pattern, expr, then_block, else_block)
+    super::parse_if_let_stmt(
+        required_pat(term, "pattern")?,
+        required_expr(term, "expr")?,
+        super::decode_block(required_field(term, "then")?)?,
+        super::decode_optional_block_field(term, "else")?,
+    )
 }
 
 pub(crate) fn decode_stmt_for<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let pattern = required_pat(term, "pattern")?;
-    let expr = required_expr(term, "expr")?;
-    let body = super::decode_block(required_field(term, "body")?)?;
-    super::parse_for_stmt(pattern, expr, body)
+    super::parse_for_stmt(
+        required_pat(term, "pattern")?,
+        required_expr(term, "expr")?,
+        super::decode_block(required_field(term, "body")?)?,
+    )
 }
 
 pub(crate) fn decode_stmt_loop<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let body = super::decode_block(required_field(term, "body")?)?;
-    super::parse_loop_stmt(body)
+    super::parse_loop_stmt(super::decode_block(required_field(term, "body")?)?)
 }
 
 pub(crate) fn decode_stmt_break<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let expr = super::decode_optional_expr_field(term, "expr")?;
-    super::parse_break_stmt(expr)
+    super::parse_break_stmt(super::decode_optional_expr_field(term, "expr")?)
 }
 
 pub(crate) fn decode_stmt_continue<'a>(_term: Term<'a>) -> NifResult<Stmt> {
@@ -642,18 +650,21 @@ pub(crate) fn decode_stmt_continue<'a>(_term: Term<'a>) -> NifResult<Stmt> {
 
 pub(crate) fn decode_stmt_let<'a>(term: Term<'a>) -> NifResult<Stmt> {
     let pattern = required_pat(term, "pattern")?;
-    let mutable = required_field(term, "mutable")?.decode()?;
+    let mutable = required_field(term, "mutable")?.decode::<bool>()?;
     let pat_tokens = super::decode_let_pattern(pattern, mutable)?;
-    let expr = required_expr(term, "expr")?;
-    let ty = super::decode_optional_type_field(term, "type")?;
-    super::parse_let_stmt(pat_tokens, ty, expr)
+    super::parse_let_stmt(
+        pat_tokens,
+        super::decode_optional_type_field(term, "type")?,
+        required_expr(term, "expr")?,
+    )
 }
 
 pub(crate) fn decode_stmt_let_else<'a>(term: Term<'a>) -> NifResult<Stmt> {
-    let pattern = required_pat(term, "pattern")?;
-    let expr = required_expr(term, "expr")?;
-    let else_block = super::decode_block(required_field(term, "else")?)?;
-    super::parse_let_else_stmt(pattern, expr, else_block)
+    super::parse_let_else_stmt(
+        required_pat(term, "pattern")?,
+        required_expr(term, "expr")?,
+        super::decode_block(required_field(term, "else")?)?,
+    )
 }
 
 pub(crate) fn decode_arm<'a>(term: Term<'a>) -> NifResult<Arm> {
@@ -664,8 +675,7 @@ pub(crate) fn decode_arm<'a>(term: Term<'a>) -> NifResult<Arm> {
     if struct_name(pat_term)? == "Elixir.RustQ.Rust.AST.PatAtomGuard" {
         super::decode_atom_guard_arm(pat_term, block)
     } else {
-        let pat = super::decode_pat(pat_term)?;
-        super::parse_guarded_block_arm(pat, guard, block)
+        super::parse_guarded_block_arm(super::decode_pat(pat_term)?, guard, block)
     }
 }
 
@@ -675,38 +685,40 @@ pub(crate) fn decode_expr_var<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_path<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let path = super::parse_ast_path(term)?;
-    super::parse_path_expr(path)
+    super::parse_path_expr(super::parse_ast_path(term)?)
 }
 
 pub(crate) fn decode_expr_atom_value<'a>(term: Term<'a>) -> NifResult<Expr> {
     let name = super::format_ident_value(atom_key(term, "name")?);
-    let module = super::decode_string_list(required_field(term, "module")?)?;
-    super::parse_atom_value_expr(module, name)
+    super::parse_atom_value_expr(
+        super::decode_string_list(required_field(term, "module")?)?,
+        name,
+    )
 }
 
 pub(crate) fn decode_expr_field<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let receiver = required_expr(term, "receiver")?;
-    let field = required_field(term, "field")?;
-    super::parse_field_expr(receiver, field)
+    super::parse_field_expr(
+        required_expr(term, "receiver")?,
+        required_field(term, "field")?,
+    )
 }
 
 pub(crate) fn decode_expr_index<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let receiver = required_expr(term, "receiver")?;
-    let index = required_expr(term, "index")?;
-    super::parse_index_expr(receiver, index)
+    super::parse_index_expr(
+        required_expr(term, "receiver")?,
+        required_expr(term, "index")?,
+    )
 }
 
 pub(crate) fn decode_expr_range<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let start = super::decode_optional_expr_field(term, "start")?;
-    let stop = super::decode_optional_expr_field(term, "stop")?;
-    super::parse_range_expr(start, stop)
+    super::parse_range_expr(
+        super::decode_optional_expr_field(term, "start")?,
+        super::decode_optional_expr_field(term, "stop")?,
+    )
 }
 
 pub(crate) fn decode_expr_cast<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    let ty = required_type(term, "type")?;
-    super::parse_cast_expr(expr, ty)
+    super::parse_cast_expr(required_expr(term, "expr")?, required_type(term, "type")?)
 }
 
 pub(crate) fn decode_expr_unary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
@@ -721,110 +733,112 @@ pub(crate) fn decode_expr_unary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_path_call<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let path = required_path(term, "path")?;
-    let args = required_expr_list(term, "args")?;
-    let generics = required_type_list(term, "generics")?;
-    super::parse_path_call_expr(path, args, generics)
+    super::parse_path_call_expr(
+        required_path(term, "path")?,
+        required_expr_list(term, "args")?,
+        required_type_list(term, "generics")?,
+    )
 }
 
 pub(crate) fn decode_expr_method_call<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let receiver = required_expr(term, "receiver")?;
     let method = super::format_ident_value(atom_key(term, "method")?);
-    let args = required_expr_list(term, "args")?;
-    let generics = required_type_list(term, "generics")?;
-    super::parse_method_call_expr(receiver, method, args, generics)
+    super::parse_method_call_expr(
+        required_expr(term, "receiver")?,
+        method,
+        required_expr_list(term, "args")?,
+        required_type_list(term, "generics")?,
+    )
 }
 
 pub(crate) fn decode_expr_local_call<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let name = atom_key(term, "name")?;
-    let args = required_expr_list(term, "args")?;
-    super::parse_local_call(name, args)
+    super::parse_local_call(atom_key(term, "name")?, required_expr_list(term, "args")?)
 }
 
 pub(crate) fn decode_expr_ref<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    let mutable = required_field(term, "mutable")?.decode()?;
-    super::parse_ref_expr(expr, mutable)
+    super::parse_ref_expr(
+        required_expr(term, "expr")?,
+        required_field(term, "mutable")?.decode::<bool>()?,
+    )
 }
 
 pub(crate) fn decode_expr_struct_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let path = required_expr(term, "path")?;
-    let fields = super::decode_struct_literal_fields(required_field(term, "fields")?)?;
-    super::parse_struct_literal_expr(path, fields)
+    super::parse_struct_literal_expr(
+        required_expr(term, "path")?,
+        super::decode_struct_literal_fields(required_field(term, "fields")?)?,
+    )
 }
 
 pub(crate) fn decode_expr_nif_raise_atom<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let name = atom_key(term, "name")?;
-    super::parse_raise_atom_expr(name)
+    super::parse_raise_atom_expr(atom_key(term, "name")?)
 }
 
 pub(crate) fn decode_expr_binary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let left = required_expr(term, "left")?;
-    let right = required_expr(term, "right")?;
-    let op = atom_key(term, "op")?;
-    super::parse_binary_expr(left, op, right)
+    super::parse_binary_expr(
+        required_expr(term, "left")?,
+        atom_key(term, "op")?,
+        required_expr(term, "right")?,
+    )
 }
 
 pub(crate) fn decode_expr_block_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let block = super::decode_block(required_field(term, "body")?)?;
-    super::parse_block_expr(block)
+    super::parse_block_expr(super::decode_block(required_field(term, "body")?)?)
 }
 
 pub(crate) fn decode_expr_match<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    let arms = required_arm_list(term, "arms")?;
-    super::parse_match_expr(expr, arms)
+    super::parse_match_expr(
+        required_expr(term, "expr")?,
+        required_arm_list(term, "arms")?,
+    )
 }
 
 pub(crate) fn decode_expr_if<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let condition = required_expr(term, "condition")?;
-    let then_block = super::decode_block(required_field(term, "then")?)?;
-    let else_block = super::decode_optional_block_field(term, "else")?;
-    super::parse_if_expr(condition, then_block, else_block)
+    super::parse_if_expr(
+        required_expr(term, "condition")?,
+        super::decode_block(required_field(term, "then")?)?,
+        super::decode_optional_block_field(term, "else")?,
+    )
 }
 
 pub(crate) fn decode_expr_tuple<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let values = required_expr_list(term, "values")?;
-    super::parse_tuple_expr(values)
+    super::parse_tuple_expr(required_expr_list(term, "values")?)
 }
 
 pub(crate) fn decode_expr_vec_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let values = required_expr_list(term, "values")?;
-    super::parse_vec_expr(values)
+    super::parse_vec_expr(required_expr_list(term, "values")?)
 }
 
 pub(crate) fn decode_expr_array_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let values = required_expr_list(term, "values")?;
-    super::parse_array_expr(values)
+    super::parse_array_expr(required_expr_list(term, "values")?)
 }
 
 pub(crate) fn decode_expr_macro_repeat_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    let separator = super::string_field(term, "separator")?;
-    let operator = super::string_field(term, "operator")?;
-    super::parse_macro_repeat_expr(expr, separator, operator)
+    super::parse_macro_repeat_expr(
+        required_expr(term, "expr")?,
+        super::string_field(term, "separator")?,
+        super::string_field(term, "operator")?,
+    )
 }
 
 pub(crate) fn decode_expr_closure<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let args = super::decode_ident_list(required_field(term, "args")?)?;
-    let body = required_expr(term, "body")?;
-    super::parse_closure_expr(args, body)
+    super::parse_closure_expr(
+        super::decode_ident_list(required_field(term, "args")?)?,
+        required_expr(term, "body")?,
+    )
 }
 
 pub(crate) fn decode_expr_macro_call<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let path = required_path(term, "path")?;
-    let args = required_expr_list(term, "args")?;
-    super::parse_macro_call_expr(path, args)
+    super::parse_macro_call_expr(
+        required_path(term, "path")?,
+        required_expr_list(term, "args")?,
+    )
 }
 
 pub(crate) fn decode_expr_byte_string<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let value = super::string_field(term, "value")?;
-    super::parse_byte_string_expr(value)
+    super::parse_byte_string_expr(super::string_field(term, "value")?)
 }
 
 pub(crate) fn decode_expr_escape_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let source = super::string_field(term, "source")?;
-    super::parse_expr(&source)
+    super::parse_expr(super::string_field(term, "source")?)
 }
 
 pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {
@@ -834,8 +848,7 @@ pub(crate) fn decode_expr_token_macro<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_ok<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let optional_expr = super::decode_optional_expr_field(term, "expr")?;
-    super::parse_ok_expr(optional_expr)
+    super::parse_ok_expr(super::decode_optional_expr_field(term, "expr")?)
 }
 
 pub(crate) fn decode_expr_none<'a>(term: Term<'a>) -> NifResult<Expr> {
@@ -847,16 +860,13 @@ pub(crate) fn decode_expr_literal<'a>(term: Term<'a>) -> NifResult<Expr> {
 }
 
 pub(crate) fn decode_expr_try<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    super::parse_try_expr(expr)
+    super::parse_try_expr(required_expr(term, "expr")?)
 }
 
 pub(crate) fn decode_expr_some<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    super::parse_some_expr(expr)
+    super::parse_some_expr(required_expr(term, "expr")?)
 }
 
 pub(crate) fn decode_expr_err<'a>(term: Term<'a>) -> NifResult<Expr> {
-    let expr = required_expr(term, "expr")?;
-    super::parse_err_expr(expr)
+    super::parse_err_expr(required_expr(term, "expr")?)
 }

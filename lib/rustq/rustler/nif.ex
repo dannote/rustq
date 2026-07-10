@@ -189,11 +189,7 @@ defmodule RustQ.Rustler.Nif do
       (is_nil(impl) or simple_ident?(impl))
   end
 
-  defp simple_ident?(value) do
-    value
-    |> to_string()
-    |> String.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/)
-  end
+  defp simple_ident?(value), do: value |> to_string() |> RustQ.Atom.identifier?()
 
   defp nif_attribute(opts) do
     case Keyword.get(opts, :schedule) do

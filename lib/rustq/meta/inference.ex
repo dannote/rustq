@@ -9,6 +9,7 @@ defmodule RustQ.Meta.Inference do
   """
 
   alias RustQ.Meta.Pattern
+  alias RustQ.Meta.Semantics
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
 
@@ -310,8 +311,11 @@ defmodule RustQ.Meta.Inference do
     {_ast, receiver_types} =
       Macro.prewalk(ast, [], &collect_downstream_receiver_type(&1, &2, name, callbacks))
 
-    Enum.find(receiver_types, &match?(%Type{}, &1)) ||
-      if(Enum.any?(receiver_types, &(&1 == :unknown_receiver)), do: rhs_success_type)
+    Enum.reduce_while(receiver_types, nil, fn
+      %Type{} = type, _acc -> {:halt, type}
+      :unknown_receiver, _acc -> {:cont, rhs_success_type}
+      _receiver_type, acc -> {:cont, acc}
+    end)
   end
 
   defp collect_downstream_receiver_type(
@@ -389,14 +393,8 @@ defmodule RustQ.Meta.Inference do
          :binary_search_by_key,
          [_key_arg, closure],
          _callbacks
-       ) do
-    with %Type{} = item_type <- slice_item_type(receiver_type),
-         %Type{} = key_type <- closure_field_return_type(closure, item_type) do
-      [ref_type(key_type), nil]
-    else
-      _no_key_type -> nil
-    end
-  end
+       ),
+       do: Semantics.binary_search_by_key_argument_types(receiver_type, closure)
 
   defp method_expected_types(_receiver_type, target, function, args, callbacks) do
     callbacks.method_argument_types.(target, function, length(args))
@@ -406,67 +404,6 @@ defmodule RustQ.Meta.Inference do
     do: [{args, expected_types} | calls]
 
   defp maybe_add_downstream_call(calls, _args, _expected_types), do: calls
-
-  defp slice_item_type(%Type{kind: :slice, meta: %{inner: %Type{} = inner}}), do: inner
-
-  defp slice_item_type(%Type{} = type) do
-    type
-    |> Type.ref_inner()
-    |> Kernel.||(type)
-    |> case do
-      %Type{kind: :slice, meta: %{inner: %Type{} = inner}} -> inner
-      %Type{ast: %AST.TypeSlice{inner: inner}} -> ast_type(inner)
-      _other -> nil
-    end
-  end
-
-  defp closure_field_return_type(
-         {:fn, _meta, [{:->, _, [[{name, _, context}], body]}]},
-         %Type{} = item_type
-       )
-       when is_atom(name) and is_atom(context) do
-    closure_binding_field_type(body, name, item_type)
-  end
-
-  defp closure_field_return_type(_closure, _item_type), do: nil
-
-  defp closure_binding_field_type(
-         {{:., _, [{name, _, context}, field]}, _meta, []},
-         name,
-         item_type
-       )
-       when is_atom(name) and is_atom(context) and is_atom(field) do
-    struct_field_type(item_type, field)
-  end
-
-  defp closure_binding_field_type(_body, _name, _item_type), do: nil
-
-  defp struct_field_type(%Type{meta: %{fields: fields}}, field) when is_list(fields) do
-    fields
-    |> Enum.find_value(fn
-      {^field, %Type{} = type, _presence} -> type
-      {^field, %Type{} = type} -> type
-      _other -> nil
-    end)
-  end
-
-  defp struct_field_type(%Type{}, _field), do: nil
-
-  defp ref_type(%Type{} = inner) do
-    %Type{
-      kind: :ref,
-      rust: "&#{inner.rust}",
-      ast: %AST.TypeRef{inner: inner.ast},
-      meta: %{inner: inner}
-    }
-  end
-
-  defp ast_type(ast),
-    do: %Type{
-      kind: :type,
-      ast: ast,
-      rust: ast |> RustQ.Rust.AST.Render.render_type() |> IO.iodata_to_binary()
-    }
 
   defp infer_expr_type({name, _, context}, vars) when is_atom(name) and is_atom(context),
     do: Map.get(vars, name)

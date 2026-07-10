@@ -162,9 +162,10 @@ defmodule RustQ.Meta.RustMacro do
 
   defp call_labeled_value!(values, label, name, fragment) do
     value =
-      if Map.has_key?(values, label),
-        do: Map.fetch!(values, label),
-        else: Map.fetch!(values, name)
+      case Map.fetch(values, label) do
+        {:ok, value} -> value
+        :error -> Map.fetch!(values, name)
+      end
 
     render_call_value(value, fragment)
   end

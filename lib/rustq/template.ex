@@ -12,7 +12,7 @@ defmodule RustQ.Template do
           splices: [{atom(), term()}]
         }
 
-  @include_pattern ~r/__rq_include!\(\s*"([^"]+)"\s*\)\s*;/
+  @include_marker "__rq_include!"
 
   def maybe_expand_includes(source, filename, opts) do
     if Keyword.has_key?(opts, :include_dir) do
@@ -62,23 +62,67 @@ defmodule RustQ.Template do
   end
 
   defp expand_includes_from(source, filename, include_dir, stack) do
-    case Regex.run(@include_pattern, source, return: :index) do
+    case next_include(source) do
       nil ->
         {:ok, source}
 
-      [{start, length}, {_path_start, _path_length}] ->
-        expand_next_include(source, filename, include_dir, stack, start, length)
+      {start, length, relative_path} ->
+        expand_next_include(source, filename, include_dir, stack, start, length, relative_path)
     end
   end
 
-  defp expand_next_include(source, filename, include_dir, stack, start, length) do
-    [_matched, relative_path] = Regex.run(@include_pattern, binary_part(source, start, length))
+  defp expand_next_include(source, filename, include_dir, stack, start, length, relative_path) do
     include_path = Path.expand(relative_path, include_dir)
 
     if include_path in stack do
       include_error(filename, "cyclic RustQ include: #{include_path}", stack ++ [include_path])
     else
       replace_include(source, filename, include_dir, stack, start, length, include_path)
+    end
+  end
+
+  defp next_include(source), do: next_include(source, 0)
+
+  defp next_include(source, offset) when offset < byte_size(source) do
+    case :binary.match(source, @include_marker, scope: {offset, byte_size(source) - offset}) do
+      :nomatch -> nil
+      {start, _length} -> parse_include(source, start) || next_include(source, start + 1)
+    end
+  end
+
+  defp next_include(_source, _offset), do: nil
+
+  defp parse_include(source, start) do
+    marker_end = start + byte_size(@include_marker)
+
+    with {:ok, rest} <- take_symbol(source, marker_end, ?(),
+         {:ok, rest} <- skip_whitespace(source, rest),
+         {:ok, path_start} <- take_symbol(source, rest, ?"),
+         {path_end, _quote_length} <-
+           :binary.match(source, "\"", scope: {path_start, byte_size(source) - path_start}),
+         {:ok, rest} <- skip_whitespace(source, path_end + 1),
+         {:ok, rest} <- take_symbol(source, rest, ?)),
+         {:ok, rest} <- skip_whitespace(source, rest),
+         {:ok, finish} <- take_symbol(source, rest, ?;) do
+      {start, finish - start, binary_part(source, path_start, path_end - path_start)}
+    else
+      _invalid_include -> nil
+    end
+  end
+
+  defp take_symbol(source, offset, symbol) do
+    with {:ok, offset} <- skip_whitespace(source, offset),
+         <<^symbol, _rest::binary>> <- binary_part(source, offset, byte_size(source) - offset) do
+      {:ok, offset + 1}
+    else
+      _missing_symbol -> :error
+    end
+  end
+
+  defp skip_whitespace(source, offset) do
+    case binary_part(source, offset, byte_size(source) - offset) do
+      <<char, _rest::binary>> when char in [32, 9, 10, 13] -> skip_whitespace(source, offset + 1)
+      _rest -> {:ok, offset}
     end
   end
 

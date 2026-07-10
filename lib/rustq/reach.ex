@@ -15,6 +15,8 @@ defmodule RustQ.Reach do
   def smell_checks do
     [
       RustQ.Reach.Smells.RawRustEscape,
+      RustQ.Reach.Smells.DynamicRawRustEscape,
+      RustQ.Reach.Smells.DefrustMissingSpec,
       RustQ.Reach.Smells.LowLevelControlFlow,
       RustQ.Reach.Smells.TrivialDefrustWrapper,
       RustQ.Reach.Smells.BlocklessDefrustmod

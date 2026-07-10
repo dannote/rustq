@@ -49,6 +49,7 @@ defmodule RustQ.Rust.AST do
     MacroItem,
     MacroItemCall,
     MacroRepeat,
+    MacroRepeatExpr,
     MacroRule,
     MacroRules,
     MacroVar,

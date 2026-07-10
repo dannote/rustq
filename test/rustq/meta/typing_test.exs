@@ -32,6 +32,66 @@ defmodule RustQ.Meta.TypingTest do
     assert Typing.synth(quote(do: maybe_path()), env) == option_path
   end
 
+  test "synthesizes unambiguous parent-module free-function returns" do
+    string = type(:type, "String")
+
+    nif_string = %Type{
+      kind: :nif_result,
+      rust: "NifResult<String>",
+      ast: %AST.TypeNifResult{inner: string.ast},
+      meta: %{inner: string}
+    }
+
+    env =
+      Typing.env(
+        vars: %{term: type(:type, "Term")},
+        callables: [
+          %Callable{
+            name: "string_field",
+            kind: :function,
+            target: "helpers",
+            args: [
+              %{name: "term", type: type(:type, "Term"), syn: nil},
+              %{name: "key", type: type(:type, "str"), syn: nil}
+            ],
+            returns: nif_string
+          }
+        ]
+      )
+
+    assert Typing.synth(quote(do: Super.string_field(term, "source")), env) == nif_string
+  end
+
+  test "propagates a fallible string into impl AsRef<str>" do
+    string = type(:type, "String")
+
+    nif_string = %Type{
+      kind: :nif_result,
+      rust: "NifResult<String>",
+      ast: %AST.TypeNifResult{inner: string.ast},
+      meta: %{inner: string}
+    }
+
+    str = type(:type, "str")
+
+    as_ref_string = %Type{
+      kind: :impl_trait,
+      rust: "impl AsRef<str>",
+      ast: %AST.TypeRaw{source: "impl AsRef<str>"},
+      meta: %{traits: [%Type{meta: %{syn_name: "AsRef", args: [str]}}]}
+    }
+
+    env =
+      Typing.env(
+        callables: [
+          %Callable{name: "string_field", kind: :function, args: [], returns: nif_string}
+        ]
+      )
+
+    assert %Typing.Check{type: ^nif_string, coercion: :propagate} =
+             Typing.check(quote(do: string_field()), as_ref_string, env)
+  end
+
   test "checks propagation, option wrapping, and borrow coercions" do
     color = type(:type, "Color")
 
@@ -188,6 +248,13 @@ defmodule RustQ.Meta.TypingTest do
       )
 
     assert inferred == %{mode: mode}
+  end
+
+  test "uses safe no-op callbacks when none are supplied" do
+    assert Typing.infer_downstream_let_types(
+             [quote(do: value = decode())],
+             Typing.env()
+           ) == %{}
   end
 
   test "checks propagation through impl Into option expectations" do
