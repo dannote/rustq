@@ -1637,12 +1637,7 @@ defmodule RustQ.Meta.LowerTest do
         ]
       )
 
-    assert [
-             %AST.Return{
-               expr: %AST.Some{expr: %AST.LocalCall{name: :maybe_path, args: []}}
-             }
-           ] =
-             statements
+    assert [%AST.Return{expr: %AST.LocalCall{name: :maybe_path, args: []}}] = statements
   end
 
   test "looks up callable return types from metadata" do

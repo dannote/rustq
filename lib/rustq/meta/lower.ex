@@ -220,10 +220,12 @@ defmodule RustQ.Meta.Lower do
          %Type{kind: :option} = return_type,
          %Context{} = context
        ) do
-    if infer_propagation?(expression, return_type, context) do
-      %AST.Try{expr: lower_expr(expression, context)}
-    else
-      %AST.Some{expr: lower_expr(expression, context)}
+    case typing_check(expression, return_type, context) do
+      %Typing.Check{coercion: coercion} = check when coercion != :unknown ->
+        lower_checked_coercion(check, expression, context)
+
+      %Typing.Check{} ->
+        %AST.Some{expr: lower_expr(expression, context)}
     end
   end
 
@@ -1484,19 +1486,23 @@ defmodule RustQ.Meta.Lower do
 
       true ->
         %AST.MethodCall{
-          receiver: lower_dot_receiver(receiver, context),
+          receiver: lower_dot_receiver(receiver, field_or_function, context),
           method: field_or_function
         }
     end
   end
 
+  defp lower_dot_receiver(receiver, :ok, %Context{} = context), do: lower_expr(receiver, context)
+
   defp lower_dot_receiver(
          {{:., _, [_term, :map_get]}, _, [_key]} = receiver,
+         _method,
          %Context{} = context
        ),
        do: %AST.Try{expr: lower_expr(receiver, context)}
 
-  defp lower_dot_receiver(receiver, %Context{} = context), do: lower_expr(receiver, context)
+  defp lower_dot_receiver(receiver, _method, %Context{} = context),
+    do: lower_expr(receiver, context)
 
   defp lower_remote_or_method_call(receiver, function, args, %Context{} = context) do
     cond do

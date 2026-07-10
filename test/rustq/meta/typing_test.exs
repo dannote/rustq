@@ -32,6 +32,32 @@ defmodule RustQ.Meta.TypingTest do
     assert Typing.synth(quote(do: maybe_path()), env) == option_path
   end
 
+  test "synthesizes Result.ok as an option of the success type" do
+    term = type(:type, "Term")
+
+    result = %Type{
+      kind: :nif_result,
+      rust: "NifResult<Term>",
+      ast: %AST.TypeNifResult{inner: term.ast},
+      meta: %{inner: term}
+    }
+
+    expected = %Type{
+      kind: :option,
+      rust: "Option<Term>",
+      ast: %AST.TypeOption{inner: term.ast},
+      meta: %{inner: term}
+    }
+
+    env =
+      Typing.env(
+        callables: [%Callable{name: "lookup", kind: :function, args: [], returns: result}]
+      )
+
+    assert Typing.synth(quote(do: lookup().ok()), env) == expected
+    assert %Typing.Check{coercion: :none} = Typing.check(quote(do: lookup().ok()), expected, env)
+  end
+
   test "synthesizes unambiguous parent-module free-function returns" do
     string = type(:type, "String")
 

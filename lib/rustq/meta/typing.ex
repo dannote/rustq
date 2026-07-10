@@ -167,6 +167,12 @@ defmodule RustQ.Meta.Typing do
     }
   end
 
+  defp synth_method_call({{:., _, [receiver, :ok]}, _meta, []}, %Env{} = env) do
+    receiver
+    |> synth(env)
+    |> result_ok_type()
+  end
+
   defp synth_method_call({{:., _, [receiver, :unwrap]}, _meta, []}, %Env{} = env) do
     case synth(receiver, env) do
       %Type{} = type -> Type.inner(type)
@@ -204,8 +210,12 @@ defmodule RustQ.Meta.Typing do
     |> slice_get_type()
   end
 
-  defp synth_method_call({{:., _, [_receiver, :map_get]}, _meta, [_key]}, %Env{}),
-    do: result_type(RustQ.Spec.type(quote(do: RustQ.Type.term())))
+  defp synth_method_call({{:., _, [receiver, :map_get]}, _meta, [_key]}, %Env{} = env) do
+    case synth(receiver, env) do
+      %Type{kind: :term} = term -> result_type(term)
+      _unknown_receiver -> result_type(RustQ.Spec.type(quote(do: RustQ.Type.term())))
+    end
+  end
 
   defp synth_method_call({{:., _, [receiver, field]}, _meta, []} = ast, %Env{} = env)
        when is_atom(field) do
@@ -254,6 +264,15 @@ defmodule RustQ.Meta.Typing do
       ast: %AST.TypeResult{ok: ok.ast, error: %AST.TypeRaw{source: "rustler::Error"}},
       meta: %{ok: ok}
     }
+
+  defp result_ok_type(%Type{kind: kind} = type) when kind in [:result, :nif_result] do
+    case Type.inner(type) do
+      %Type{} = inner -> option_type(inner)
+      nil -> nil
+    end
+  end
+
+  defp result_ok_type(_type), do: nil
 
   defp option_as_ref_type(%Type{kind: :option} = type) do
     case Type.inner(type) do

@@ -80,10 +80,7 @@ defmodule RustQ.Rustler.Term do
 
   @spec get(term(), R.path({:rustler, :Atom})) :: R.option(term())
   defrust get(term, key) do
-    case term.map_get(key) do
-      {:ok, value} -> value
-      {:error, _reason} -> nil
-    end
+    term.map_get(key).ok()
   end
 
   @spec is_nil(term()) :: boolean()
@@ -176,10 +173,7 @@ defmodule RustQ.Rustler.Term do
   defrust get_bool(term, key) do
     case get(term, key) do
       {:some, value} ->
-        case decode_as(value, boolean()) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> nil
-        end
+        decode_as(value, boolean()).ok()
 
       :none ->
         nil
@@ -190,10 +184,7 @@ defmodule RustQ.Rustler.Term do
   defrust get_i64(term, key) do
     case get(term, key) do
       {:some, value} ->
-        case decode_as(value, R.i64()) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> nil
-        end
+        decode_as(value, R.i64()).ok()
 
       :none ->
         nil
@@ -224,10 +215,7 @@ defmodule RustQ.Rustler.Term do
   defrust get_string_list(term, key) do
     case get(term, key) do
       {:some, value} ->
-        case decode_as(value, R.vec(String.t())) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> nil
-        end
+        decode_as(value, R.vec(String.t())).ok()
 
       :none ->
         nil
@@ -238,10 +226,7 @@ defmodule RustQ.Rustler.Term do
   defrust get_term_list(term, key) do
     case get(term, key) do
       {:some, value} ->
-        case decode_as(value, R.vec(term())) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> nil
-        end
+        decode_as(value, R.vec(term())).ok()
 
       :none ->
         nil
@@ -267,10 +252,7 @@ defmodule RustQ.Rustler.Term do
   defrust type_atom(term) do
     case get(term, Atoms.type()) do
       {:some, value} ->
-        case decode_as(value, R.path({:rustler, :Atom})) do
-          {:ok, decoded} -> decoded
-          {:error, _reason} -> nil
-        end
+        decode_as(value, R.path({:rustler, :Atom})).ok()
 
       :none ->
         nil
