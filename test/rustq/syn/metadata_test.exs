@@ -219,6 +219,19 @@ defmodule RustQ.Syn.MetadataTest do
     assert Syn.atom_references!(source) == ["error", "ok"]
   end
 
+  test "returns atom references nested in macro token trees" do
+    source = """
+    fn encode(env: Env) -> Term {
+        term_map!(env, {
+            atoms::kind() => atoms::component(),
+            atoms::value() => 42,
+        })
+    }
+    """
+
+    assert Syn.atom_references!(source) == ["component", "kind", "value"]
+  end
+
   test "returns receiver method references from parsed Rust source" do
     source = """
     fn draw(canvas: &Canvas, paint: &Paint) {

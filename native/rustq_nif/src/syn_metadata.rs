@@ -1,9 +1,11 @@
+use proc_macro2::{TokenStream, TokenTree};
 use quote::ToTokens;
 use rustler::{Encoder, Env, NifResult, Term};
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, Expr, ExprCall, ExprLit, ExprMethodCall, ExprPath, Fields, FnArg, GenericArgument,
-    ImplItem, Item, Lit, PathArguments, ReturnType, Type, TypeParamBound, UseTree, Visibility,
+    ImplItem, Item, Lit, Macro, PathArguments, ReturnType, Type, TypeParamBound, UseTree,
+    Visibility,
 };
 
 use crate::{atoms, template_error};
@@ -115,6 +117,31 @@ impl<'ast> Visit<'ast> for AtomReferenceVisitor {
         }
 
         visit::visit_expr_call(self, node);
+    }
+
+    fn visit_macro(&mut self, node: &'ast Macro) {
+        collect_macro_atom_references(node.tokens.clone(), &mut self.atoms);
+        visit::visit_macro(self, node);
+    }
+}
+
+fn collect_macro_atom_references(tokens: TokenStream, atoms: &mut Vec<String>) {
+    let trees = tokens.into_iter().collect::<Vec<_>>();
+
+    for window in trees.windows(4) {
+        if let [TokenTree::Ident(module), TokenTree::Punct(first), TokenTree::Punct(second), TokenTree::Ident(name)] =
+            window
+        {
+            if module == "atoms" && first.as_char() == ':' && second.as_char() == ':' {
+                atoms.push(name.to_string());
+            }
+        }
+    }
+
+    for tree in trees {
+        if let TokenTree::Group(group) = tree {
+            collect_macro_atom_references(group.stream(), atoms);
+        }
     }
 }
 
