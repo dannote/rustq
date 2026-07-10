@@ -390,6 +390,36 @@ defmodule RustQ.RustlerTest do
     refute code =~ "fn type_atom"
   end
 
+  test "builds forgiving optional map decoders" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("term_helpers.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_helpers(
+              include: [
+                :get,
+                :get_bool,
+                :get_i64,
+                :get_string,
+                :get_string_list,
+                :get_term_list,
+                :get_map
+              ]
+            )
+        ]
+      )
+
+    assert code =~ "fn get_bool<'a>"
+    assert code =~ "fn get_i64<'a>"
+    assert code =~ "fn get_string<'a>"
+    assert code =~ "fn get_string_list<'a>"
+    assert code =~ "fn get_term_list<'a>"
+    assert code =~ "fn get_map<'a>"
+    assert code =~ "value.decode::<Vec<String>>()"
+    assert code =~ "value.is_map()"
+  end
+
   test "supports explicit all term helper selection" do
     code =
       "__rq_items!();"

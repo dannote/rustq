@@ -36,6 +36,12 @@ defmodule RustQ.Rustler.Term do
     :bool_val,
     :f64_val,
     :list_val,
+    :get_bool,
+    :get_i64,
+    :get_string,
+    :get_string_list,
+    :get_term_list,
+    :get_map,
     :type_atom,
     :type_eq,
     :type_str
@@ -163,6 +169,97 @@ defmodule RustQ.Rustler.Term do
 
       :none ->
         Vec.new()
+    end
+  end
+
+  @spec get_bool(term(), R.path({:rustler, :Atom})) :: R.option(boolean())
+  defrust get_bool(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, boolean()) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> nil
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec get_i64(term(), R.path({:rustler, :Atom})) :: R.option(R.i64())
+  defrust get_i64(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.i64()) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> nil
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec get_string(term(), R.path({:rustler, :Atom})) :: R.option(String.t())
+  defrust get_string(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, String.t()) do
+          {:ok, decoded} ->
+            decoded
+
+          {:error, _reason} ->
+            case value.atom_to_string() do
+              {:ok, decoded} -> decoded
+              {:error, _reason} -> nil
+            end
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec get_string_list(term(), R.path({:rustler, :Atom})) :: R.option(R.vec(String.t()))
+  defrust get_string_list(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.vec(String.t())) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> nil
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec get_term_list(term(), R.path({:rustler, :Atom})) :: R.option(R.vec(term()))
+  defrust get_term_list(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        case decode_as(value, R.vec(term())) do
+          {:ok, decoded} -> decoded
+          {:error, _reason} -> nil
+        end
+
+      :none ->
+        nil
+    end
+  end
+
+  @spec get_map(term(), R.path({:rustler, :Atom})) :: R.option(term())
+  defrust get_map(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        if value.is_map() do
+          value
+        else
+          nil
+        end
+
+      :none ->
+        nil
     end
   end
 
