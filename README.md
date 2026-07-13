@@ -34,8 +34,11 @@ RustQ-powered generator, give the agent that file first. It summarizes RustQ's
 ideology, authoring order, inference features, and anti-patterns.
 
 The same guidance is published in HexDocs as
-[`Using RustQ Well`](https://rustq.hexdocs.pm/using-rustq-well.md). The skill
-itself is also available at [`https://rustq.hexdocs.pm/skill.md`](https://rustq.hexdocs.pm/skill.md).
+[`Using RustQ Well`](https://rustq.hexdocs.pm/using-rustq-well.md). For
+source-derived Rustler exports, Elixir stubs, atoms, and term encoders, see
+[`Generating Rustler Boundaries`](https://rustq.hexdocs.pm/rustler-generation.html).
+The skill itself is also available at
+[`https://rustq.hexdocs.pm/skill.md`](https://rustq.hexdocs.pm/skill.md).
 
 ## Choose an authoring style
 

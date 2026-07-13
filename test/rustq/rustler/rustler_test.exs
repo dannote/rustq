@@ -59,6 +59,49 @@ defmodule RustQ.RustlerTest do
     refute source =~ "_env"
   end
 
+  test "one manifest generates matching Rust exports and Elixir stubs" do
+    manifest = [parse_nif: [], compile_nif: []]
+
+    rust =
+      "__rq_items!();"
+      |> RustQ.render!("nif_exports.rs",
+        splice: [
+          items:
+            RustQ.Rustler.nif_exports_from_source(
+              "test/fixtures/nif_impls.rs",
+              manifest,
+              lifetime: :a,
+              schedule: :dirty_cpu
+            )
+        ]
+      )
+
+    suffix = System.unique_integer([:positive])
+    stubs_module = Module.concat([RustQ.Test, "GeneratedNifStubs#{suffix}"])
+    consumer_module = Module.concat([RustQ.Test, "NifConsumer#{suffix}"])
+
+    elixir =
+      RustQ.Rustler.nif_stubs_from_source(
+        "test/fixtures/nif_impls.rs",
+        manifest,
+        stubs_module
+      )
+
+    Code.compile_string(elixir)
+
+    Module.create(
+      consumer_module,
+      quote(do: use(unquote(stubs_module))),
+      Macro.Env.location(__ENV__)
+    )
+
+    assert rust =~ "fn parse_nif<'a>(env: Env<'a>, source: &str)"
+    assert rust =~ "fn compile_nif<'a>(env: Env<'a>, source: &str, minify: bool)"
+    assert function_exported?(consumer_module, :parse_nif, 1)
+    assert function_exported?(consumer_module, :compile_nif, 2)
+    refute function_exported?(consumer_module, :parse_nif, 2)
+  end
+
   test "builds NIF export functions" do
     code =
       "__rq_items!();"

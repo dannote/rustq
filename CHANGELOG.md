@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add AST-backed Rustler term encoders with nested, conditional, optional,
+  collection, adapter, helper, and fallback field projections.
+- Add source-derived Rustler NIF wrappers and Elixir fallback stubs so one
+  manifest and the handwritten Rust implementation signatures determine both
+  sides of the boundary.
+- Discover atom references inside Rust macro token trees and document stable,
+  structural Rustler generation workflows.
+- Add optional Rustler map decoders and improve option/method result inference.
+
 ## v0.9.3 - 2026-07-06
 
 - Infer `Option<T>` author input for expected `Option<&T>` adapter arguments,
