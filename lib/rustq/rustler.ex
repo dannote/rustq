@@ -84,6 +84,15 @@ defmodule RustQ.Rustler do
     do: Nif.stubs_from_source(path, specs, module, defaults)
 
   @doc """
+  Builds an Elixir NIF stub macro module from mixed `RustQ.Syn.Function` and
+  RustQ AST function metadata. Entries may be `{export_name, function}` tuples
+  when the exported name differs from the implementation name.
+  """
+  @spec nif_stubs_from_functions([term()], module()) :: String.t()
+  def nif_stubs_from_functions(functions, module),
+    do: Nif.stubs_from_functions(functions, module)
+
+  @doc """
   Builds a single exported Rustler NIF function.
   """
   @spec nif_export(atom() | String.t(), keyword()) :: Rust.Function.t()

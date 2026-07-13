@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.9.6 - 2026-07-10
+
+- Generate one Elixir NIF stub module from mixed Rust source metadata and RustQ
+  AST functions, including automatic Rustler `Env` exclusion.
+
 ## v0.9.5 - 2026-07-10
 
 - Preserve no-parentheses function-pointer field access in expected-type

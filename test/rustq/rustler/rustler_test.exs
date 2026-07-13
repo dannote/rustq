@@ -59,6 +59,34 @@ defmodule RustQ.RustlerTest do
     refute source =~ "_env"
   end
 
+  test "derives one stub module from mixed Syn and RustQ AST functions" do
+    syn_function =
+      "test/fixtures/nif_impls.rs"
+      |> RustQ.Syn.parse_file!()
+      |> RustQ.Syn.functions()
+      |> Enum.find(&(&1.name == "parse_nif_impl"))
+
+    ast_function = %RustQ.Rust.AST.Function{
+      name: :scene_index_roots,
+      args: [
+        A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a])),
+        A.arg(:resource, A.type_path(:SceneIndexResource))
+      ],
+      returns: A.type_path(:Term, lifetimes: [:a]),
+      body: []
+    }
+
+    source =
+      RustQ.Rustler.nif_stubs_from_functions(
+        [{:parse_nif, syn_function}, ast_function],
+        RustQ.Test.MixedNifStubs
+      )
+
+    assert source =~ "def parse_nif(_source)"
+    assert source =~ "def scene_index_roots(_resource)"
+    refute source =~ "_env"
+  end
+
   test "one manifest generates matching Rust exports and Elixir stubs" do
     manifest = [parse_nif: [], compile_nif: []]
 

@@ -101,21 +101,21 @@ defmodule RustQ.Rustler.Nif do
 
   @spec stubs_from_source(Path.t(), [spec()], module(), keyword()) :: String.t()
   def stubs_from_source(path, specs, module, defaults \\ []) do
-    definitions =
+    functions =
       path
       |> source_exports(specs, defaults)
-      |> Enum.map(fn {name, function, _opts} ->
-        args =
-          function.args
-          |> Enum.reject(&env_arg?/1)
-          |> Enum.map(&stub_arg/1)
+      |> Enum.map(fn {name, function, _opts} -> {name, function} end)
 
-        quote do
-          def unquote(RustQ.Atom.identifier!(to_string(name)))(unquote_splicing(args)),
-            do: :erlang.nif_error(:nif_not_loaded)
-        end
-      end)
+    stubs_from_functions(functions, module)
+  end
 
+  @spec stubs_from_functions(
+          [RustQ.Syn.Function.t() | AST.Function.t() | {term(), term()}],
+          module()
+        ) ::
+          String.t()
+  def stubs_from_functions(functions, module) do
+    definitions = Enum.map(functions, &stub_definition/1)
     quoted_body = {:quote, [], [[do: {:__block__, [], definitions}]]}
 
     quote do
@@ -246,9 +246,36 @@ defmodule RustQ.Rustler.Nif do
   defp source_arg(%Arg{name: name, type: type}) when is_binary(name),
     do: {RustQ.Atom.identifier!(name), type}
 
+  defp stub_definition({name, function}) do
+    stub_definition(function, name)
+  end
+
+  defp stub_definition(%{name: name} = function), do: stub_definition(function, name)
+
+  defp stub_definition(function, name) do
+    args = function |> stub_args() |> Enum.map(&stub_arg/1)
+
+    quote do
+      def unquote(RustQ.Atom.identifier!(to_string(name)))(unquote_splicing(args)),
+        do: :erlang.nif_error(:nif_not_loaded)
+    end
+  end
+
+  defp stub_args(%RustQ.Syn.Function{args: args}), do: Enum.reject(args, &env_arg?/1)
+
+  defp stub_args(%AST.Function{args: args}) do
+    Enum.reject(args, fn
+      %AST.FunctionArg{receiver: true} -> true
+      %AST.FunctionArg{type: type} -> ast_env_type?(type)
+    end)
+  end
+
   defp env_arg?(%Arg{type_ast: type}), do: Type.path?(type, "Env")
 
-  defp stub_arg(%Arg{name: name}) do
+  defp ast_env_type?(%AST.TypePath{parts: parts}), do: to_string(List.last(parts)) == "Env"
+  defp ast_env_type?(_type), do: false
+
+  defp stub_arg(%{name: name}) do
     RustQ.Atom.identifier!("_#{name}")
     |> then(&{&1, [], nil})
   end
