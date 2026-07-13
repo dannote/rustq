@@ -80,6 +80,36 @@ defmodule RustQ.Meta.DefrustTest do
     refute code =~ "fn decode_rect_opts"
   end
 
+  test "propagates nested result tuple binding types into conditions" do
+    defmodule ResultTupleBindingCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec enabled(term()) :: R.nif_result(R.u32())
+      defrust enabled(term) do
+        case decode_as(term, {atom(), R.vec(R.f64()), R.bool()}) do
+          {:ok, {_tag, _values, flag}} ->
+            flag =
+              if flag do
+                1
+              else
+                0
+              end
+
+            {:ok, flag}
+
+          {:error, _reason} ->
+            {:ok, 0}
+        end
+      end
+    end
+
+    source = ResultTupleBindingCase.__rustq_source__()
+
+    assert source =~ "if flag {"
+    refute source =~ "if flag? {"
+  end
+
   test "defrust lowers macro-generated case clauses" do
     defmodule MacroGeneratedCaseClauseCase do
       use RustQ.Meta

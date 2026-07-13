@@ -25,6 +25,7 @@ defmodule RustQ.Meta.Lower do
     defstruct [
       :return_type,
       vars: %{},
+      lexical_vars: %{},
       position: :return,
       rust_modules: %{},
       callables: %BindingIndex{},
@@ -115,10 +116,11 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_statement({:=, _, [pattern, expression]}, %Context{} = context) do
     expected_type = infer_let_expected_type(pattern, expression, context)
+    expression_context = context_with_lexical_pattern_vars(pattern, context)
 
     %AST.Let{
       pattern: lower_binding_pattern(pattern),
-      expr: lower_expr(expression, expected_type, context)
+      expr: lower_expr(expression, expected_type, expression_context)
     }
   end
 
@@ -1300,31 +1302,27 @@ defmodule RustQ.Meta.Lower do
   defp for_item_type(_type), do: nil
 
   defp context_with_inner_pattern(pattern, %Type{} = inner, wrappers, %Context{} = context) do
-    case inner_pattern_binding(pattern, wrappers) do
+    case unwrap_match_pattern(pattern, wrappers) do
       nil -> context
-      name when is_atom(name) -> %{context | vars: Map.put(context.vars, name, inner)}
+      inner_pattern -> context_with_match_pattern(inner_pattern, inner, context)
     end
   end
 
   defp context_with_inner_pattern(_pattern, _inner, _wrappers, %Context{} = context), do: context
 
-  defp inner_pattern_binding({name, _meta, ast_context}, _wrappers)
+  defp unwrap_match_pattern({name, _meta, ast_context} = pattern, _wrappers)
        when is_atom(name) and is_atom(ast_context),
-       do: name
+       do: pattern
 
-  defp inner_pattern_binding({wrapper, {name, _meta, ast_context}}, wrappers)
-       when is_atom(name) and is_atom(ast_context),
-       do: wrapped_pattern_binding(wrapper, name, wrappers)
-
-  defp inner_pattern_binding({:{}, _, [wrapper, {name, _meta, ast_context}]}, wrappers)
-       when is_atom(name) and is_atom(ast_context),
-       do: wrapped_pattern_binding(wrapper, name, wrappers)
-
-  defp inner_pattern_binding(_pattern, _wrappers), do: nil
-
-  defp wrapped_pattern_binding(wrapper, name, wrappers) do
-    if wrapper in wrappers, do: name
+  defp unwrap_match_pattern({wrapper, inner}, wrappers) do
+    if wrapper in wrappers, do: inner
   end
+
+  defp unwrap_match_pattern({:{}, _, [wrapper, inner]}, wrappers) do
+    if wrapper in wrappers, do: inner
+  end
+
+  defp unwrap_match_pattern(_pattern, _wrappers), do: nil
 
   defp lower_guard_expr(nil, %Context{}), do: nil
   defp lower_guard_expr(guard, %Context{} = context), do: lower_expr(guard, context)
@@ -2171,7 +2169,32 @@ defmodule RustQ.Meta.Lower do
         Map.put(inference_callbacks(context), :block_return_type, context.return_type)
       )
 
-    %{context | vars: Map.merge(context.vars, inferred)}
+    %{context | vars: Map.merge(context.vars, inferred), lexical_vars: context.vars}
+  end
+
+  defp context_with_lexical_pattern_vars(pattern, %Context{} = context) do
+    vars =
+      pattern
+      |> binding_pattern_names()
+      |> Enum.reduce(context.vars, fn name, vars ->
+        case Map.fetch(context.lexical_vars, name) do
+          {:ok, type} -> Map.put(vars, name, type)
+          :error -> vars
+        end
+      end)
+
+    %{context | vars: vars}
+  end
+
+  defp binding_pattern_names({name, _meta, ast_context})
+       when is_atom(name) and is_atom(ast_context) and name != :_,
+       do: [name]
+
+  defp binding_pattern_names(pattern) do
+    case Pattern.tuple_elements(pattern) do
+      elements when is_list(elements) -> Enum.flat_map(elements, &binding_pattern_names/1)
+      _not_tuple -> []
+    end
   end
 
   defp inference_callbacks(%Context{} = context) do
