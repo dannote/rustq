@@ -433,6 +433,37 @@ defmodule RustQ.RustlerTest do
     assert code =~ "loc_to_term(env, &self.0.loc)"
   end
 
+  test "builds mapped and optional adapter fields" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("term_encoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_encoder(:EncodedResult,
+              fields: [
+                template: [field: [:descriptor, :template], optional: [wrap: :EncodedTemplate]],
+                styles: [field: [:descriptor, :styles], map: [wrap: :EncodedStyle]],
+                errors: [field: [:result, :errors], map: [convert: :EncodedError]],
+                warnings: [field: [:result, :warnings], map: [via: :as_str]],
+                ast: [field: [:result, :ast], optional: [with: :encode_json_value]]
+              ],
+              target_lifetimes: [:_]
+            )
+        ]
+      )
+
+    assert code =~ ".template"
+    assert code =~ ".map(|value| EncodedTemplate(value).encode(env))"
+    assert code =~ ".unwrap_or_else(|| nil_term(env))"
+    assert code =~ ".styles"
+    assert code =~ ".map(|value| EncodedStyle(value).encode(env))"
+    assert code =~ "collect::<Vec<Term<'a>>>()"
+    assert code =~ ".encode(env)"
+    assert code =~ "EncodedError::from(value).encode(env)"
+    assert code =~ "value.as_str().encode(env)"
+    assert code =~ "encode_json_value(env, value)"
+  end
+
   test "builds term encoders with conditional option fields" do
     code =
       "__rq_items!();"

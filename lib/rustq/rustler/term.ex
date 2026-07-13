@@ -24,7 +24,7 @@ defmodule RustQ.Rustler.Term do
   defmodule EncoderField do
     @moduledoc false
     @enforce_keys [:key, :source, :mode]
-    defstruct [:key, :source, :mode, :via, :with]
+    defstruct [:key, :source, :mode, :via, :with, :map, :optional]
   end
 
   @builder_names [:map_from_terms, :struct_from_terms]
@@ -351,7 +351,9 @@ defmodule RustQ.Rustler.Term do
       source: opts |> Keyword.get(:field, key) |> List.wrap(),
       mode: mode,
       via: Keyword.get(opts, :via),
-      with: Keyword.get(opts, :with)
+      with: Keyword.get(opts, :with),
+      map: Keyword.get(opts, :map),
+      optional: Keyword.get(opts, :optional)
     }
   end
 
@@ -404,6 +406,26 @@ defmodule RustQ.Rustler.Term do
 
   defp encoded_atom(key), do: A.method(A.path_call([:atoms, key]), :encode, [:env])
 
+  defp encoded_field(%EncoderField{source: source, map: map}) when is_list(map) do
+    source
+    |> field_source()
+    |> A.method(:iter)
+    |> A.method(:map, [A.closure([:value], adapted_term(A.var(:value), map))])
+    |> A.method(:collect, [],
+      generics: [A.type_path(:Vec, generics: [A.type_path(:Term, lifetimes: [:a])])]
+    )
+    |> A.method(:encode, [:env])
+  end
+
+  defp encoded_field(%EncoderField{source: source, optional: optional})
+       when is_list(optional) do
+    source
+    |> field_source()
+    |> A.method(:as_ref)
+    |> A.method(:map, [A.closure([:value], adapted_term(A.var(:value), optional))])
+    |> A.method(:unwrap_or_else, [A.closure([], A.call(:nil_term, [:env]))])
+  end
+
   defp encoded_field(%EncoderField{source: source, via: via, with: helper}) do
     value = source |> field_source() |> apply_encoder_via(via)
 
@@ -411,6 +433,27 @@ defmodule RustQ.Rustler.Term do
       A.path_call(List.wrap(helper), [:env, A.ref(value)])
     else
       A.method(value, :encode, [:env])
+    end
+  end
+
+  defp adapted_term(value, opts) do
+    cond do
+      helper = Keyword.get(opts, :with) ->
+        A.path_call(List.wrap(helper), [:env, value])
+
+      wrapper = Keyword.get(opts, :wrap) ->
+        A.method(A.call(wrapper, [value]), :encode, [:env])
+
+      converter = Keyword.get(opts, :convert) ->
+        converter
+        |> then(&A.path_call([&1, :from], [value]))
+        |> A.method(:encode, [:env])
+
+      via = Keyword.get(opts, :via) ->
+        value |> A.method(via) |> A.method(:encode, [:env])
+
+      true ->
+        A.method(value, :encode, [:env])
     end
   end
 
