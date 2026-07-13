@@ -621,6 +621,7 @@ defmodule RustQ.RustlerTest do
                 :get_bool,
                 :get_i64,
                 :get_string,
+                :get_optional_string,
                 :get_string_list,
                 :get_term_list,
                 :get_map
@@ -632,6 +633,11 @@ defmodule RustQ.RustlerTest do
     assert code =~ "fn get_bool<'a>"
     assert code =~ "fn get_i64<'a>"
     assert code =~ "fn get_string<'a>"
+    assert code =~ "fn get_optional_string<'a>"
+    assert code =~ "if is_nil(value) { Some(None) }"
+    assert code =~ "get_string(term, key).map(Some)"
+    assert code =~ "None => None"
+    refute code =~ "Some(Some(None))"
     assert code =~ "fn get_string_list<'a>"
     assert code =~ "fn get_term_list<'a>"
     assert code =~ "fn get_map<'a>"

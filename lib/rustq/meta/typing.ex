@@ -220,6 +220,30 @@ defmodule RustQ.Meta.Typing do
     end
   end
 
+  defp synth_method_call(
+         {{:., _, [receiver, :map]}, _meta, [{:__aliases__, _, [:Some]}]},
+         %Env{} = env
+       ) do
+    case synth(receiver, env) do
+      %Type{kind: :option} = option -> option_type(option)
+      _unknown -> nil
+    end
+  end
+
+  defp synth_method_call(
+         {{:., _, [receiver, :map]}, _meta, [{:fn, _, [{:->, _, [[{name, _, context}], body]}]}]},
+         %Env{} = env
+       )
+       when is_atom(name) and is_atom(context) do
+    with %Type{kind: :option} = option <- synth(receiver, env),
+         %Type{} = inner <- Type.inner(option),
+         %Type{} = mapped <- synth(body, %{env | vars: Map.put(env.vars, name, inner)}) do
+      option_type(mapped)
+    else
+      _unknown -> nil
+    end
+  end
+
   defp synth_method_call({{:., _, [receiver, field]}, _meta, []} = ast, %Env{} = env)
        when is_atom(field) do
     field_type(synth(receiver, env), field) || synth_method_return(ast, env)

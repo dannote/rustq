@@ -204,6 +204,21 @@ defmodule RustQ.Meta.Lower do
   defp lower_return_expr_context(nil, %Type{kind: :option}, %Context{}), do: %AST.None{}
 
   defp lower_return_expr_context(
+         {:none, _, []},
+         %Type{kind: :option},
+         %Context{}
+       ),
+       do: %AST.None{}
+
+  defp lower_return_expr_context(
+         {:some, _, [expression]},
+         %Type{kind: :option} = return_type,
+         %Context{} = context
+       ) do
+    %AST.Some{expr: lower_expr(expression, Type.inner(return_type), context)}
+  end
+
+  defp lower_return_expr_context(
          {:ok, value},
          %Type{kind: kind} = return_type,
          %Context{} = context

@@ -47,6 +47,7 @@ defmodule RustQ.Rustler.Term do
     :get_bool,
     :get_i64,
     :get_string,
+    :get_optional_string,
     :get_string_list,
     :get_term_list,
     :get_map,
@@ -213,6 +214,22 @@ defmodule RustQ.Rustler.Term do
 
       :none ->
         nil
+    end
+  end
+
+  @spec get_optional_string(term(), R.path({:rustler, :Atom})) ::
+          R.option(R.option(String.t()))
+  defrust get_optional_string(term, key) do
+    case get(term, key) do
+      {:some, value} ->
+        if is_nil(value) do
+          some(none())
+        else
+          get_string(term, key).map(Some)
+        end
+
+      :none ->
+        none()
     end
   end
 
