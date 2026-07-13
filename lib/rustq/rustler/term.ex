@@ -369,15 +369,25 @@ defmodule RustQ.Rustler.Term do
     end
   end
 
-  defp conditional_encoder_field(%EncoderField{key: key, source: source}) do
+  defp conditional_encoder_field(%EncoderField{key: key, source: source} = field) do
     A.if_let(
       P.some(P.var(:value)),
       A.method(field_source(source), :as_ref),
       [
         %AST.ExprStmt{expr: A.method(:keys, :push, [encoded_atom(key)])},
-        %AST.ExprStmt{expr: A.method(:values, :push, [A.method(:value, :encode, [:env])])}
+        %AST.ExprStmt{expr: A.method(:values, :push, [encoded_optional_value(field)])}
       ]
     )
+  end
+
+  defp encoded_optional_value(%EncoderField{via: via, with: helper}) do
+    value = apply_encoder_via(A.var(:value), via)
+
+    if helper do
+      A.path_call(List.wrap(helper), [:env, A.ref(value)])
+    else
+      A.method(value, :encode, [:env])
+    end
   end
 
   defp encoder_map_call(fields, :array) do

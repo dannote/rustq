@@ -440,16 +440,16 @@ defmodule RustQ.RustlerTest do
         splice: [
           items:
             RustQ.Rustler.term_encoder(:EncodedError,
-              fields: [:message, code: [when_some: true]],
+              fields: [:message, code: [field: [0, :module_code], when_some: true, via: :as_str]],
               target_lifetimes: [:_]
             )
         ]
       )
 
     assert code =~ "let mut keys = vec![atoms::message().encode(env)]"
-    assert code =~ "if let Some(value) = self.code.as_ref()"
+    assert code =~ "if let Some(value) = self.0.module_code.as_ref()"
     assert code =~ "keys.push(atoms::code().encode(env))"
-    assert code =~ "values.push(value.encode(env))"
+    assert code =~ "values.push(value.as_str().encode(env))"
     assert code =~ "Term::map_from_arrays(env, &keys, &values)"
   end
 
