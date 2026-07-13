@@ -29,6 +29,7 @@ defmodule RustQ.Rustler.Schema do
   the schema close to the generated Rust.
   """
   alias RustQ.Diagnostic
+  alias RustQ.Rust
   alias RustQ.Rust.AST.Builder, as: A
 
   defstruct module_prefix: nil,
@@ -158,6 +159,16 @@ defmodule RustQ.Rustler.Schema do
       @rustq_schema_enums {unquote(name), unquote(Macro.escape(opts))}
     end
   end
+
+  @doc "Builds structural Rust field fragments from `{name, type}` pairs."
+  @spec struct_fields([{atom() | String.t(), Rust.rust_type()}], keyword()) :: [Rust.Field.t()]
+  def struct_fields(fields, opts \\ []) do
+    Enum.map(fields, fn {name, type} -> Rust.field(name, type, opts) end)
+  end
+
+  @doc "Builds structural shorthand fields for Rust struct literals."
+  @spec shorthand_fields([atom() | String.t()]) :: [RustQ.Rust.ShorthandField.t()]
+  def shorthand_fields(names), do: Enum.map(names, &Rust.shorthand_field/1)
 
   @spec rust_items(%__MODULE__{}) :: [RustQ.Rust.Fragment.t()]
   def rust_items(%__MODULE__{} = schema) do

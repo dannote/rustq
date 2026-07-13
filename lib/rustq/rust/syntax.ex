@@ -57,6 +57,15 @@ defmodule RustQ.Rust.Field do
         }
 end
 
+defmodule RustQ.Rust.ShorthandField do
+  @moduledoc """
+  Represents a shorthand Rust struct literal field such as `name,`.
+  """
+  defstruct [:name]
+
+  @type t :: %__MODULE__{name: atom() | String.t()}
+end
+
 defmodule RustQ.Rust.Fragment do
   @moduledoc """
   Represents a raw Rust fragment validated or spliced by RustQ.

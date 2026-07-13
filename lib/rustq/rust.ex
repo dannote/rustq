@@ -27,6 +27,7 @@ defmodule RustQ.Rust do
   alias RustQ.Rust.Function
   alias RustQ.Rust.Impl
   alias RustQ.Rust.ModDecl
+  alias RustQ.Rust.ShorthandField
   alias RustQ.Rust.Struct
   alias RustQ.Rust.TypeAlias
   alias RustQ.Rust.Use
@@ -193,6 +194,9 @@ defmodule RustQ.Rust do
     }
   end
 
+  @spec shorthand_field(atom() | String.t()) :: ShorthandField.t()
+  def shorthand_field(name), do: %ShorthandField{name: name}
+
   @spec fn_(atom() | String.t(), keyword()) :: Function.t()
   def fn_(name, opts \\ []) do
     %Function{
@@ -317,6 +321,8 @@ defmodule RustQ.Rust do
     [attrs(field.attrs), visibility(field.vis), ident(field.name), ": ", type(field.type), ","]
     |> IO.iodata_to_binary()
   end
+
+  def to_fragment(%ShorthandField{name: name}), do: IO.iodata_to_binary([ident(name), ","])
 
   def to_fragment(%Function{} = function) do
     args = Enum.map_join(function.args, ", ", &arg/1)

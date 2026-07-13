@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.9.7 - 2026-07-10
+
+- Add structural schema field and shorthand-field splices for projection-driven
+  Rust struct declarations and literals.
+
 ## v0.9.6 - 2026-07-10
 
 - Generate one Elixir NIF stub module from mixed Rust source metadata and RustQ

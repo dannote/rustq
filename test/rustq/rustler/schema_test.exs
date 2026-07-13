@@ -3,6 +3,7 @@ defmodule RustQ.RustlerSchemaTest do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rustler.Schema
 
   defmodule ContentSchema do
     use RustQ.Rustler.Schema
@@ -76,6 +77,32 @@ defmodule RustQ.RustlerSchemaTest do
     assert code =~ ~S/"Elixir.Folio.Content.Text"/
     assert code =~ "Ok(ExContent::Text(rustler::Decoder::decode(term)?))"
     assert code =~ ~S/Err(rustler::Error::RaiseAtom("unknown_content_variant"))/
+  end
+
+  test "builds structural declaration and shorthand field splices" do
+    code =
+      RustQ.render!(
+        """
+        struct Projection {
+            __rq_fields: (),
+        }
+
+        fn projection(name: String, visible: bool) -> Projection {
+            Projection {
+                __rq_build_fields: (),
+            }
+        }
+        """,
+        "projection.rs",
+        splice: [
+          fields: Schema.struct_fields(name: :String, visible: :bool),
+          build_fields: Schema.shorthand_fields([:name, :visible])
+        ]
+      )
+
+    assert code =~ "name: String"
+    assert code =~ "visible: bool"
+    assert code =~ "Projection { name, visible }"
   end
 
   test "raises structured diagnostics for raw tagged enum attrs" do
