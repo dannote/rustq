@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.9.10 - 2026-07-10
+
+- Preserve explicit nested `Option` constructors and infer `Option::map(Some)`
+  without adding extra wrappers or propagation.
+- Add a source-generated optional-string map decoder and emit zero-arity Elixir
+  NIF stubs without parentheses.
+
 ## v0.9.9 - 2026-07-10
 
 - Preserve nested wrapper tuple binding types and lexical pre-shadow types so
