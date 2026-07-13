@@ -23,6 +23,28 @@ defmodule RustQ.RustlerTest do
     assert code =~ ~s|"Elixir.RustQ.Native"|
   end
 
+  test "derives NIF export signatures from implementation source" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("nif_exports.rs",
+        splice: [
+          items:
+            RustQ.Rustler.nif_exports_from_source(
+              "test/fixtures/nif_impls.rs",
+              [parse_nif: [], compile_nif: [attrs: [A.allow_attr(:too_many_arguments)]]],
+              lifetime: :a,
+              schedule: :dirty_cpu
+            )
+        ]
+      )
+
+    assert code =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
+    assert code =~ "fn parse_nif<'a>(env: Env<'a>, source: &str) -> NifResult<Term<'a>>"
+    assert code =~ "parse_nif_impl(env, source)"
+    assert code =~ "#[allow(too_many_arguments)]"
+    assert code =~ "compile_nif_impl(env, source, minify)"
+  end
+
   test "builds NIF export functions" do
     code =
       "__rq_items!();"

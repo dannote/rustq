@@ -62,6 +62,18 @@ defmodule RustQ.Rustler do
   def nif_exports(specs), do: Nif.exports(specs)
 
   @doc """
+  Builds exported NIF wrappers whose signatures are derived structurally from
+  handwritten Rust implementation functions.
+
+  Implementation functions default to the export name with an `_impl` suffix.
+  The manifest owns only boundary policy such as scheduling and attributes.
+  """
+  @spec nif_exports_from_source(Path.t(), [{atom() | String.t(), keyword()}], keyword()) ::
+          [Rust.Function.t()]
+  def nif_exports_from_source(path, specs, defaults \\ []),
+    do: Nif.exports_from_source(path, specs, defaults)
+
+  @doc """
   Builds a single exported Rustler NIF function.
   """
   @spec nif_export(atom() | String.t(), keyword()) :: Rust.Function.t()

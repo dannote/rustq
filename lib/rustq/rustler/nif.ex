@@ -84,6 +84,29 @@ defmodule RustQ.Rustler.Nif do
     Enum.map(specs, fn {name, opts} -> wrapper(name, opts) end)
   end
 
+  @spec exports_from_source(Path.t(), [spec()], keyword()) :: [Rust.Function.t()]
+  def exports_from_source(path, specs, defaults \\ []) do
+    functions = path |> RustQ.Syn.parse_file!() |> RustQ.Syn.functions()
+
+    Enum.map(specs, fn {name, opts} ->
+      opts = Keyword.merge(defaults, opts)
+      impl = Keyword.get(opts, :impl, "#{name}_impl")
+      function = Enum.find(functions, &(&1.name == to_string(impl)))
+
+      if function do
+        derived = [
+          args: Enum.map(function.args, &source_arg/1),
+          returns: function.returns || :unit,
+          impl: impl
+        ]
+
+        wrapper(name, Keyword.merge(derived, opts))
+      else
+        raise ArgumentError, "NIF implementation #{impl} not found in #{path}"
+      end
+    end)
+  end
+
   @spec export(atom() | String.t(), keyword()) :: Rust.Function.t()
   def export(name, opts), do: wrapper(name, opts)
 
@@ -160,7 +183,7 @@ defmodule RustQ.Rustler.Nif do
           returns: Keyword.fetch!(opts, :returns),
           lifetime: Keyword.get(opts, :lifetime),
           vis: Keyword.get(opts, :vis),
-          attrs: [nif_attribute(opts)] do
+          attrs: normalize_attrs(Keyword.get(opts, :attrs, [])) ++ [nif_attribute(opts)] do
           A.return(A.call(RustQ.Atom.identifier!(to_string(impl)), Keyword.keys(args)))
         end
 
@@ -180,6 +203,9 @@ defmodule RustQ.Rustler.Nif do
       |> Rust.attr(nif_attr(opts))
     end
   end
+
+  defp source_arg(%RustQ.Syn.Arg{name: name, type: type}) when is_binary(name),
+    do: {RustQ.Atom.identifier!(name), type}
 
   defp ast_compatible?(opts) do
     impl = Keyword.get(opts, :impl)
