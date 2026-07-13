@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.11.0 - 2026-07-13
+
 - Require structural Rust type nodes at the native rendering boundary, normalize
   builder type inputs, and add structural tuple types.
 - Support multiple lifetimes on Rust struct AST nodes, hide the internal AST
