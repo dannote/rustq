@@ -37,6 +37,8 @@ The same guidance is published in HexDocs as
 [`Using RustQ Well`](https://rustq.hexdocs.pm/using-rustq-well.md). For
 source-derived Rustler exports, Elixir stubs, atoms, and term encoders, see
 [`Generating Rustler Boundaries`](https://rustq.hexdocs.pm/rustler-generation.html).
+For naming, target manifests, and generator organization, see
+[`Designing RustQ Generators`](https://rustq.hexdocs.pm/designing-generators.html).
 The skill itself is also available at
 [`https://rustq.hexdocs.pm/skill.md`](https://rustq.hexdocs.pm/skill.md).
 

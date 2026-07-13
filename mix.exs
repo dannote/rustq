@@ -110,6 +110,7 @@ defmodule RustQ.MixProject do
         "SKILL.md",
         "guides/using-rustq-well.md",
         "guides/rustler-generation.md",
+        "guides/designing-generators.md",
         "guides/reach-plugin.md",
         "CHANGELOG.md",
         "LICENSE"
@@ -124,6 +125,7 @@ defmodule RustQ.MixProject do
         "README.md",
         "guides/using-rustq-well.md",
         "guides/rustler-generation.md",
+        "guides/designing-generators.md",
         "guides/reach-plugin.md",
         "SKILL.md",
         "CHANGELOG.md",

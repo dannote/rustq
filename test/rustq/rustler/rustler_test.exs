@@ -32,7 +32,6 @@ defmodule RustQ.RustlerTest do
             RustQ.Rustler.nif_exports_from_source(
               "test/fixtures/nif_impls.rs",
               [parse_nif: [], compile_nif: [attrs: [A.allow_attr(:too_many_arguments)]]],
-              lifetime: :a,
               schedule: :dirty_cpu
             )
         ]
@@ -57,6 +56,34 @@ defmodule RustQ.RustlerTest do
     assert source =~ "def parse_nif(_source)"
     assert source =~ "def compile_nif(_source, _minify)"
     refute source =~ "_env"
+  end
+
+  test "derives wrappers and one stub module from multiple Rust sources" do
+    groups = [
+      {"test/fixtures/nif_impls.rs", [parse_nif: []]},
+      {"test/fixtures/nif_more_impls.rs", [lint_nif: [], borrow_nif: []]}
+    ]
+
+    rust =
+      "__rq_items!();"
+      |> RustQ.render!("nif_exports.rs",
+        splice: [
+          items: RustQ.Rustler.nif_exports_from_sources(groups, schedule: :dirty_cpu)
+        ]
+      )
+
+    elixir =
+      RustQ.Rustler.nif_stubs_from_sources(
+        groups,
+        RustQ.Test.MultiSourceNifStubs
+      )
+
+    assert rust =~ "fn parse_nif<'a>(env: Env<'a>, source: &str)"
+    assert rust =~ "fn lint_nif<'a>(env: Env<'a>, source: &str, fix: bool)"
+    assert rust =~ "fn borrow_nif<'a, 'b>(env: Env<'a>, source: &'b str)"
+    assert elixir =~ "def parse_nif(_source)"
+    assert elixir =~ "def lint_nif(_source, _fix)"
+    assert elixir =~ "def borrow_nif(_source)"
   end
 
   test "derives one stub module from mixed Syn and RustQ AST functions" do
@@ -107,7 +134,6 @@ defmodule RustQ.RustlerTest do
             RustQ.Rustler.nif_exports_from_source(
               "test/fixtures/nif_impls.rs",
               manifest,
-              lifetime: :a,
               schedule: :dirty_cpu
             )
         ]
@@ -507,15 +533,15 @@ defmodule RustQ.RustlerTest do
   end
 
   test "builds atom-keyed term encoder implementations" do
+    manifest = [fields: [:start, {:end_, :end}], target_lifetimes: [:_]]
+
+    assert RustQ.Rustler.term_encoder_atom_names(manifest) == ["start", "end_"]
+
     code =
       "__rq_items!();"
       |> RustQ.render!("term_encoder.rs",
         splice: [
-          items:
-            RustQ.Rustler.term_encoder(:EncodedLoc,
-              fields: [:start, {:end_, :end}],
-              target_lifetimes: [:_]
-            )
+          items: RustQ.Rustler.term_encoder(:EncodedLoc, manifest)
         ]
       )
 

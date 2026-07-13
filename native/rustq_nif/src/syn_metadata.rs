@@ -198,6 +198,11 @@ fn item_terms<'a>(env: Env<'a>, item: Item, module_path: Vec<String>) -> Vec<Ter
             (
                 line(item.sig.ident.span()),
                 item.sig.to_token_stream().to_string(),
+                item.sig
+                    .generics
+                    .lifetimes()
+                    .map(|param| param.lifetime.ident.to_string())
+                    .collect::<Vec<_>>(),
             ),
             docs(&item.attrs),
             item.sig

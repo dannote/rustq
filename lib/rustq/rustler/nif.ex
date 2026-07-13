@@ -90,23 +90,48 @@ defmodule RustQ.Rustler.Nif do
     path
     |> source_exports(specs, defaults)
     |> Enum.map(fn {name, function, opts} ->
-      derived = [
-        args: Enum.map(function.args, &source_arg/1),
-        returns: function.returns || :unit
-      ]
+      derived =
+        [
+          args: Enum.map(function.args, &source_arg/1),
+          returns: function.returns || :unit
+        ] ++ source_lifetime_opts(function)
 
       wrapper(name, Keyword.merge(derived, opts))
     end)
   end
 
+  @spec exports_from_sources([{Path.t(), [spec()]}], keyword()) :: [Rust.Function.t()]
+  def exports_from_sources(groups, defaults \\ []) do
+    Enum.flat_map(groups, fn {path, specs} -> exports_from_source(path, specs, defaults) end)
+  end
+
+  @spec functions_from_source(Path.t(), [spec()], keyword()) :: [
+          {atom() | String.t(), RustQ.Syn.Function.t()}
+        ]
+  def functions_from_source(path, specs, defaults \\ []) do
+    path
+    |> source_exports(specs, defaults)
+    |> Enum.map(fn {name, function, _opts} -> {name, function} end)
+  end
+
+  @spec functions_from_sources([{Path.t(), [spec()]}], keyword()) ::
+          [{atom() | String.t(), RustQ.Syn.Function.t()}]
+  def functions_from_sources(groups, defaults \\ []) do
+    Enum.flat_map(groups, fn {path, specs} -> functions_from_source(path, specs, defaults) end)
+  end
+
   @spec stubs_from_source(Path.t(), [spec()], module(), keyword()) :: String.t()
   def stubs_from_source(path, specs, module, defaults \\ []) do
-    functions =
-      path
-      |> source_exports(specs, defaults)
-      |> Enum.map(fn {name, function, _opts} -> {name, function} end)
+    path
+    |> functions_from_source(specs, defaults)
+    |> stubs_from_functions(module)
+  end
 
-    stubs_from_functions(functions, module)
+  @spec stubs_from_sources([{Path.t(), [spec()]}], module(), keyword()) :: String.t()
+  def stubs_from_sources(groups, module, defaults \\ []) do
+    groups
+    |> functions_from_sources(defaults)
+    |> stubs_from_functions(module)
   end
 
   @spec stubs_from_functions(
@@ -245,6 +270,14 @@ defmodule RustQ.Rustler.Nif do
 
   defp source_arg(%Arg{name: name, type: type}) when is_binary(name),
     do: {RustQ.Atom.identifier!(name), type}
+
+  defp source_lifetime_opts(%RustQ.Syn.Function{lifetimes: []}), do: []
+
+  defp source_lifetime_opts(%RustQ.Syn.Function{lifetimes: [lifetime]}),
+    do: [lifetime: RustQ.Atom.identifier!(lifetime)]
+
+  defp source_lifetime_opts(%RustQ.Syn.Function{lifetimes: lifetimes}),
+    do: [lifetimes: Enum.map(lifetimes, &RustQ.Atom.identifier!/1)]
 
   defp stub_definition({name, function}) do
     stub_definition(function, name)

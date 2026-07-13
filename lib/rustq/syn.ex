@@ -295,6 +295,7 @@ defmodule RustQ.Syn do
       :source_path,
       :signature,
       :signature_ast,
+      lifetimes: [],
       docs: [],
       args: [],
       returns: nil,
@@ -309,6 +310,7 @@ defmodule RustQ.Syn do
             source_path: Path.t() | nil,
             signature: String.t() | nil,
             signature_ast: RustQ.Syn.Signature.t() | nil,
+            lifetimes: [String.t()],
             docs: [String.t()],
             args: [RustQ.Syn.Arg.t()],
             returns: String.t() | nil,
@@ -719,6 +721,25 @@ defmodule RustQ.Syn do
       docs: docs,
       fields: Elixir.Enum.map(fields, &decode_field!/1)
     }
+  end
+
+  defp decode_item!(
+         {"function", name, {module_path, visibility}, {source_line, signature, lifetimes}, docs,
+          args, returns}
+       ) do
+    function =
+      decode_callable!(
+        RustQ.Syn.Function,
+        name,
+        module_path,
+        visibility,
+        {source_line, signature},
+        docs,
+        args,
+        returns
+      )
+
+    %{function | lifetimes: lifetimes}
   end
 
   defp decode_item!(

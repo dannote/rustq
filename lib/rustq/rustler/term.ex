@@ -324,6 +324,16 @@ defmodule RustQ.Rustler.Term do
     ])
   end
 
+  @doc "Returns the Rust atom identifiers referenced by a term encoder manifest."
+  @spec encoder_atom_names(keyword()) :: [String.t()]
+  def encoder_atom_names(opts) do
+    opts
+    |> Keyword.fetch!(:fields)
+    |> Enum.map(&encoder_field/1)
+    |> Enum.map(&to_string(&1.key))
+    |> Enum.uniq()
+  end
+
   @spec encoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
   def encoder(name, opts) do
     fields = opts |> Keyword.fetch!(:fields) |> Enum.map(&encoder_field/1)

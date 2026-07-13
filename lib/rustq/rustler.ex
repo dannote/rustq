@@ -73,6 +73,14 @@ defmodule RustQ.Rustler do
   def nif_exports_from_source(path, specs, defaults \\ []),
     do: Nif.exports_from_source(path, specs, defaults)
 
+  @doc "Builds NIF wrappers from multiple `{source_path, export_specs}` groups."
+  @spec nif_exports_from_sources(
+          [{Path.t(), [{atom() | String.t(), keyword()}]}],
+          keyword()
+        ) :: [Rust.Function.t()]
+  def nif_exports_from_sources(groups, defaults \\ []),
+    do: Nif.exports_from_sources(groups, defaults)
+
   @doc """
   Builds an Elixir macro module containing NIF-not-loaded stubs whose names and
   arities are derived from Rust implementation signatures. Rustler `Env`
@@ -82,6 +90,15 @@ defmodule RustQ.Rustler do
           String.t()
   def nif_stubs_from_source(path, specs, module, defaults \\ []),
     do: Nif.stubs_from_source(path, specs, module, defaults)
+
+  @doc "Builds one Elixir NIF stub module from multiple Rust source groups."
+  @spec nif_stubs_from_sources(
+          [{Path.t(), [{atom() | String.t(), keyword()}]}],
+          module(),
+          keyword()
+        ) :: String.t()
+  def nif_stubs_from_sources(groups, module, defaults \\ []),
+    do: Nif.stubs_from_sources(groups, module, defaults)
 
   @doc """
   Builds an Elixir NIF stub macro module from mixed `RustQ.Syn.Function` and
@@ -217,6 +234,10 @@ defmodule RustQ.Rustler do
   """
   @spec term_encoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
   def term_encoder(name, opts), do: Term.encoder(name, opts)
+
+  @doc "Returns Rust atom identifiers referenced by a term encoder manifest."
+  @spec term_encoder_atom_names(keyword()) :: [String.t()]
+  def term_encoder_atom_names(opts), do: Term.encoder_atom_names(opts)
 
   @doc """
   Builds common map/term helper functions used by generated decoders.
