@@ -76,14 +76,23 @@ defmodule RustQ.RustlerTest do
       body: []
     }
 
+    zero_arity_function = %RustQ.Rust.AST.Function{
+      name: :font_families,
+      args: [A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
+      returns: A.type_path(:Term, lifetimes: [:a]),
+      body: []
+    }
+
     source =
       RustQ.Rustler.nif_stubs_from_functions(
-        [{:parse_nif, syn_function}, ast_function],
+        [{:parse_nif, syn_function}, ast_function, zero_arity_function],
         RustQ.Test.MixedNifStubs
       )
 
     assert source =~ "def parse_nif(_source)"
     assert source =~ "def scene_index_roots(_resource)"
+    assert source =~ "def font_families do"
+    refute source =~ "def font_families()"
     refute source =~ "_env"
   end
 

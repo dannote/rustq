@@ -254,10 +254,11 @@ defmodule RustQ.Rustler.Nif do
 
   defp stub_definition(function, name) do
     args = function |> stub_args() |> Enum.map(&stub_arg/1)
+    name = RustQ.Atom.identifier!(to_string(name))
+    head = {name, [], if(args == [], do: nil, else: args)}
 
     quote do
-      def unquote(RustQ.Atom.identifier!(to_string(name)))(unquote_splicing(args)),
-        do: :erlang.nif_error(:nif_not_loaded)
+      def unquote(head), do: :erlang.nif_error(:nif_not_loaded)
     end
   end
 
