@@ -73,6 +73,23 @@ defmodule RustQ.Rustler do
   def nif_exports_from_source(path, specs, defaults \\ []),
     do: Nif.exports_from_source(path, specs, defaults)
 
+  @doc "Returns named function metadata for one source-derived NIF manifest."
+  @spec nif_functions_from_source(
+          Path.t(),
+          [{atom() | String.t(), keyword()}],
+          keyword()
+        ) :: [{atom() | String.t(), RustQ.Syn.Function.t()}]
+  def nif_functions_from_source(path, specs, defaults \\ []),
+    do: Nif.functions_from_source(path, specs, defaults)
+
+  @doc "Returns named function metadata from multiple source-derived NIF groups."
+  @spec nif_functions_from_sources(
+          [{Path.t(), [{atom() | String.t(), keyword()}]}],
+          keyword()
+        ) :: [{atom() | String.t(), RustQ.Syn.Function.t()}]
+  def nif_functions_from_sources(groups, defaults \\ []),
+    do: Nif.functions_from_sources(groups, defaults)
+
   @doc "Builds NIF wrappers from multiple `{source_path, export_specs}` groups."
   @spec nif_exports_from_sources(
           [{Path.t(), [{atom() | String.t(), keyword()}]}],
