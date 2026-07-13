@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.9.4 - 2026-07-10
+
 - Add AST-backed Rustler term encoders with nested, conditional, optional,
   collection, adapter, helper, and fallback field projections.
 - Add source-derived Rustler NIF wrappers and Elixir fallback stubs so one
