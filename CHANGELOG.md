@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.9.11 - 2026-07-10
+
+- Discover Rustler atom references through a configurable Rust module name,
+  including references nested in macro token trees.
+
 ## v0.9.10 - 2026-07-10
 
 - Preserve explicit nested `Option` constructors and infer `Option::map(Some)`
