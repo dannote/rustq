@@ -60,6 +60,26 @@ defmodule RustQ.Meta.DefrustTest do
     refute source =~ "field.decode::<DecodeFn>()"
   end
 
+  test "selects map-backed type structs with boundary derives" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("type_structs.rs",
+        splice: [
+          items:
+            MetaAST.struct_type_items(Generated, [:rect_opts],
+              derive: [:Clone, :Debug, "rustler::NifMap"],
+              field_vis: nil
+            )
+        ]
+      )
+
+    assert code =~ "#[derive(Clone, Debug, rustler::NifMap)]"
+    assert code =~ "pub struct RectOpts"
+    assert code =~ "width: f32"
+    refute code =~ "pub width: f32"
+    refute code =~ "fn decode_rect_opts"
+  end
+
   test "defrust lowers macro-generated case clauses" do
     defmodule MacroGeneratedCaseClauseCase do
       use RustQ.Meta

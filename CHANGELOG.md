@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.9.8 - 2026-07-10
+
+- Select map-backed Rust struct items from Rusty-Elixir `@type` metadata with
+  configurable derives, attributes, struct visibility, and field visibility.
+
 ## v0.9.7 - 2026-07-10
 
 - Add structural schema field and shorthand-field splices for projection-driven

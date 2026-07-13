@@ -9,6 +9,7 @@ defmodule RustQ.Meta.AST do
   alias RustQ.Meta.Lower
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
+  alias RustQ.Meta.Validate
   alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
@@ -28,6 +29,43 @@ defmodule RustQ.Meta.AST do
   @spec items(module(), [atom()]) :: [Rust.Fragment.t()]
   def items(module, names) when is_atom(module) and is_list(names),
     do: Enum.map(names, &item(module, &1))
+
+  @doc """
+  Builds Rust struct items for selected map-backed `@type` declarations.
+
+  Use `:derive`, `:attrs`, and `:vis` to adapt the structural type item at a
+  boundary such as Rustler encoding without duplicating its fields.
+  """
+  @spec struct_type_items(module(), [atom()], keyword()) :: [Rust.Fragment.t()]
+  def struct_type_items(module, names, opts \\ []) do
+    names = names |> Enum.map(&to_string/1) |> MapSet.new()
+
+    module.__rustq_type_asts__()
+    |> Enum.filter(fn
+      %AST.Struct{name: name} ->
+        MapSet.member?(names, name |> to_string() |> Macro.underscore())
+
+      _item ->
+        false
+    end)
+    |> Enum.map(fn struct ->
+      fields =
+        if Keyword.has_key?(opts, :field_vis) do
+          Enum.map(struct.fields, &%{&1 | vis: Keyword.fetch!(opts, :field_vis)})
+        else
+          struct.fields
+        end
+
+      %{
+        struct
+        | derive: Keyword.get(opts, :derive, struct.derive),
+          attrs: Keyword.get(opts, :attrs, struct.attrs),
+          vis: Keyword.get(opts, :vis, struct.vis),
+          fields: fields
+      }
+    end)
+    |> Enum.map(&Validate.item_ast/1)
+  end
 
   @doc false
   @spec macro_item(module(), atom()) :: Rust.Fragment.t()
