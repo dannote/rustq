@@ -15,12 +15,23 @@ defmodule RustQ.Rust do
   alias RustQ.Rust.AST.TypeBuilder
   alias RustQ.Rust.Fragment
 
+  @type renderable ::
+          AST.item()
+          | AST.stmt()
+          | AST.expr()
+          | AST.pat()
+          | AST.type()
+          | AST.StructField.t()
+          | AST.Arm.t()
+          | Fragment.t()
+          | iodata()
+
   @doc "Builds an explicit Rust source fragment for a known splice context."
   @spec fragment(Fragment.kind(), iodata()) :: Fragment.t()
   def fragment(kind, source), do: %Fragment{kind: kind, source: source}
 
   @doc "Renders one Rust AST item, struct field, or explicit fragment."
-  @spec render(AST.item() | AST.StructField.t() | Fragment.t() | iodata()) :: String.t()
+  @spec render(renderable()) :: String.t()
   def render(value), do: to_fragment(value)
 
   @doc "Renders a list of Rust items separated by blank lines."

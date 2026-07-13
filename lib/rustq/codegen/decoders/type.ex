@@ -71,4 +71,9 @@ defmodule RustQ.Codegen.Decoders.Type do
   defrust decode_type_array(term) do
     Super.parse_type_array(required_type(term, "inner"), required_field(term, "size"))
   end
+
+  @spec decode_type_tuple(term()) :: R.nif_result(R.path(:Type))
+  defrust decode_type_tuple(term) do
+    Super.parse_type_tuple(required_type_list(term, "items"))
+  end
 end

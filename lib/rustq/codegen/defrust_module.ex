@@ -9,12 +9,17 @@ defmodule RustQ.Codegen.DefrustModule do
   ]
 
   defmacro __using__(opts) do
+    callable_modules = Keyword.get(opts, :callable_modules, [])
+
     opts =
       Keyword.update(opts, :rust_sources, @native_sources, fn sources ->
         (@native_sources ++ List.wrap(sources)) |> Enum.uniq()
       end)
 
+    requires = Enum.map(callable_modules, &quote(do: require(unquote(&1))))
+
     quote do
+      unquote_splicing(requires)
       use RustQ.Meta, unquote(opts)
 
       alias RustQ.Type, as: R

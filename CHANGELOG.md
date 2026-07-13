@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Require structural Rust type nodes at the native rendering boundary, normalize
+  builder type inputs, and add structural tuple types.
+- Support multiple lifetimes on Rust struct AST nodes, hide the internal AST
+  renderer, and remove duplicate simple-item builder delegates.
+- Validate atom-backed Rust identifiers and avoid callable metadata cache locks
+  during parallel compilation.
+
 ## v0.10.0 - 2026-07-10
 
 - Make `RustQ.Rust.AST` the canonical generated-Rust representation, including

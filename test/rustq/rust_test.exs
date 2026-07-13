@@ -34,12 +34,16 @@ defmodule RustQ.RustTest do
     assert Identifier.atom!("generated_name") == :generated_name
     refute Identifier.valid?("not::an::identifier")
     assert_raise ArgumentError, fn -> Identifier.atom!("not::an::identifier") end
+    assert_raise ArgumentError, fn -> Identifier.atom!(:"not-valid") end
   end
 
   test "renders structural Rust types" do
     assert Rust.render_type(T.path(:Term, lifetimes: [:a])) == "Term<'a>"
     assert Rust.render_type(T.ref(:Document, lifetime: :static)) == "&'static Document"
     assert Rust.render_type(T.ref(T.slice(T.ref(:str)))) == "&[&str]"
+    assert Rust.render_type(T.tuple([:i32])) == "(i32,)"
+    assert Rust.render_type(T.tuple([:i32, :i64])) == "(i32, i64)"
+    assert_raise ArgumentError, fn -> T.tuple([]) end
 
     assert Rust.render_type(T.path(:ResourceArc, generics: [T.path(:Document)])) ==
              "ResourceArc<Document>"

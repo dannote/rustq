@@ -29,6 +29,12 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert diagnostic.snippet =~ "%RustQ.Rust.AST.Function"
   end
 
+  test "native type decoding accepts only structural type nodes" do
+    assert_raise ArgumentError, fn ->
+      Native.render_ast(%Function{name: :legacy, args: [], returns: "i32", body: []})
+    end
+  end
+
   test "behavioral examples cover every current AST schema node" do
     samples = RustQ.ASTSamples.all()
 
@@ -36,7 +42,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
              Schema.nodes() |> Enum.map(& &1.name) |> MapSet.new()
 
     for {name, ast} <- samples do
-      source = Native.render_ast(ast)
+      source = render_ast(ast)
       assert is_binary(source), "sample for #{name} should render"
 
       assert RustQ.ASTSamples.validate_rendered?(name, ast, source),
@@ -46,7 +52,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "native decoder renders macro item calls with literal arguments" do
     source =
-      Native.render_ast(A.macro_item_call([:rustler, :init], literal: "Elixir.RustQ.Native"))
+      render_ast(A.macro_item_call([:rustler, :init], literal: "Elixir.RustQ.Native"))
 
     assert source =~ "rustler::init!"
     assert source =~ ~s|"Elixir.RustQ.Native"|
@@ -63,7 +69,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "native decoder renders token-shaped macro item calls" do
     source =
-      Native.render_ast(
+      render_ast(
         A.macro_item_token_call(:fig_scene_skip_field_decoder, [
           "fn ",
           A.path(:skip_fig_message_field),
@@ -92,19 +98,19 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
   end
 
   test "dogfooded item and type decoders render use, module, macro, constants, structs, and enums" do
-    use_source = Native.render_ast(%AST.Use{tree: "std::fmt"})
+    use_source = render_ast(%AST.Use{tree: "std::fmt"})
 
     module_source =
-      Native.render_ast(%AST.Module{
+      render_ast(%AST.Module{
         name: :generated,
         vis: :crate,
         items: [%AST.Const{name: :ANSWER, type: A.type_path(:u32), expr: A.lit(42)}]
       })
 
-    macro_source = Native.render_ast(%AST.MacroItem{source: "type Alias = u32;"})
+    macro_source = render_ast(%AST.MacroItem{source: "type Alias = u32;"})
 
     const_source =
-      Native.render_ast(%AST.Const{
+      render_ast(%AST.Const{
         name: :LIMIT,
         type: %AST.TypeOption{inner: %AST.TypeRef{inner: A.type_path(:str), lifetime: :a}},
         expr: A.none(),
@@ -112,9 +118,9 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     struct_source =
-      Native.render_ast(%AST.Struct{
+      render_ast(%AST.Struct{
         name: :Holder,
-        lifetime: :a,
+        lifetimes: [:a, :b],
         vis: :pub,
         fields: [
           %AST.StructField{
@@ -126,7 +132,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     enum_source =
-      Native.render_ast(%AST.Enum{
+      render_ast(%AST.Enum{
         name: :Maybe,
         vis: :pub,
         variants: [
@@ -140,7 +146,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert module_source =~ "const ANSWER: u32 = 42;"
     assert macro_source =~ "type Alias = u32;"
     assert const_source =~ "pub(crate) const LIMIT: Option<&'a str> = None;"
-    assert struct_source =~ "pub struct Holder<'a>"
+    assert struct_source =~ "pub struct Holder<'a, 'b>"
     assert struct_source =~ "pub value: &'a str"
     assert enum_source =~ "pub enum Maybe"
     assert enum_source =~ "Some(Vec<u8>)"
@@ -148,7 +154,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated statement decoders render expression and return statements" do
     source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :statements,
         args: [],
         returns: "i32",
@@ -165,7 +171,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated expression decoders render field, calls, methods, and refs" do
     source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :exprs,
         args: [],
         returns: "NifResult<()> ",
@@ -191,7 +197,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "native decoder renders mutable and typed let statements" do
     mutable_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :mutable_let,
         args: [],
         returns: "String",
@@ -205,7 +211,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert mutable_source =~ "let mut tokens = read_tokens();"
 
     source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :typed_let,
         args: [],
         returns: "String",
@@ -221,7 +227,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated expression decoders render local calls, struct literals, and ok expressions" do
     source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :more_exprs,
         args: [],
         returns: "NifResult<Rect>",
@@ -246,7 +252,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated expression decoders render literal, token macro, and binary expressions" do
     literal_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :literal_expr,
         args: [],
         returns: "&'static str",
@@ -254,7 +260,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     float_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :float_expr,
         args: [],
         returns: "f32",
@@ -262,7 +268,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     token_macro_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :token_macro_expr,
         args: [],
         returns: "TokenStream",
@@ -270,7 +276,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     binary_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :binary_expr,
         args: [],
         returns: "bool",
@@ -278,7 +284,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     deref_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :deref_expr,
         args: [value: "&i64"],
         returns: "i64",
@@ -295,7 +301,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated arm decoder renders atom guard patterns" do
     source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :atom_guard,
         args: [value: "Atom"],
         returns: "i32",
@@ -320,7 +326,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated pattern decoders render tuple, path tuple, and struct patterns" do
     source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :pattern_exprs,
         args: [],
         returns: "i32",
@@ -351,7 +357,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated expression decoders render match, if, and raise atom expressions" do
     match_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :match_expr,
         args: [],
         returns: "NifResult<()> ",
@@ -372,7 +378,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     if_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :if_expr,
         args: [],
         returns: "NifResult<()> ",
@@ -389,7 +395,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     raise_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :raise_expr,
         args: [],
         returns: "NifResult<()> ",
@@ -405,7 +411,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
   test "generated expression decoders render try, tuple, some, and err expressions" do
     try_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :try_expr,
         args: [],
         returns: "NifResult<()> ",
@@ -413,7 +419,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     tuple_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :tuple_expr,
         args: [],
         returns: "(i32, i32)",
@@ -421,7 +427,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     some_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :some_expr,
         args: [],
         returns: "Option<i32>",
@@ -429,7 +435,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
       })
 
     err_source =
-      Native.render_ast(%AST.Function{
+      render_ast(%AST.Function{
         name: :err_expr,
         args: [],
         returns: "NifResult<()> ",
@@ -441,4 +447,13 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert some_source =~ "Some(value)"
     assert err_source =~ "Err(rustler::Error::BadArg)"
   end
+
+  defp render_ast(%AST.Function{} = function) do
+    function
+    |> Map.update!(:args, &A.function_args/1)
+    |> Map.update!(:returns, &A.type/1)
+    |> Native.render_ast()
+  end
+
+  defp render_ast(ast), do: Native.render_ast(ast)
 end

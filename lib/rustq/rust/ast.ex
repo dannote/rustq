@@ -92,6 +92,7 @@ defmodule RustQ.Rust.AST do
     TypeRef,
     TypeResult,
     TypeSlice,
+    TypeTuple,
     TypeUnit,
     TypeVec,
     UnaryOp,
@@ -176,6 +177,7 @@ defmodule RustQ.Rust.AST do
           | TypeVec.t()
           | TypeSlice.t()
           | TypeArray.t()
+          | TypeTuple.t()
           | RustQ.Rust.AST.TypeRaw.t()
           | TypeUnit.t()
 
@@ -232,7 +234,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: AST.type() | String.t(),
+          type: AST.type(),
           expr: AST.expr(),
           vis: AST.vis()
         }
@@ -244,7 +246,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: AST.type() | String.t(),
+          type: AST.type(),
           expr: AST.expr(),
           mutable: boolean(),
           vis: AST.vis()
@@ -257,7 +259,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: AST.type() | String.t(),
+          type: AST.type(),
           vis: AST.vis()
         }
       )
@@ -321,8 +323,8 @@ defmodule RustQ.Rust.AST do
     type:
       quote(
         do: %__MODULE__{
-          target: AST.type() | String.t(),
-          trait: Path.t() | AST.type() | String.t() | nil,
+          target: AST.type(),
+          trait: AST.type() | nil,
           items: [AST.item()],
           attrs: [Attribute.t()],
           lifetimes: [atom()]
@@ -335,7 +337,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           name: atom(),
-          type: AST.type() | String.t() | nil,
+          type: AST.type() | nil,
           receiver: boolean(),
           mutable: boolean()
         }
@@ -351,7 +353,7 @@ defmodule RustQ.Rust.AST do
         do: %__MODULE__{
           name: atom(),
           args: [FunctionArg.t()],
-          returns: AST.type() | String.t(),
+          returns: AST.type(),
           body: [AST.stmt()],
           lifetimes: [atom()],
           vis: AST.vis(),
@@ -364,7 +366,7 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{paths: [[atom() | String.t()] | atom() | String.t()]})
   )
 
-  defnode(Struct, :item, [:name, fields: [], vis: nil, derive: [], lifetime: nil, attrs: []],
+  defnode(Struct, :item, [:name, fields: [], vis: nil, derive: [], lifetimes: [], attrs: []],
     type:
       quote(
         do: %__MODULE__{
@@ -372,7 +374,7 @@ defmodule RustQ.Rust.AST do
           fields: [StructField.t()],
           vis: AST.vis(),
           derive: [Derive.t() | atom()],
-          lifetime: atom() | nil,
+          lifetimes: [atom()],
           attrs: [Attribute.t()]
         }
       )
@@ -430,6 +432,8 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{inner: AST.type(), size: String.t() | integer()})
   )
 
+  defnode(TypeTuple, :type, [items: []], type: quote(do: %__MODULE__{items: [AST.type()]}))
+
   defnode(TypeRaw, :type, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
   defnode(TypeUnit, :type, [], type: quote(do: %__MODULE__{}))
@@ -441,7 +445,7 @@ defmodule RustQ.Rust.AST do
           pattern: AST.pat(),
           expr: AST.expr(),
           mutable: boolean(),
-          type: AST.type() | String.t() | nil
+          type: AST.type() | nil
         }
       )
   )
@@ -675,8 +679,16 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{path: Path.t(), fields: [{atom(), AST.pat()}]})
   )
 
+  @doc "Returns whether a value is a structural Rust type node."
+  @spec type_node?(term()) :: boolean()
   def type_node?(term), do: category_node?(term, :type)
+
+  @doc "Returns whether a value is a structural Rust expression node."
+  @spec expr_node?(term()) :: boolean()
   def expr_node?(term), do: category_node?(term, :expr)
+
+  @doc "Returns whether a value is a structural Rust pattern node."
+  @spec pat_node?(term()) :: boolean()
   def pat_node?(term), do: category_node?(term, :pat)
 
   defp category_node?(%{__struct__: module}, category) do
@@ -686,6 +698,7 @@ defmodule RustQ.Rust.AST do
 
   defp category_node?(_term, _category), do: false
 
+  @doc false
   def __rustq_ast_modules__ do
     [
       Use,
@@ -717,6 +730,7 @@ defmodule RustQ.Rust.AST do
       TypeVec,
       TypeSlice,
       TypeArray,
+      TypeTuple,
       TypeRaw,
       TypeUnit,
       Let,

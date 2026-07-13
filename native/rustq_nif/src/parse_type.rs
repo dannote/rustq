@@ -34,6 +34,14 @@ pub(crate) fn parse_type_slice(inner: Type) -> NifResult<Type> {
     parse_syn(quote!([#inner]))
 }
 
+pub(crate) fn parse_type_tuple(items: Vec<Type>) -> NifResult<Type> {
+    if items.is_empty() {
+        Err(rustler::Error::BadArg)
+    } else {
+        parse_syn(quote!((#(#items,)*)))
+    }
+}
+
 pub(crate) fn parse_type_array(inner: Type, size: rustler::Term) -> NifResult<Type> {
     let size_source = if let Ok(size) = size.decode::<u64>() {
         size.to_string()

@@ -139,6 +139,7 @@ defmodule RustQ.Meta.AST do
     }
   end
 
+  @doc false
   def build_ast(
         definition,
         specs,
@@ -222,12 +223,14 @@ defmodule RustQ.Meta.AST do
       raise_defrust_diagnostic(call_ast, body_ast, error)
   end
 
+  @doc false
   def build_type_asts(type_aliases) do
     type_aliases
     |> Map.values()
     |> Enum.flat_map(&type_items/1)
   end
 
+  @doc false
   def group_module_asts(built_asts) do
     {plain, nested} = Enum.split_with(built_asts, &is_nil(&1.rust_module))
 
@@ -242,7 +245,9 @@ defmodule RustQ.Meta.AST do
   end
 
   defp normalize_type(%Type{} = type, _aliases), do: type
-  defp normalize_type(type_ast, _aliases) when is_binary(type_ast), do: rust_ast_type(type_ast)
+
+  defp normalize_type(type_ast, _aliases) when is_binary(type_ast),
+    do: type_ast |> A.type() |> rust_ast_type()
 
   defp normalize_type(%{__struct__: _module} = type_ast, _aliases) do
     if AST.type_node?(type_ast) do
@@ -429,7 +434,7 @@ defmodule RustQ.Meta.AST do
     decoder = %AST.Function{
       name: Identifier.atom!("decode_#{elixir_name}_atom"),
       vis: :pub,
-      args: [%AST.FunctionArg{name: :value, type: "Atom"}],
+      args: [%AST.FunctionArg{name: :value, type: %AST.TypePath{parts: [:Atom]}}],
       returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
       body:
         A.block do
@@ -483,7 +488,7 @@ defmodule RustQ.Meta.AST do
       name: Identifier.atom!(rust_name),
       vis: :pub,
       derive: [:Clone, :Debug],
-      lifetime: lifetime,
+      lifetimes: List.wrap(lifetime),
       fields: Enum.map(fields, &Decoder.struct_field_ast/1)
     }
 

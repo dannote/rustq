@@ -31,6 +31,7 @@ defmodule RustQ.Diagnostic do
     end
   end
 
+  @doc false
   @spec lower(atom(), Macro.t(), String.t()) :: no_return()
   @spec lower(atom(), Macro.t(), String.t(), keyword()) :: no_return()
   def lower(kind, node, message, opts \\ []) do
@@ -42,6 +43,7 @@ defmodule RustQ.Diagnostic do
         )
   end
 
+  @doc false
   @spec defrust(atom(), Macro.t(), String.t()) :: no_return()
   @spec defrust(atom(), Macro.t(), String.t(), keyword()) :: no_return()
   def defrust(kind, node, message, opts \\ []) do
@@ -53,6 +55,7 @@ defmodule RustQ.Diagnostic do
         )
   end
 
+  @doc false
   @spec render(atom(), term(), String.t()) :: no_return()
   @spec render(atom(), term(), String.t(), keyword()) :: no_return()
   def render(kind, node, message, opts \\ []) do
@@ -65,6 +68,7 @@ defmodule RustQ.Diagnostic do
         )
   end
 
+  @doc "Builds structured diagnostic data for extension and tooling errors."
   @spec new(atom(), atom(), Macro.t() | nil, String.t(), keyword()) :: t()
   def new(phase, kind, node, message, opts \\ []) do
     snippet = Keyword.get(opts, :snippet) || snippet(node)

@@ -30,7 +30,7 @@ defmodule RustQ.Codegen.Modules do
         &(&1.name in [:arm, :attribute, :derive, :function_arg, :struct_field, :enum_variant])
       )
       |> Enum.map(fn node ->
-        A.const(node.rust_const, "&str", node.rust_module, vis: :crate)
+        A.const(node.rust_const, {:ref, :str}, node.rust_module, vis: :crate)
       end)
 
     A.module(:ast_modules, constants, vis: :crate)

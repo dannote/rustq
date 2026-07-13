@@ -475,22 +475,25 @@ defmodule RustQ.Binding.Source do
 
     case :persistent_term.get(cache_key, :missing) do
       :missing ->
-        single_flight(cache_key, fn -> fill_callables_cache(cache_key, fun) end)
+        # Resolving callable modules may suspend in Code.ensure_compiled/1. Do
+        # that outside the global cache lock so parallel compilation can make
+        # progress instead of forming an invisible lock/wait cycle.
+        callables = fun.()
+        single_flight(cache_key, fn -> fill_callables_cache(cache_key, callables) end)
 
       callables ->
         callables
     end
   end
 
-  defp fill_callables_cache(cache_key, fun) do
+  defp fill_callables_cache(cache_key, callables) do
     case :persistent_term.get(cache_key, :missing) do
       :missing ->
-        callables = fun.()
         :persistent_term.put(cache_key, callables)
         callables
 
-      callables ->
-        callables
+      cached ->
+        cached
     end
   end
 

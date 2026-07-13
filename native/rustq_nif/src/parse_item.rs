@@ -274,16 +274,19 @@ pub(crate) fn parse_item_struct(
     name: syn::Ident,
     vis: syn::Visibility,
     derive: Vec<syn::Attribute>,
-    lifetime: Option<String>,
+    lifetimes: Vec<String>,
     fields: Vec<Field>,
     attrs: Vec<syn::Attribute>,
 ) -> NifResult<syn::ItemStruct> {
-    let generics = if let Some(lifetime) = lifetime {
-        let lifetime =
-            syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
-        quote!(<#lifetime>)
-    } else {
+    let lifetimes = lifetimes
+        .into_iter()
+        .map(|value| syn::Lifetime::new(&format!("'{}", value), proc_macro2::Span::call_site()))
+        .collect::<Vec<_>>();
+
+    let generics = if lifetimes.is_empty() {
         quote!()
+    } else {
+        quote!(<#(#lifetimes),*>)
     };
 
     parse_syn(quote!(#(#derive)* #(#attrs)* #vis struct #name #generics { #(#fields,)* }))

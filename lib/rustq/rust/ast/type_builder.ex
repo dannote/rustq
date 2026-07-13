@@ -2,14 +2,15 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   @moduledoc """
   Constructors and normalization for Rust type AST nodes.
 
-  `type/1` accepts existing type nodes, Rust paths, and structural tuples such
-  as `{:option, type}`, `{:result, ok, error}`, `{:vec, type}`, references,
-  slices, arrays, and explicit `{:raw, source}` escapes. Prefer the named
-  constructors when they make generator intent clearer.
+  `type/1` accepts existing type nodes, atom/list Rust paths, raw binary source,
+  and structural tuples such as `{:option, type}`, `{:result, ok, error}`,
+  `{:vec, type}`, tuple types, references, slices, and arrays. Binary source is
+  normalized to `RustQ.Rust.AST.TypeRaw`; prefer `raw/1` when an explicit escape
+  makes generator intent clearer.
   """
 
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.Identifier
 
   def type(%{__struct__: _module} = value) do
     if AST.type_node?(value) do
@@ -20,7 +21,8 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   end
 
   def type(parts) when is_list(parts), do: path(parts)
-  def type(part) when is_atom(part) or is_binary(part), do: path(part)
+  def type(part) when is_atom(part), do: path(part)
+  def type(source) when is_binary(source), do: raw(source)
   def type({:raw, source}), do: raw(source)
   def type({:path, parts}), do: path(parts)
   def type({:path, parts, generics}), do: path(parts, generics: Enum.map(generics, &type/1))
@@ -34,16 +36,16 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def type({:slice, inner}), do: slice(inner)
   def type({:array, inner, size}), do: array(inner, size)
 
-  def type({:tuple, values}),
-    do: raw(["(", Enum.intersperse(Enum.map(values, &render/1), ", "), ")"])
+  def type({:tuple, values}), do: tuple(values)
 
   def path(parts_or_part, opts \\ [])
 
   def path(parts, opts) when is_list(parts),
     do: %AST.TypePath{
       parts: parts,
-      lifetimes: Keyword.get(opts, :lifetimes, []),
-      generics: Keyword.get(opts, :generics, [])
+      lifetimes:
+        opts |> Keyword.get(:lifetimes, []) |> List.wrap() |> Enum.map(&Identifier.atom!/1),
+      generics: opts |> Keyword.get(:generics, []) |> Enum.map(&type/1)
     }
 
   def path(part, opts) when is_atom(part), do: path([part], opts)
@@ -63,6 +65,8 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def vec(inner), do: %AST.TypeVec{inner: type(inner)}
   def slice(inner), do: %AST.TypeSlice{inner: type(inner)}
   def array(inner, size), do: %AST.TypeArray{inner: type(inner), size: size}
+  def tuple([]), do: raise(ArgumentError, "empty tuple types must use unit/0")
+  def tuple(items) when is_list(items), do: %AST.TypeTuple{items: Enum.map(items, &type/1)}
 
   def ref(inner, opts \\ []),
     do: %AST.TypeRef{inner: type(inner), lifetime: Keyword.get(opts, :lifetime)}
@@ -70,12 +74,5 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def mut_ref(inner, opts \\ []),
     do: %AST.TypeRef{inner: type(inner), mutable: true, lifetime: Keyword.get(opts, :lifetime)}
 
-  def term(lifetime \\ :a), do: %AST.TypePath{parts: [:Term], lifetimes: List.wrap(lifetime)}
-
-  defp render(value) do
-    value
-    |> type()
-    |> Render.render_type()
-    |> IO.iodata_to_binary()
-  end
+  def term(lifetime \\ :a), do: path(:Term, lifetimes: List.wrap(lifetime))
 end

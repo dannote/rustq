@@ -1,8 +1,8 @@
 defmodule RustQ.RustlerTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Rust
   alias RustQ.Rust.AST.Builder, as: A
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rustler.{Atom, Nif, Opts, Resource, TaggedEnum, Term}
 
   test "builds Rustler helpers" do
@@ -713,7 +713,7 @@ defmodule RustQ.RustlerTest do
       )
 
     assert Resource.arc_type(:Document)
-           |> Render.render_type()
+           |> Rust.render_type()
            |> IO.iodata_to_binary() == "ResourceArc<Document>"
 
     assert code =~ "type DocumentResource = ResourceArc<Document>;"

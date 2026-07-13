@@ -11,16 +11,14 @@ defmodule RustQ.Rust.AST.ItemBuilder do
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.Identifier
 
+  @doc "Builds a structural Rust struct field."
+  @spec field(atom() | String.t(), term(), keyword()) :: AST.StructField.t()
   def field(name, type, opts \\ []),
     do: %AST.StructField{
       name: Identifier.atom!(to_string(name)),
-      type: type,
+      type: A.type(type),
       vis: Keyword.get(opts, :vis)
     }
-
-  def const(name, type, expression, opts \\ []), do: A.const(name, type, expression, opts)
-  def static(name, type, expression, opts \\ []), do: A.static(name, type, expression, opts)
-  def type_alias(name, type, opts \\ []), do: A.type_alias(name, type, opts)
 
   @doc "Builds a Rust struct declaration from structural fields."
   defmacro struct(name, opts \\ [], do: body) do
@@ -28,7 +26,7 @@ defmodule RustQ.Rust.AST.ItemBuilder do
       %AST.Struct{
         name: Identifier.atom!(to_string(unquote(name))),
         vis: Keyword.get(unquote(opts), :vis),
-        lifetime: Keyword.get(unquote(opts), :lifetime),
+        lifetimes: List.wrap(Keyword.get(unquote(opts), :lifetimes, [])),
         derive: Keyword.get(unquote(opts), :derive, []),
         attrs: Keyword.get(unquote(opts), :attrs, []),
         fields: A.flatten(unquote(block_values(body)))
@@ -40,7 +38,7 @@ defmodule RustQ.Rust.AST.ItemBuilder do
   defmacro impl(target, opts \\ [], do: body) do
     quote do
       %AST.Impl{
-        target: unquote(target),
+        target: A.type(unquote(target)),
         trait:
           Keyword.get(unquote(opts), :trait) &&
             A.trait_path(Keyword.fetch!(unquote(opts), :trait)),
@@ -58,7 +56,7 @@ defmodule RustQ.Rust.AST.ItemBuilder do
         name: Identifier.atom!(to_string(unquote(name))),
         vis: Keyword.get(unquote(opts), :vis),
         args: A.function_args(Keyword.get(unquote(opts), :args, [])),
-        returns: Keyword.fetch!(unquote(opts), :returns),
+        returns: A.type(Keyword.fetch!(unquote(opts), :returns)),
         lifetimes: List.wrap(Keyword.get(unquote(opts), :lifetimes, [])),
         attrs: Keyword.get(unquote(opts), :attrs, []),
         body: A.flatten(unquote(block_values(body)))

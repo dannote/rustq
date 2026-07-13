@@ -18,7 +18,7 @@ defmodule RustQ.Rustler.Atom do
   alias RustQ.Rust.Identifier
   alias RustQ.Type, as: R
 
-  import RustQ.Rust.AST.ItemBuilder, only: [function: 3, static: 3]
+  import RustQ.Rust.AST.ItemBuilder, only: [function: 3]
 
   require A
   require I
@@ -60,8 +60,8 @@ defmodule RustQ.Rustler.Atom do
 
     %AST.Function{
       name: ident_atom(name),
-      args: Keyword.get(opts, :args, []),
-      returns: Keyword.get(opts, :returns, "NifResult<()>"),
+      args: opts |> Keyword.get(:args, []) |> A.function_args(),
+      returns: opts |> Keyword.get(:returns, "NifResult<()>") |> A.type(),
       body: [
         A.let(:value, dispatch_expr(Keyword.fetch!(opts, :on))),
         A.return_stmt(%AST.Match{
@@ -105,7 +105,7 @@ defmodule RustQ.Rustler.Atom do
       name: ident_atom(name),
       vis: :pub,
       args: [A.function_arg(:value, T.type(input))],
-      returns: result,
+      returns: A.type(result),
       body: [
         A.return_stmt(%AST.Match{expr: A.var(:value), arms: atom_arms(cases, atoms, unknown)})
       ]
@@ -190,9 +190,9 @@ defmodule RustQ.Rustler.Atom do
     static_name = static_name(name)
 
     [
-      static(
+      A.static(
         Identifier.atom!(static_name),
-        "OnceLock<Atom>",
+        T.path(:OnceLock, generics: [:Atom]),
         A.path_call([:OnceLock, :new])
       ),
       function Identifier.atom!("#{name}_atom"), args: [env: "Env"], returns: "Atom" do

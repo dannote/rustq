@@ -123,7 +123,12 @@ defmodule RustQ.Meta.TypeItemsTest do
 
     assert %RustQ.Rust.AST.Function{
              name: :decode_mode_atom,
-             args: [%RustQ.Rust.AST.FunctionArg{name: :value, type: "Atom"}],
+             args: [
+               %RustQ.Rust.AST.FunctionArg{
+                 name: :value,
+                 type: %RustQ.Rust.AST.TypePath{parts: [:Atom]}
+               }
+             ],
              body: [
                %RustQ.Rust.AST.Return{
                  expr: %RustQ.Rust.AST.Match{
@@ -143,7 +148,7 @@ defmodule RustQ.Meta.TypeItemsTest do
 
     assert %RustQ.Rust.AST.Struct{
              name: :NestedOpts,
-             lifetime: :a,
+             lifetimes: [:a],
              fields: [
                %RustQ.Rust.AST.StructField{
                  name: :rect,

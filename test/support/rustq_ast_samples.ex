@@ -245,6 +245,9 @@ defmodule RustQ.ASTSamples do
   def sample_for(:type_array),
     do: type_sample(:type_array, %AST.TypeArray{inner: A.type_path(:u8), size: 4})
 
+  def sample_for(:type_tuple),
+    do: type_sample(:type_tuple, %AST.TypeTuple{items: [A.type_path(:u8), A.type_path(:u16)]})
+
   def sample_for(:type_raw),
     do: type_sample(:type_raw, %AST.TypeRaw{source: "std::marker::PhantomData<&'a ()>"})
 
@@ -498,8 +501,8 @@ defmodule RustQ.ASTSamples do
 
     %AST.Function{
       name: name,
-      args: Keyword.get(opts, :args, []),
-      returns: returns,
+      args: opts |> Keyword.get(:args, []) |> A.function_args(),
+      returns: A.type(returns),
       body: body,
       attrs: Keyword.get(opts, :attrs, [])
     }

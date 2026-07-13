@@ -7,10 +7,7 @@ use crate::generated_ast::{
     decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
     optional_map_get, struct_name,
 };
-use crate::{
-    ident_from_part, parse_expr, parse_syn, parse_type, parse_type_generic, parse_type_ref,
-    path_from_parts,
-};
+use crate::{ident_from_part, parse_expr, parse_syn, path_from_parts};
 
 // Primitive-boundary inventory:
 // - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
@@ -799,38 +796,8 @@ pub(crate) fn atom_or_string(term: Term) -> NifResult<String> {
     }
 }
 
-// Type decoding primitives retained until all type shapes are dogfooded.
 pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
-    if let Ok(source) = term.decode::<String>() {
-        return parse_type(&source);
-    }
-
-    if term.is_atom() {
-        return parse_type(&atom_or_string(term)?);
-    }
-
-    if let Ok((tag, value)) = term.decode::<(Term, Term)>() {
-        return decode_type_tuple2(atom_or_string(tag)?.as_str(), value);
-    }
-
-    if let Ok((tag, ok, error)) = term.decode::<(Term, Term, Term)>() {
-        if atom_or_string(tag)? == "result" {
-            return parse_type_generic("Result", vec![decode_type(ok)?, decode_type(error)?]);
-        }
-    }
-
     decode_ast_type(term)
-}
-
-fn decode_type_tuple2(tag: &str, value: Term) -> NifResult<Type> {
-    match tag {
-        "option" => parse_type_generic("Option", vec![decode_type(value)?]),
-        "vec" => parse_type_generic("Vec", vec![decode_type(value)?]),
-        "ref" => parse_type_ref(decode_type(value)?, false, None),
-        "mut_ref" => parse_type_ref(decode_type(value)?, true, None),
-        "raw" => parse_type(&atom_or_string(value)?),
-        _ => Err(rustler::Error::BadArg),
-    }
 }
 
 pub(crate) fn decode_string_list(term: Term) -> NifResult<Vec<String>> {

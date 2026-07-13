@@ -11,10 +11,16 @@ defmodule RustQ.Rust.Identifier do
 
   @doc "Returns a Rust identifier atom, rejecting invalid or oversized names."
   @spec atom!(atom() | String.t()) :: atom()
-  def atom!(value) when is_atom(value), do: value
+  def atom!(value) when is_atom(value) do
+    if value |> Atom.to_string() |> valid_identifier?() do
+      value
+    else
+      raise ArgumentError, "unsafe Rust identifier: #{inspect(value)}"
+    end
+  end
 
   def atom!(value) when is_binary(value) do
-    if byte_size(value) <= @max_bytes and valid?(value) do
+    if valid_identifier?(value) do
       :erlang.binary_to_atom(value, :utf8)
     else
       raise ArgumentError, "unsafe Rust identifier: #{inspect(value)}"
@@ -28,6 +34,8 @@ defmodule RustQ.Rust.Identifier do
 
   def valid?(<<"_", rest::binary>>), do: valid_tail?(rest)
   def valid?(""), do: false
+
+  defp valid_identifier?(value), do: byte_size(value) <= @max_bytes and valid?(value)
 
   defp valid_tail?(<<>>), do: true
 

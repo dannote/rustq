@@ -2,7 +2,7 @@ defmodule RustQ.Meta.QuotedTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.AST, as: MetaAST
-  alias RustQ.Rust.AST.Render
+  alias RustQ.Rust
   alias RustQ.Rust.AST.TypeBuilder, as: T
 
   test "quoted accepts explicit Rust AST types" do
@@ -21,7 +21,7 @@ defmodule RustQ.Meta.QuotedTest do
           end
       )
 
-    source = Render.render_function(function)
+    source = Rust.render(function)
 
     assert source =~ "fn draw_translate_impl<'a>("
     assert source =~ "canvas: &skia_safe::Canvas"
@@ -43,7 +43,7 @@ defmodule RustQ.Meta.QuotedTest do
           end
       )
 
-    source = Render.render_function(function)
+    source = Rust.render(function)
     assert source =~ "atoms::fill()"
   end
 end

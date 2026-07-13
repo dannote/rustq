@@ -1,7 +1,5 @@
 defmodule RustQ.Rust.AST.Render do
-  @moduledoc """
-  Renders RustQ AST nodes through the native Rust renderer.
-  """
+  @moduledoc false
 
   alias RustQ.Diagnostic
   alias RustQ.Native.Nif
@@ -90,6 +88,7 @@ defmodule RustQ.Rust.AST.Render do
     TypeRef,
     TypeResult,
     TypeSlice,
+    TypeTuple,
     TypeUnit,
     TypeVec,
     UnaryOp,
@@ -361,7 +360,13 @@ defmodule RustQ.Rust.AST.Render do
   def render_struct(%Struct{} = struct) do
     derive = render_derive(struct.derive)
     vis = render_vis(struct.vis)
-    lifetime = if struct.lifetime, do: "<'#{struct.lifetime}>", else: ""
+
+    lifetimes =
+      case struct.lifetimes do
+        [] -> ""
+        values -> ["<", render_lifetimes(values), ">"]
+      end
+
     fields = struct.fields |> Elixir.Enum.map(&render_struct_field/1) |> Elixir.Enum.join("\n")
 
     [
@@ -370,7 +375,7 @@ defmodule RustQ.Rust.AST.Render do
       vis,
       "struct ",
       Atom.to_string(struct.name),
-      lifetime,
+      lifetimes,
       " {\n",
       fields |> indent(),
       "\n}"
@@ -454,6 +459,13 @@ defmodule RustQ.Rust.AST.Render do
 
   def render_type(%TypeArray{inner: inner, size: size}),
     do: ["[", render_type(inner), "; ", to_string(size), "]"]
+
+  def render_type(%TypeTuple{items: items}) do
+    rendered = Elixir.Enum.map(items, &render_type/1)
+    trailing_comma = if match?([_item], items), do: ",", else: ""
+
+    ["(", Elixir.Enum.intersperse(rendered, ", "), trailing_comma, ")"]
+  end
 
   def render_stmt(%Let{} = stmt) do
     mut = if stmt.mutable, do: "mut ", else: ""

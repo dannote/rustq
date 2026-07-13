@@ -58,10 +58,6 @@ pub(crate) fn parse_syn<T: ParseSynTokens>(tokens: proc_macro2::TokenStream) -> 
     T::parse_syn_tokens(tokens).map_err(|_| rustler::Error::BadArg)
 }
 
-pub(crate) fn parse_type(source: &str) -> NifResult<Type> {
-    syn::parse_str(source).map_err(|_| rustler::Error::BadArg)
-}
-
 pub(crate) fn path_from_parts(parts: Vec<String>) -> NifResult<syn::Path> {
     if parts.is_empty() {
         return Err(rustler::Error::BadArg);

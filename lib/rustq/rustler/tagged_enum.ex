@@ -50,7 +50,7 @@ defmodule RustQ.Rustler.TaggedEnum do
   end
 
   defp variant({variant, opts}) do
-    %AST.EnumVariant{name: ident_atom(variant), tuple: [Keyword.fetch!(opts, :type)]}
+    %AST.EnumVariant{name: ident_atom(variant), tuple: [A.type(Keyword.fetch!(opts, :type))]}
   end
 
   defp decoder_function(enum_name, variants, tag, unknown) do

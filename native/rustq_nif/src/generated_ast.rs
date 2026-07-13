@@ -38,6 +38,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_VEC: &str = "Elixir.RustQ.Rust.AST.TypeVec";
     pub(crate) const TYPE_SLICE: &str = "Elixir.RustQ.Rust.AST.TypeSlice";
     pub(crate) const TYPE_ARRAY: &str = "Elixir.RustQ.Rust.AST.TypeArray";
+    pub(crate) const TYPE_TUPLE: &str = "Elixir.RustQ.Rust.AST.TypeTuple";
     pub(crate) const TYPE_RAW: &str = "Elixir.RustQ.Rust.AST.TypeRaw";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
@@ -228,6 +229,7 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         ast_modules::TYPE_VEC => decode_type_vec(term),
         ast_modules::TYPE_SLICE => decode_type_slice(term),
         ast_modules::TYPE_ARRAY => decode_type_array(term),
+        ast_modules::TYPE_TUPLE => decode_type_tuple(term),
         ast_modules::TYPE_RAW => decode_type_raw(term),
         ast_modules::TYPE_UNIT => decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
@@ -409,7 +411,7 @@ pub(crate) fn decode_ast_struct<'a>(term: Term<'a>) -> NifResult<ItemStruct> {
         name,
         super::decode_vis(required_field(term, "vis")?)?,
         super::decode_derive(required_field(term, "derive")?)?,
-        optional_atom_key(term, "lifetime")?,
+        decode_lifetime_list(required_field(term, "lifetimes")?)?,
         required_struct_field_list(term, "fields")?,
         super::decode_attribute_list(required_field(term, "attrs")?)?,
     )
@@ -540,6 +542,10 @@ pub(crate) fn decode_type_slice<'a>(term: Term<'a>) -> NifResult<Type> {
 
 pub(crate) fn decode_type_array<'a>(term: Term<'a>) -> NifResult<Type> {
     super::parse_type_array(required_type(term, "inner")?, required_field(term, "size")?)
+}
+
+pub(crate) fn decode_type_tuple<'a>(term: Term<'a>) -> NifResult<Type> {
+    super::parse_type_tuple(required_type_list(term, "items")?)
 }
 
 pub(crate) fn decode_pat_var<'a>(term: Term<'a>) -> NifResult<Pat> {

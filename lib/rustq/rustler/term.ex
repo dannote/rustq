@@ -563,7 +563,7 @@ defmodule RustQ.Rustler.Term do
   end
 
   defp struct_ast(name, fields, lifetime) do
-    I.struct ident_atom(name), lifetime: lifetime do
+    I.struct ident_atom(name), lifetimes: List.wrap(lifetime) do
       struct_fields(fields)
     end
   end

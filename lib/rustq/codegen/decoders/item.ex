@@ -122,7 +122,7 @@ defmodule RustQ.Codegen.Decoders.Item do
       name,
       Super.decode_vis(required_field(term, "vis")),
       Super.decode_derive(required_field(term, "derive")),
-      optional_atom_key(term, "lifetime"),
+      unwrap!(decode_lifetime_list(unwrap!(required_field(term, "lifetimes")))),
       required_struct_field_list(term, "fields"),
       Super.decode_attribute_list(required_field(term, "attrs"))
     )

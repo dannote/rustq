@@ -1,6 +1,8 @@
 defmodule RustQ.Rust.AST.BuilderTest do
   use ExUnit.Case, async: true
 
+  alias RustQ.Rust
+
   alias RustQ.Rust.AST.{
     Arm,
     Err,
@@ -10,7 +12,6 @@ defmodule RustQ.Rust.AST.BuilderTest do
     Path,
     PatVar,
     PatWildcard,
-    Render,
     Return,
     TypePath
   }
@@ -35,7 +36,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       body: [A.return(A.ok())]
     }
 
-    source = Render.render_function(function)
+    source = render_function(function)
 
     assert source =~ "fn typed<'a>("
     assert source =~ "canvas: &skia_safe::Canvas"
@@ -53,14 +54,14 @@ defmodule RustQ.Rust.AST.BuilderTest do
 
   test "splits Rust path strings into type and expression path parts" do
     assert %TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
-    assert Render.render_type(T.path("paint::Cap")) == "paint::Cap"
+    assert Rust.render_type(T.path("paint::Cap")) == "paint::Cap"
 
     assert %Path{parts: ["paint", "Cap", "Butt"]} = A.path("paint::Cap::Butt")
-    assert Render.render_expr(A.path("paint::Cap::Butt")) == "paint::Cap::Butt"
+    assert Rust.render(A.path("paint::Cap::Butt")) == "paint::Cap::Butt"
   end
 
   test "renders Rust keywords in paths as raw identifiers" do
-    assert Render.render_expr(A.path([:atoms, :type])) == "atoms::r#type"
+    assert Rust.render(A.path([:atoms, :type])) == "atoms::r#type"
   end
 
   test "renders token macro expressions through native AST" do
@@ -74,7 +75,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    assert Render.render_function(function) =~ "parse_pat(quote!(None))"
+    assert render_function(function) =~ "parse_pat(quote!(None))"
   end
 
   test "renders structural item macros with repeated token trees" do
@@ -121,7 +122,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         attrs: [A.allow_attr(:unused_macros)]
       )
 
-    source = Render.render_item(macro)
+    source = Rust.render(macro)
 
     assert source =~ "macro_rules! kiwi_sparse_message_descriptor_decoder"
 
@@ -141,7 +142,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       body: [A.return(A.var(:term))]
     }
 
-    assert Render.render_function(function) =~
+    assert render_function(function) =~
              "fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a>"
   end
 
@@ -160,13 +161,13 @@ defmodule RustQ.Rust.AST.BuilderTest do
         ]
       )
 
-    assert Render.render_impl(impl) =~
+    assert Rust.render(impl) =~
              "impl<'a> rustler::Decoder<'a> for Content"
   end
 
   test "renders item-level Rust AST nodes through native AST" do
     source =
-      Render.render_file([
+      Rust.render_all([
         A.use([:quote, :quote]),
         A.use({[:rustler], [:Atom, :Env]}),
         A.module(
@@ -194,7 +195,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       body: [A.return(A.tuple([1, 2]))]
     }
 
-    assert Render.render_function(function) =~ "(1, 2)"
+    assert render_function(function) =~ "(1, 2)"
   end
 
   test "renders numeric literal match patterns" do
@@ -212,7 +213,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
       ]
     }
 
-    source = Render.render_function(function)
+    source = render_function(function)
 
     assert source =~ "1 =>"
     assert source =~ "Ok(atoms::clear())"
@@ -235,7 +236,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    source = Render.render_function(function)
+    source = render_function(function)
 
     assert source =~ "loop {"
     assert source =~ "step();"
@@ -262,7 +263,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    source = Render.render_function(function)
+    source = render_function(function)
 
     assert source =~ "value if value > 0 =>"
     assert source =~ "Ok(value)"
@@ -294,7 +295,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
         end
     }
 
-    source = Render.render_function(function)
+    source = render_function(function)
 
     assert source =~ "if left && right == true"
     assert source =~ "Ok(())"
@@ -331,5 +332,12 @@ defmodule RustQ.Rust.AST.BuilderTest do
            ] = body
   end
 
-  defp render_type(type), do: type |> Render.render_type() |> IO.iodata_to_binary()
+  defp render_function(%Function{} = function) do
+    function
+    |> Map.update!(:args, &A.function_args/1)
+    |> Map.update!(:returns, &A.type/1)
+    |> Rust.render()
+  end
+
+  defp render_type(type), do: Rust.render_type(type)
 end

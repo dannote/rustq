@@ -137,7 +137,7 @@ defmodule RustQ.Rustler.Opts do
   defp helper_names(opts), do: HelperSelection.names(opts, @helper_names)
 
   defp struct_ast(name, fields, phantom?, lifetime) do
-    I.struct Identifier.atom!(to_string(name)), vis: :pub, lifetime: lifetime do
+    I.struct Identifier.atom!(to_string(name)), vis: :pub, lifetimes: List.wrap(lifetime) do
       fields(fields, phantom?, lifetime)
     end
   end

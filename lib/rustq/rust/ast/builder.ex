@@ -159,7 +159,7 @@ defmodule RustQ.Rust.AST.Builder do
   def const(name, type, expression, opts \\ []),
     do: %Const{
       name: Identifier.atom!(to_string(name)),
-      type: type,
+      type: type(type),
       expr: expr(expression),
       vis: Keyword.get(opts, :vis)
     }
@@ -167,26 +167,26 @@ defmodule RustQ.Rust.AST.Builder do
   def type_alias(name, type, opts \\ []),
     do: %TypeAlias{
       name: Identifier.atom!(to_string(name)),
-      type: type,
+      type: type(type),
       vis: Keyword.get(opts, :vis)
     }
 
   def static(name, type, expression, opts \\ []),
     do: %Static{
       name: Identifier.atom!(to_string(name)),
-      type: type,
+      type: type(type),
       expr: expr(expression),
       mutable: Keyword.get(opts, :mutable, false),
       vis: Keyword.get(opts, :vis)
     }
 
-  def function_arg(%FunctionArg{} = arg), do: arg
+  def function_arg(%FunctionArg{} = arg), do: %{arg | type: maybe_type(arg.type)}
 
   def function_arg({name, type}),
-    do: %FunctionArg{name: Identifier.atom!(to_string(name)), type: type}
+    do: %FunctionArg{name: Identifier.atom!(to_string(name)), type: maybe_type(type)}
 
   def function_arg(name, type),
-    do: %FunctionArg{name: Identifier.atom!(to_string(name)), type: type}
+    do: %FunctionArg{name: Identifier.atom!(to_string(name)), type: maybe_type(type)}
 
   def function_args(args), do: Enum.map(args, &function_arg/1)
 
@@ -199,7 +199,7 @@ defmodule RustQ.Rust.AST.Builder do
 
   def impl(target, opts \\ []) do
     %Impl{
-      target: target,
+      target: type(target),
       trait: Keyword.get(opts, :trait) && trait_path(Keyword.fetch!(opts, :trait)),
       items: flatten(Keyword.get(opts, :items, [])),
       attrs: Keyword.get(opts, :attrs, []),
@@ -231,14 +231,18 @@ defmodule RustQ.Rust.AST.Builder do
   end
 
   def let(name, expression, opts \\ []),
-    do: %Let{pattern: pat(name), expr: expr(expression), type: Keyword.get(opts, :type)}
+    do: %Let{
+      pattern: pat(name),
+      expr: expr(expression),
+      type: maybe_type(Keyword.get(opts, :type))
+    }
 
   def let_mut(name, expression, opts \\ []),
     do: %Let{
       pattern: pat(name),
       expr: expr(expression),
       mutable: true,
-      type: Keyword.get(opts, :type)
+      type: maybe_type(Keyword.get(opts, :type))
     }
 
   def let_else(pattern, expression, else_body),
@@ -271,8 +275,7 @@ defmodule RustQ.Rust.AST.Builder do
   def break(expression), do: %Break{expr: expr(expression)}
   def continue, do: %Continue{}
 
-  def arg(name, type) when is_binary(type), do: %FunctionArg{name: name, type: type}
-  def arg(name, type), do: %FunctionArg{name: name, type: type(type)}
+  def arg(name, type), do: function_arg(name, type)
 
   def receiver(opts \\ []),
     do: %FunctionArg{
@@ -283,6 +286,8 @@ defmodule RustQ.Rust.AST.Builder do
     }
 
   def type(value), do: TypeBuilder.type(value)
+  defp maybe_type(nil), do: nil
+  defp maybe_type(value), do: type(value)
 
   def var(name) when is_atom(name), do: %Var{name: name}
   def path_parts(parts) when is_list(parts), do: parts
@@ -300,7 +305,7 @@ defmodule RustQ.Rust.AST.Builder do
   def field(receiver, field), do: %Field{receiver: expr(receiver), field: field}
   def index(receiver, index), do: %Index{receiver: expr(receiver), index: expr(index)}
   def range(start, stop), do: %Range{start: maybe_expr(start), stop: maybe_expr(stop)}
-  def cast(expression, type), do: %Cast{expr: expr(expression), type: type}
+  def cast(expression, type), do: %Cast{expr: expr(expression), type: type(type)}
   def not_(expression), do: %UnaryOp{op: :not, expr: expr(expression)}
   def neg(expression), do: %UnaryOp{op: :neg, expr: expr(expression)}
   def deref(expression), do: %UnaryOp{op: :deref, expr: expr(expression)}
@@ -347,7 +352,7 @@ defmodule RustQ.Rust.AST.Builder do
     do: %PathCall{
       path: %Path{parts: parts},
       args: Enum.map(List.wrap(args), &expr/1),
-      generics: Keyword.get(opts, :generics, [])
+      generics: opts |> Keyword.get(:generics, []) |> Enum.map(&type/1)
     }
 
   def method(receiver, method, args \\ [], opts \\ []),
@@ -355,7 +360,7 @@ defmodule RustQ.Rust.AST.Builder do
       receiver: expr(receiver),
       method: method,
       args: Enum.map(List.wrap(args), &expr/1),
-      generics: Keyword.get(opts, :generics, [])
+      generics: opts |> Keyword.get(:generics, []) |> Enum.map(&type/1)
     }
 
   def struct_expr(path, fields) do
