@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.9.9 - 2026-07-10
+
+- Preserve nested wrapper tuple binding types and lexical pre-shadow types so
+  downstream inference does not add propagation to infallible values.
+
 ## v0.9.8 - 2026-07-10
 
 - Select map-backed Rust struct items from Rusty-Elixir `@type` metadata with
