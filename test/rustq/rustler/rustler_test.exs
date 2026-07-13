@@ -45,6 +45,20 @@ defmodule RustQ.RustlerTest do
     assert code =~ "compile_nif_impl(env, source, minify)"
   end
 
+  test "derives Elixir NIF stub arities from implementation source" do
+    source =
+      RustQ.Rustler.nif_stubs_from_source(
+        "test/fixtures/nif_impls.rs",
+        [parse_nif: [], compile_nif: []],
+        RustQ.Test.GeneratedNifStubs
+      )
+
+    assert {:ok, _ast} = Code.string_to_quoted(source)
+    assert source =~ "def parse_nif(_source)"
+    assert source =~ "def compile_nif(_source, _minify)"
+    refute source =~ "_env"
+  end
+
   test "builds NIF export functions" do
     code =
       "__rq_items!();"

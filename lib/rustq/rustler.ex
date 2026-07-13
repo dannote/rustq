@@ -74,6 +74,16 @@ defmodule RustQ.Rustler do
     do: Nif.exports_from_source(path, specs, defaults)
 
   @doc """
+  Builds an Elixir macro module containing NIF-not-loaded stubs whose names and
+  arities are derived from Rust implementation signatures. Rustler `Env`
+  arguments are excluded from Elixir arity.
+  """
+  @spec nif_stubs_from_source(Path.t(), [{atom() | String.t(), keyword()}], module(), keyword()) ::
+          String.t()
+  def nif_stubs_from_source(path, specs, module, defaults \\ []),
+    do: Nif.stubs_from_source(path, specs, module, defaults)
+
+  @doc """
   Builds a single exported Rustler NIF function.
   """
   @spec nif_export(atom() | String.t(), keyword()) :: Rust.Function.t()

@@ -13,6 +13,7 @@ defmodule RustQ.Rustler.Nif do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Syn.{Arg, Type}
 
   import RustQ.Rust.AST.ItemBuilder, only: [field: 3]
   import RustQ.Rust.AST.ItemBuilder
@@ -86,25 +87,47 @@ defmodule RustQ.Rustler.Nif do
 
   @spec exports_from_source(Path.t(), [spec()], keyword()) :: [Rust.Function.t()]
   def exports_from_source(path, specs, defaults \\ []) do
-    functions = path |> RustQ.Syn.parse_file!() |> RustQ.Syn.functions()
+    path
+    |> source_exports(specs, defaults)
+    |> Enum.map(fn {name, function, opts} ->
+      derived = [
+        args: Enum.map(function.args, &source_arg/1),
+        returns: function.returns || :unit
+      ]
 
-    Enum.map(specs, fn {name, opts} ->
-      opts = Keyword.merge(defaults, opts)
-      impl = Keyword.get(opts, :impl, "#{name}_impl")
-      function = Enum.find(functions, &(&1.name == to_string(impl)))
-
-      if function do
-        derived = [
-          args: Enum.map(function.args, &source_arg/1),
-          returns: function.returns || :unit,
-          impl: impl
-        ]
-
-        wrapper(name, Keyword.merge(derived, opts))
-      else
-        raise ArgumentError, "NIF implementation #{impl} not found in #{path}"
-      end
+      wrapper(name, Keyword.merge(derived, opts))
     end)
+  end
+
+  @spec stubs_from_source(Path.t(), [spec()], module(), keyword()) :: String.t()
+  def stubs_from_source(path, specs, module, defaults \\ []) do
+    definitions =
+      path
+      |> source_exports(specs, defaults)
+      |> Enum.map(fn {name, function, _opts} ->
+        args =
+          function.args
+          |> Enum.reject(&env_arg?/1)
+          |> Enum.map(&stub_arg/1)
+
+        quote do
+          def unquote(RustQ.Atom.identifier!(to_string(name)))(unquote_splicing(args)),
+            do: :erlang.nif_error(:nif_not_loaded)
+        end
+      end)
+
+    quoted_body = {:quote, [], [[do: {:__block__, [], definitions}]]}
+
+    quote do
+      defmodule unquote(module) do
+        @moduledoc false
+        defmacro __using__(_opts), do: unquote(quoted_body)
+      end
+    end
+    |> Macro.to_string()
+    |> Code.format_string!()
+    |> IO.iodata_to_binary()
+    |> Kernel.<>("\n")
   end
 
   @spec export(atom() | String.t(), keyword()) :: Rust.Function.t()
@@ -204,8 +227,31 @@ defmodule RustQ.Rustler.Nif do
     end
   end
 
-  defp source_arg(%RustQ.Syn.Arg{name: name, type: type}) when is_binary(name),
+  defp source_exports(path, specs, defaults) do
+    functions = path |> RustQ.Syn.parse_file!() |> RustQ.Syn.functions()
+
+    Enum.map(specs, fn {name, opts} ->
+      opts = Keyword.merge(defaults, opts)
+      impl = Keyword.get(opts, :impl, "#{name}_impl")
+      function = Enum.find(functions, &(&1.name == to_string(impl)))
+
+      if function do
+        {name, function, Keyword.put(opts, :impl, impl)}
+      else
+        raise ArgumentError, "NIF implementation #{impl} not found in #{path}"
+      end
+    end)
+  end
+
+  defp source_arg(%Arg{name: name, type: type}) when is_binary(name),
     do: {RustQ.Atom.identifier!(name), type}
+
+  defp env_arg?(%Arg{type_ast: type}), do: Type.path?(type, "Env")
+
+  defp stub_arg(%Arg{name: name}) do
+    RustQ.Atom.identifier!("_#{name}")
+    |> then(&{&1, [], nil})
+  end
 
   defp ast_compatible?(opts) do
     impl = Keyword.get(opts, :impl)
