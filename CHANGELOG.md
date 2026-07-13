@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.9.5 - 2026-07-10
+
+- Preserve no-parentheses function-pointer field access in expected-type
+  positions instead of lowering fields named `decode` as generic Rustler method
+  calls.
+
 ## v0.9.4 - 2026-07-10
 
 - Add AST-backed Rustler term encoders with nested, conditional, optional,

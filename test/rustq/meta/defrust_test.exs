@@ -44,6 +44,22 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
+  test "preserves no-parentheses function pointer field access in expected positions" do
+    defmodule FunctionPointerFieldCase do
+      use RustQ.Meta, rust_sources: ["test/fixtures/function_pointer_field.rs"]
+      alias RustQ.Type, as: R
+
+      @spec decode_function(R.path(:DecodeField)) :: R.path(:DecodeFn)
+      defrust(decode_function(field), do: field.decode)
+    end
+
+    source = FunctionPointerFieldCase.__rustq_source__()
+
+    assert source =~ "fn decode_function(field: DecodeField) -> DecodeFn"
+    assert source =~ "field.decode"
+    refute source =~ "field.decode::<DecodeFn>()"
+  end
+
   test "defrust lowers macro-generated case clauses" do
     defmodule MacroGeneratedCaseClauseCase do
       use RustQ.Meta

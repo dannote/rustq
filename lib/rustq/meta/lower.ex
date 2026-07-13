@@ -320,18 +320,22 @@ defmodule RustQ.Meta.Lower do
        do: lower_closure_args(args, body, context, closure_return_type(expected_type))
 
   defp lower_expected_expr_context(
-         {{:., _, [receiver, :decode]}, _meta, []},
+         {{:., _, [receiver, :decode]}, meta, []} = expression,
          %Type{} = expected_type,
          %Context{} = context
        ) do
-    %AST.Try{
-      expr: %AST.MethodCall{
-        receiver: lower_checked_expr(receiver, rustler_term_type(), context),
-        method: :decode,
-        args: [],
-        generics: [expected_type.ast]
+    if Keyword.get(meta, :no_parens, false) do
+      lower_expr_context(expression, context)
+    else
+      %AST.Try{
+        expr: %AST.MethodCall{
+          receiver: lower_checked_expr(receiver, rustler_term_type(), context),
+          method: :decode,
+          args: [],
+          generics: [expected_type.ast]
+        }
       }
-    }
+    end
   end
 
   defp lower_expected_expr_context(
