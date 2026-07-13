@@ -54,8 +54,8 @@ fn syn_inspect<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-fn syn_atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
-    syn_metadata::atom_references(env, source)
+fn syn_atom_references<'a>(env: Env<'a>, source: String, module: String) -> NifResult<Term<'a>> {
+    syn_metadata::atom_references(env, source, module)
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]

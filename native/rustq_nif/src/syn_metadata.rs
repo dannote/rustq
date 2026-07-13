@@ -17,10 +17,17 @@ pub(crate) fn inspect_source<'a>(env: Env<'a>, source: String) -> NifResult<Term
     }
 }
 
-pub(crate) fn atom_references<'a>(env: Env<'a>, source: String) -> NifResult<Term<'a>> {
+pub(crate) fn atom_references<'a>(
+    env: Env<'a>,
+    source: String,
+    module: String,
+) -> NifResult<Term<'a>> {
     match syn::parse_file(&source) {
         Ok(file) => {
-            let mut visitor = AtomReferenceVisitor { atoms: Vec::new() };
+            let mut visitor = AtomReferenceVisitor {
+                atoms: Vec::new(),
+                module,
+            };
             visitor.visit_file(&file);
             visitor.atoms.sort();
             visitor.atoms.dedup();
@@ -89,6 +96,7 @@ pub(crate) fn enum_variants<'a>(
 
 struct AtomReferenceVisitor {
     atoms: Vec<String>,
+    module: String,
 }
 
 struct MethodReferenceVisitor {
@@ -109,7 +117,7 @@ impl<'ast> Visit<'ast> for AtomReferenceVisitor {
     fn visit_expr_call(&mut self, node: &'ast ExprCall) {
         if let Expr::Path(ExprPath { path, .. }) = &*node.func {
             if path.segments.len() == 2
-                && path.segments[0].ident == "atoms"
+                && path.segments[0].ident == self.module.as_str()
                 && matches!(path.segments[1].arguments, PathArguments::None)
             {
                 self.atoms.push(path.segments[1].ident.to_string());
@@ -120,19 +128,19 @@ impl<'ast> Visit<'ast> for AtomReferenceVisitor {
     }
 
     fn visit_macro(&mut self, node: &'ast Macro) {
-        collect_macro_atom_references(node.tokens.clone(), &mut self.atoms);
+        collect_macro_atom_references(node.tokens.clone(), &self.module, &mut self.atoms);
         visit::visit_macro(self, node);
     }
 }
 
-fn collect_macro_atom_references(tokens: TokenStream, atoms: &mut Vec<String>) {
+fn collect_macro_atom_references(tokens: TokenStream, module_name: &str, atoms: &mut Vec<String>) {
     let trees = tokens.into_iter().collect::<Vec<_>>();
 
     for window in trees.windows(4) {
         if let [TokenTree::Ident(module), TokenTree::Punct(first), TokenTree::Punct(second), TokenTree::Ident(name)] =
             window
         {
-            if module == "atoms" && first.as_char() == ':' && second.as_char() == ':' {
+            if module == module_name && first.as_char() == ':' && second.as_char() == ':' {
                 atoms.push(name.to_string());
             }
         }
@@ -140,7 +148,7 @@ fn collect_macro_atom_references(tokens: TokenStream, atoms: &mut Vec<String>) {
 
     for tree in trees {
         if let TokenTree::Group(group) = tree {
-            collect_macro_atom_references(group.stream(), atoms);
+            collect_macro_atom_references(group.stream(), module_name, atoms);
         }
     }
 }

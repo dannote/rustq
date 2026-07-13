@@ -569,17 +569,26 @@ defmodule RustQ.Syn do
   @doc """
   Returns atom names referenced as `atoms::name()` calls in Rust source.
 
-  This is intended for generators that need to keep `rustler::atoms!` in sync
-  with existing Rust code without scraping source text. The source is parsed by
+  Pass `module: "a"` to discover calls through another atom module. This is
+  intended for generators that need to keep `rustler::atoms!` in sync with
+  existing Rust code without scraping source text. The source is parsed by
   `syn`; invalid Rust returns a normal RustQ parse error.
   """
-  @spec atom_references(String.t()) :: {:ok, [String.t()]} | {:error, term()}
-  def atom_references(source) when is_binary(source), do: RustQ.Native.syn_atom_references(source)
+  @spec atom_references(String.t(), keyword()) :: {:ok, [String.t()]} | {:error, term()}
+  def atom_references(source, opts \\ []) when is_binary(source) and is_list(opts) do
+    module = Keyword.get(opts, :module, "atoms")
 
-  @doc "Returns atom names referenced as `atoms::name()` calls in Rust source, raising on failure."
-  @spec atom_references!(String.t()) :: [String.t()]
-  def atom_references!(source) do
-    case atom_references(source) do
+    unless is_binary(module) do
+      raise ArgumentError, "expected :module to be a Rust module name string"
+    end
+
+    RustQ.Native.syn_atom_references(source, module)
+  end
+
+  @doc "Returns referenced atom names in Rust source, raising on failure."
+  @spec atom_references!(String.t(), keyword()) :: [String.t()]
+  def atom_references!(source, opts \\ []) do
+    case atom_references(source, opts) do
       {:ok, atoms} ->
         atoms
 
