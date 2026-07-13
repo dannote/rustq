@@ -23,8 +23,8 @@ defmodule RustQ.Rustler.Term do
 
   defmodule EncoderField do
     @moduledoc false
-    @enforce_keys [:key, :field, :mode]
-    defstruct [:key, :field, :mode]
+    @enforce_keys [:key, :source, :mode]
+    defstruct [:key, :source, :mode, :via, :with]
   end
 
   @builder_names [:map_from_terms, :struct_from_terms]
@@ -338,14 +338,21 @@ defmodule RustQ.Rustler.Term do
   end
 
   defp encoder_field(field) when is_atom(field),
-    do: %EncoderField{key: field, field: field, mode: :required}
+    do: %EncoderField{key: field, source: [field], mode: :required}
 
   defp encoder_field({key, field}) when is_atom(key) and is_atom(field),
-    do: %EncoderField{key: key, field: field, mode: :required}
+    do: %EncoderField{key: key, source: [field], mode: :required}
 
   defp encoder_field({key, opts}) when is_atom(key) and is_list(opts) do
     mode = if Keyword.get(opts, :when_some, false), do: :when_some, else: :required
-    %EncoderField{key: key, field: Keyword.get(opts, :field, key), mode: mode}
+
+    %EncoderField{
+      key: key,
+      source: opts |> Keyword.get(:field, key) |> List.wrap(),
+      mode: mode,
+      via: Keyword.get(opts, :via),
+      with: Keyword.get(opts, :with)
+    }
   end
 
   defp encoder_body(fields) do
@@ -356,16 +363,16 @@ defmodule RustQ.Rustler.Term do
     else
       [
         A.let_mut(:keys, A.vec(Enum.map(required, &encoded_atom(&1.key)))),
-        A.let_mut(:values, A.vec(Enum.map(required, &encoded_field(&1.field))))
+        A.let_mut(:values, A.vec(Enum.map(required, &encoded_field/1)))
         | Enum.map(conditional, &conditional_encoder_field/1)
       ] ++ [A.return(A.method(encoder_map_call([], :vectors), :unwrap))]
     end
   end
 
-  defp conditional_encoder_field(%EncoderField{key: key, field: field}) do
+  defp conditional_encoder_field(%EncoderField{key: key, source: source}) do
     A.if_let(
       P.some(P.var(:value)),
-      A.method(A.field(:self, field), :as_ref),
+      A.method(field_source(source), :as_ref),
       [
         %AST.ExprStmt{expr: A.method(:keys, :push, [encoded_atom(key)])},
         %AST.ExprStmt{expr: A.method(:values, :push, [A.method(:value, :encode, [:env])])}
@@ -375,7 +382,7 @@ defmodule RustQ.Rustler.Term do
 
   defp encoder_map_call(fields, :array) do
     keys = Enum.map(fields, &encoded_atom(&1.key))
-    values = Enum.map(fields, &encoded_field(&1.field))
+    values = Enum.map(fields, &encoded_field/1)
     encoder_map_call(A.array(keys), A.array(values))
   end
 
@@ -386,7 +393,20 @@ defmodule RustQ.Rustler.Term do
   end
 
   defp encoded_atom(key), do: A.method(A.path_call([:atoms, key]), :encode, [:env])
-  defp encoded_field(field), do: A.method(A.field(:self, field), :encode, [:env])
+
+  defp encoded_field(%EncoderField{source: source, via: via, with: helper}) do
+    value = source |> field_source() |> apply_encoder_via(via)
+
+    if helper do
+      A.path_call(List.wrap(helper), [:env, A.ref(value)])
+    else
+      A.method(value, :encode, [:env])
+    end
+  end
+
+  defp field_source(source), do: Enum.reduce(source, A.var(:self), &A.field(&2, &1))
+  defp apply_encoder_via(value, nil), do: value
+  defp apply_encoder_via(value, method), do: A.method(value, method)
 
   defp builder_item(name) do
     function_name = Map.fetch!(@builder_function_names, name)

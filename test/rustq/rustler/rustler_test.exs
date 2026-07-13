@@ -411,6 +411,28 @@ defmodule RustQ.RustlerTest do
     assert code =~ "Term::map_from_arrays"
   end
 
+  test "builds term encoders with nested and transformed fields" do
+    code =
+      "__rq_items!();"
+      |> RustQ.render!("term_encoder.rs",
+        splice: [
+          items:
+            RustQ.Rustler.term_encoder(:EncodedBlock,
+              fields: [
+                content: [field: [0, :content], via: :as_ref],
+                lang: [field: [0, :lang], via: :as_deref],
+                loc: [field: [0, :loc], with: :loc_to_term]
+              ],
+              target_lifetimes: [:_]
+            )
+        ]
+      )
+
+    assert code =~ "self.0.content.as_ref().encode(env)"
+    assert code =~ "self.0.lang.as_deref().encode(env)"
+    assert code =~ "loc_to_term(env, &self.0.loc)"
+  end
+
   test "builds term encoders with conditional option fields" do
     code =
       "__rq_items!();"
