@@ -1,6 +1,10 @@
 defmodule RustQ.Rust.AST.PatternBuilder do
   @moduledoc """
-  Small constructor API for RustQ pattern AST nodes.
+  Constructors and normalization for Rust pattern AST nodes.
+
+  `pattern/1` accepts existing pattern nodes and atom variables. Named helpers
+  cover wildcard, literal, path, tuple-variant, struct, `Some`, `Ok`, and `Err`
+  patterns.
   """
 
   alias RustQ.Rust.AST

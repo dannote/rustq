@@ -10,6 +10,7 @@ defmodule RustQ.Binding.Source do
   alias RustQ.Binding.Callable
   alias RustQ.Diagnostic
   alias RustQ.Meta.Type
+  alias RustQ.Rust.Identifier
   alias RustQ.Spec
   alias RustQ.Syn
 
@@ -134,7 +135,7 @@ defmodule RustQ.Binding.Source do
     index
     |> Syn.Index.statics()
     |> Map.new(fn static ->
-      {RustQ.Atom.identifier!(static.name),
+      {Identifier.atom!(static.name),
        annotate_type(Spec.from_syn(static.type_ast), index, conversions)}
     end)
   end

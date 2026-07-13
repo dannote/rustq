@@ -58,9 +58,8 @@ defmodule RustQ.Meta do
   alias RustQ.Meta.Options
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
-  alias RustQ.Meta.Validate
-  alias RustQ.Rust
   alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.Identifier
 
   @doc false
   defmacro __using__(opts) do
@@ -123,6 +122,7 @@ defmodule RustQ.Meta do
       @rustq_defs {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast)),
                    RustQ.Meta.Attrs.take_pending(__MODULE__),
                    RustQ.Meta.Attrs.current_rust_mod(__MODULE__)}
+      @doc false
       def unquote(name)(unquote_splicing(stub_args)), do: :erlang.nif_error(:rustq_defrust_stub)
     end
   end
@@ -148,12 +148,11 @@ defmodule RustQ.Meta do
     asts = Enum.map(built_asts, & &1.ast)
     macro_items = Enum.map(built_macros, &Map.take(&1, [:name, :ast, :rust_module]))
     type_asts = AST.build_type_asts(type_aliases)
-    type_items = Enum.map(type_asts, &Validate.item_ast/1)
+    type_items = type_asts
     rust_items = AST.group_module_asts(built_macros ++ built_asts)
-    rendered_items = Enum.map(rust_items, &Validate.item_ast/1)
-    items = type_items ++ rendered_items
+    items = type_items ++ rust_items
 
-    type_source = Enum.map_join(type_items, "\n\n", &Rust.to_fragment/1)
+    type_source = Enum.map_join(type_items, "\n\n", &Render.render_item/1)
 
     function_source =
       Enum.map_join(rust_items, "\n\n", &Render.render_item/1)
@@ -256,7 +255,7 @@ defmodule RustQ.Meta do
   defp alias_parts!(atom) when is_atom(atom) do
     atom
     |> Module.split()
-    |> Enum.map(&RustQ.Atom.identifier!/1)
+    |> Enum.map(&Identifier.atom!/1)
   end
 
   defp alias_parts!(other) do

@@ -2,6 +2,8 @@ defmodule RustQ.RustlerTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.Render
+  alias RustQ.Rustler.{Atom, Nif, Opts, Resource, TaggedEnum, Term}
 
   test "builds Rustler helpers" do
     code =
@@ -9,9 +11,9 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("native.rs",
         splice: [
           items: [
-            RustQ.Rustler.atoms([:ok, :error, {"r#type", "type"}]),
-            RustQ.Rustler.nif(:add, args: [a: :i64, b: :i64], returns: :i64, body: "a + b"),
-            RustQ.Rustler.init(RustQ.Native)
+            Atom.declaration([:ok, :error, {"r#type", "type"}]),
+            Nif.wrapper(:add, args: [a: :i64, b: :i64], returns: :i64),
+            Nif.init(RustQ.Native)
           ]
         ]
       )
@@ -19,6 +21,7 @@ defmodule RustQ.RustlerTest do
     assert code =~ "rustler::atoms!"
     assert code =~ "#[rustler::nif]"
     assert code =~ "fn add(a: i64, b: i64) -> i64"
+    assert code =~ "add_impl(a, b)"
     assert code =~ ~s|rustler::init! {|
     assert code =~ ~s|"Elixir.RustQ.Native"|
   end
@@ -26,10 +29,10 @@ defmodule RustQ.RustlerTest do
   test "derives NIF export signatures from implementation source" do
     code =
       "__rq_items!();"
-      |> RustQ.render!("nif_exports.rs",
+      |> RustQ.render!("nif_wrappers.rs",
         splice: [
           items:
-            RustQ.Rustler.nif_exports_from_source(
+            Nif.wrappers_from_source(
               "test/fixtures/nif_impls.rs",
               [parse_nif: [], compile_nif: [attrs: [A.allow_attr(:too_many_arguments)]]],
               schedule: :dirty_cpu
@@ -46,7 +49,7 @@ defmodule RustQ.RustlerTest do
 
   test "derives Elixir NIF stub arities from implementation source" do
     source =
-      RustQ.Rustler.nif_stubs_from_source(
+      Nif.stubs_from_source(
         "test/fixtures/nif_impls.rs",
         [parse_nif: [], compile_nif: []],
         RustQ.Test.GeneratedNifStubs
@@ -66,14 +69,14 @@ defmodule RustQ.RustlerTest do
 
     rust =
       "__rq_items!();"
-      |> RustQ.render!("nif_exports.rs",
+      |> RustQ.render!("nif_wrappers.rs",
         splice: [
-          items: RustQ.Rustler.nif_exports_from_sources(groups, schedule: :dirty_cpu)
+          items: Nif.wrappers_from_sources(groups, schedule: :dirty_cpu)
         ]
       )
 
     elixir =
-      RustQ.Rustler.nif_stubs_from_sources(
+      Nif.stubs_from_sources(
         groups,
         RustQ.Test.MultiSourceNifStubs
       )
@@ -111,7 +114,7 @@ defmodule RustQ.RustlerTest do
     }
 
     source =
-      RustQ.Rustler.nif_stubs_from_functions(
+      Nif.stubs_from_functions(
         [{:parse_nif, syn_function}, ast_function, zero_arity_function],
         RustQ.Test.MixedNifStubs
       )
@@ -128,10 +131,10 @@ defmodule RustQ.RustlerTest do
 
     rust =
       "__rq_items!();"
-      |> RustQ.render!("nif_exports.rs",
+      |> RustQ.render!("nif_wrappers.rs",
         splice: [
           items:
-            RustQ.Rustler.nif_exports_from_source(
+            Nif.wrappers_from_source(
               "test/fixtures/nif_impls.rs",
               manifest,
               schedule: :dirty_cpu
@@ -144,7 +147,7 @@ defmodule RustQ.RustlerTest do
     consumer_module = Module.concat([RustQ.Test, "NifConsumer#{suffix}"])
 
     elixir =
-      RustQ.Rustler.nif_stubs_from_source(
+      Nif.stubs_from_source(
         "test/fixtures/nif_impls.rs",
         manifest,
         stubs_module
@@ -168,20 +171,20 @@ defmodule RustQ.RustlerTest do
   test "builds NIF export functions" do
     code =
       "__rq_items!();"
-      |> RustQ.render!("nif_exports.rs",
+      |> RustQ.render!("nif_wrappers.rs",
         splice: [
           items:
-            RustQ.Rustler.nif_exports(
+            Nif.wrappers(
               render_png: [
                 args: [env: "Env<'a>", batch: "Term<'a>"],
                 returns: "NifResult<Term<'a>>",
-                lifetime: :a,
+                lifetimes: [:a],
                 schedule: :dirty_cpu
               ],
               register_file: [
                 args: [path: :String, data: "rustler::Binary<'a>"],
                 returns: "rustler::Atom",
-                lifetime: :a,
+                lifetimes: [:a],
                 impl: "files::register"
               ]
             )
@@ -205,7 +208,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("atom_decoder.rs",
         splice: [
           items: [
-            RustQ.Rustler.atom_decoder(:decode_blend_mode,
+            Atom.decoder(:decode_blend_mode,
               returns: :BlendMode,
               cases: [src_over: "BlendMode::SrcOver", multiply: "BlendMode::Multiply"]
             )
@@ -229,7 +232,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("atom_decoder_descriptor.rs",
         splice: [
           items: [
-            RustQ.Rustler.atom_decoder(:decode_clip_op,
+            Atom.decoder(:decode_clip_op,
               returns: :ClipOp,
               descriptor: descriptor
             )
@@ -248,7 +251,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("atom_decoder_strings.rs",
         splice: [
           items: [
-            RustQ.Rustler.atom_decoder("decode_fill_rule",
+            Atom.decoder("decode_fill_rule",
               returns: :FillRule,
               cases: [{"even_odd", "FillRule::EvenOdd"}]
             )
@@ -266,8 +269,8 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("atom_dispatch.rs",
         splice: [
           items: [
-            RustQ.Rustler.atom_dispatch(:draw_command,
-              lifetime: :a,
+            Atom.dispatch(:draw_command,
+              lifetimes: [:a],
               args: [surface: "&mut Surface", command: "Term<'a>"],
               on: "command.map_get(atoms::op())?.decode::<Atom>()?",
               cases: [
@@ -293,7 +296,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("atom_dispatch_ast.rs",
         splice: [
           items: [
-            RustQ.Rustler.atom_dispatch(:draw_command,
+            Atom.dispatch(:draw_command,
               on: A.atom(:op),
               cases: [rect: A.call(:draw_rect)],
               unknown: A.err(A.badarg())
@@ -310,7 +313,7 @@ defmodule RustQ.RustlerTest do
   test "builds map helper functions" do
     code =
       "__rq_items!();"
-      |> RustQ.render!("opts_helpers.rs", splice: [items: RustQ.Rustler.opts_helpers()])
+      |> RustQ.render!("opts_helpers.rs", splice: [items: Opts.helpers()])
 
     assert code =~ "fn decode_opts<'a>(term: Term<'a>) -> NifResult<Vec<(Atom, Term<'a>)>>"
     assert code =~ "term.map_get(atoms::opts())?"
@@ -328,7 +331,7 @@ defmodule RustQ.RustlerTest do
     code =
       "__rq_items!();"
       |> RustQ.render!("cached_atoms.rs",
-        splice: [items: RustQ.Rustler.cached_atoms([:ok, {:node_changes, "nodeChanges"}])]
+        splice: [items: Atom.cached([:ok, {:node_changes, "nodeChanges"}])]
       )
 
     assert code =~ "fn cached_atom(env: Env, cell: &OnceLock<Atom>, name: &str) -> Atom"
@@ -340,7 +343,7 @@ defmodule RustQ.RustlerTest do
   test "builds term builder helpers" do
     code =
       "__rq_items!();"
-      |> RustQ.render!("term_builders.rs", splice: [items: RustQ.Rustler.term_builders()])
+      |> RustQ.render!("term_builders.rs", splice: [items: Term.builders()])
 
     assert code =~ "fn make_map_from_terms<'a>"
     assert code =~ "fn make_struct_from_terms<'a>"
@@ -353,7 +356,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("fixed_struct_helpers.rs",
         splice: [
           items:
-            RustQ.Rustler.term_helpers(
+            Term.helpers(
               include: [
                 :cached_struct_keys,
                 :default_struct_values,
@@ -374,7 +377,9 @@ defmodule RustQ.RustlerTest do
   test "builds raw NIF_TERM builder helpers" do
     code =
       "__rq_items!();"
-      |> RustQ.render!("nif_term_builders.rs", splice: [items: RustQ.Rustler.nif_term_builders()])
+      |> RustQ.render!("nif_term_builders.rs",
+        splice: [items: Nif.raw_term_builders()]
+      )
 
     assert code =~ "fn make_map_from_nif_terms<'a>"
     assert code =~ "fn make_struct_from_nif_terms<'a>"
@@ -387,7 +392,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("nif_struct.rs",
         splice: [
           items: [
-            RustQ.Rustler.nif_struct(:ExText, "Folio.Content.Text",
+            Nif.struct(:ExText, "Folio.Content.Text",
               fields: [
                 text: :String,
                 size: {:option, :String}
@@ -410,7 +415,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("tagged_enum.rs",
         splice: [
           items:
-            RustQ.Rustler.tagged_enum(:ExContent,
+            TaggedEnum.items(:ExContent,
               tag: A.call(:atom_struct),
               attrs: [A.allow_attr(:dead_code)],
               variants: [
@@ -435,7 +440,7 @@ defmodule RustQ.RustlerTest do
     code =
       "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
-        splice: [items: RustQ.Rustler.term_helpers(type_key: "a::r#type()")]
+        splice: [items: Term.helpers(type_key: "a::r#type()")]
       )
 
     assert code =~ "fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
@@ -450,7 +455,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_decoder.rs",
         splice: [
           items:
-            RustQ.Rustler.term_decoder(:User,
+            Term.decoder(:User,
               fields: [
                 id: [type: :i64, key: "a::id()", required: true],
                 name: [type: :String, key: "a::name()", required: true],
@@ -477,7 +482,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_decoder.rs",
         splice: [
           items:
-            RustQ.Rustler.term_decoder(:IfStatementInput,
+            Term.decoder(:IfStatementInput,
               result: "R",
               fields: [
                 test: [type: "Term<'a>", key: "a::test()", required: true],
@@ -500,7 +505,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_decoder.rs",
         splice: [
           items:
-            RustQ.Rustler.term_decoder(:IfStatementInput,
+            Term.decoder(:IfStatementInput,
               result: "R",
               fields: [
                 test: [
@@ -523,7 +528,7 @@ defmodule RustQ.RustlerTest do
     code =
       "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
-        splice: [items: RustQ.Rustler.term_helpers(include: [:get, :str_val])]
+        splice: [items: Term.helpers(include: [:get, :str_val])]
       )
 
     assert code =~ "fn get<'a>"
@@ -535,13 +540,13 @@ defmodule RustQ.RustlerTest do
   test "builds atom-keyed term encoder implementations" do
     manifest = [fields: [:start, {:end_, :end}], target_lifetimes: [:_]]
 
-    assert RustQ.Rustler.term_encoder_atom_names(manifest) == ["start", "end_"]
+    assert Term.encoder_atom_names(manifest) == ["start", "end_"]
 
     code =
       "__rq_items!();"
       |> RustQ.render!("term_encoder.rs",
         splice: [
-          items: RustQ.Rustler.term_encoder(:EncodedLoc, manifest)
+          items: Term.encoder(:EncodedLoc, manifest)
         ]
       )
 
@@ -559,7 +564,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_encoder.rs",
         splice: [
           items:
-            RustQ.Rustler.term_encoder(:EncodedBlock,
+            Term.encoder(:EncodedBlock,
               fields: [
                 content: [field: [0, :content], via: :as_ref],
                 lang: [field: [0, :lang], via: :as_deref],
@@ -590,7 +595,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_encoder.rs",
         splice: [
           items:
-            RustQ.Rustler.term_encoder(:EncodedResult,
+            Term.encoder(:EncodedResult,
               fields: [
                 template: [field: [:descriptor, :template], optional: [wrap: :EncodedTemplate]],
                 styles: [field: [:descriptor, :styles], map: [wrap: :EncodedStyle]],
@@ -621,7 +626,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_encoder.rs",
         splice: [
           items:
-            RustQ.Rustler.term_encoder(:EncodedError,
+            Term.encoder(:EncodedError,
               fields: [:message, code: [field: [0, :module_code], when_some: true, via: :as_str]],
               target_lifetimes: [:_]
             )
@@ -641,7 +646,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("term_helpers.rs",
         splice: [
           items:
-            RustQ.Rustler.term_helpers(
+            Term.helpers(
               include: [
                 :get,
                 :get_bool,
@@ -675,7 +680,7 @@ defmodule RustQ.RustlerTest do
     code =
       "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
-        splice: [items: RustQ.Rustler.term_helpers(include: :all)]
+        splice: [items: Term.helpers(include: :all)]
       )
 
     assert code =~ "fn get<'a>"
@@ -686,7 +691,7 @@ defmodule RustQ.RustlerTest do
     code =
       "__rq_items!();"
       |> RustQ.render!("term_helpers.rs",
-        splice: [items: RustQ.Rustler.term_helpers(exclude: [:f64_val, :type_str])]
+        splice: [items: Term.helpers(exclude: [:f64_val, :type_str])]
       )
 
     assert code =~ "fn get<'a>"
@@ -700,14 +705,17 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("resource.rs",
         splice: [
           items: [
-            RustQ.Rustler.resource_type(:Document),
-            RustQ.Rustler.resource_decoder(:Document),
-            RustQ.Rustler.resource_init(:Document)
+            Resource.type_alias(:Document),
+            Resource.decoder(:Document),
+            Resource.init(:Document)
           ]
         ]
       )
 
-    assert RustQ.Rustler.resource_arc(:Document) == "ResourceArc<Document>"
+    assert Resource.arc_type(:Document)
+           |> Render.render_type()
+           |> IO.iodata_to_binary() == "ResourceArc<Document>"
+
     assert code =~ "type DocumentResource = ResourceArc<Document>;"
 
     assert code =~
@@ -722,7 +730,7 @@ defmodule RustQ.RustlerTest do
       "__rq_items!();"
       |> RustQ.render!("resource.rs",
         splice: [
-          items: RustQ.Rustler.resource(:EncodedImage, fields: [bytes: {:vec, :u8}])
+          items: Resource.items(:EncodedImage, fields: [bytes: {:vec, :u8}])
         ]
       )
 
@@ -738,7 +746,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("resource_handle.rs",
         splice: [
           items:
-            RustQ.Rustler.resource_handle(:EncodedImage,
+            Resource.handle_items(:EncodedImage,
               fields: [bytes: "Vec<u8>"],
               handle_field: :ref
             )
@@ -760,7 +768,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("resource_handle.rs",
         splice: [
           items:
-            RustQ.Rustler.resource_handle(:Session,
+            Resource.handle_items(:Session,
               fields: [id: :u64],
               handle_field: "handle",
               decoder: :decode_session_ref
@@ -782,7 +790,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("opts.rs",
         splice: [
           items:
-            RustQ.Rustler.opts_decoder(:RectOpts,
+            Opts.decoder(:RectOpts,
               lifetime: :a,
               fields: [
                 x: [type: :f32, decode: R.opt_decode(:opt_f32, :opts, :x)],
@@ -824,7 +832,7 @@ defmodule RustQ.RustlerTest do
       |> RustQ.render!("typed_opts.rs",
         splice: [
           items:
-            RustQ.Rustler.opts_decoder(:TypedOpts,
+            Opts.decoder(:TypedOpts,
               lifetime: :a,
               fields: [
                 x: [type: RustQ.Spec.type(quote(do: RustQ.Type.f32())), required: true],
@@ -850,7 +858,7 @@ defmodule RustQ.RustlerTest do
   test "builds bare atoms blocks" do
     code =
       RustQ.render!("__rq_items!();", "atoms.rs",
-        splice: [items: [RustQ.Rustler.atoms([:ok], module: false)]]
+        splice: [items: [Atom.declaration([:ok], module: false)]]
       )
 
     assert code =~ "rustler::atoms!"

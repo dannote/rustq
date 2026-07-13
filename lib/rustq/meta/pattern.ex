@@ -1,7 +1,5 @@
 defmodule RustQ.Meta.Pattern do
-  @moduledoc """
-  Structural helpers for Rusty-Elixir binding and tuple patterns.
-  """
+  @moduledoc false
 
   @spec tuple_elements(Macro.t()) :: [Macro.t()] | nil
   def tuple_elements({:{}, _, elements}) when is_list(elements), do: elements

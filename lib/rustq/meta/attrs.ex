@@ -1,7 +1,5 @@
 defmodule RustQ.Meta.Attrs do
-  @moduledoc """
-  Collects Rust-facing attributes declared around `defrust` definitions.
-  """
+  @moduledoc false
 
   alias RustQ.Rust.AST
 

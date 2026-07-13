@@ -11,10 +11,11 @@ defmodule RustQ.Rustler.Atom do
 
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Native.EnumDescriptor
-  alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Rust.AST.TypeBuilder, as: T
+  alias RustQ.Rust.Identifier
   alias RustQ.Type, as: R
 
   import RustQ.Rust.AST.ItemBuilder, only: [function: 3, static: 3]
@@ -22,22 +23,24 @@ defmodule RustQ.Rustler.Atom do
   require A
   require I
 
+  @doc "Builds a `rustler::atoms!` declaration, optionally wrapped in a module."
   @spec declaration([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) ::
-          Rust.Fragment.t()
+          AST.MacroItemCall.t() | AST.Module.t()
   def declaration(atoms, opts \\ []) do
     item = A.macro_item_call([:rustler, :atoms], atoms)
 
     case Keyword.get(opts, :module, :atoms) do
-      false -> Rust.ast_item(item)
-      module -> Rust.ast_item(A.module(module, [item]))
+      false -> item
+      module -> A.module(module, [item])
     end
   end
 
-  @spec decoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  @doc "Builds a function that decodes Rustler atoms into Rust values."
+  @spec decoder(atom() | String.t(), keyword()) :: AST.Function.t()
   def decoder(name, opts) do
     input = Keyword.get(opts, :input, :Atom)
     returns = Keyword.fetch!(opts, :returns)
-    result = Keyword.get(opts, :result, "NifResult<#{Rust.type(returns)}>")
+    result = Keyword.get(opts, :result, T.nif_result(returns))
     atoms = Keyword.get(opts, :atoms, "atoms")
     unknown = Keyword.get(opts, :unknown, "Err(rustler::Error::BadArg)")
 
@@ -49,12 +52,13 @@ defmodule RustQ.Rustler.Atom do
     decoder_ast(name, input, result, atoms, unknown, cases)
   end
 
-  @spec dispatch(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  @doc "Builds a function that dispatches an expression by atom value."
+  @spec dispatch(atom() | String.t(), keyword()) :: AST.Function.t()
   def dispatch(name, opts) do
     atoms = Keyword.get(opts, :atoms, "atoms")
     unknown = Keyword.get(opts, :unknown, A.ok())
 
-    function = %AST.Function{
+    %AST.Function{
       name: ident_atom(name),
       args: Keyword.get(opts, :args, []),
       returns: Keyword.get(opts, :returns, "NifResult<()>"),
@@ -66,15 +70,14 @@ defmodule RustQ.Rustler.Atom do
         })
       ],
       vis: Keyword.get(opts, :vis),
-      lifetime: Keyword.get(opts, :lifetime),
+      lifetimes: List.wrap(Keyword.get(opts, :lifetimes, [])),
       attrs: Keyword.get(opts, :attrs, [])
     }
-
-    Rust.ast_item(function)
   end
 
+  @doc "Builds `OnceLock<Atom>` declarations and cached atom accessors."
   @spec cached([atom() | String.t() | {atom() | String.t(), String.t()}], keyword()) :: [
-          Rust.Fragment.t()
+          AST.item()
         ]
   def cached(atoms, opts \\ []) do
     include_helpers? = Keyword.get(opts, :helpers, true)
@@ -83,7 +86,7 @@ defmodule RustQ.Rustler.Atom do
 
     helper_items =
       if include_helpers? do
-        [MetaAST.item(__MODULE__, :cached_atom)]
+        [MetaAST.function!(__MODULE__, :cached_atom)]
       else
         []
       end
@@ -98,21 +101,19 @@ defmodule RustQ.Rustler.Atom do
   end
 
   defp decoder_ast(name, input, result, atoms, unknown, cases) do
-    function = %AST.Function{
+    %AST.Function{
       name: ident_atom(name),
       vis: :pub,
-      args: [A.function_arg(:value, Rust.type(input))],
+      args: [A.function_arg(:value, T.type(input))],
       returns: result,
       body: [
         A.return_stmt(%AST.Match{expr: A.var(:value), arms: atom_arms(cases, atoms, unknown)})
       ]
     }
-
-    Rust.ast_item(function)
   end
 
   defp atom_arms(cases, atoms, unknown) do
-    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&RustQ.Atom.identifier!/1)
+    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&Identifier.atom!/1)
 
     Enum.map(cases, fn {atom, value} ->
       %AST.Arm{
@@ -126,7 +127,7 @@ defmodule RustQ.Rustler.Atom do
   end
 
   defp dispatch_arms(cases, atoms, unknown) do
-    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&RustQ.Atom.identifier!/1)
+    module = atoms |> to_string() |> A.path_parts() |> Enum.map(&Identifier.atom!/1)
 
     Enum.map(cases, fn {atom, call} ->
       %AST.Arm{
@@ -151,13 +152,17 @@ defmodule RustQ.Rustler.Atom do
   defp dispatch_expr(value), do: A.expr(value)
 
   defp ident_atom(value) when is_atom(value), do: value
-  defp ident_atom(value) when is_binary(value), do: RustQ.Atom.identifier!(value)
+  defp ident_atom(value) when is_binary(value), do: Identifier.atom!(value)
 
   defp rust_value_expr(%{__struct__: _module} = value) do
-    if AST.expr_node?(value), do: value, else: value |> Rust.type() |> A.path()
+    if AST.expr_node?(value) do
+      value
+    else
+      raise ArgumentError, "expected RustQ expression AST, got: #{inspect(value)}"
+    end
   end
 
-  defp rust_value_expr(value), do: value |> Rust.type() |> A.path()
+  defp rust_value_expr(value), do: A.path(value)
 
   defp unknown_arm("Err(rustler::Error::BadArg)"), do: A.badarg_arm()
 
@@ -174,7 +179,7 @@ defmodule RustQ.Rustler.Atom do
   end
 
   defp descriptor_cases(%EnumDescriptor{} = descriptor, returns) do
-    return_parts = returns |> Rust.type() |> A.path_parts()
+    return_parts = A.path_parts(returns)
 
     Enum.map(EnumDescriptor.variants(descriptor), fn {atom, variant} ->
       {atom, A.path(return_parts ++ [variant])}
@@ -185,24 +190,20 @@ defmodule RustQ.Rustler.Atom do
     static_name = static_name(name)
 
     [
-      Rust.ast_item(
-        static(
-          RustQ.Atom.identifier!(static_name),
-          "OnceLock<Atom>",
-          A.path_call([:OnceLock, :new])
-        )
+      static(
+        Identifier.atom!(static_name),
+        "OnceLock<Atom>",
+        A.path_call([:OnceLock, :new])
       ),
-      Rust.ast_item(
-        function RustQ.Atom.identifier!("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
-          A.return(
-            A.call(:cached_atom, [
-              A.var(:env),
-              A.ref(A.var(RustQ.Atom.identifier!(static_name))),
-              A.lit(value)
-            ])
-          )
-        end
-      )
+      function Identifier.atom!("#{name}_atom"), args: [env: "Env"], returns: "Atom" do
+        A.return(
+          A.call(:cached_atom, [
+            A.var(:env),
+            A.ref(A.var(Identifier.atom!(static_name))),
+            A.lit(value)
+          ])
+        )
+      end
     ]
   end
 

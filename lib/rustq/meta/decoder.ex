@@ -1,10 +1,8 @@
 defmodule RustQ.Meta.Decoder do
-  @moduledoc """
-  Builds decoder AST fragments for Rust types derived from Elixir type aliases.
-  """
+  @moduledoc false
 
   alias RustQ.Meta.Type
-  alias RustQ.Rust.AST
+  alias RustQ.Rust.{AST, Identifier}
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.PatternBuilder, as: P
 
@@ -45,9 +43,12 @@ defmodule RustQ.Meta.Decoder do
             A.arm P.lit("Elixir.#{variant_name}") do
               A.return do
                 A.method(
-                  A.call(RustQ.Atom.identifier!("decode_#{Macro.underscore(variant_name)}"), [
-                    :term
-                  ]),
+                  A.call(
+                    Identifier.atom!("decode_#{Macro.underscore(variant_name)}"),
+                    [
+                      :term
+                    ]
+                  ),
                   :map,
                   [A.path([rust_name, rust_variant(tag)])]
                 )

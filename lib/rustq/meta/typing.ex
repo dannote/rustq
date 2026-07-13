@@ -1,12 +1,5 @@
 defmodule RustQ.Meta.Typing do
-  @moduledoc """
-  Small bidirectional typing nucleus for Rusty-Elixir lowering.
-
-  This module intentionally starts as an explicit, side-effect-free companion to
-  `RustQ.Meta.Lower`: callers pass an `%Env{}` instead of relying on the
-  lowerer's process dictionary. The lowerer can migrate individual positions to
-  `synth/2` and `check/3` over time.
-  """
+  @moduledoc false
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Meta.Inference
@@ -16,7 +9,7 @@ defmodule RustQ.Meta.Typing do
   alias RustQ.Rust.AST
 
   defmodule Env do
-    @moduledoc "Typing environment threaded through synthesis/checking."
+    @moduledoc false
     defstruct vars: %{}, callables: %BindingIndex{}, rust_modules: %{}
 
     @type t :: %__MODULE__{
@@ -27,7 +20,7 @@ defmodule RustQ.Meta.Typing do
   end
 
   defmodule Check do
-    @moduledoc "Result of checking an expression against an expected type."
+    @moduledoc false
     defstruct [:type, :coercion]
 
     @type coercion ::

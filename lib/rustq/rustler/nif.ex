@@ -1,6 +1,6 @@
 defmodule RustQ.Rustler.Nif do
   @moduledoc """
-  Generates Rustler NIF exports, NifStruct declarations, and raw NIF_TERM builders.
+  Generates Rustler NIF wrappers, stubs, `NifStruct` declarations, and raw `NIF_TERM` builders.
 
   Most helpers in this module use RustQ AST. The raw `NIF_TERM` builders are an
   explicit low-level Rustler escape boundary for unsafe wrapper APIs; prefer
@@ -13,14 +13,13 @@ defmodule RustQ.Rustler.Nif do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Rust.Identifier
   alias RustQ.Syn.{Arg, Type}
 
-  import RustQ.Rust.AST.ItemBuilder, only: [field: 3]
   import RustQ.Rust.AST.ItemBuilder
 
   require A
   require I
-  require RustQ.Rust.AST.ItemBuilder
 
   @type spec :: {atom() | String.t(), keyword()}
 
@@ -64,47 +63,56 @@ defmodule RustQ.Rustler.Nif do
     """
   }
 
-  @spec struct(atom() | String.t(), module() | String.t(), keyword()) :: Rust.Fragment.t()
-  def struct(name, module, opts \\ []) do
-    ast =
-      I.struct RustQ.Atom.identifier!(to_string(name)),
-        vis: Keyword.get(opts, :vis, :pub),
-        derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
-        attrs: [
-          A.attr_value(:module, module_name(module))
-          | normalize_attrs(Keyword.get(opts, :attrs, []))
-        ] do
-        struct_fields(Keyword.get(opts, :fields, []), Keyword.get(opts, :field_vis, :pub))
-      end
+  @doc "Builds the `rustler::init!` declaration for an Elixir module."
+  @spec init(module() | String.t()) :: AST.MacroItemCall.t()
+  def init(module) when is_atom(module), do: init(Elixir.Atom.to_string(module))
 
-    Rust.ast_item(ast)
+  def init(module) when is_binary(module),
+    do: A.macro_item_call([:rustler, :init], literal: module)
+
+  @doc "Builds a Rust struct deriving `NifStruct` for an Elixir struct module."
+  @spec struct(atom() | String.t(), module() | String.t(), keyword()) :: AST.Struct.t()
+  def struct(name, module, opts \\ []) do
+    I.struct Identifier.atom!(to_string(name)),
+      vis: Keyword.get(opts, :vis, :pub),
+      derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
+      attrs: [
+        A.attr_value(:module, module_name(module))
+        | normalize_attrs(Keyword.get(opts, :attrs, []))
+      ] do
+      struct_fields(Keyword.get(opts, :fields, []), Keyword.get(opts, :field_vis, :pub))
+    end
   end
 
-  @spec exports([spec()]) :: [Rust.Function.t()]
-  def exports(specs) do
+  @doc "Builds NIF wrappers from explicit export specifications."
+  @spec wrappers([spec()]) :: [AST.Function.t()]
+  def wrappers(specs) do
     Enum.map(specs, fn {name, opts} -> wrapper(name, opts) end)
   end
 
-  @spec exports_from_source(Path.t(), [spec()], keyword()) :: [Rust.Function.t()]
-  def exports_from_source(path, specs, defaults \\ []) do
+  @doc "Builds NIF wrappers whose signatures are derived from Rust functions in one source file."
+  @spec wrappers_from_source(Path.t(), [spec()], keyword()) :: [AST.Function.t()]
+  def wrappers_from_source(path, specs, defaults \\ []) do
     path
     |> source_exports(specs, defaults)
     |> Enum.map(fn {name, function, opts} ->
-      derived =
-        [
-          args: Enum.map(function.args, &source_arg/1),
-          returns: function.returns || :unit
-        ] ++ source_lifetime_opts(function)
+      derived = [
+        args: Enum.map(function.args, &source_arg/1),
+        returns: function.returns || :unit,
+        lifetimes: Enum.map(function.lifetimes, &Identifier.atom!/1)
+      ]
 
       wrapper(name, Keyword.merge(derived, opts))
     end)
   end
 
-  @spec exports_from_sources([{Path.t(), [spec()]}], keyword()) :: [Rust.Function.t()]
-  def exports_from_sources(groups, defaults \\ []) do
-    Enum.flat_map(groups, fn {path, specs} -> exports_from_source(path, specs, defaults) end)
+  @doc "Builds NIF wrappers from multiple `{source_path, specs}` groups."
+  @spec wrappers_from_sources([{Path.t(), [spec()]}], keyword()) :: [AST.Function.t()]
+  def wrappers_from_sources(groups, defaults \\ []) do
+    Enum.flat_map(groups, fn {path, specs} -> wrappers_from_source(path, specs, defaults) end)
   end
 
+  @doc "Returns selected, export-named Rust function metadata from one source file."
   @spec functions_from_source(Path.t(), [spec()], keyword()) :: [
           {atom() | String.t(), RustQ.Syn.Function.t()}
         ]
@@ -114,12 +122,14 @@ defmodule RustQ.Rustler.Nif do
     |> Enum.map(fn {name, function, _opts} -> {name, function} end)
   end
 
+  @doc "Returns selected, export-named Rust function metadata from multiple source groups."
   @spec functions_from_sources([{Path.t(), [spec()]}], keyword()) ::
           [{atom() | String.t(), RustQ.Syn.Function.t()}]
   def functions_from_sources(groups, defaults \\ []) do
     Enum.flat_map(groups, fn {path, specs} -> functions_from_source(path, specs, defaults) end)
   end
 
+  @doc "Builds an Elixir NIF-not-loaded stub module from one Rust source file."
   @spec stubs_from_source(Path.t(), [spec()], module(), keyword()) :: String.t()
   def stubs_from_source(path, specs, module, defaults \\ []) do
     path
@@ -127,6 +137,7 @@ defmodule RustQ.Rustler.Nif do
     |> stubs_from_functions(module)
   end
 
+  @doc "Builds one Elixir NIF-not-loaded stub module from multiple Rust source groups."
   @spec stubs_from_sources([{Path.t(), [spec()]}], module(), keyword()) :: String.t()
   def stubs_from_sources(groups, module, defaults \\ []) do
     groups
@@ -134,6 +145,7 @@ defmodule RustQ.Rustler.Nif do
     |> stubs_from_functions(module)
   end
 
+  @doc "Builds an Elixir stub module from mixed `RustQ.Syn.Function` and RustQ AST metadata."
   @spec stubs_from_functions(
           [RustQ.Syn.Function.t() | AST.Function.t() | {term(), term()}],
           module()
@@ -155,36 +167,40 @@ defmodule RustQ.Rustler.Nif do
     |> Kernel.<>("\n")
   end
 
-  @spec export(atom() | String.t(), keyword()) :: Rust.Function.t()
-  def export(name, opts), do: wrapper(name, opts)
+  @doc "Builds one NIF wrapper that delegates to an implementation function."
+  @spec wrapper(atom() | String.t(), keyword()) :: AST.Function.t()
+  def wrapper(name, opts) do
+    args = Keyword.get(opts, :args, [])
+    impl = Keyword.get(opts, :impl, "#{name}_impl")
 
-  @spec term_builders(keyword()) :: [Rust.Fragment.t()]
-  def term_builders(opts \\ []) do
+    function Identifier.atom!(to_string(name)),
+      args: args,
+      returns: Keyword.fetch!(opts, :returns),
+      lifetimes: Keyword.get(opts, :lifetimes, []),
+      vis: Keyword.get(opts, :vis),
+      attrs: normalize_attrs(Keyword.get(opts, :attrs, [])) ++ [nif_attribute(opts)] do
+      A.return(impl_call(impl, Keyword.keys(args)))
+    end
+  end
+
+  @doc "Builds unsafe raw `NIF_TERM` map and struct helpers."
+  @spec raw_term_builders(keyword()) :: [Rust.Fragment.t()]
+  def raw_term_builders(opts \\ []) do
     opts
     |> Keyword.get(:include, @nif_term_builder_names)
     |> include_names()
     |> Enum.map(
-      &Rust.item(RustQ.render!(nif_term_builder_template!(&1), "rustler_nif_term_builder.rs"))
+      &Rust.fragment(
+        :item,
+        RustQ.render!(nif_term_builder_template!(&1), "rustler_nif_term_builder.rs")
+      )
     )
-  end
-
-  @doc false
-  @spec nif_attr(keyword()) :: String.t()
-  def nif_attr(opts) do
-    case Keyword.get(opts, :schedule) do
-      nil -> "rustler::nif"
-      :dirty_cpu -> ~s|rustler::nif(schedule = "DirtyCpu")|
-      :dirty_io -> ~s|rustler::nif(schedule = "DirtyIo")|
-      value when is_binary(value) -> ~s|rustler::nif(schedule = "#{value}")|
-    end
   end
 
   defp struct_fields(fields, default_vis) do
     Enum.map(fields, fn
-      %RustQ.Rust.Field{} = rust_field ->
-        field(RustQ.Atom.identifier!(to_string(rust_field.name)), rust_field.type,
-          vis: rust_field.vis
-        )
+      %AST.StructField{} = rust_field ->
+        rust_field
 
       {field_name, type} ->
         field(field_name, type, vis: default_vis)
@@ -201,7 +217,7 @@ defmodule RustQ.Rustler.Nif do
     cond do
       String.contains?(attr, " = ") ->
         [path, value] = String.split(attr, " = ", parts: 2)
-        A.attr_value(RustQ.Atom.identifier!(path), String.trim(value, ~s|"|))
+        A.attr_value(Identifier.atom!(path), String.trim(value, ~s|"|))
 
       String.ends_with?(attr, ")") and String.contains?(attr, "(") ->
         [path, args] = String.split(String.trim_trailing(attr, ")"), "(", parts: 2)
@@ -210,45 +226,12 @@ defmodule RustQ.Rustler.Nif do
           args
           |> String.split(",", trim: true)
           |> Enum.map(&String.trim/1)
-          |> Enum.map(&RustQ.Atom.identifier!/1)
+          |> Enum.map(&Identifier.atom!/1)
 
-        A.attr(RustQ.Atom.identifier!(path), args)
+        A.attr(Identifier.atom!(path), args)
 
       true ->
-        A.attr(RustQ.Atom.identifier!(attr))
-    end
-  end
-
-  defp wrapper(name, opts) do
-    args = Keyword.get(opts, :args, [])
-    impl = Keyword.get(opts, :impl, "#{name}_impl")
-    call_args = args |> Keyword.keys() |> Enum.map_join(", ", &to_string/1)
-
-    if ast_compatible?(opts) do
-      ast =
-        function RustQ.Atom.identifier!(to_string(name)),
-          args: args,
-          returns: Keyword.fetch!(opts, :returns),
-          lifetime: Keyword.get(opts, :lifetime),
-          vis: Keyword.get(opts, :vis),
-          attrs: normalize_attrs(Keyword.get(opts, :attrs, [])) ++ [nif_attribute(opts)] do
-          A.return(A.call(RustQ.Atom.identifier!(to_string(impl)), Keyword.keys(args)))
-        end
-
-      Rust.ast_item(ast)
-    else
-      name
-      |> Rust.fn(
-        args: args,
-        returns: Keyword.get(opts, :returns),
-        lifetime: Keyword.get(opts, :lifetime),
-        lifetimes: Keyword.get(opts, :lifetimes, []),
-        generics: Keyword.get(opts, :generics, []),
-        where: Keyword.get(opts, :where, []),
-        body: "#{impl}(#{call_args})",
-        vis: Keyword.get(opts, :vis)
-      )
-      |> Rust.attr(nif_attr(opts))
+        A.attr(Identifier.atom!(attr))
     end
   end
 
@@ -269,15 +252,16 @@ defmodule RustQ.Rustler.Nif do
   end
 
   defp source_arg(%Arg{name: name, type: type}) when is_binary(name),
-    do: {RustQ.Atom.identifier!(name), type}
+    do: {Identifier.atom!(name), type}
 
-  defp source_lifetime_opts(%RustQ.Syn.Function{lifetimes: []}), do: []
+  defp impl_call(impl, args) do
+    parts = impl |> to_string() |> String.split("::") |> Enum.map(&Identifier.atom!/1)
 
-  defp source_lifetime_opts(%RustQ.Syn.Function{lifetimes: [lifetime]}),
-    do: [lifetime: RustQ.Atom.identifier!(lifetime)]
-
-  defp source_lifetime_opts(%RustQ.Syn.Function{lifetimes: lifetimes}),
-    do: [lifetimes: Enum.map(lifetimes, &RustQ.Atom.identifier!/1)]
+    case parts do
+      [name] -> A.call(name, args)
+      parts -> A.path_call(parts, args)
+    end
+  end
 
   defp stub_definition({name, function}) do
     stub_definition(function, name)
@@ -287,7 +271,7 @@ defmodule RustQ.Rustler.Nif do
 
   defp stub_definition(function, name) do
     args = function |> stub_args() |> Enum.map(&stub_arg/1)
-    name = RustQ.Atom.identifier!(to_string(name))
+    name = Identifier.atom!(to_string(name))
     head = {name, [], if(args == [], do: nil, else: args)}
 
     quote do
@@ -310,19 +294,9 @@ defmodule RustQ.Rustler.Nif do
   defp ast_env_type?(_type), do: false
 
   defp stub_arg(%{name: name}) do
-    RustQ.Atom.identifier!("_#{name}")
+    Identifier.atom!("_#{name}")
     |> then(&{&1, [], nil})
   end
-
-  defp ast_compatible?(opts) do
-    impl = Keyword.get(opts, :impl)
-
-    Keyword.has_key?(opts, :returns) and Keyword.get(opts, :lifetimes, []) == [] and
-      Keyword.get(opts, :generics, []) == [] and Keyword.get(opts, :where, []) == [] and
-      (is_nil(impl) or simple_ident?(impl))
-  end
-
-  defp simple_ident?(value), do: value |> to_string() |> RustQ.Atom.identifier?()
 
   defp nif_attribute(opts) do
     case Keyword.get(opts, :schedule) do

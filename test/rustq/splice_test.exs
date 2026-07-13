@@ -72,8 +72,8 @@ defmodule RustQ.SpliceTest do
       |> RustQ.render!("arms.rs",
         splice: [
           arms: [
-            Rust.arm("Some(value)", "value"),
-            Rust.arm("None", "0")
+            Rust.fragment(:arm, "Some(value) => value,"),
+            Rust.fragment(:arm, "None => 0,")
           ]
         ]
       )

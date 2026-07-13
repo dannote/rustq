@@ -10,15 +10,16 @@ defmodule RustQ do
 
     * `render!/3` for one-shot rendering from a string template.
     * `render_file!/2` for `.rs` template files.
-    * `parse!/2`, `bind/2`, `splice/3`, and `codegen!/2` for pipeline-style codegen.
-    * `parse_fragment!/2` and `valid_fragment?/2` for validating generated snippets.
+    * `parse!/2`, `bind/2`, `splice/3`, and `render!/1,2` for pipeline-style generation.
+    * `parse_fragment!/2` and `valid_fragment?/2` for validating explicit escapes.
 
-  Use `RustQ.Rust` for Rust fragment builders, `RustQ.Rustler` for Rustler code
-  generators, and `RustQ.Config` plus `mix rustq.gen` for project-level generated
-  files.
+  Use `RustQ.Rust.AST` builders for generated structure, the cohesive
+  `RustQ.Rustler` submodules for Rustler generation, and `RustQ.Config` plus
+  `mix rustq.gen` for project-level generated files.
   """
 
   alias RustQ.Error
+  alias RustQ.Native.Nif
   alias RustQ.Template
 
   @type source :: iodata()
@@ -32,7 +33,7 @@ defmodule RustQ do
   def parse(source, filename) when is_binary(filename) do
     source = IO.iodata_to_binary(source)
 
-    case RustQ.Native.parse(source) do
+    case Nif.parse(source) do
       :ok -> {:ok, %Template{source: source, filename: filename}}
       {:error, errors} -> {:error, Template.normalize_errors(errors, filename)}
     end
@@ -68,8 +69,8 @@ defmodule RustQ do
   parsing and are resolved relative to the including file by default. Pass
   `:include_dir` to override the root directory for the initial file.
   """
-  @spec from_file(Path.t(), keyword()) :: {:ok, Template.t()} | {:error, [map()] | File.posix()}
-  def from_file(path, opts \\ []) do
+  @spec parse_file(Path.t(), keyword()) :: {:ok, Template.t()} | {:error, [map()] | File.posix()}
+  def parse_file(path, opts \\ []) do
     with {:ok, source} <- File.read(path),
          {:ok, source} <- Template.expand_includes(source, path, opts) do
       parse(source, path)
@@ -77,11 +78,11 @@ defmodule RustQ do
   end
 
   @doc """
-  Like `from_file/1`, but returns the template directly or raises on errors.
+  Like `parse_file/1`, but returns the template directly or raises on errors.
   """
-  @spec from_file!(Path.t(), keyword()) :: Template.t()
-  def from_file!(path, opts \\ []) do
-    case from_file(path, opts) do
+  @spec parse_file!(Path.t(), keyword()) :: Template.t()
+  def parse_file!(path, opts \\ []) do
+    case parse_file(path, opts) do
       {:ok, template} ->
         template
 
@@ -134,7 +135,7 @@ defmodule RustQ do
     code = RustQ.Rust.to_fragment(fragment)
 
     case validate_fragment(kind, code) do
-      :ok -> {:ok, %RustQ.Rust.Fragment{kind: kind, code: code}}
+      :ok -> {:ok, RustQ.Rust.fragment(kind, code)}
       {:error, errors} -> {:error, errors}
     end
   end
@@ -168,7 +169,7 @@ defmodule RustQ do
   expression or type macro.
 
   Values may be strings, atoms, `{:literal, value}`, `{:expr, code}`, or
-  `{:type, type}` where type uses `RustQ.Rust.type/1` syntax.
+  `{:type, type}` where type is accepted by `RustQ.Rust.AST.TypeBuilder.type/1`.
   """
   @spec bind(Template.t(), keyword()) :: Template.t()
   def bind(%Template{} = template, bindings) when is_list(bindings) do
@@ -197,12 +198,8 @@ defmodule RustQ do
     %{template | splices: RustQ.Splice.merge([template.splices, splices])}
   end
 
-  @doc """
-  Generates formatted Rust source from a parsed template.
-  """
-  @spec codegen(Template.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
-  def codegen(%Template{} = template, opts \\ []) do
-    case RustQ.Native.render(
+  defp render_template(%Template{} = template, opts) do
+    case Nif.render(
            template.source,
            native_bindings(template.bindings),
            native_splices(template.splices)
@@ -221,21 +218,7 @@ defmodule RustQ do
   end
 
   @doc """
-  Like `codegen/2`, but raises on errors.
-  """
-  @spec codegen!(Template.t(), keyword()) :: String.t()
-  def codegen!(%Template{} = template, opts \\ []) do
-    case codegen(template, opts) do
-      {:ok, code} ->
-        code
-
-      {:error, errors} ->
-        raise Error, message: "RustQ codegen error: #{inspect(errors)}", errors: errors
-    end
-  end
-
-  @doc """
-  Convenience wrapper around `parse/2`, `bind/2`, `splice/3`, and `codegen/2`.
+  Parses and renders source, or renders an already parsed template.
 
   Options:
 
@@ -243,23 +226,47 @@ defmodule RustQ do
     * `:splice` - splice replacements passed to `splice/3`.
     * `:preamble` - optional text prepended after formatting.
   """
+  @spec render(Template.t()) :: {:ok, String.t()} | {:error, [map()]}
+  def render(%Template{} = template), do: render_template(template, [])
+
+  @spec render(Template.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
+  def render(%Template{} = template, opts), do: render_template(template, opts)
+
+  @spec render(source(), String.t()) :: {:ok, String.t()} | {:error, [map()]}
+  def render(source, filename) when is_binary(filename), do: render(source, filename, [])
+
   @spec render(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [map()]}
-  def render(source, filename, opts \\ []) do
+  def render(source, filename, opts) do
     with {:ok, source} <- Template.maybe_expand_includes(source, filename, opts),
          {:ok, template} <- parse(source, filename) do
       template = bind(template, Keyword.get(opts, :bind, []))
 
       template
       |> splice(Keyword.get(opts, :splice, []))
-      |> codegen(opts)
+      |> render_template(opts)
     end
   end
 
-  @doc """
-  Like `render/3`, but raises on errors.
-  """
+  @doc "Like `render/1,2,3`, but raises on errors."
+  @spec render!(Template.t()) :: String.t()
+  def render!(%Template{} = template), do: render!(template, [])
+
+  @spec render!(Template.t(), keyword()) :: String.t()
+  def render!(%Template{} = template, opts) do
+    case render(template, opts) do
+      {:ok, code} ->
+        code
+
+      {:error, errors} ->
+        raise Error, message: "RustQ render error: #{inspect(errors)}", errors: errors
+    end
+  end
+
+  @spec render!(source(), String.t()) :: String.t()
+  def render!(source, filename) when is_binary(filename), do: render!(source, filename, [])
+
   @spec render!(source(), String.t(), keyword()) :: String.t()
-  def render!(source, filename, opts \\ []) do
+  def render!(source, filename, opts) do
     case render(source, filename, opts) do
       {:ok, code} ->
         code
@@ -295,7 +302,12 @@ defmodule RustQ do
   end
 
   defp validate_fragment(:expr, code),
-    do: validate_binding_fragment(:value, RustQ.Rust.expr(code), "fn target() { __rq_value!(); }")
+    do:
+      validate_binding_fragment(
+        :value,
+        RustQ.Rust.fragment(:expr, code),
+        "fn target() { __rq_value!(); }"
+      )
 
   defp validate_fragment(:type, code),
     do: validate_binding_fragment(:value, {:type, {:raw, code}}, "type Target = __rq_value!();")
@@ -331,9 +343,10 @@ defmodule RustQ do
   end
 
   defp binding_value(%RustQ.Rust.Fragment{} = fragment), do: RustQ.Rust.to_fragment(fragment)
+  defp binding_value(%{__struct__: _module} = ast), do: RustQ.Rust.to_fragment(ast)
   defp binding_value({:literal, value}), do: RustQ.Rust.literal(value)
   defp binding_value({:expr, value}), do: IO.iodata_to_binary(value)
-  defp binding_value({:type, value}), do: RustQ.Rust.type(value)
+  defp binding_value({:type, value}), do: RustQ.Rust.render_type(value)
   defp binding_value(value) when is_atom(value), do: Atom.to_string(value)
   defp binding_value(value) when is_binary(value), do: value
   defp binding_value(value) when is_list(value), do: IO.iodata_to_binary(value)

@@ -60,18 +60,15 @@ defmodule RustQ.GeneratedTest do
     end
   end
 
-  test "loads rustq manifests with the optional wrapper DSL" do
+  test "loads generated content declared with RustQ.Config" do
     path = tmp_path("rustq.exs")
-
     File.mkdir_p!(Path.dirname(path))
 
     File.write!(path, """
-    import RustQ.Config
+    use RustQ.Config
 
-    rustq do
-      generate :helpers, "native/generated.rs" do
-        content "fn main() {}\\n"
-      end
+    generate :helpers, "native/generated.rs" do
+      content "fn main() {}\\n"
     end
     """)
 
@@ -80,62 +77,28 @@ defmodule RustQ.GeneratedTest do
     assert Keyword.fetch!(target, :content) == "fn main() {}\n"
   end
 
-  test "loads rustq manifests with use macro" do
+  test "loads structural Rust targets" do
     path = tmp_path("rustq.exs")
-
     File.mkdir_p!(Path.dirname(path))
 
     File.write!(path, """
     use RustQ.Config
-
-    rust_items :helpers, "native/generated.rs", items: [RustQ.Rust.fn(:main, body: "")]
-    """)
-
-    assert [helpers: target] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated.rs"
-    assert Keyword.fetch!(target, :build).() =~ "fn main()"
-  end
-
-  test "loads rustq manifests with rust_items shortcut" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    import RustQ.Config
-
-    rust_items :helpers, "native/generated.rs", items: [RustQ.Rust.fn(:main, body: "")]
-    """)
-
-    assert [helpers: target] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated.rs"
-    assert Keyword.fetch!(target, :build).() =~ "fn main()"
-  end
-
-  test "loads rustq manifests with rust block shortcut" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    use RustQ.Config
+    alias RustQ.Rust.AST.Builder, as: A
 
     rust "native/generated_helpers.rs" do
-      RustQ.Rust.fn(:first, body: "")
-      RustQ.Rust.fn(:second, body: "")
+      A.const(:FIRST, :u32, A.lit(1))
+      [A.const(:SECOND, :u32, A.lit(2))]
     end
     """)
 
     assert [{"helpers", target}] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
     code = Keyword.fetch!(target, :build).()
-    assert code =~ "fn first()"
-    assert code =~ "fn second()"
+    assert code =~ "const FIRST: u32 = 1;"
+    assert code =~ "const SECOND: u32 = 2;"
   end
 
-  test "loads rustq manifests with defrust module items" do
+  test "loads structural items from a defrust module" do
     path = tmp_path("rustq.exs")
-
     File.mkdir_p!(Path.dirname(path))
 
     File.write!(path, """
@@ -153,121 +116,22 @@ defmodule RustQ.GeneratedTest do
     end
 
     rust "native/generated_helpers.rs" do
-      from_module GeneratedDefrustManifest
+      GeneratedDefrustManifest.__rustq_items__()
     end
     """)
 
     assert [{"helpers", target}] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
     code = Keyword.fetch!(target, :build).()
     assert code =~ "fn generated(canvas: &Canvas) -> NifResult<()>"
     assert code =~ "canvas.save();"
   end
 
-  test "loads rustq manifests with rust_items block shortcut" do
+  test "loads ordinary manifest values" do
     path = tmp_path("rustq.exs")
-
     File.mkdir_p!(Path.dirname(path))
 
     File.write!(path, """
-    use RustQ.Config
-
-    rust_items "native/generated_helpers.rs" do
-      RustQ.Rust.fn(:first, body: "")
-      RustQ.Rust.fn(:second, body: "")
-    end
-    """)
-
-    assert [{"helpers", target}] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
-    code = Keyword.fetch!(target, :build).()
-    assert code =~ "fn first()"
-    assert code =~ "fn second()"
-  end
-
-  test "flattens nested rust_items lists" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    import RustQ.Config
-
-    rust_items "native/generated_helpers.rs",
-      items: [
-        RustQ.Rust.fn(:first, body: ""),
-        [RustQ.Rust.fn(:second, body: "")]
-      ]
-    """)
-
-    assert [{"helpers", target}] = Generated.load_manifest!(path)
-    code = Keyword.fetch!(target, :build).()
-    assert code =~ "fn first()"
-    assert code =~ "fn second()"
-  end
-
-  test "infers names for rust_items shortcut" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    import RustQ.Config
-
-    rust_items "native/generated_helpers.rs", items: [RustQ.Rust.fn(:main, body: "")]
-    """)
-
-    assert [{"helpers", target}] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated_helpers.rs"
-  end
-
-  test "loads rustq manifests with render shortcut" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    import RustQ.Config
-
-    generate :helpers, "native/generated.rs" do
-      render "fn main() {}"
-    end
-    """)
-
-    assert [helpers: target] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated.rs"
-    assert Keyword.fetch!(target, :build).() =~ "fn main()"
-  end
-
-  test "loads rustq manifests with top-level generate calls" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    import RustQ.Config
-
-    generate :helpers, "native/generated.rs" do
-      content "fn main() {}\\n"
-    end
-    """)
-
-    assert [helpers: target] = Generated.load_manifest!(path)
-    assert Keyword.fetch!(target, :path) == "native/generated.rs"
-    assert Keyword.fetch!(target, :content) == "fn main() {}\n"
-  end
-
-  test "loads rustq manifests" do
-    path = tmp_path("rustq.exs")
-
-    File.mkdir_p!(Path.dirname(path))
-
-    File.write!(path, """
-    [
-      generated: [
-        helpers: [path: "native/generated.rs", content: "fn main() {}\\n"]
-      ]
-    ]
+    [generated: [helpers: [path: "native/generated.rs", content: "fn main() {}\\n"]]]
     """)
 
     assert [helpers: [path: "native/generated.rs", content: "fn main() {}\n"]] =

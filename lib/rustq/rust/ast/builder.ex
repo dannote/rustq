@@ -1,15 +1,33 @@
 defmodule RustQ.Rust.AST.Builder do
   @moduledoc """
-  Small builder DSL for `RustQ.Rust.AST` nodes.
+  Expression, statement, and simple item constructors for `RustQ.Rust.AST`.
 
-  Use functions for leaves and `do`-block macros for tree-shaped constructs like
-  blocks, matches, arms, and returns.
+  Alias the focused builders together:
+
+      alias RustQ.Rust.AST.Builder, as: A
+      alias RustQ.Rust.AST.ItemBuilder, as: I
+      alias RustQ.Rust.AST.PatternBuilder, as: P
+      alias RustQ.Rust.AST.TypeBuilder, as: T
+
+  The main families are:
+
+    * items — `use/1`, `module/3`, `const/4`, `static/4`, `type_alias/3`,
+      `impl/2`, and macro-item constructors
+    * statements — `let/3`, `assign/2`, `if_let/4`, `return_stmt/1`, and
+      block-oriented macros such as `block/1`, `match/2`, and `arm/3`
+    * expressions — `call/2`, `path_call/3`, `method/4`, `struct_expr/2`,
+      constructors such as `ok/1`, and binary-operation helpers
+    * conversion — `expr/1`, `pat_expr/1`, `type/1`, and path normalization
+
+  `struct_expr/2` builds a struct literal. Use `I.struct/3` for a struct
+  declaration and `I.function/3` for a function declaration.
   """
 
   alias __MODULE__, as: Builder
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.PatternBuilder
   alias RustQ.Rust.AST.TypeBuilder
+  alias RustQ.Rust.Identifier
 
   alias RustQ.Rust.AST.{
     Arm,
@@ -132,17 +150,30 @@ defmodule RustQ.Rust.AST.Builder do
   def use(tree), do: %Use{tree: tree}
 
   def module(name, items, opts \\ []),
-    do: %Module{name: name, items: flatten(items), vis: Keyword.get(opts, :vis)}
+    do: %Module{
+      name: Identifier.atom!(to_string(name)),
+      items: flatten(items),
+      vis: Keyword.get(opts, :vis)
+    }
 
   def const(name, type, expression, opts \\ []),
-    do: %Const{name: name, type: type, expr: expr(expression), vis: Keyword.get(opts, :vis)}
+    do: %Const{
+      name: Identifier.atom!(to_string(name)),
+      type: type,
+      expr: expr(expression),
+      vis: Keyword.get(opts, :vis)
+    }
 
   def type_alias(name, type, opts \\ []),
-    do: %TypeAlias{name: name, type: type, vis: Keyword.get(opts, :vis)}
+    do: %TypeAlias{
+      name: Identifier.atom!(to_string(name)),
+      type: type,
+      vis: Keyword.get(opts, :vis)
+    }
 
   def static(name, type, expression, opts \\ []),
     do: %Static{
-      name: name,
+      name: Identifier.atom!(to_string(name)),
       type: type,
       expr: expr(expression),
       mutable: Keyword.get(opts, :mutable, false),
@@ -150,8 +181,13 @@ defmodule RustQ.Rust.AST.Builder do
     }
 
   def function_arg(%FunctionArg{} = arg), do: arg
-  def function_arg({name, type}), do: %FunctionArg{name: name, type: type}
-  def function_arg(name, type), do: %FunctionArg{name: name, type: type}
+
+  def function_arg({name, type}),
+    do: %FunctionArg{name: Identifier.atom!(to_string(name)), type: type}
+
+  def function_arg(name, type),
+    do: %FunctionArg{name: Identifier.atom!(to_string(name)), type: type}
+
   def function_args(args), do: Enum.map(args, &function_arg/1)
 
   def derive(paths), do: %Derive{paths: List.wrap(paths)}
@@ -300,7 +336,7 @@ defmodule RustQ.Rust.AST.Builder do
 
   def call(name, args \\ []) when is_atom(name) do
     if name |> Atom.to_string() |> String.ends_with?("!") do
-      RustQ.Atom.identifier!(String.trim_trailing(Atom.to_string(name), "!"))
+      Identifier.atom!(String.trim_trailing(Atom.to_string(name), "!"))
       |> macro_call(args)
     else
       %LocalCall{name: name, args: Enum.map(List.wrap(args), &expr/1)}
@@ -322,7 +358,7 @@ defmodule RustQ.Rust.AST.Builder do
       generics: Keyword.get(opts, :generics, [])
     }
 
-  def struct(path, fields) do
+  def struct_expr(path, fields) do
     %StructLiteral{
       path: expr_path(path),
       fields: Enum.map(fields, fn {name, expression} -> {name, expr(expression)} end)

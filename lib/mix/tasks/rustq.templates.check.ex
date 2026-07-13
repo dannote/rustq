@@ -6,6 +6,7 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
   use Mix.Task
 
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rustler.{Atom, Nif, Opts, Resource, TaggedEnum, Term}
 
   @shortdoc "Checks RustQ's Rustler helper templates"
 
@@ -43,39 +44,39 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
 
   defp generated_items do
     List.flatten([
-      RustQ.Rustler.resource(:Document, fields: [nodes: {:vec, :Node}]),
-      RustQ.Rustler.resource_type(:Document),
-      RustQ.Rustler.resource_decoder(:Document),
-      RustQ.Rustler.term_helpers(type_key: "atoms::r#type()"),
-      RustQ.Rustler.atom_decoder(:decode_node_kind,
+      Resource.items(:Document, fields: [nodes: {:vec, :Node}]),
+      Resource.type_alias(:Document),
+      Resource.decoder(:Document),
+      Term.helpers(type_key: "atoms::r#type()"),
+      Atom.decoder(:decode_node_kind,
         returns: :NodeKind,
         cases: [text: "NodeKind::Text", space: "NodeKind::Space"]
       ),
-      RustQ.Rustler.atom_dispatch(:dispatch_node,
+      Atom.dispatch(:dispatch_node,
         args: [kind: :Atom],
         on: "kind",
         cases: [text: "decode_text()", space: "decode_space()"]
       ),
-      RustQ.Rustler.opts_helpers(),
-      RustQ.Rustler.term_decoder(:ProgramInput,
+      Opts.helpers(),
+      Term.decoder(:ProgramInput,
         fields: [body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]]
       ),
-      RustQ.Rustler.term_decoder(:IfStatementInput,
+      Term.decoder(:IfStatementInput,
         fields: [
           test: [type: "Term<'a>", key: "atoms::test()", required: true],
           consequent: [type: "Term<'a>", key: "atoms::consequent()", required: true],
           alternate: [type: {:option, "Term<'a>"}, key: "atoms::alternate()"]
         ]
       ),
-      RustQ.Rustler.nif_struct(:ExText, "Folio.Content.Text",
+      Nif.struct(:ExText, "Folio.Content.Text",
         attrs: ["allow(dead_code)"],
         fields: [text: :String, size: {:option, :String}]
       ),
-      RustQ.Rustler.nif_struct(:ExSpace, "Folio.Content.Space",
+      Nif.struct(:ExSpace, "Folio.Content.Space",
         attrs: ["allow(dead_code)"],
         fields: []
       ),
-      RustQ.Rustler.tagged_enum(:ExContent,
+      TaggedEnum.items(:ExContent,
         attrs: [A.allow_attr(:dead_code)],
         tag: A.call(:atom_struct),
         variants: [
@@ -83,9 +84,9 @@ defmodule Mix.Tasks.Rustq.Templates.Check do
           Space: [type: :ExSpace, module: "Elixir.Folio.Content.Space"]
         ]
       ),
-      RustQ.Rustler.cached_atoms([:ok, {:node_changes, "nodeChanges"}]),
-      RustQ.Rustler.term_builders(),
-      RustQ.Rustler.nif_term_builders()
+      Atom.cached([:ok, {:node_changes, "nodeChanges"}]),
+      Term.builders(),
+      Nif.raw_term_builders()
     ])
   end
 

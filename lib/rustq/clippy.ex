@@ -1,17 +1,5 @@
 defmodule RustQ.Clippy do
-  @moduledoc """
-  Idiomatic Rusty-Elixir helpers for Clippy lint attribute paths.
-
-  Use these through `use RustQ.Meta`, which aliases this module as `Clippy`:
-
-      @allow Clippy.redundant_field_names
-      defrust build(value) do
-        ...
-      end
-
-  The helper returns RustQ path metadata that renders as
-  `#[allow(clippy::redundant_field_names)]`.
-  """
+  @moduledoc false
 
   alias RustQ.Rust.AST
 

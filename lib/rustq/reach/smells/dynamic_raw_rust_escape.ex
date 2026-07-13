@@ -1,11 +1,5 @@
 defmodule RustQ.Reach.Smells.DynamicRawRustEscape do
-  @moduledoc """
-  Detects dynamic values passed to raw Rust escape APIs.
-
-  Raw escape APIs must receive a literal source fragment so the escape remains
-  local, auditable, and parser-validated. Dynamic interpolation or composition
-  should instead be represented through RustQ AST, `defrust`, or Elixir macros.
-  """
+  @moduledoc false
 
   use Reach.Smell.Check.AST
 
@@ -18,7 +12,8 @@ defmodule RustQ.Reach.Smells.DynamicRawRustEscape do
     "lib/rustq.ex",
     "lib/rustq/rust/ast/builder.ex",
     "lib/rustq/rustler/atom.ex",
-    "lib/rustq/rustler/nif.ex"
+    "lib/rustq/rustler/nif.ex",
+    "lib/rustq/rustler/schema.ex"
   ]
 
   @impl true
@@ -52,6 +47,9 @@ defmodule RustQ.Reach.Smells.DynamicRawRustEscape do
   end
 
   defp raw_escape({name, meta, [source]}) when name in @raw_functions, do: {:ok, meta, source}
+
+  defp raw_escape({{:., meta, [_receiver, :fragment]}, _call_meta, [_kind, source]}),
+    do: {:ok, meta, source}
 
   defp raw_escape({{:., meta, [_receiver, function]}, _call_meta, [source]})
        when function in @raw_methods,

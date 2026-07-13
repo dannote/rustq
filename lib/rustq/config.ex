@@ -1,49 +1,35 @@
 defmodule RustQ.Config do
   @moduledoc """
-  DSL for declaring generated RustQ files in `rustq.exs`.
+  Concise manifest DSL for checked-in generated files.
 
-  A manifest is ordinary Elixir. It can require helper modules, declare generated
-  Rust item files, or provide custom render/build functions.
+  Use `rust/2` when a target is a list of RustQ AST items and `generate/2`
+  with `content/1` for arbitrary generated content:
 
       use RustQ.Config
 
-      alias RustQ.Rustler
-
-      require_file "lib/my_app/codegen/schema.ex"
+      alias RustQ.Rustler.Term
 
       rust "native/my_nif/src/generated_term_helpers.rs" do
-        Rustler.term_helpers()
+        Term.helpers()
       end
 
-      rust "native/my_nif/src/generated_schema.rs" do
-        MyApp.Codegen.Schema.rust_items()
+      generate "lib/my_app/native/generated_stubs.ex" do
+        content(MyApp.Codegen.Native.stubs())
       end
 
-  Run `mix rustq.gen` to write files and `mix rustq.gen --check` in CI to fail
-  when checked-in generated files are stale.
+  Run `mix rustq.gen` to write targets and `mix rustq.gen --check` in CI.
   """
 
   alias RustQ.Config.State
 
+  @doc false
   defmacro __using__(_opts) do
     quote do
       import RustQ.Config
     end
   end
 
-  defmacro rustq(do: block) do
-    quote do
-      State.start()
-
-      try do
-        unquote(block)
-        [generated: State.finish()]
-      after
-        State.delete()
-      end
-    end
-  end
-
+  @doc "Declares an arbitrary generated target with an explicit name."
   defmacro generate(name, path, do: block) do
     quote do
       State.start_target(unquote(name), unquote(path))
@@ -53,89 +39,33 @@ defmodule RustQ.Config do
     end
   end
 
+  @doc "Declares an arbitrary generated target, inferring its name from the path."
   defmacro generate(path, do: block) do
     quote do
-      State.start_target(
-        Path.basename(unquote(path), Path.extname(unquote(path))),
-        unquote(path)
-      )
-
+      path = unquote(path)
+      State.start_target(State.target_name(path), path)
       unquote(block)
       State.finish_target()
       State.manifest()
     end
   end
 
+  @doc "Declares a generated Rust item target with an explicit name."
   defmacro rust(name, path, do: block) do
-    items = block_items(block)
-
     quote do
-      State.put_rust_items(unquote(name), unquote(path), unquote(items))
+      State.put_rust_items(unquote(name), unquote(path), unquote(block_items(block)))
     end
   end
 
+  @doc "Declares a generated Rust item target, inferring its name from the path."
   defmacro rust(path, do: block) do
-    items = block_items(block)
-
     quote do
       path = unquote(path)
-
-      State.put_rust_items(
-        State.target_name(path),
-        path,
-        unquote(items)
-      )
+      State.put_rust_items(State.target_name(path), path, unquote(block_items(block)))
     end
   end
 
-  defmacro rust_items(name, path, do: block) do
-    items = block_items(block)
-
-    quote do
-      State.put_rust_items(unquote(name), unquote(path), unquote(items))
-    end
-  end
-
-  defmacro rust_items(name, path, opts) do
-    quote do
-      State.put_target(
-        unquote(name),
-        unquote(path),
-        build: fn -> State.render_rust_items(unquote(path), unquote(opts)) end
-      )
-
-      State.manifest()
-    end
-  end
-
-  defmacro rust_items(path, do: block) do
-    items = block_items(block)
-
-    quote do
-      path = unquote(path)
-
-      State.put_rust_items(
-        State.target_name(path),
-        path,
-        unquote(items)
-      )
-    end
-  end
-
-  defmacro rust_items(path, opts) do
-    quote do
-      path = unquote(path)
-
-      State.put_target(
-        State.target_name(path),
-        path,
-        build: fn -> State.render_rust_items(path, unquote(opts)) end
-      )
-
-      State.manifest()
-    end
-  end
-
+  @doc "Requires a generator source file once and returns the current manifest."
   defmacro require_file(path) do
     quote do
       path = unquote(path)
@@ -149,30 +79,17 @@ defmodule RustQ.Config do
     end
   end
 
-  defmacro render(template, opts \\ []) do
-    quote do
-      State.put_target_option(
-        :build,
-        fn -> State.render(unquote(template), unquote(opts)) end
-      )
-    end
-  end
-
+  @doc "Sets a custom zero-arity build function for the current `generate` target."
   defmacro build(fun) do
     quote do
       State.put_target_option(:build, unquote(fun))
     end
   end
 
+  @doc "Sets content for the current `generate` target."
   defmacro content(value) do
     quote do
       State.put_target_option(:content, unquote(value))
-    end
-  end
-
-  defmacro from_module(module) do
-    quote do
-      unquote(module).__rustq_items__()
     end
   end
 

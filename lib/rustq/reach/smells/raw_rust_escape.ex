@@ -1,11 +1,5 @@
 defmodule RustQ.Reach.Smells.RawRustEscape do
-  @moduledoc """
-  Detects large raw Rust escape hatches in RustQ generator code.
-
-  Tiny local escapes remain acceptable for macro invocations and parser gaps, but
-  multiline or long raw snippets should usually become Rusty-Elixir, RustQ AST,
-  source metadata, or a focused `defrustmacro`.
-  """
+  @moduledoc false
 
   use Reach.Smell.Check.AST
 
@@ -45,6 +39,10 @@ defmodule RustQ.Reach.Smells.RawRustEscape do
 
   defp raw_escape({name, meta, [source]})
        when name in [:raw_expr!, :raw_pat!, :raw_stmt!, :raw_arm!] do
+    with {:ok, source} <- string_literal(source), do: {:ok, meta, source}
+  end
+
+  defp raw_escape({{:., meta, [_receiver, :fragment]}, _call_meta, [_kind, source]}) do
     with {:ok, source} <- string_literal(source), do: {:ok, meta, source}
   end
 

@@ -1,7 +1,7 @@
 defmodule RustQ.FileTest do
   use ExUnit.Case, async: true
 
-  alias RustQ.Rust
+  alias RustQ.Rust.AST.ItemBuilder, as: I
 
   test "loads and renders template files" do
     path = tmp_template_path()
@@ -9,16 +9,16 @@ defmodule RustQ.FileTest do
 
     code =
       path
-      |> RustQ.from_file!()
+      |> RustQ.parse_file!()
       |> RustQ.bind(Name: :User)
-      |> RustQ.splice(:fields, Rust.field(:id, :i64, vis: :pub))
-      |> RustQ.codegen!()
+      |> RustQ.splice(:fields, I.field(:id, :i64, vis: :pub))
+      |> RustQ.render!()
 
     assert code =~ "pub struct User"
     assert code =~ "pub id: i64"
 
     assert {:ok, rendered} =
-             RustQ.render_file(path, bind: [Name: :Post], splice: [fields: Rust.field(:id, :i64)])
+             RustQ.render_file(path, bind: [Name: :Post], splice: [fields: I.field(:id, :i64)])
 
     assert rendered =~ "struct Post"
   after

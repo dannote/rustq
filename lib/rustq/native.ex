@@ -1,16 +1,10 @@
 defmodule RustQ.Native do
   @moduledoc """
-  Rustler NIF boundary for parsing, rendering, and decoding Rust syntax.
+  Native Rust source metadata used by bindings and generators.
+
+  `RustQ.Native.Ref`, `RustQ.Native.Descriptor`, and
+  `RustQ.Native.EnumDescriptor` describe resolved Rust items. The private NIF
+  bridge that powers parsing and rendering is intentionally not part of this
+  public API.
   """
-
-  use Rustler, otp_app: :rustq, crate: "rustq_nif"
-
-  def parse(_source), do: :erlang.nif_error(:nif_not_loaded)
-  def render(_source, _bindings, _splices), do: :erlang.nif_error(:nif_not_loaded)
-  def render_ast(_ast), do: :erlang.nif_error(:nif_not_loaded)
-  def syn_inspect(_source), do: :erlang.nif_error(:nif_not_loaded)
-  def syn_atom_references(_source, _module), do: :erlang.nif_error(:nif_not_loaded)
-  def syn_method_references(_source), do: :erlang.nif_error(:nif_not_loaded)
-  def syn_method_calls(_source), do: :erlang.nif_error(:nif_not_loaded)
-  def syn_enum_variants(_source, _enum_name), do: :erlang.nif_error(:nif_not_loaded)
 end

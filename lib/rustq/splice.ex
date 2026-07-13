@@ -4,7 +4,7 @@ defmodule RustQ.Splice do
 
   Splices use the same shape accepted by `RustQ.render/3`:
 
-      [items: [RustQ.Rust.item("pub fn generated() {}")]]
+      [items: [RustQ.Rust.fragment(:item, "pub fn generated() {}")]]
 
   `merge/1` also accepts nested splice sources, so manifests can compose output
   from several generators without wrapper structs.
@@ -23,7 +23,7 @@ defmodule RustQ.Splice do
       RustQ.Splice.merge([
         BaseGenerator.splices(schema),
         NativeGenerator.splices(schema),
-        items: RustQ.Rust.item("pub fn generated() {}")
+        items: RustQ.Rust.fragment(:item, "pub fn generated() {}")
       ])
   """
   @spec merge(source()) :: t()

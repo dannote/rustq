@@ -1,7 +1,5 @@
 defmodule RustQ.Codegen.Decoders.Arm do
-  @moduledoc """
-  Emits native decoder helpers for Rust match arms.
-  """
+  @moduledoc false
 
   use RustQ.Codegen.DefrustModule,
     callable_modules: [RustQ.Codegen.DecoderHelpers, RustQ.Codegen.Helpers]

@@ -73,4 +73,4 @@ fn syn_enum_variants<'a>(env: Env<'a>, source: String, enum_name: String) -> Nif
     syn_metadata::enum_variants(env, source, enum_name)
 }
 
-rustler::init!("Elixir.RustQ.Native");
+rustler::init!("Elixir.RustQ.Native.Nif");

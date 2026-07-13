@@ -8,6 +8,7 @@ defmodule RustQ.Spec do
   """
 
   alias RustQ.Meta.Type
+  alias RustQ.Rust.Identifier
 
   @doc "Lowers a typespec type form to `RustQ.Meta.Type` metadata."
   @spec type(term(), map()) :: Type.t()
@@ -29,19 +30,25 @@ defmodule RustQ.Spec do
     |> Type.type_aliases()
   end
 
-  @doc "Extracts aliases, function specs, and def argument names from a source path or quoted module AST."
-  @spec declarations(Path.t() | Macro.t()) :: %{
+  @doc "Extracts aliases, function specs, and argument names from an Elixir source file."
+  @spec declarations_file!(Path.t()) :: %{
           aliases: %{optional({atom(), non_neg_integer()}) => Type.t()},
           specs: [{atom(), [Macro.t()]}],
           defs: %{optional(atom()) => [atom()]}
         }
-  def declarations(path) when is_binary(path) do
+  def declarations_file!(path) when is_binary(path) do
     path
     |> File.read!()
     |> Code.string_to_quoted!(file: path)
     |> declarations()
   end
 
+  @doc "Extracts aliases, function specs, and argument names from quoted module AST."
+  @spec declarations(Macro.t()) :: %{
+          aliases: %{optional({atom(), non_neg_integer()}) => Type.t()},
+          specs: [{atom(), [Macro.t()]}],
+          defs: %{optional(atom()) => [atom()]}
+        }
   def declarations({:defmodule, _meta, [_module, [do: body]]}), do: declarations(body)
 
   def declarations(quoted) do
@@ -149,7 +156,7 @@ defmodule RustQ.Spec do
   defp module_ast(module) when is_atom(module) do
     module
     |> Module.split()
-    |> Enum.map(&RustQ.Atom.identifier!/1)
+    |> Enum.map(&Identifier.atom!/1)
     |> then(&{:__aliases__, [], &1})
   end
 end

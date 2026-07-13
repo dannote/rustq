@@ -1,14 +1,11 @@
 defmodule RustQ.Rust.AST.Schema do
-  @moduledoc """
-  Runtime schema view over RustQ AST node modules and their Rust decoder names.
-  """
+  @moduledoc false
 
   alias RustQ.Rust.AST
+  alias RustQ.Rust.Identifier
 
   defmodule Node do
-    @moduledoc """
-    Describes one RustQ AST node module, category, fields, and native decoder mapping.
-    """
+    @moduledoc false
     defstruct [:name, :module, :rust_const, :rust_module, :category, fields: []]
 
     @type t :: %__MODULE__{
@@ -82,11 +79,11 @@ defmodule RustQ.Rust.AST.Schema do
   end
 
   defp name(module) do
-    RustQ.Atom.identifier!(Macro.underscore(List.last(Module.split(module))))
+    Identifier.atom!(Macro.underscore(List.last(Module.split(module))))
   end
 
   defp rust_const(module) do
-    RustQ.Atom.identifier!(String.upcase(Atom.to_string(name(module))))
+    Identifier.atom!(String.upcase(Atom.to_string(name(module))))
   end
 
   defp rust_module(module), do: Atom.to_string(module)

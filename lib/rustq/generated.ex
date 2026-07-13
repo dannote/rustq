@@ -36,6 +36,7 @@ defmodule RustQ.Generated do
 
   @type target :: {atom() | String.t(), keyword()}
 
+  @doc "Loads and normalizes generated targets from a RustQ manifest."
   @spec load_manifest!(Path.t()) :: [target()]
   def load_manifest!(path \\ "rustq.exs") do
     unless File.exists?(path) do
@@ -46,6 +47,7 @@ defmodule RustQ.Generated do
     normalize_manifest!(manifest)
   end
 
+  @doc "Writes or checks all selected generated targets."
   @spec sync_all!([target()], keyword()) :: :ok
   def sync_all!(targets, opts \\ []) do
     only = opts |> Keyword.get(:only, []) |> Enum.map(&to_string/1)
@@ -62,6 +64,7 @@ defmodule RustQ.Generated do
     :ok
   end
 
+  @doc "Writes or checks one named generated target."
   @spec sync!(atom() | String.t(), keyword(), keyword()) :: :ok
   def sync!(name, target, opts \\ []) do
     path = Keyword.fetch!(target, :path)
@@ -78,12 +81,14 @@ defmodule RustQ.Generated do
     :ok
   end
 
+  @doc "Writes normalized generated content, creating parent directories."
   @spec write!(Path.t(), iodata()) :: :ok
   def write!(path, contents) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, normalize_newlines(contents))
   end
 
+  @doc "Raises `StaleError` when a generated file differs from expected content."
   @spec check!(Path.t(), iodata(), keyword()) :: :ok
   def check!(path, expected, opts \\ []) do
     expected = normalize_newlines(expected)

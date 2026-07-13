@@ -1,5 +1,5 @@
 defmodule RustQ.Syn.Doc do
-  @moduledoc "Utilities for rendering Rust doc comments for downstream docs."
+  @moduledoc false
 
   @doc """
   Renders Rust doc comment lines as Markdown suitable for consumer docs.

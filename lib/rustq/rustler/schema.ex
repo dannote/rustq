@@ -30,7 +30,10 @@ defmodule RustQ.Rustler.Schema do
   """
   alias RustQ.Diagnostic
   alias RustQ.Rust
+  alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.Identifier
+  alias RustQ.Rustler.{Nif, TaggedEnum}
 
   defstruct module_prefix: nil,
             rust_prefix: "Ex",
@@ -40,10 +43,11 @@ defmodule RustQ.Rustler.Schema do
             nodes: [],
             enums: []
 
-  @type field :: {atom(), RustQ.Rust.rust_type(), keyword()}
+  @type rust_type :: AST.type() | String.t() | atom() | tuple()
+  @type field :: {atom(), rust_type(), keyword()}
   @type schema_node :: {atom(), [field()], keyword()}
   @type enum_decl :: {atom(), keyword()}
-  @type type_alias :: {atom(), RustQ.Rust.rust_type()}
+  @type type_alias :: {atom(), rust_type()}
   @type t :: %__MODULE__{
           module_prefix: module(),
           rust_prefix: String.t(),
@@ -54,6 +58,7 @@ defmodule RustQ.Rustler.Schema do
           enums: [enum_decl()]
         }
 
+  @doc false
   defmacro __using__(_opts) do
     quote do
       import RustQ.Rustler.Schema
@@ -68,6 +73,7 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
+  @doc false
   defmacro __before_compile__(_env) do
     quote do
       alias RustQ.Rustler.Schema, as: RustlerSchema
@@ -90,6 +96,7 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
+  @doc "Declares a Rustler schema for an Elixir module namespace."
   defmacro schema(module_prefix, opts \\ [], do: block) do
     module_prefix = Macro.expand(module_prefix, __CALLER__)
 
@@ -102,30 +109,35 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
+  @doc "Overrides the Rust type-name prefix for the current schema."
   defmacro rust_prefix(prefix) do
     quote do
       @rustq_schema_rust_prefix unquote(prefix)
     end
   end
 
+  @doc "Sets the atom-keyed field used to identify tagged values."
   defmacro tag_field(field) do
     quote do
       @rustq_schema_tag_field unquote(field)
     end
   end
 
+  @doc "Sets default Rust attributes for generated schema items."
   defmacro default_attrs(attrs) do
     quote do
       @rustq_schema_default_attrs unquote(attrs)
     end
   end
 
+  @doc "Declares a reusable schema-local Rust type alias."
   defmacro type(name, rust_type) do
     quote do
       @rustq_schema_type_aliases {unquote(name), unquote(rust_type)}
     end
   end
 
+  @doc false
   def __apply_schema_opts__(module, opts) do
     if prefix = Keyword.get(opts, :rust_prefix) do
       Module.put_attribute(module, :rustq_schema_rust_prefix, prefix)
@@ -140,6 +152,7 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
+  @doc "Declares an Elixir struct-backed Rust `NifStruct` node."
   defmacro node(name, opts \\ [], do: block) do
     name = ast_name(name)
     opts = normalize_node_opts(opts, __CALLER__)
@@ -151,6 +164,7 @@ defmodule RustQ.Rustler.Schema do
     end
   end
 
+  @doc "Declares a tagged enum over selected schema nodes."
   defmacro tagged_enum(name, opts \\ [], do: block) do
     name = ast_name(name)
     opts = Keyword.merge(opts, extract_enum_opts(block))
@@ -161,16 +175,26 @@ defmodule RustQ.Rustler.Schema do
   end
 
   @doc "Builds structural Rust field fragments from `{name, type}` pairs."
-  @spec struct_fields([{atom() | String.t(), Rust.rust_type()}], keyword()) :: [Rust.Field.t()]
+  @spec struct_fields([{atom() | String.t(), AST.type() | String.t()}], keyword()) ::
+          [AST.StructField.t()]
   def struct_fields(fields, opts \\ []) do
-    Enum.map(fields, fn {name, type} -> Rust.field(name, type, opts) end)
+    Enum.map(fields, fn {name, type} ->
+      %AST.StructField{
+        name: Identifier.atom!(to_string(name)),
+        type: type,
+        vis: opts[:vis]
+      }
+    end)
   end
 
-  @doc "Builds structural shorthand fields for Rust struct literals."
-  @spec shorthand_fields([atom() | String.t()]) :: [RustQ.Rust.ShorthandField.t()]
-  def shorthand_fields(names), do: Enum.map(names, &Rust.shorthand_field/1)
+  @doc "Builds shorthand field fragments for Rust template splices."
+  @spec shorthand_fields([atom() | String.t()]) :: [Rust.Fragment.t()]
+  def shorthand_fields(names) do
+    Enum.map(names, &Rust.fragment(:field, [to_string(&1), ","]))
+  end
 
-  @spec rust_items(%__MODULE__{}) :: [RustQ.Rust.Fragment.t()]
+  @doc "Builds all structural Rust items for a schema."
+  @spec rust_items(%__MODULE__{}) :: [AST.item()]
   def rust_items(%__MODULE__{} = schema) do
     schema.nodes
     |> Enum.map(&nif_struct(schema, &1))
@@ -178,7 +202,7 @@ defmodule RustQ.Rustler.Schema do
   end
 
   defp nif_struct(schema, {name, fields, opts}) do
-    RustQ.Rustler.nif_struct(node_rust_name(schema, name), module_name(schema, name),
+    Nif.struct(node_rust_name(schema, name), module_name(schema, name),
       fields: Enum.map(fields, fn {field, type, _opts} -> {field, rust_type(schema, type)} end),
       attrs: attrs(schema, opts),
       derive: Keyword.get(opts, :derive, [:Clone, :Debug, :NifStruct]),
@@ -200,7 +224,7 @@ defmodule RustQ.Rustler.Schema do
          ]}
       end)
 
-    RustQ.Rustler.tagged_enum(Keyword.get(opts, :rust, rust_name(schema, name)),
+    TaggedEnum.items(Keyword.get(opts, :rust, rust_name(schema, name)),
       tag: tag_expr(schema.tag_field),
       unknown: Keyword.get(opts, :unknown, :unknown_variant),
       variants: variants,

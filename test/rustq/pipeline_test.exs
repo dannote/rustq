@@ -2,6 +2,13 @@ defmodule RustQ.PipelineTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Rust
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.ItemBuilder, as: I
+
+  import RustQ.Rust.AST.ItemBuilder, only: [function: 3]
+
+  require A
+  require I
 
   test "binds identifiers, expressions, and splices fields/methods" do
     template = """
@@ -23,18 +30,18 @@ defmodule RustQ.PipelineTest do
       |> RustQ.parse!("resource.rs")
       |> RustQ.bind(Resource: :User, table_name: {:literal, "users"})
       |> RustQ.splice(:fields, [
-        Rust.field(:id, :i64, vis: :pub),
-        Rust.field(:name, :String, vis: :pub)
+        I.field(:id, :i64, vis: :pub),
+        I.field(:name, :String, vis: :pub)
       ])
       |> RustQ.splice(:methods, [
-        Rust.fn(:new,
+        function :new,
           vis: :pub,
           args: [id: :i64, name: :String],
-          returns: :Self,
-          body: "Self { id, name }"
-        )
+          returns: :Self do
+          A.return(A.struct_expr(:Self, id: A.var(:id), name: A.var(:name)))
+        end
       ])
-      |> RustQ.codegen!()
+      |> RustQ.render!()
 
     assert code =~ "pub struct User"
     assert code =~ "pub id: i64"
@@ -72,7 +79,7 @@ defmodule RustQ.PipelineTest do
   test "prepends preambles after codegen" do
     template = RustQ.parse!("fn answer() -> i32 { 42 }", "answer.rs")
 
-    assert RustQ.codegen!(template, preamble: "// generated\n\n") ==
+    assert RustQ.render!(template, preamble: "// generated\n\n") ==
              "// generated\n\nfn answer() -> i32 {\n    42\n}\n"
 
     assert RustQ.render!("fn answer() -> i32 { 42 }", "answer.rs",
@@ -92,10 +99,10 @@ defmodule RustQ.PipelineTest do
       }
       """
       |> RustQ.render!("fragments.rs",
-        bind: [value: Rust.expr("answer")],
+        bind: [value: Rust.fragment(:expr, "answer")],
         splice: [
-          items: [Rust.item("const answer: i32 = 42;")],
-          body: [Rust.stmt("let answer = answer + 1;")]
+          items: [Rust.fragment(:item, "const answer: i32 = 42;")],
+          body: [Rust.fragment(:stmt, "let answer = answer + 1;")]
         ]
       )
 

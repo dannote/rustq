@@ -131,6 +131,34 @@ defmodule RustQ.MixProject do
         "CHANGELOG.md",
         "LICENSE"
       ],
+      groups_for_modules: [
+        "Start here": [
+          RustQ,
+          RustQ.Meta,
+          RustQ.Type,
+          RustQ.Config,
+          RustQ.Rustler,
+          RustQ.Syn,
+          RustQ.Rust,
+          RustQ.Rust.Identifier
+        ],
+        "Rustler generation": ~r/^RustQ\.Rustler\./,
+        "Rust AST nodes":
+          ~r/^RustQ\.Rust\.AST\.(?!Builder|ItemBuilder|PatternBuilder|TypeBuilder|Render|Walk$)/,
+        "Rust AST": ~r/^RustQ\.Rust\.AST/,
+        "Rust source metadata": ~r/^RustQ\.(Syn($|\.)|Cargo($|\.)|Native($|\.))/,
+        "Rusty-Elixir metadata": ~r/^RustQ\.(Meta|Binding|Spec)/,
+        "Generation and templates": [
+          RustQ.Generated,
+          RustQ.Generated.StaleError,
+          RustQ.Splice,
+          RustQ.Template,
+          RustQ.Sigil,
+          RustQ.Rust.Fragment
+        ],
+        "Diagnostics and tooling": ~r/^RustQ\.(Diagnostic|Error|Reach)/
+      ],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       source_ref: "v#{@version}",
       source_url: @source_url
     ]

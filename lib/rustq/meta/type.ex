@@ -20,6 +20,7 @@ defmodule RustQ.Meta.Type do
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.Identifier
   alias RustQ.Syn.Type, as: SynType
 
   defguardp is_ast_tuple(tuple)
@@ -460,7 +461,7 @@ defmodule RustQ.Meta.Type do
 
   defp from_syn_path_parts(parts, name, args, assoc) do
     ast = %AST.TypePath{
-      parts: Enum.map(parts, &RustQ.Atom.identifier!/1),
+      parts: Enum.map(parts, &Identifier.atom!/1),
       generics: Enum.map(args, & &1.ast)
     }
 
@@ -822,7 +823,7 @@ defmodule RustQ.Meta.Type do
   end
 
   defp spec_path_part!(part) when is_atom(part), do: part
-  defp spec_path_part!(part) when is_binary(part), do: RustQ.Atom.identifier!(part)
+  defp spec_path_part!(part) when is_binary(part), do: Identifier.atom!(part)
 
   defp spec_path_part!(other) do
     raise ArgumentError,
@@ -903,7 +904,7 @@ defmodule RustQ.Meta.Type do
   defp external_type_generics(arg, aliases), do: [parse(arg, aliases).ast]
 
   defp rust_module_part(part) when is_atom(part),
-    do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
+    do: Identifier.atom!(Macro.underscore(Atom.to_string(part)))
 
   defp rust_module_part(part) when is_binary(part), do: Macro.underscore(part)
 
@@ -1021,7 +1022,7 @@ defmodule RustQ.Meta.Type do
 
   defp tuple_variant({name, _, args}, raw, aliases) when is_atom(name) and is_list(args) do
     {type, aliases} = parse_alias_type({name, [], args}, raw, aliases)
-    {{RustQ.Atom.identifier!(type.meta.rust_name), [type]}, aliases}
+    {{Identifier.atom!(type.meta.rust_name), [type]}, aliases}
   end
 
   defp result_members(ast) do

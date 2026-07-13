@@ -10,11 +10,13 @@ defmodule RustQ.Rustler.Term do
   use RustQ.Meta
 
   alias RustQ.Meta.AST, as: MetaAST
-  alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
   alias RustQ.Rust.AST.PatternBuilder, as: P
+  alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.AST.TypeBuilder, as: T
+  alias RustQ.Rust.Identifier
   alias RustQ.Rustler.HelperSelection
   alias RustQ.Type, as: R
 
@@ -300,14 +302,16 @@ defmodule RustQ.Rustler.Term do
     end
   end
 
-  @spec builders(keyword()) :: [Rust.Fragment.t()]
+  @doc "Builds safe `Term<'a>` map and struct construction helpers."
+  @spec builders(keyword()) :: [AST.Function.t()]
   def builders(opts \\ []) do
     opts
     |> HelperSelection.names(@builder_names)
     |> Enum.map(&builder_item/1)
   end
 
-  @spec decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
+  @doc "Builds a struct and decoder from an atom-keyed Rustler map term."
+  @spec decoder(atom() | String.t(), keyword()) :: [AST.Struct.t() | AST.Function.t()]
   def decoder(name, opts) do
     lifetime = Keyword.get(opts, :lifetime, :a)
     fields = Keyword.fetch!(opts, :fields)
@@ -318,10 +322,10 @@ defmodule RustQ.Rustler.Term do
     result = Keyword.get(opts, :result, :nif)
     result_type = result_type(name, lifetime, result)
 
-    Rust.ast_items([
+    [
       struct_ast(name, fields, lifetime),
       decoder_ast(name, function_name, fields, term_arg, term_type, result_type, result, lifetime)
-    ])
+    ]
   end
 
   @doc "Returns the Rust atom identifiers referenced by a term encoder manifest."
@@ -334,13 +338,14 @@ defmodule RustQ.Rustler.Term do
     |> Enum.uniq()
   end
 
-  @spec encoder(atom() | String.t(), keyword()) :: Rust.Fragment.t()
+  @doc "Builds a `rustler::Encoder` implementation from structural field metadata."
+  @spec encoder(atom() | String.t(), keyword()) :: AST.Impl.t()
   def encoder(name, opts) do
     fields = opts |> Keyword.fetch!(:fields) |> Enum.map(&encoder_field/1)
 
     function = %AST.Function{
       name: :encode,
-      lifetime: :a,
+      lifetimes: [:a],
       args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
       returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
       body: encoder_body(fields)
@@ -349,15 +354,14 @@ defmodule RustQ.Rustler.Term do
     target =
       A.type_path(ident_atom(name), lifetimes: Keyword.get(opts, :target_lifetimes, []))
 
-    Rust.ast_item(
-      A.impl(target,
-        trait: A.type_path([:rustler, :Encoder]),
-        items: [function]
-      )
+    A.impl(target,
+      trait: A.type_path([:rustler, :Encoder]),
+      items: [function]
     )
   end
 
-  @spec helpers(keyword()) :: [Rust.Fragment.t()]
+  @doc "Builds common map access and term decoding helpers."
+  @spec helpers(keyword()) :: [AST.Function.t()]
   def helpers(opts \\ []) do
     opts
     |> HelperSelection.names(@helper_names)
@@ -510,24 +514,24 @@ defmodule RustQ.Rustler.Term do
 
   defp builder_item(name) do
     function_name = Map.fetch!(@builder_function_names, name)
-    MetaAST.item(__MODULE__, function_name)
+    MetaAST.function!(__MODULE__, function_name)
   end
 
   defp helper_item(:cached_struct_keys), do: cached_struct_keys_item()
   defp helper_item(:make_struct_from_nif_term_arrays), do: make_struct_from_nif_term_arrays_item()
 
   defp helper_item(name) when name in @rusty_helper_names,
-    do: MetaAST.item(__MODULE__, name)
+    do: MetaAST.function!(__MODULE__, name)
 
   defp cached_struct_keys_item do
-    Rust.ast_item(%AST.Function{
+    %AST.Function{
       name: :cached_struct_keys,
       args: [
         A.arg(:env, "Env<'_>"),
         A.arg(:cache, "&'static OnceLock<Vec<rustler::wrapper::NIF_TERM>>"),
         A.arg(:fields, "&[&str]")
       ],
-      returns: Rust.type({:raw, "&'static [rustler::wrapper::NIF_TERM]"}),
+      returns: T.raw("&'static [rustler::wrapper::NIF_TERM]"),
       body: [
         A.return_stmt(
           A.escape_expr(
@@ -535,19 +539,19 @@ defmodule RustQ.Rustler.Term do
           )
         )
       ]
-    })
+    }
   end
 
   defp make_struct_from_nif_term_arrays_item do
-    Rust.ast_item(%AST.Function{
+    %AST.Function{
       name: :make_struct_from_nif_term_arrays,
-      lifetime: :a,
+      lifetimes: [:a],
       args: [
         A.arg(:env, "Env<'a>"),
         A.arg(:keys, "&[rustler::wrapper::NIF_TERM]"),
         A.arg(:values, "&[rustler::wrapper::NIF_TERM]")
       ],
-      returns: Rust.type({:raw, "NifResult<Term<'a>>"}),
+      returns: T.raw("NifResult<Term<'a>>"),
       body: [
         A.return_stmt(
           A.escape_expr(
@@ -555,7 +559,7 @@ defmodule RustQ.Rustler.Term do
           )
         )
       ]
-    })
+    }
   end
 
   defp struct_ast(name, fields, lifetime) do
@@ -576,12 +580,12 @@ defmodule RustQ.Rustler.Term do
        ) do
     %AST.Function{
       name: ident_atom(function_name),
-      lifetime: lifetime,
+      lifetimes: List.wrap(lifetime),
       args: [A.arg(ident_atom(term_arg), term_type)],
-      returns: Rust.type(result_type),
+      returns: T.type(result_type),
       body: [
         A.return_stmt(
-          A.ok(A.struct(A.path(ident_atom(name)), decoder_inits(fields, term_arg, result)))
+          A.ok(A.struct_expr(A.path(ident_atom(name)), decoder_inits(fields, term_arg, result)))
         )
       ]
     }
@@ -609,7 +613,7 @@ defmodule RustQ.Rustler.Term do
         required_expr(spec, term_arg, result)
 
       Keyword.has_key?(spec, :default) ->
-        "#{term_arg}.map_get(#{key!(spec)}).ok().and_then(|t| t.decode::<#{Rust.type(Keyword.fetch!(spec, :type))}>().ok()).unwrap_or(#{Keyword.fetch!(spec, :default)})"
+        "#{term_arg}.map_get(#{key!(spec)}).ok().and_then(|t| t.decode::<#{render_type(Keyword.fetch!(spec, :type))}>().ok()).unwrap_or(#{Keyword.fetch!(spec, :default)})"
 
       true ->
         "#{term_arg}.map_get(#{key!(spec)}).ok().and_then(|t| t.decode::<#{inner_option_type(Keyword.fetch!(spec, :type))}>().ok())"
@@ -617,12 +621,12 @@ defmodule RustQ.Rustler.Term do
   end
 
   defp required_expr(spec, term_arg, :nif) do
-    "#{term_arg}.map_get(#{key!(spec)})?.decode::<#{Rust.type(Keyword.fetch!(spec, :type))}>()?"
+    "#{term_arg}.map_get(#{key!(spec)})?.decode::<#{render_type(Keyword.fetch!(spec, :type))}>()?"
   end
 
   defp required_expr(spec, term_arg, _result) do
     field = Keyword.fetch!(spec, :field)
-    type = Rust.type(Keyword.fetch!(spec, :type))
+    type = render_type(Keyword.fetch!(spec, :type))
     missing = Keyword.get(spec, :missing, "Missing :#{field}")
     invalid = Keyword.get(spec, :invalid, "Invalid :#{field}")
 
@@ -631,14 +635,18 @@ defmodule RustQ.Rustler.Term do
 
   defp key!(spec), do: Keyword.fetch!(spec, :key)
 
-  defp inner_option_type({:option, type}), do: Rust.type(type)
-  defp inner_option_type(type), do: Rust.type(type)
+  defp inner_option_type({:option, type}), do: render_type(type)
+  defp inner_option_type(type), do: render_type(type)
 
   defp result_type(name, lifetime, :nif), do: {:raw, "NifResult<#{name}<'#{lifetime}>>"}
   defp result_type(name, lifetime, result), do: {:raw, "#{result}<#{name}<'#{lifetime}>>"}
 
   defp ident_atom(value) when is_atom(value), do: value
-  defp ident_atom(value) when is_binary(value), do: RustQ.Atom.identifier!(value)
+  defp ident_atom(value) when is_binary(value), do: Identifier.atom!(value)
+
+  defp render_type(type) do
+    type |> T.type() |> Render.render_type() |> IO.iodata_to_binary()
+  end
 
   defp default_decoder_name(name), do: "decode_#{Macro.underscore(to_string(name))}"
 end

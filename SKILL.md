@@ -370,10 +370,9 @@ generated `defrust` helpers.
 When generating Rust declarations, prefer RustQ AST/builders:
 
 ```elixir
-alias RustQ.Rust
 alias RustQ.Rust.AST.Builder, as: A
 
-Rust.ast_item(A.const(:MAX_FIELDS, :usize, A.lit(128), vis: :pub))
+A.const(:MAX_FIELDS, :usize, A.lit(128), vis: :pub)
 ```
 
 If AST/native rendering rejects a shape you need, that is usually a RustQ capability gap. Add the missing node/decoder/rendering support rather than falling back to a giant template.
@@ -393,13 +392,13 @@ Anything outside those boundaries should use `defrust`, RustQ AST, or inferred m
 Acceptable:
 
 ```elixir
-Rust.ast_item(A.macro_item("rustler::atoms! { ok, error }"))
+A.macro_item("rustler::atoms! { ok, error }")
 ```
 
 Not acceptable as normal style:
 
 ```elixir
-Rust.item([
+RustQ.Rust.fragment(:item, [
   "fn decode_", name, "(decoder: &mut Decoder<'_>) -> NifResult<()> {\n",
   "    loop { ... }\n",
   "}\n"
@@ -430,7 +429,7 @@ Read these in HexDocs/source when working with RustQ:
 - `RustQ.Syn` and `RustQ.Syn.Index` — Rust source introspection
 - `RustQ.Binding.Callable`, `RustQ.Binding.Source`, `RustQ.Binding.Index` — callable metadata/inference inputs
 - `RustQ.Rustler` and `RustQ.Rustler.Schema` — Rustler helper generation
-- `RustQ.Meta.Lower` and `RustQ.Meta.Inference` — current lowering/inference behavior
+- `lib/rustq/meta/` — internal lowering and inference implementation
 - `guides/using-rustq-well.md` — expanded guide with examples
 
 ## Verification

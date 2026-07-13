@@ -1,12 +1,5 @@
 defmodule RustQ.Meta.Inference do
-  @moduledoc """
-  Performs block-local type inference used by Rusty-Elixir lowering.
-
-  This module intentionally stays scoped to straight-line block inference. It
-  propagates expected argument types from later callable uses back to earlier
-  local let bindings and carries known let RHS types forward so receiver method
-  calls can participate in the same pass.
-  """
+  @moduledoc false
 
   alias RustQ.Meta.Pattern
   alias RustQ.Meta.Semantics

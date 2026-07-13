@@ -1,7 +1,5 @@
 defmodule RustQ.Codegen.Decoders.Item do
-  @moduledoc """
-  Emits native decoder helpers for Rust items.
-  """
+  @moduledoc false
 
   use RustQ.Codegen.DefrustModule,
     callable_modules: [RustQ.Codegen.DecoderHelpers, RustQ.Codegen.Helpers]
@@ -100,7 +98,7 @@ defmodule RustQ.Codegen.Decoders.Item do
       Super.decode_vis(required_field(term, "vis")),
       required_function_arg_list(term, "args"),
       required_type(term, "returns"),
-      optional_atom_key(term, "lifetime"),
+      unwrap!(decode_lifetime_list(unwrap!(required_field(term, "lifetimes")))),
       required_stmt_list(term, "body"),
       Super.decode_attribute_list(required_field(term, "attrs"))
     )

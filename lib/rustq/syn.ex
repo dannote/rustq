@@ -36,6 +36,7 @@ defmodule RustQ.Syn do
   """
 
   alias RustQ.Error
+  alias RustQ.Native.Nif
 
   defmodule File do
     @moduledoc """
@@ -472,7 +473,7 @@ defmodule RustQ.Syn do
   """
   @spec parse(String.t()) :: {:ok, RustQ.Syn.File.t()} | {:error, term()}
   def parse(source) when is_binary(source) do
-    with {:ok, raw_items} <- RustQ.Native.syn_inspect(source) do
+    with {:ok, raw_items} <- Nif.syn_inspect(source) do
       {:ok, %RustQ.Syn.File{items: Elixir.Enum.map(raw_items, &decode_item!/1)}}
     end
   end
@@ -566,7 +567,7 @@ defmodule RustQ.Syn do
   """
   @spec enum_variants(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, term()}
   def enum_variants(source, enum_name) when is_binary(source) and is_binary(enum_name),
-    do: RustQ.Native.syn_enum_variants(source, enum_name)
+    do: Nif.syn_enum_variants(source, enum_name)
 
   @doc """
   Returns atom names referenced as `atoms::name()` calls in Rust source.
@@ -584,7 +585,7 @@ defmodule RustQ.Syn do
       raise ArgumentError, "expected :module to be a Rust module name string"
     end
 
-    RustQ.Native.syn_atom_references(source, module)
+    Nif.syn_atom_references(source, module)
   end
 
   @doc "Returns referenced atom names in Rust source, raising on failure."
@@ -609,7 +610,7 @@ defmodule RustQ.Syn do
   """
   @spec method_calls(String.t()) :: {:ok, [RustQ.Syn.MethodCall.t()]} | {:error, term()}
   def method_calls(source) when is_binary(source) do
-    case RustQ.Native.syn_method_calls(source) do
+    case Nif.syn_method_calls(source) do
       {:ok, calls} -> {:ok, Elixir.Enum.map(calls, &decode_method_call!/1)}
       {:error, errors} -> {:error, errors}
     end
@@ -636,7 +637,7 @@ defmodule RustQ.Syn do
   """
   @spec method_references(String.t()) :: {:ok, [String.t()]} | {:error, term()}
   def method_references(source) when is_binary(source),
-    do: RustQ.Native.syn_method_references(source)
+    do: Nif.syn_method_references(source)
 
   @doc "Returns method names referenced as receiver method calls in Rust source, raising on failure."
   @spec method_references!(String.t()) :: [String.t()]

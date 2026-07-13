@@ -6,6 +6,7 @@ defmodule RustQ.Meta.DefrustTest do
   alias RustQ.Diagnostic
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Native.Nif
   alias RustQ.Rust.AST
 
   test "generates Rust source from defrust functions and specs" do
@@ -400,7 +401,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     call =
-      RustQ.Meta.AST.macro_call(DefrustMacroItemCallCase, :descriptor,
+      RustQ.Meta.AST.macro_call!(DefrustMacroItemCallCase, :descriptor,
         fn: :decode_user,
         env: :env,
         fields: [
@@ -411,7 +412,7 @@ defmodule RustQ.Meta.DefrustTest do
 
     source =
       [
-        RustQ.Meta.AST.macro_item(DefrustMacroItemCallCase, :descriptor),
+        RustQ.Meta.AST.macro_item!(DefrustMacroItemCallCase, :descriptor),
         call
       ]
       |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
@@ -471,7 +472,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     call =
-      RustQ.Meta.AST.macro_call(DefrustMacroFullMessageItemCallCase, :descriptor,
+      RustQ.Meta.AST.macro_call!(DefrustMacroFullMessageItemCallCase, :descriptor,
         fn: :decode_message,
         fields: [
           [field_id: 1, field_index: 1, field_repeated: false, field_decode: :decode_id],
@@ -481,7 +482,7 @@ defmodule RustQ.Meta.DefrustTest do
 
     source =
       [
-        RustQ.Meta.AST.macro_item(DefrustMacroFullMessageItemCallCase, :descriptor),
+        RustQ.Meta.AST.macro_item!(DefrustMacroFullMessageItemCallCase, :descriptor),
         call
       ]
       |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
@@ -525,7 +526,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     call =
-      RustQ.Meta.AST.macro_call(DefrustMacroOneCaptureItemCallCase, :descriptor,
+      RustQ.Meta.AST.macro_call!(DefrustMacroOneCaptureItemCallCase, :descriptor,
         fn: :decode_values,
         fields: [
           [field_expr: "1 + 2"],
@@ -535,7 +536,7 @@ defmodule RustQ.Meta.DefrustTest do
 
     source =
       [
-        RustQ.Meta.AST.macro_item(DefrustMacroOneCaptureItemCallCase, :descriptor),
+        RustQ.Meta.AST.macro_item!(DefrustMacroOneCaptureItemCallCase, :descriptor),
         call
       ]
       |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
@@ -561,14 +562,14 @@ defmodule RustQ.Meta.DefrustTest do
       end
     end
 
-    [field] = RustQ.Meta.AST.macro_items(DefrustMacroSelectorCase, [:field])
+    [field] = RustQ.Meta.AST.macro_items!(DefrustMacroSelectorCase, [:field])
     source = RustQ.Rust.to_fragment(field)
 
     assert source =~ "macro_rules! field"
     assert source =~ "required_field($term, $name)?.decode::<$type>()?"
 
     assert_raise ArgumentError, ~r/no defrustmacro item named missing/, fn ->
-      RustQ.Meta.AST.macro_item(DefrustMacroSelectorCase, :missing)
+      RustQ.Meta.AST.macro_item!(DefrustMacroSelectorCase, :missing)
     end
   end
 
@@ -1701,12 +1702,12 @@ defmodule RustQ.Meta.DefrustTest do
   end
 
   test "Meta returns rendered items" do
-    item = MetaAST.item(RustQ.Meta.GeneratedCase, :draw_save)
+    item = MetaAST.function!(RustQ.Meta.GeneratedCase, :draw_save)
 
     assert RustQ.Rust.to_fragment(item) =~ "fn draw_save"
 
     assert_raise ArgumentError, fn ->
-      MetaAST.item(RustQ.Meta.GeneratedCase, :missing)
+      MetaAST.function!(RustQ.Meta.GeneratedCase, :missing)
     end
   end
 
@@ -2239,11 +2240,15 @@ defmodule RustQ.Meta.DefrustTest do
   test "native AST renderer emits Rust through syn" do
     [draw_save | _] = Generated.__rustq_asts__()
 
-    assert RustQ.Native.render_ast(draw_save) =~ "fn draw_save(canvas: &Canvas) -> NifResult<()>"
-    assert RustQ.Native.render_ast(draw_save) =~ "canvas.save();"
+    assert Nif.render_ast(draw_save) =~
+             "fn draw_save(canvas: &Canvas) -> NifResult<()>"
+
+    assert Nif.render_ast(draw_save) =~ "canvas.save();"
   end
 
-  test "generated items are validated Rust fragments" do
-    assert Enum.all?(Generated.__rustq_items__(), &match?(%RustQ.Rust.Fragment{kind: :item}, &1))
+  test "generated items remain structural RustQ AST" do
+    assert Enum.all?(Generated.__rustq_items__(), fn item ->
+             item.__struct__.__rustq_ast_category__() == :item
+           end)
   end
 end

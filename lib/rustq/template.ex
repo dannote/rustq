@@ -14,6 +14,7 @@ defmodule RustQ.Template do
 
   @include_marker "__rq_include!"
 
+  @doc false
   def maybe_expand_includes(source, filename, opts) do
     if Keyword.has_key?(opts, :include_dir) do
       expand_includes(source, filename, opts)
@@ -22,6 +23,7 @@ defmodule RustQ.Template do
     end
   end
 
+  @doc false
   def expand_includes(source, filename, opts) do
     include_dir = Keyword.get(opts, :include_dir, Path.dirname(filename))
 
@@ -30,6 +32,7 @@ defmodule RustQ.Template do
     |> expand_includes_from(filename, include_dir, [Path.expand(filename)])
   end
 
+  @doc false
   def with_preamble(code, opts) do
     case Keyword.get(opts, :preamble, "") do
       nil -> code
@@ -38,6 +41,7 @@ defmodule RustQ.Template do
     end
   end
 
+  @doc false
   def maybe_rustfmt(code, opts, filename) do
     case Keyword.get(opts, :rustfmt, false) do
       false ->
@@ -51,6 +55,7 @@ defmodule RustQ.Template do
     end
   end
 
+  @doc false
   def normalize_errors(errors, filename) do
     Enum.map(errors, fn error ->
       error

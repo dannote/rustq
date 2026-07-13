@@ -1,13 +1,5 @@
 defmodule RustQ.Meta.RustMacro do
-  @moduledoc """
-  Builds compact Rust `macro_rules!` items from Rusty-Elixir `defrustmacro`
-  declarations.
-
-  A `defrustmacro` body is lowered through the same Rusty-Elixir pipeline used by
-  `defrust`, while its arguments are tracked as Rust macro fragments. This keeps
-  macro definitions semantic at the Elixir layer and confines Rust token-tree
-  syntax to the generated backend item.
-  """
+  @moduledoc false
 
   alias RustQ.Diagnostic
   alias RustQ.Meta.AST, as: MetaAST
@@ -17,9 +9,7 @@ defmodule RustQ.Meta.RustMacro do
   alias RustQ.Rust.AST.Render
 
   defmodule Definition do
-    @moduledoc """
-    Normalized `defrustmacro` declaration metadata.
-    """
+    @moduledoc false
 
     @enforce_keys [:name, :args, :call_ast, :body_ast]
     defstruct [:name, :args, :call_ast, :body_ast, :rust_module]
@@ -39,9 +29,7 @@ defmodule RustQ.Meta.RustMacro do
   end
 
   defmodule Item do
-    @moduledoc """
-    Rust AST item emitted from a normalized `defrustmacro` declaration.
-    """
+    @moduledoc false
 
     @enforce_keys [:name, :ast]
     defstruct [:name, :ast, :rust_module]

@@ -12,7 +12,7 @@ defmodule RustQ.SigilTest do
           __rq_value!()
       }
       """
-      |> RustQ.render!("sigil.rs", bind: [value: Rust.expr("42")])
+      |> RustQ.render!("sigil.rs", bind: [value: Rust.fragment(:expr, "42")])
 
     assert code =~ "pub fn answer() -> i32"
     assert code =~ "42"

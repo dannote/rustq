@@ -388,7 +388,7 @@ pub(crate) fn decode_ast_function<'a>(term: Term<'a>) -> NifResult<ItemFn> {
         super::decode_vis(required_field(term, "vis")?)?,
         required_function_arg_list(term, "args")?,
         required_type(term, "returns")?,
-        optional_atom_key(term, "lifetime")?,
+        decode_lifetime_list(required_field(term, "lifetimes")?)?,
         required_stmt_list(term, "body")?,
         super::decode_attribute_list(required_field(term, "attrs")?)?,
     )

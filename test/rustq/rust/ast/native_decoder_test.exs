@@ -4,7 +4,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Diagnostic
-  alias RustQ.Native
+  alias RustQ.Native.Nif, as: Native
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.Function
@@ -231,7 +231,7 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
 
             A.return(
               A.ok(
-                A.struct([:Rect],
+                A.struct_expr([:Rect],
                   x: A.var(:x),
                   y: A.var(:y)
                 )

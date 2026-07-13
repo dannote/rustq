@@ -7,10 +7,10 @@ defmodule RustQ.Rustler.Opts do
 
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.Type
-  alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Rust.Identifier
   alias RustQ.Rustler.Decode
   alias RustQ.Rustler.HelperSelection
   alias RustQ.Type, as: R
@@ -109,14 +109,16 @@ defmodule RustQ.Rustler.Opts do
     end
   end
 
-  @spec helpers(keyword()) :: [Rust.Fragment.t()]
+  @doc "Builds reusable keyword/options decoding helpers."
+  @spec helpers(keyword()) :: [AST.Function.t()]
   def helpers(opts \\ []) do
     opts
     |> helper_names()
     |> Enum.map(&helper_item/1)
   end
 
-  @spec decoder(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
+  @doc "Builds an options struct and its decoder from structural field metadata."
+  @spec decoder(atom() | String.t(), keyword()) :: [AST.Struct.t() | AST.Function.t()]
   def decoder(name, opts) do
     lifetime = Keyword.get(opts, :lifetime)
     fields = opts |> Keyword.fetch!(:fields) |> normalize_fields()
@@ -124,18 +126,18 @@ defmodule RustQ.Rustler.Opts do
     opts_arg = Keyword.get(opts, :opts_arg, "opts: &[(Atom, Term#{lifetime_generics(lifetime)})]")
     phantom? = Keyword.get(opts, :phantom, lifetime != nil)
 
-    Rust.ast_items([
+    [
       struct_ast(name, fields, phantom?, lifetime),
       decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg)
-    ])
+    ]
   end
 
-  defp helper_item(name) when name in @rusty_names, do: MetaAST.item(__MODULE__, name)
+  defp helper_item(name) when name in @rusty_names, do: MetaAST.function!(__MODULE__, name)
 
   defp helper_names(opts), do: HelperSelection.names(opts, @helper_names)
 
   defp struct_ast(name, fields, phantom?, lifetime) do
-    I.struct RustQ.Atom.identifier!(to_string(name)), vis: :pub, lifetime: lifetime do
+    I.struct Identifier.atom!(to_string(name)), vis: :pub, lifetime: lifetime do
       fields(fields, phantom?, lifetime)
     end
   end
@@ -143,12 +145,12 @@ defmodule RustQ.Rustler.Opts do
   defp decoder_ast(name, function_name, fields, phantom?, lifetime, opts_arg) do
     struct_type = A.type_path(name, lifetimes: List.wrap(lifetime))
 
-    function RustQ.Atom.identifier!(to_string(function_name)),
+    function Identifier.atom!(to_string(function_name)),
       vis: :pub,
-      lifetime: lifetime,
+      lifetimes: List.wrap(lifetime),
       args: [opts: opts_arg_type(opts_arg)],
       returns: %AST.TypeNifResult{inner: struct_type} do
-      A.return(A.ok(A.struct([name], inits(fields, phantom?))))
+      A.return(A.ok(A.struct_expr([name], inits(fields, phantom?))))
     end
   end
 

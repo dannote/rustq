@@ -24,7 +24,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
   test "builds ergonomic function argument and Rustler type nodes" do
     function = %Function{
       name: :typed,
-      lifetime: :a,
+      lifetimes: [:a],
       args: [
         A.arg(:canvas, T.ref([:skia_safe, :Canvas])),
         A.arg(:term, T.term()),
@@ -135,7 +135,7 @@ defmodule RustQ.Rust.AST.BuilderTest do
   test "renders function receiver arguments" do
     function = %Function{
       name: :encode,
-      lifetime: :a,
+      lifetimes: [:a],
       args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
       returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
       body: [A.return(A.var(:term))]

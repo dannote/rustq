@@ -16,7 +16,7 @@ defmodule RustQ.ParserTest do
 
   test "parses fragments" do
     assert {:ok, %RustQ.Rust.Fragment{kind: :field}} = RustQ.parse_fragment(:field, "pub id: i64")
-    assert RustQ.valid_fragment?(:arm, Rust.arm("Some(value)", "value"))
+    assert RustQ.valid_fragment?(:arm, Rust.fragment(:arm, "Some(value) => value,"))
     refute RustQ.valid_fragment?(:stmt, "let =")
 
     assert {:error, [%{type: :invalid_splice, context: :stmt}]} =

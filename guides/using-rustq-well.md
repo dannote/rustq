@@ -478,10 +478,9 @@ AST node, or helper.
 Use builders for declarations and data-shaped Rust generation:
 
 ```elixir
-alias RustQ.Rust
 alias RustQ.Rust.AST.Builder, as: A
 
-Rust.ast_item(A.const(:MAX_FIELDS, :usize, A.lit(128), vis: :pub))
+A.const(:MAX_FIELDS, :usize, A.lit(128), vis: :pub)
 ```
 
 If the AST cannot represent a needed construct, that is a RustQ feature request,
@@ -505,7 +504,7 @@ Do not treat those boundaries as a normal generator style. Outside them, prefer
 ### String-built functions
 
 ```elixir
-Rust.item([
+RustQ.Rust.fragment(:item, [
   "fn decode_", name, "(decoder: &mut Decoder<'_>) -> NifResult<()> {\n",
   "    loop { ... }\n",
   "}\n"
@@ -553,8 +552,6 @@ Useful modules to read in HexDocs/source:
 
 - `RustQ.Meta`
 - `RustQ.Type`
-- `RustQ.Meta.Lower`
-- `RustQ.Meta.Inference`
 - `RustQ.Binding.Callable`
 - `RustQ.Binding.Source`
 - `RustQ.Binding.Index`

@@ -1,11 +1,5 @@
 defmodule RustQ.Reach.Smells.LowLevelControlFlow do
-  @moduledoc """
-  Detects low-level Rusty-Elixir exits inside `defrust` bodies.
-
-  RustQ supports forms such as `return!`, `break`, and `continue` for internal
-  IR and genuinely Rust-shaped primitives, but product generator code should
-  usually prefer recursion, pattern matching, `case`, `with`, or reducers.
-  """
+  @moduledoc false
 
   use Reach.Smell.Check.AST
 

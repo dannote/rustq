@@ -1,11 +1,5 @@
 defmodule RustQ.Meta.Options do
-  @moduledoc """
-  Validates and normalizes `use RustQ.Meta` options.
-
-  Validation happens at the public macro boundary. Errors from NimbleOptions are
-  converted into RustQ diagnostics so callers get the same structured failure
-  shape as lowering and metadata resolution errors.
-  """
+  @moduledoc false
 
   alias RustQ.Binding.Source
   alias RustQ.Diagnostic

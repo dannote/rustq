@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Make `RustQ.Rust.AST` the canonical generated-Rust representation, including
+  source-derived NIF wrappers with multiple lifetimes, and remove the duplicate
+  legacy Rust builder model.
+- Reorganize Rustler generation into focused `Nif`, `Term`, `Atom`, `Opts`,
+  `Resource`, and `Schema` APIs with concise wrapper, function-metadata, stub,
+  and encoder naming.
+- Simplify generator manifests, template rendering, metadata selection, and
+  file-spec APIs; hide implementation modules and document the public API by
+  responsibility.
+
 ## v0.9.11 - 2026-07-10
 
 - Discover Rustler atom references through a configurable Rust module name,

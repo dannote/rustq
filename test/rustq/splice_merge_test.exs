@@ -23,7 +23,7 @@ defmodule RustQ.SpliceMergeTest do
       "mod generated { __rq_items!(); }"
       |> RustQ.parse!("generated.rs")
       |> RustQ.splice(splices)
-      |> RustQ.codegen!()
+      |> RustQ.render!()
 
     assert code =~ "pub fn one() -> i32"
     assert code =~ "pub fn two() -> i32"

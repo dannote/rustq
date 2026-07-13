@@ -18,7 +18,7 @@ defmodule RustQ.ErrorTest do
   test "returns structured binding errors" do
     assert {:error, [error]} =
              RustQ.render("fn value() -> i32 { __rq_value!() }", "broken.rs",
-               bind: [value: Rust.expr("+")]
+               bind: [value: Rust.fragment(:expr, "+")]
              )
 
     assert error.type == :invalid_binding

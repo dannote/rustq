@@ -6,6 +6,7 @@ defmodule RustQ.Native.EnumDescriptor do
   metadata and, when available, a web source link derived from Cargo metadata.
   """
 
+  alias RustQ.Rust.Identifier
   alias RustQ.Syn.Enum, as: SynEnum
   alias RustQ.Syn.Index
 
@@ -21,7 +22,7 @@ defmodule RustQ.Native.EnumDescriptor do
   @doc "Returns descriptor variants as `{atom_name, rust_variant}` pairs."
   @spec variants(t()) :: [{atom(), String.t()}]
   def variants(%__MODULE__{enum: %{__struct__: SynEnum, variants: variants}}) do
-    Enum.map(variants, &{RustQ.Atom.identifier!(Macro.underscore(&1)), &1})
+    Enum.map(variants, &{Identifier.atom!(Macro.underscore(&1)), &1})
   end
 
   @doc "Resolves a native enum through a `RustQ.Syn.Index`."

@@ -1,10 +1,5 @@
 defmodule RustQ.Reach.Smells.DefrustMissingSpec do
-  @moduledoc """
-  Detects `defrust` declarations without an immediately available `@spec`.
-
-  RustQ uses specs as the structural source of function signatures and callable
-  metadata. A missing spec disables type-driven lowering and propagation.
-  """
+  @moduledoc false
 
   use Reach.Smell.Check.AST
 

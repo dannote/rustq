@@ -1,7 +1,5 @@
 defmodule RustQ.Meta.Lower do
-  @moduledoc """
-  Lowers Rusty-Elixir quoted expressions into RustQ AST nodes.
-  """
+  @moduledoc false
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
@@ -13,15 +11,14 @@ defmodule RustQ.Meta.Lower do
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Walk
+  alias RustQ.Rust.Identifier
 
   defguardp macro_call_tuple?(tuple)
             when tuple_size(tuple) == 3 and is_atom(elem(tuple, 0)) and is_list(elem(tuple, 1)) and
                    is_list(elem(tuple, 2))
 
   defmodule Env do
-    @moduledoc """
-    Tracks return type, variables, aliases, callable metadata, and position while lowering a body.
-    """
+    @moduledoc false
     defstruct [
       :return_type,
       vars: %{},
@@ -1936,7 +1933,7 @@ defmodule RustQ.Meta.Lower do
   defp macro_call_name?(name), do: name |> Atom.to_string() |> String.ends_with?("!")
 
   defp macro_call_part(name) do
-    RustQ.Atom.identifier!(String.trim_trailing(Atom.to_string(name), "!"))
+    Identifier.atom!(String.trim_trailing(Atom.to_string(name), "!"))
   end
 
   defp lower_macro_call(name, args, rust_macros, %Context{} = context) do
@@ -2253,7 +2250,7 @@ defmodule RustQ.Meta.Lower do
     parts = String.split(target, "::")
 
     if Enum.all?(parts, &simple_rust_identifier?/1) do
-      Enum.map(parts, &RustQ.Atom.identifier!/1)
+      Enum.map(parts, &Identifier.atom!/1)
     end
   end
 
@@ -2327,7 +2324,7 @@ defmodule RustQ.Meta.Lower do
   defp rust_constructor_alias?({:__aliases__, _, [module]}) when module in [:Stmt], do: true
   defp rust_constructor_alias?(_other), do: false
 
-  defp rust_variant(name), do: RustQ.Atom.identifier!(Macro.camelize(Atom.to_string(name)))
+  defp rust_variant(name), do: Identifier.atom!(Macro.camelize(Atom.to_string(name)))
 
   defp alias_parts({:__aliases__, _, parts}, rust_modules),
     do: mapped_alias_parts(parts, rust_modules)
@@ -2383,7 +2380,7 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp rust_module_part(part),
-    do: RustQ.Atom.identifier!(Macro.underscore(Atom.to_string(part)))
+    do: Identifier.atom!(Macro.underscore(Atom.to_string(part)))
 
   defp callable_return_type_from_index(
          {name, _meta, args},

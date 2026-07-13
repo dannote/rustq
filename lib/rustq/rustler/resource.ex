@@ -3,26 +3,24 @@ defmodule RustQ.Rustler.Resource do
   Generates Rustler resource structs, handles, decoders, and initialization helpers.
   """
 
-  alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
+  alias RustQ.Rust.Identifier
 
   import RustQ.Rust.AST.ItemBuilder, only: [field: 3, function: 3, impl: 3]
 
   require A
   require I
 
-  @spec build(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
-  def build(name, opts \\ []) do
-    struct_item = resource_struct_ast(name, Keyword.get(opts, :fields, []))
-    impl_item = resource_impl_ast(name)
-
-    Rust.ast_items([struct_item, impl_item])
+  @doc "Builds the resource struct and its `rustler::Resource` implementation."
+  @spec items(atom() | String.t(), keyword()) :: [AST.Struct.t() | AST.Impl.t()]
+  def items(name, opts \\ []) do
+    [resource_struct_ast(name, Keyword.get(opts, :fields, [])), resource_impl_ast(name)]
   end
 
   defp resource_struct_ast(name, fields) do
-    I.struct RustQ.Atom.identifier!(to_string(name)) do
+    I.struct Identifier.atom!(to_string(name)) do
       Enum.map(fields, fn {field_name, type} -> field(field_name, type, vis: :pub) end)
     end
   end
@@ -33,45 +31,49 @@ defmodule RustQ.Rustler.Resource do
     end
   end
 
-  @spec type_alias(atom() | String.t(), keyword()) :: Rust.TypeAlias.t()
+  @doc "Builds a type alias for `ResourceArc<name>`."
+  @spec type_alias(atom() | String.t(), keyword()) :: AST.TypeAlias.t()
   def type_alias(name, opts \\ []) do
     alias_name = Keyword.get(opts, :as, "#{name}Resource")
 
-    Rust.type_alias(alias_name, {:raw, Rust.type(:ResourceArc, [name])},
-      vis: Keyword.get(opts, :vis)
+    A.type_alias(
+      Identifier.atom!(to_string(alias_name)),
+      resource_arc_type(name),
+      opts
     )
   end
 
-  @spec arc(atom() | String.t()) :: String.t()
-  def arc(name), do: Rust.type(:ResourceArc, [name])
+  @doc "Builds the `ResourceArc<name>` type."
+  @spec arc_type(atom() | String.t()) :: AST.TypePath.t()
+  def arc_type(name), do: resource_arc_type(name)
 
-  @spec handle(atom() | String.t(), keyword()) :: [Rust.Fragment.t()]
-  def handle(name, opts \\ []) do
-    build(name, opts) ++ [handle_decode(name, opts)]
+  @doc "Builds resource items plus a decoder for an Elixir-facing handle."
+  @spec handle_items(atom() | String.t(), keyword()) :: [AST.item()]
+  def handle_items(name, opts \\ []) do
+    items(name, opts) ++ [handle_decoder(name, opts)]
   end
 
-  @spec decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
-  def decode(name, opts \\ []) do
+  @doc "Builds a decoder for `ResourceArc<name>`."
+  @spec decoder(atom() | String.t(), keyword()) :: AST.Function.t()
+  def decoder(name, opts \\ []) do
     function_name = Keyword.get(opts, :fn, "decode_#{Macro.underscore(to_string(name))}_resource")
-
-    Rust.ast_item(resource_decode_ast(name, function_name))
+    resource_decode_ast(name, function_name)
   end
 
-  @spec handle_decode(atom() | String.t(), keyword()) :: Rust.Fragment.t()
-  def handle_decode(name, opts \\ []) do
+  @doc "Builds a decoder for an Elixir-facing resource handle."
+  @spec handle_decoder(atom() | String.t(), keyword()) :: AST.Function.t()
+  def handle_decoder(name, opts \\ []) do
     function_name =
       Keyword.get(opts, :decoder, "decode_#{Macro.underscore(to_string(name))}_handle")
 
-    field = Keyword.get(opts, :handle_field, "ref")
-
-    Rust.ast_item(resource_handle_decode_ast(name, function_name, field))
+    resource_handle_decode_ast(name, function_name, Keyword.get(opts, :handle_field, "ref"))
   end
 
   defp resource_decode_ast(name, function_name) do
     resource_type = resource_arc_type(name)
 
-    function RustQ.Atom.identifier!(to_string(function_name)),
-      lifetime: :a,
+    function Identifier.atom!(to_string(function_name)),
+      lifetimes: [:a],
       args: [term: A.type_path(:Term, lifetimes: [:a])],
       returns: %AST.TypeNifResult{inner: resource_type} do
       A.return(A.method(:term, :decode, [], generics: [resource_type]))
@@ -81,8 +83,8 @@ defmodule RustQ.Rustler.Resource do
   defp resource_handle_decode_ast(name, function_name, field) do
     resource_type = resource_arc_type(name)
 
-    function RustQ.Atom.identifier!(to_string(function_name)),
-      lifetime: :a,
+    function Identifier.atom!(to_string(function_name)),
+      lifetimes: [:a],
       args: [term: A.type_path(:Term, lifetimes: [:a])],
       returns: %AST.TypeNifResult{inner: resource_type} do
       A.return(
@@ -110,8 +112,7 @@ defmodule RustQ.Rustler.Resource do
   defp field_to_string(field) when is_atom(field), do: Atom.to_string(field)
   defp field_to_string(field) when is_binary(field), do: field
 
-  @spec init(atom() | String.t()) :: Rust.Fragment.t()
-  def init(name) do
-    Rust.ast_item(A.macro_item_call([:rustler, :resource], [name, :env]))
-  end
+  @doc "Builds the resource registration macro invocation."
+  @spec init(atom() | String.t()) :: AST.MacroItemCall.t()
+  def init(name), do: A.macro_item_call([:rustler, :resource], [name, :env])
 end

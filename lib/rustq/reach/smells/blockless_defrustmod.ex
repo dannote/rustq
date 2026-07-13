@@ -1,12 +1,5 @@
 defmodule RustQ.Reach.Smells.BlocklessDefrustmod do
-  @moduledoc """
-  Detects blockless `defrustmod` declarations.
-
-  Blockless `defrustmod Foo, as: ...` often means an external Rust module is
-  being mirrored as an Elixir alias. Prefer ordinary remote types in specs,
-  normal alias calls, or a block-form `defrustmod` when RustQ owns the generated
-  Rust module body.
-  """
+  @moduledoc false
 
   use Reach.Smell.Check.AST
 

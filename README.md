@@ -410,12 +410,12 @@ fresh:
 ```elixir
 use RustQ.Config
 
-alias RustQ.Rustler
+alias RustQ.Rustler.Term
 
 require_file "lib/my_app/codegen/content_schema.ex"
 
 rust "native/my_nif/src/generated_term_helpers.rs" do
-  Rustler.term_helpers(type_key: "atoms::r#type()")
+  Term.helpers(type_key: "atoms::r#type()")
 end
 
 rust "native/my_nif/src/generated_content.rs" do
@@ -445,7 +445,11 @@ Templates are ordinary Rust with parseable placeholder forms:
 
 ```elixir
 use RustQ.Sigil
-alias RustQ.Rust
+alias RustQ.Rust.AST.Builder, as: A
+alias RustQ.Rust.AST.ItemBuilder, as: I
+import RustQ.Rust.AST.ItemBuilder, only: [function: 3]
+require A
+require I
 
 template = ~R"""
 pub struct __rq_Resource {
@@ -466,18 +470,18 @@ code =
   |> RustQ.parse!("resource.rs")
   |> RustQ.bind(Resource: :User, table_name: {:literal, "users"})
   |> RustQ.splice(:fields, [
-    Rust.field(:id, :i64, vis: :pub),
-    Rust.field(:name, :String, vis: :pub)
+    I.field(:id, :i64, vis: :pub),
+    I.field(:name, :String, vis: :pub)
   ])
   |> RustQ.splice(:methods, [
-    Rust.fn(:new,
+    function :new,
       vis: :pub,
       args: [id: :i64, name: :String],
-      returns: :Self,
-      body: "Self { id, name }"
-    )
+      returns: :Self do
+      A.return(A.struct_expr(:Self, id: A.var(:id), name: A.var(:name)))
+    end
   ])
-  |> RustQ.codegen!()
+  |> RustQ.render!()
 ```
 
 For file templates:
@@ -485,7 +489,7 @@ For file templates:
 ```elixir
 RustQ.render_file!("priv/templates/resource.rs",
   bind: [Resource: :User],
-  splice: [fields: [RustQ.Rust.field(:id, :i64, vis: :pub)]]
+  splice: [fields: [RustQ.Rust.AST.ItemBuilder.field(:id, :i64, vis: :pub)]]
 )
 ```
 
@@ -538,45 +542,35 @@ instead of:
 println!("{}", __rq_value!());
 ```
 
-## Rust builders
+## Rust AST builders
 
-`RustQ.Rust` provides small Elixir builders for common Rust fragments. Use these
-when generating Rust declarations from data. For larger implementation bodies,
-prefer `defrust` when the body can be valid Elixir, or real Rust templates when
-handwritten Rust is clearer.
+Use `RustQ.Rust.AST` builders for generated declarations and keep values
+structural until the template rendering boundary:
 
 ```elixir
-alias RustQ.Rust
+alias RustQ.Rust.AST.Builder, as: A
+alias RustQ.Rust.AST.ItemBuilder, as: I
+alias RustQ.Rust.AST.TypeBuilder, as: T
 
 items = [
-  Rust.use([:std, :sync, :OnceLock]),
-  Rust.const(:TABLE, {:ref, :str}, Rust.expr(Rust.literal("users")), vis: :pub),
-  Rust.struct(:User,
+  A.use([:std, :sync, :OnceLock]),
+  A.const(:TABLE, T.ref(:str), A.lit("users"), vis: :pub),
+  %RustQ.Rust.AST.Struct{
+    name: :User,
     vis: :pub,
     derive: [:Clone, :Debug],
-    fields: [Rust.field(:id, :i64, vis: :pub)]
-  )
+    fields: [I.field(:id, :i64, vis: :pub)]
+  }
 ]
 ```
 
-Use `Rust.raw/1`, `Rust.item/1`, `Rust.impl_item/1`, `Rust.stmt/1`,
-`Rust.expr/1`, and `Rust.arm/1` when hand-written Rust is clearer than a
-builder.
+`rustq.exs` and template splices accept these nodes directly. Use
+`RustQ.Rust.render/1` only when a caller explicitly needs rendered source. For
+small unsupported syntax boundaries, use the visibly explicit
+`RustQ.Rust.fragment/2` escape.
 
-When codegen already has a `RustQ.Rust.AST` item, use `Rust.ast_item/1` or
-`Rust.ast_items/1` as the standard AST-to-fragment bridge instead of rendering
-AST items by hand:
-
-```elixir
-alias RustQ.Rust
-alias RustQ.Rust.AST.Builder, as: A
-
-Rust.ast_item(A.const(:ANSWER, :i32, A.lit(42)))
-```
-
-For structural Rust item generation, prefer the AST builders directly. They
-cover Rustler-friendly shapes such as lifetime-bearing impl blocks and receiver
-arguments:
+The AST covers Rustler-friendly shapes such as lifetime-bearing impl blocks and
+receiver arguments:
 
 ```elixir
 A.impl(A.type_path(:Content),
@@ -587,7 +581,7 @@ A.impl(A.type_path(:Content),
 
 %RustQ.Rust.AST.Function{
   name: :encode,
-  lifetime: :a,
+  lifetimes: [:a],
   args: [A.receiver(), A.arg(:env, A.type_path([:rustler, :Env], lifetimes: [:a]))],
   returns: A.type_path([:rustler, :Term], lifetimes: [:a]),
   body: [A.return(A.method(:value, :encode, [:env]))]
@@ -596,36 +590,33 @@ A.impl(A.type_path(:Content),
 
 ## Rustler helpers
 
-`RustQ.Rustler` generates common Rustler code as Rust fragments:
+Rustler generation is organized into cohesive submodules that return structural
+RustQ AST:
 
 ```elixir
-RustQ.Rustler.atoms([:ok, :error, {"r#type", "type"}])
-RustQ.Rustler.cached_atoms([:ok, node_changes: "nodeChanges"])
+alias RustQ.Rustler.{Atom, Nif, Opts, Resource, Term}
 
-RustQ.Rustler.nif(:add,
-  args: [a: :i64, b: :i64],
-  returns: :i64,
-  body: "a + b"
-)
+Atom.declaration([:ok, :error, {"r#type", "type"}])
+Atom.cached([:ok, node_changes: "nodeChanges"])
 
-RustQ.Rustler.nif_exports(
+Nif.wrappers(
   render_png: [
     args: [env: "Env<'a>", batch: "Term<'a>"],
     returns: "NifResult<Term<'a>>",
-    lifetime: :a,
+    lifetimes: [:a],
     schedule: :dirty_cpu
   ]
 )
 
-RustQ.Rustler.term_helpers(type_key: "atoms::r#type()")
-RustQ.Rustler.opts_helpers()
-RustQ.Rustler.term_decoder(:ProgramInput,
+Term.helpers(type_key: "atoms::r#type()")
+Opts.helpers()
+Term.decoder(:ProgramInput,
   fields: [
     body: [type: {:vec, "Term<'a>"}, key: "atoms::body()", required: true]
   ]
 )
 
-RustQ.Rustler.resource_handle(:EncodedImage,
+Resource.handle_items(:EncodedImage,
   fields: [bytes: "Vec<u8>"],
   handle_field: "ref"
 )
@@ -635,12 +626,12 @@ Atom-based decoders and dispatchers are intentionally low-level so projects can
 compose them into their own command, AST, or schema models:
 
 ```elixir
-RustQ.Rustler.atom_decoder(:decode_blend_mode,
+RustQ.Rustler.Atom.decoder(:decode_blend_mode,
   returns: :BlendMode,
   cases: [src_over: "BlendMode::SrcOver", multiply: "BlendMode::Multiply"]
 )
 
-RustQ.Rustler.atom_dispatch(:draw_command,
+RustQ.Rustler.Atom.dispatch(:draw_command,
   args: [surface: "&mut Surface", command: "Term<'a>"],
   on: "command.map_get(atoms::op())?.decode::<Atom>()?",
   cases: [rect: "draw_rect(surface, command)"],
@@ -651,13 +642,13 @@ RustQ.Rustler.atom_dispatch(:draw_command,
 Safe term builders use `Term<'a>`:
 
 ```elixir
-RustQ.Rustler.term_builders(include: [:map_from_terms, :struct_from_terms])
+RustQ.Rustler.Term.builders(include: [:map_from_terms, :struct_from_terms])
 ```
 
 Low-level raw `NIF_TERM` helpers are explicit:
 
 ```elixir
-RustQ.Rustler.nif_term_builders(include: [:map_from_nif_terms, :struct_from_nif_terms])
+RustQ.Rustler.Nif.raw_term_builders(include: [:map_from_nif_terms, :struct_from_nif_terms])
 ```
 
 ## Rustler schema DSL
@@ -706,7 +697,7 @@ RustQ.render_file!("native/src/generated.template.rs",
   splice: [
     MyApp.BaseGenerator.splices(schema),
     MyApp.NativeGenerator.splices(schema),
-    items: RustQ.Rust.item("pub fn generated() {}")
+    items: RustQ.Rust.fragment(:item, "pub fn generated() {}")
   ]
 )
 ```
@@ -718,7 +709,7 @@ splices =
   RustQ.Splice.merge([
     MyApp.BaseGenerator.splices(schema),
     MyApp.NativeGenerator.splices(schema),
-    items: RustQ.Rust.item("pub fn generated() {}")
+    items: RustQ.Rust.fragment(:item, "pub fn generated() {}")
   ])
 ```
 
@@ -741,8 +732,11 @@ Rustfmt failures return structured `:rustfmt_error` metadata.
 You can validate individual Rust fragments in the same contexts RustQ splices:
 
 ```elixir
+require RustQ.Rust.AST.Builder, as: A
+alias RustQ.Rust.AST.PatternBuilder, as: P
+
 RustQ.valid_fragment?(:field, "pub id: i64")
-RustQ.parse_fragment!(:arm, RustQ.Rust.arm("Some(value)", "value"))
+RustQ.parse_fragment!(:arm, A.arm(P.some(:value), do: :value))
 ```
 
 Native AST rendering is the required backend for RustQ AST items. Unsupported

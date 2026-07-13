@@ -1,7 +1,5 @@
 defmodule RustQ.Codegen.DefrustModule do
-  @moduledoc """
-  Compile-time bridge for modules that define native support helpers with `defrust`.
-  """
+  @moduledoc false
 
   @native_sources [
     "native/rustq_nif/src/decode.rs",

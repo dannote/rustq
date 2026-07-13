@@ -54,8 +54,8 @@ defmodule RustQ.Corpus.Macros.DefrustmacroItemCall do
 
   def __rustq_corpus_fragments__ do
     [
-      MetaAST.macro_item(__MODULE__, :descriptor),
-      MetaAST.macro_call(__MODULE__, :descriptor,
+      MetaAST.macro_item!(__MODULE__, :descriptor),
+      MetaAST.macro_call!(__MODULE__, :descriptor,
         fn: :skip_document,
         decoder: :decoder,
         field: :field,

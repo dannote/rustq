@@ -1,7 +1,5 @@
 defmodule RustQ.Codegen do
-  @moduledoc """
-  Generates RustQ's native AST support crate fragments.
-  """
+  @moduledoc false
 
   alias RustQ.Codegen.DecoderHelpers
   alias RustQ.Codegen.Decoders

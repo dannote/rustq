@@ -12,7 +12,7 @@ defmodule RustQ.Reach.SmellsTest do
     source = ~S'''
     defmodule Sample.RawEscape do
       def build do
-        RustQ.Rust.item("""
+        RustQ.Rust.fragment(:item, """
         fn generated() {
             do_work();
         }

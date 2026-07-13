@@ -231,13 +231,13 @@ pub(crate) fn parse_item_function_args(
     vis: syn::Visibility,
     args: Vec<FnArg>,
     returns: Type,
-    lifetime: Option<String>,
+    lifetimes: Vec<String>,
     stmts: Vec<Stmt>,
     attrs: Vec<syn::Attribute>,
 ) -> NifResult<syn::ItemFn> {
     let mut generics = syn::Generics::default();
 
-    if let Some(lifetime) = lifetime {
+    for lifetime in lifetimes {
         let lifetime =
             syn::Lifetime::new(&format!("'{}", lifetime), proc_macro2::Span::call_site());
         generics

@@ -1,12 +1,5 @@
 defmodule RustQ.Reach.Smells.TrivialDefrustWrapper do
-  @moduledoc """
-  Detects `defrust` functions that appear to wrap one call and return `:ok`.
-
-  These wrappers are often a sign that callable metadata is missing. Prefer
-  exposing the Rust source through `rust_sources`, `rust_packages`, or
-  `callable_modules`, or improve inference before adding a wrapper whose only
-  job is to force propagation.
-  """
+  @moduledoc false
 
   use Reach.Smell.Check.AST
 

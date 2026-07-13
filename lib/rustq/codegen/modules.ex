@@ -1,7 +1,5 @@
 defmodule RustQ.Codegen.Modules do
-  @moduledoc """
-  Builds Rust module declarations for generated native support code.
-  """
+  @moduledoc false
 
   alias RustQ.Codegen.ModuleHelpers
   alias RustQ.Rust.AST.Builder, as: A

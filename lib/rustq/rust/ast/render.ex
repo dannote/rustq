@@ -4,6 +4,7 @@ defmodule RustQ.Rust.AST.Render do
   """
 
   alias RustQ.Diagnostic
+  alias RustQ.Native.Nif
 
   alias RustQ.Rust.AST.{
     Arm,
@@ -121,7 +122,7 @@ defmodule RustQ.Rust.AST.Render do
   def render_function(%Function{} = function), do: render_item(function)
 
   defp render_native(item) do
-    RustQ.Native.render_ast(item)
+    Nif.render_ast(item)
   rescue
     error in [ArgumentError, RuntimeError] ->
       Diagnostic.render(
@@ -288,14 +289,18 @@ defmodule RustQ.Rust.AST.Render do
     args =
       Elixir.Enum.map_join(function.args, ", ", &render_function_arg/1)
 
-    lifetime = if function.lifetime, do: "<'#{function.lifetime}>", else: ""
+    lifetimes =
+      case function.lifetimes do
+        [] -> ""
+        lifetimes -> ["<", render_lifetimes(lifetimes), ">"]
+      end
 
     [
       render_attrs(function.attrs),
       render_vis(function.vis),
       "fn ",
       Atom.to_string(function.name),
-      lifetime,
+      lifetimes,
       "(",
       args,
       ") -> ",

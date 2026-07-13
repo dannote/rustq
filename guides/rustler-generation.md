@@ -7,7 +7,7 @@ than duplicating signatures across Rust and Elixir.
 ## Atom registries
 
 Discover atom calls structurally with `RustQ.Syn.atom_references!/1`, then emit
-the registry with `RustQ.Rustler.atoms/2`. The scanner recognizes calls in
+the registry with `RustQ.Rustler.Atom.declaration/2`. The scanner recognizes calls in
 ordinary expressions and Rust macro token trees.
 
 ```elixir
@@ -19,7 +19,7 @@ atoms =
   |> Enum.sort()
 
 rust "native/my_nif/src/generated_atoms.rs" do
-  RustQ.Rustler.atoms(atoms)
+  RustQ.Rustler.Atom.declaration(atoms)
 end
 ```
 
@@ -33,7 +33,7 @@ stable result in one pass.
 AST. Simple fields are atoms; `{key, field}` renames the atom key.
 
 ```elixir
-RustQ.Rustler.term_encoder(:EncodedLocation,
+RustQ.Rustler.Term.encoder(:EncodedLocation,
   fields: [:start, {:end_, :end}, :line]
 )
 ```
@@ -41,7 +41,7 @@ RustQ.Rustler.term_encoder(:EncodedLocation,
 Lifetime-bearing adapters use `:target_lifetimes`:
 
 ```elixir
-RustQ.Rustler.term_encoder(:EncodedError,
+RustQ.Rustler.Term.encoder(:EncodedError,
   target_lifetimes: [:_],
   fields: [:message, code: [when_some: true, via: :as_str]]
 )
@@ -79,18 +79,17 @@ nifs = [
   compile_nif: [attrs: [A.attr(:allow, [A.path([:clippy, :too_many_arguments])])]]
 ]
 
-rust "native/my_nif/src/generated_nif_exports.rs" do
-  RustQ.Rustler.nif_exports_from_source(
+rust "native/my_nif/src/generated_nifs.rs" do
+  RustQ.Rustler.Nif.wrappers_from_source(
     "native/my_nif/src/lib.rs",
     nifs,
-    lifetime: :a,
     schedule: :dirty_cpu
   )
 end
 
 generate "lib/my_app/generated_nif_stubs.ex" do
   content(
-    RustQ.Rustler.nif_stubs_from_source(
+    RustQ.Rustler.Nif.stubs_from_source(
       "native/my_nif/src/lib.rs",
       nifs,
       MyApp.GeneratedNifStubs

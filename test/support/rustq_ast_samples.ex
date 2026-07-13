@@ -182,7 +182,7 @@ defmodule RustQ.ASTSamples do
   def sample_for(:impl),
     do: %AST.Impl{
       target: A.type_path(:Sample),
-      items: [function_sample(:new, A.struct([:Sample], []), returns: "Self")]
+      items: [function_sample(:new, A.struct_expr([:Sample], []), returns: "Self")]
     }
 
   def sample_for(:function), do: function_sample(:function, A.lit(1), returns: "i64")
@@ -362,7 +362,10 @@ defmodule RustQ.ASTSamples do
       )
 
   def sample_for(:struct_literal),
-    do: function_sample(:struct_literal_sample, A.struct([:Point], x: A.lit(1)), returns: "Point")
+    do:
+      function_sample(:struct_literal_sample, A.struct_expr([:Point], x: A.lit(1)),
+        returns: "Point"
+      )
 
   def sample_for(:local_call),
     do: function_sample(:local_call_sample, A.call(:make_value), returns: "i64")

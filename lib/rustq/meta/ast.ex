@@ -9,26 +9,26 @@ defmodule RustQ.Meta.AST do
   alias RustQ.Meta.Lower
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
-  alias RustQ.Meta.Validate
-  alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.Render
+  alias RustQ.Rust.Identifier
 
   require A
 
-  @doc false
-  @spec item(module(), atom()) :: Rust.Fragment.t()
-  def item(module, name) when is_atom(module) and is_atom(name) do
-    module
-    |> ast!(name)
-    |> Rust.ast_item()
+  @doc "Returns one generated `defrust` function AST by name, raising when absent."
+  @spec function!(module(), atom() | String.t()) :: AST.Function.t()
+  def function!(module, name) when is_atom(module) do
+    name = Identifier.atom!(to_string(name))
+
+    Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
+      raise ArgumentError, "#{inspect(module)} has no defrust function named #{name}"
   end
 
-  @doc false
-  @spec items(module(), [atom()]) :: [Rust.Fragment.t()]
-  def items(module, names) when is_atom(module) and is_list(names),
-    do: Enum.map(names, &item(module, &1))
+  @doc "Returns selected generated `defrust` function AST nodes."
+  @spec functions!(module(), [atom() | String.t()]) :: [AST.Function.t()]
+  def functions!(module, names) when is_atom(module) and is_list(names),
+    do: Enum.map(names, &function!(module, &1))
 
   @doc """
   Builds Rust struct items for selected map-backed `@type` declarations.
@@ -36,7 +36,7 @@ defmodule RustQ.Meta.AST do
   Use `:derive`, `:attrs`, and `:vis` to adapt the structural type item at a
   boundary such as Rustler encoding without duplicating its fields.
   """
-  @spec struct_type_items(module(), [atom()], keyword()) :: [Rust.Fragment.t()]
+  @spec struct_type_items(module(), [atom()], keyword()) :: [AST.Struct.t()]
   def struct_type_items(module, names, opts \\ []) do
     names = names |> Enum.map(&to_string/1) |> MapSet.new()
 
@@ -64,41 +64,13 @@ defmodule RustQ.Meta.AST do
           fields: fields
       }
     end)
-    |> Enum.map(&Validate.item_ast/1)
   end
 
-  @doc false
-  @spec macro_item(module(), atom()) :: Rust.Fragment.t()
-  def macro_item(module, name) when is_atom(module) and is_atom(name) do
-    module
-    |> macro_ast!(name)
-    |> Rust.ast_item()
-  end
+  @doc "Returns one generated `defrustmacro` item AST by name, raising when absent."
+  @spec macro_item!(module(), atom() | String.t()) :: AST.MacroItem.t()
+  def macro_item!(module, name) when is_atom(module) do
+    name = Identifier.atom!(to_string(name))
 
-  @doc false
-  @spec macro_items(module(), [atom()]) :: [Rust.Fragment.t()]
-  def macro_items(module, names) when is_atom(module) and is_list(names),
-    do: Enum.map(names, &macro_item(module, &1))
-
-  @doc false
-  @spec macro_call(module(), atom(), keyword()) :: Rust.Fragment.t()
-  def macro_call(module, name, args) when is_atom(module) and is_atom(name) and is_list(args) do
-    module
-    |> macro_definition!(name)
-    |> RustMacro.item_call(args)
-    |> Rust.ast_item()
-  end
-
-  @doc false
-  @spec ast!(module(), atom()) :: AST.Function.t()
-  def ast!(module, name) when is_atom(module) and is_atom(name) do
-    Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
-      raise ArgumentError, "#{inspect(module)} has no defrust item named #{name}"
-  end
-
-  @doc false
-  @spec macro_ast!(module(), atom()) :: AST.MacroItem.t()
-  def macro_ast!(module, name) when is_atom(module) and is_atom(name) do
     module.__rustq_macro_items__()
     |> Enum.find(&(&1.name == name))
     |> case do
@@ -107,9 +79,22 @@ defmodule RustQ.Meta.AST do
     end
   end
 
-  @doc false
-  @spec macro_definition!(module(), atom()) :: RustMacro.Definition.t()
-  def macro_definition!(module, name) when is_atom(module) and is_atom(name) do
+  @doc "Returns selected generated `defrustmacro` item AST nodes."
+  @spec macro_items!(module(), [atom() | String.t()]) :: [AST.MacroItem.t()]
+  def macro_items!(module, names) when is_atom(module) and is_list(names),
+    do: Enum.map(names, &macro_item!(module, &1))
+
+  @doc "Builds a structural invocation of a generated Rust item macro."
+  @spec macro_call!(module(), atom() | String.t(), keyword()) :: AST.MacroItemCall.t()
+  def macro_call!(module, name, args) when is_atom(module) and is_list(args) do
+    module
+    |> macro_definition!(name)
+    |> RustMacro.item_call(args)
+  end
+
+  defp macro_definition!(module, name) when is_atom(module) do
+    name = Identifier.atom!(to_string(name))
+
     module.__rustq_macro_definitions__()
     |> Enum.find(&(&1.name == name))
     |> case do
@@ -148,7 +133,7 @@ defmodule RustQ.Meta.AST do
       args: function_args,
       returns: return_type.ast,
       body: body,
-      lifetime: lifetime,
+      lifetimes: List.wrap(lifetime),
       vis: Keyword.get(opts, :vis),
       attrs: Keyword.get(opts, :attrs, [])
     }
@@ -319,7 +304,7 @@ defmodule RustQ.Meta.AST do
       args: args,
       returns: return_type.ast,
       body: body,
-      lifetime: lifetime,
+      lifetimes: List.wrap(lifetime),
       attrs: attrs
     }
 
@@ -432,17 +417,17 @@ defmodule RustQ.Meta.AST do
          meta: %{variants: variants, elixir_name: elixir_name}
        }) do
     enum = %AST.Enum{
-      name: RustQ.Atom.identifier!(rust_name),
+      name: Identifier.atom!(rust_name),
       vis: :pub,
       derive: [:Clone, :Copy, :Debug, :Eq, :PartialEq],
       variants:
         variants
         |> Enum.map(&Decoder.rust_variant/1)
-        |> Enum.map(&%AST.EnumVariant{name: RustQ.Atom.identifier!(&1)})
+        |> Enum.map(&%AST.EnumVariant{name: Identifier.atom!(&1)})
     }
 
     decoder = %AST.Function{
-      name: RustQ.Atom.identifier!("decode_#{elixir_name}_atom"),
+      name: Identifier.atom!("decode_#{elixir_name}_atom"),
       vis: :pub,
       args: [%AST.FunctionArg{name: :value, type: "Atom"}],
       returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
@@ -475,11 +460,11 @@ defmodule RustQ.Meta.AST do
     enum = enum_item(rust_name, variants)
 
     decoder = %AST.Function{
-      name: RustQ.Atom.identifier!("decode_#{elixir_name}"),
+      name: Identifier.atom!("decode_#{elixir_name}"),
       vis: :pub,
       args: [%AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}],
       returns: %AST.TypeNifResult{inner: %AST.TypePath{parts: [rust_name]}},
-      lifetime: :a,
+      lifetimes: [:a],
       body: Decoder.tuple_enum_decoder_body(rust_name, variants)
     }
 
@@ -487,7 +472,7 @@ defmodule RustQ.Meta.AST do
   end
 
   defp type_items(%Type{kind: :alias, rust: rust_name, meta: %{target: %Type{} = target}}) do
-    [%AST.TypeAlias{name: RustQ.Atom.identifier!(rust_name), type: target.ast, vis: :pub}]
+    [%AST.TypeAlias{name: Identifier.atom!(rust_name), type: target.ast, vis: :pub}]
   end
 
   defp type_items(%Type{kind: :struct, meta: %{rust_name: rust_name, fields: fields}}) do
@@ -495,7 +480,7 @@ defmodule RustQ.Meta.AST do
     lifetime = if lifetime?, do: :a
 
     struct = %AST.Struct{
-      name: RustQ.Atom.identifier!(rust_name),
+      name: Identifier.atom!(rust_name),
       vis: :pub,
       derive: [:Clone, :Debug],
       lifetime: lifetime,
@@ -504,7 +489,7 @@ defmodule RustQ.Meta.AST do
 
     if decodable? do
       decoder = %AST.Function{
-        name: RustQ.Atom.identifier!("decode_#{Macro.underscore(rust_name)}"),
+        name: Identifier.atom!("decode_#{Macro.underscore(rust_name)}"),
         vis: :pub,
         args: [
           %AST.FunctionArg{name: :term, type: %AST.TypePath{parts: [:Term], lifetimes: [:a]}}
@@ -512,11 +497,11 @@ defmodule RustQ.Meta.AST do
         returns: %AST.TypeNifResult{
           inner: %AST.TypePath{parts: [rust_name], lifetimes: List.wrap(lifetime)}
         },
-        lifetime: :a,
+        lifetimes: [:a],
         body:
           A.block do
             A.return(
-              A.ok(A.struct([rust_name], Enum.map(fields, &Decoder.struct_decoder_field/1)))
+              A.ok(A.struct_expr([rust_name], Enum.map(fields, &Decoder.struct_decoder_field/1)))
             )
           end
       }
@@ -531,13 +516,13 @@ defmodule RustQ.Meta.AST do
 
   defp enum_item(rust_name, variants) do
     %AST.Enum{
-      name: RustQ.Atom.identifier!(rust_name),
+      name: Identifier.atom!(rust_name),
       vis: :pub,
       derive: [:Clone, :Debug],
       variants:
         Enum.map(variants, fn {tag, types} ->
           %AST.EnumVariant{
-            name: tag |> Decoder.rust_variant() |> RustQ.Atom.identifier!(),
+            name: tag |> Decoder.rust_variant() |> Identifier.atom!(),
             tuple: Enum.map(types, & &1.ast)
           }
         end)

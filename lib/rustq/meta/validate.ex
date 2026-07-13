@@ -1,7 +1,5 @@
 defmodule RustQ.Meta.Validate do
-  @moduledoc """
-  Validates generated RustQ AST items by rendering and parsing them as Rust.
-  """
+  @moduledoc false
 
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Render

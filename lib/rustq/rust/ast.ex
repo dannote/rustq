@@ -345,7 +345,7 @@ defmodule RustQ.Rust.AST do
   defnode(
     Function,
     :item,
-    [:name, args: [], returns: nil, body: [], lifetime: nil, vis: nil, attrs: []],
+    [:name, args: [], returns: nil, body: [], lifetimes: [], vis: nil, attrs: []],
     type:
       quote(
         do: %__MODULE__{
@@ -353,7 +353,7 @@ defmodule RustQ.Rust.AST do
           args: [FunctionArg.t()],
           returns: AST.type() | String.t(),
           body: [AST.stmt()],
-          lifetime: atom() | nil,
+          lifetimes: [atom()],
           vis: AST.vis(),
           attrs: [Attribute.t()]
         }

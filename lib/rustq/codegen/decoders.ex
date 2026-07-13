@@ -1,7 +1,5 @@
 defmodule RustQ.Codegen.Decoders do
-  @moduledoc """
-  Aggregates AST decoder support items by Rust syntax category.
-  """
+  @moduledoc false
 
   alias RustQ.Codegen.Decoders.{Arm, Expr, Item, Pat, Stmt, Type}
 
