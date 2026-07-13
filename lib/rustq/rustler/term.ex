@@ -24,7 +24,7 @@ defmodule RustQ.Rustler.Term do
   defmodule EncoderField do
     @moduledoc false
     @enforce_keys [:key, :source, :mode]
-    defstruct [:key, :source, :mode, :via, :with, :map, :optional]
+    defstruct [:key, :source, :mode, :via, :with, :map, :optional, :fallback, borrow: true]
   end
 
   @builder_names [:map_from_terms, :struct_from_terms]
@@ -353,7 +353,9 @@ defmodule RustQ.Rustler.Term do
       via: Keyword.get(opts, :via),
       with: Keyword.get(opts, :with),
       map: Keyword.get(opts, :map),
-      optional: Keyword.get(opts, :optional)
+      optional: Keyword.get(opts, :optional),
+      fallback: Keyword.get(opts, :fallback),
+      borrow: Keyword.get(opts, :borrow, true)
     }
   end
 
@@ -426,14 +428,32 @@ defmodule RustQ.Rustler.Term do
     |> A.method(:unwrap_or_else, [A.closure([], A.call(:nil_term, [:env]))])
   end
 
-  defp encoded_field(%EncoderField{source: source, via: via, with: helper}) do
-    value = source |> field_source() |> apply_encoder_via(via)
+  defp encoded_field(%EncoderField{} = field) do
+    value =
+      field.source
+      |> field_source()
+      |> apply_encoder_fallback(field.fallback)
+      |> apply_encoder_via(field.via)
 
-    if helper do
-      A.path_call(List.wrap(helper), [:env, A.ref(value)])
+    if field.with do
+      argument = if field.borrow, do: A.ref(value), else: value
+      A.path_call(List.wrap(field.with), [:env, argument])
     else
       A.method(value, :encode, [:env])
     end
+  end
+
+  defp apply_encoder_fallback(value, nil), do: value
+
+  defp apply_encoder_fallback(value, opts) do
+    fallback =
+      opts
+      |> Keyword.fetch!(:field)
+      |> List.wrap()
+      |> field_source()
+      |> apply_encoder_via(Keyword.get(opts, :via))
+
+    A.method(value, :unwrap_or, [fallback])
   end
 
   defp adapted_term(value, opts) do

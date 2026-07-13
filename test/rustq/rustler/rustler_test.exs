@@ -421,7 +421,14 @@ defmodule RustQ.RustlerTest do
               fields: [
                 content: [field: [0, :content], via: :as_ref],
                 lang: [field: [0, :lang], via: :as_deref],
-                loc: [field: [0, :loc], with: :loc_to_term]
+                loc: [field: [0, :loc], with: :loc_to_term],
+                exports: [
+                  field: [0, :exports],
+                  via: :as_ref,
+                  with: :encode_exports,
+                  borrow: false
+                ],
+                code: [field: :code_override, fallback: [field: [:result, :code], via: :as_str]]
               ],
               target_lifetimes: [:_]
             )
@@ -431,6 +438,8 @@ defmodule RustQ.RustlerTest do
     assert code =~ "self.0.content.as_ref().encode(env)"
     assert code =~ "self.0.lang.as_deref().encode(env)"
     assert code =~ "loc_to_term(env, &self.0.loc)"
+    assert code =~ "encode_exports(env, self.0.exports.as_ref())"
+    assert code =~ "self.code_override.unwrap_or(self.result.code.as_str()).encode(env)"
   end
 
   test "builds mapped and optional adapter fields" do
