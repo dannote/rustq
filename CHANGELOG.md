@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.10.0 - 2026-07-10
+
 - Make `RustQ.Rust.AST` the canonical generated-Rust representation, including
   source-derived NIF wrappers with multiple lifetimes, and remove the duplicate
   legacy Rust builder model.
