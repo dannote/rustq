@@ -1798,6 +1798,62 @@ defmodule RustQ.Meta.LowerTest do
            ] = Lower.quoted_body(quote(do: arm!({:ok, value}, value)), nil)
   end
 
+  test "Enum.map lowers multi-statement closures to block expressions" do
+    assert [
+             %AST.Return{
+               expr: %AST.MethodCall{
+                 method: :collect,
+                 receiver: %AST.MethodCall{
+                   method: :map,
+                   args: [
+                     %AST.Closure{
+                       body: %AST.BlockExpr{
+                         body: [
+                           %AST.Let{pattern: %AST.PatVar{name: :doubled}},
+                           %AST.Return{expr: %AST.BinaryOp{op: :add}}
+                         ]
+                       }
+                     }
+                   ]
+                 }
+               }
+             }
+           ] =
+             Lower.quoted_body(
+               quote do
+                 Enum.map(values, fn value ->
+                   doubled = value * 2
+                   doubled + 1
+                 end)
+               end,
+               nil
+             )
+  end
+
+  test "Enum.map lowers named function captures" do
+    assert [
+             %AST.Return{
+               expr: %AST.MethodCall{
+                 method: :collect,
+                 receiver: %AST.MethodCall{
+                   method: :map,
+                   args: [%AST.Path{parts: [:decode]}]
+                 }
+               }
+             }
+           ] = Lower.quoted_body(quote(do: Enum.map(values, &decode/1)), nil)
+
+    assert [
+             %AST.Return{
+               expr: %AST.MethodCall{
+                 receiver: %AST.MethodCall{
+                   args: [%AST.Path{parts: [:super, :decode]}]
+                 }
+               }
+             }
+           ] = Lower.quoted_body(quote(do: Enum.map(values, &Super.decode/1)), nil)
+  end
+
   test "defrust lowers closures and deref in method chains" do
     defmodule ClosureDerefCase do
       use RustQ.Meta

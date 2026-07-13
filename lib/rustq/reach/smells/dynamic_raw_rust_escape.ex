@@ -7,14 +7,7 @@ defmodule RustQ.Reach.Smells.DynamicRawRustEscape do
 
   @kind :rustq_dynamic_raw_rust_escape
   @raw_functions [:raw_expr!, :raw_pat!, :raw_stmt!, :raw_arm!]
-  @raw_methods [:raw, :item, :impl_item, :stmt, :expr, :arm, :macro_item]
-  @explicit_boundaries [
-    "lib/rustq.ex",
-    "lib/rustq/rust/ast/builder.ex",
-    "lib/rustq/rustler/atom.ex",
-    "lib/rustq/rustler/nif.ex",
-    "lib/rustq/rustler/schema.ex"
-  ]
+  @raw_methods [:raw, :escape_expr, :macro_item]
 
   @impl true
   def kinds, do: [@kind]
@@ -29,8 +22,7 @@ defmodule RustQ.Reach.Smells.DynamicRawRustEscape do
   end
 
   defp dynamic_escape_findings(node, file) do
-    with false <- explicit_boundary?(file),
-         {:ok, meta, source} <- raw_escape(node),
+    with {:ok, meta, source} <- raw_escape(node),
          false <- literal_source?(source) do
       [
         Finding.new(
@@ -57,9 +49,10 @@ defmodule RustQ.Reach.Smells.DynamicRawRustEscape do
 
   defp raw_escape(_node), do: :error
 
-  defp explicit_boundary?(file), do: file in @explicit_boundaries
+  defp literal_source?(source) when is_binary(source) or is_atom(source), do: true
 
-  defp literal_source?(source) when is_binary(source), do: true
-  defp literal_source?({:__block__, _meta, [source]}) when is_binary(source), do: true
+  defp literal_source?({:__block__, _meta, [source]}) when is_binary(source) or is_atom(source),
+    do: true
+
   defp literal_source?(_source), do: false
 end

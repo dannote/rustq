@@ -464,14 +464,21 @@ stmt!(canvas.clear(color))
 arm!({:ok, value}, value)
 ```
 
-Use raw token escapes only when the semantic form does not exist yet:
+Use structural AST for Rust-only constructs that have no honest Elixir-shaped
+surface. For example, isolate a low-level operation without turning the whole
+function into a string:
 
 ```elixir
-raw_expr!("unsafe { make_term(env, value) }")
+alias RustQ.Rust.AST.Builder, as: A
+
+A.unsafe_block([
+  A.return(A.path_call([:native, :make_term], [:env, :value]))
+])
 ```
 
-If raw escapes spread or become repeated patterns, add a RustQ lowering rule,
-AST node, or helper.
+Use raw token escapes only when no semantic form or structural node exists. If
+raw escapes spread or become repeated patterns, add a RustQ lowering rule, AST
+node, or helper.
 
 ## RustQ AST for generated structure
 
@@ -494,7 +501,7 @@ are honest about being low-level:
 - render/template entry points validate real Rust text
 - `MacroItem`, `EscapeExpr`, and `TypeRaw` are explicit AST escape nodes
 - some Rustler helpers accept caller-provided Rust expressions for advanced dispatch or defaults
-- unsafe raw `NIF_TERM` helpers may need handwritten Rust because they sit at the Rustler wrapper boundary
+- the lowest-level raw `NIF_TERM` primitives may remain handwritten Rust, while generated control flow around them should use `UnsafeBlock` and ordinary AST nodes
 
 Do not treat those boundaries as a normal generator style. Outside them, prefer
 `defrust`, RustQ AST, or inferred metadata.

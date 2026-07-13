@@ -1867,6 +1867,18 @@ defmodule RustQ.Meta.Lower do
     |> method_chain(:collect)
   end
 
+  defp lower_enum_map(
+         collection,
+         {:&, _, [{:/, _, [capture, 1]}]},
+         %Context{} = context
+       ) do
+    collection
+    |> lower_expr(context)
+    |> method_chain(:into_iter)
+    |> method_chain(:map, [lower_function_capture(capture, context)])
+    |> method_chain(:collect)
+  end
+
   defp lower_enum_map(_collection, other, %Context{}) do
     Diagnostic.lower(
       :unsupported_enum_map_mapper,
@@ -1880,8 +1892,58 @@ defmodule RustQ.Meta.Lower do
        when is_list(args) do
     %AST.Closure{
       args: Enum.map(args, &closure_arg!/1),
-      body: lower_expr(closure_body_expr(body), expected_return_type, context)
+      body: lower_closure_body(body, expected_return_type, context)
     }
+  end
+
+  defp lower_closure_body(
+         {:__block__, _, [_first, _second | _rest] = expressions},
+         expected_return_type,
+         %Context{} = context
+       ) do
+    body =
+      case expected_return_type do
+        %Type{} = type -> lower_expected_block(expressions, context, type)
+        _none -> lower_value_block(expressions, context)
+      end
+
+    %AST.BlockExpr{body: body}
+  end
+
+  defp lower_closure_body(body, expected_return_type, %Context{} = context),
+    do: lower_expr(closure_body_expr(body), expected_return_type, context)
+
+  defp lower_value_block(expressions, %Context{} = context) do
+    context = context_with_downstream_let_types(expressions, context)
+    {statements, final} = split_final(expressions)
+
+    Enum.map(statements, &lower_statement(&1, %{context | position: :statement})) ++
+      [%AST.Return{expr: lower_expr(final, %{context | position: :return})}]
+  end
+
+  defp lower_function_capture({name, _, capture_context}, %Context{})
+       when is_atom(name) and is_atom(capture_context),
+       do: %AST.Path{parts: [name]}
+
+  defp lower_function_capture(
+         {{:., _, [{:__aliases__, _, [:Super]}, name]}, _, []},
+         %Context{}
+       ),
+       do: %AST.Path{parts: [:super, name]}
+
+  defp lower_function_capture(
+         {{:., _, [{:__aliases__, _, parts}, name]}, _, []},
+         %Context{} = context
+       ),
+       do: %AST.Path{parts: mapped_alias_parts(parts, context.rust_modules) ++ [name]}
+
+  defp lower_function_capture(other, %Context{}) do
+    Diagnostic.lower(
+      :unsupported_function_capture,
+      other,
+      "unsupported function capture in defrust",
+      suggestion: "Capture a named local or remote function with arity one."
+    )
   end
 
   defp closure_arg!({name, _, context}) when is_atom(name) and is_atom(context), do: name

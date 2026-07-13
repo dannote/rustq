@@ -89,6 +89,7 @@ defmodule RustQ.Rust.AST.Builder do
     TypeAlias,
     TypePath,
     UnaryOp,
+    UnsafeBlock,
     Use,
     Var,
     VecLiteral
@@ -270,6 +271,7 @@ defmodule RustQ.Rust.AST.Builder do
     do: %For{pattern: pat_expr(pattern), expr: expr(expression), body: flatten(body)}
 
   def block_expr(body), do: %BlockExpr{body: flatten(body)}
+  def unsafe_block(body), do: %UnsafeBlock{body: flatten(body)}
   def loop(body), do: %Loop{body: flatten(body)}
   def break, do: %Break{}
   def break(expression), do: %Break{expr: expr(expression)}
@@ -433,6 +435,7 @@ defmodule RustQ.Rust.AST.Builder do
              AST.Err,
              AST.NifRaiseAtom,
              AST.BlockExpr,
+             AST.UnsafeBlock,
              AST.Match,
              AST.If,
              AST.BinaryOp

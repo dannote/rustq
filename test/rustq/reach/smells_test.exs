@@ -56,6 +56,23 @@ defmodule RustQ.Reach.SmellsTest do
     assert [] = run_check(DynamicRawRustEscape, source)
   end
 
+  test "distinguishes structural expression normalization from raw AST escapes" do
+    structural = """
+    defmodule Sample.StructuralExpression do
+      def build(expression), do: RustQ.Rust.AST.Builder.expr(expression)
+    end
+    """
+
+    raw = """
+    defmodule Sample.DynamicASTEscape do
+      def build(source), do: RustQ.Rust.AST.Builder.escape_expr(source)
+    end
+    """
+
+    assert [] = run_check(DynamicRawRustEscape, structural)
+    assert [%{kind: :rustq_dynamic_raw_rust_escape}] = run_check(DynamicRawRustEscape, raw)
+  end
+
   test "detects defrust declarations without specs" do
     source = """
     defmodule Sample.MissingSpec do

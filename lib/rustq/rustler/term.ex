@@ -14,7 +14,6 @@ defmodule RustQ.Rustler.Term do
   alias RustQ.Rust.AST.Builder, as: A
   alias RustQ.Rust.AST.ItemBuilder, as: I
   alias RustQ.Rust.AST.PatternBuilder, as: P
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.TypeBuilder, as: T
   alias RustQ.Rust.Identifier
   alias RustQ.Rustler.HelperSelection
@@ -59,6 +58,24 @@ defmodule RustQ.Rustler.Term do
   ]
 
   @rusty_helper_names @helper_names
+
+  @spec cached_struct_keys(
+          R.raw(:"Env<'_>"),
+          R.raw(:"&'static OnceLock<Vec<rustler::wrapper::NIF_TERM>>"),
+          R.raw(:"&[&str]")
+        ) :: R.raw(:"&'static [rustler::wrapper::NIF_TERM]")
+  defrust cached_struct_keys(env, cache, fields) do
+    cache.get_or_init(fn ->
+      keys = Vec.with_capacity(fields.len() + 1)
+      keys.push(Atom.from_str(env, "__struct__").unwrap().as_c_arg())
+
+      for field <- fields do
+        keys.push(Atom.from_str(env, field).unwrap().as_c_arg())
+      end
+
+      keys
+    end)
+  end
 
   @spec default_struct_values(R.path(:Env, R.lifetime(:_)), R.path(:Atom), R.usize()) ::
           R.vec(R.path({:rustler, :wrapper, :NIF_TERM}))
@@ -517,32 +534,25 @@ defmodule RustQ.Rustler.Term do
     MetaAST.function!(__MODULE__, function_name)
   end
 
-  defp helper_item(:cached_struct_keys), do: cached_struct_keys_item()
   defp helper_item(:make_struct_from_nif_term_arrays), do: make_struct_from_nif_term_arrays_item()
 
   defp helper_item(name) when name in @rusty_helper_names,
     do: MetaAST.function!(__MODULE__, name)
 
-  defp cached_struct_keys_item do
-    %AST.Function{
-      name: :cached_struct_keys,
-      args: [
-        A.arg(:env, "Env<'_>"),
-        A.arg(:cache, "&'static OnceLock<Vec<rustler::wrapper::NIF_TERM>>"),
-        A.arg(:fields, "&[&str]")
-      ],
-      returns: T.raw("&'static [rustler::wrapper::NIF_TERM]"),
-      body: [
-        A.return_stmt(
-          A.escape_expr(
-            "cache.get_or_init(|| { let mut keys = Vec::with_capacity(fields.len() + 1); keys.push(Atom::from_str(env, \"__struct__\").unwrap().as_c_arg()); for field in fields { keys.push(Atom::from_str(env, field).unwrap().as_c_arg()); } keys })"
-          )
-        )
-      ]
-    }
-  end
-
   defp make_struct_from_nif_term_arrays_item do
+    make_map =
+      [:rustler, :wrapper, :map, :make_map_from_arrays]
+      |> A.path_call([A.method(:env, :as_c_arg), :keys, :values])
+      |> A.method(:map, [A.closure([:term], A.path_call([:Term, :new], [:env, :term]))])
+      |> A.method(:ok_or, [A.badarg()])
+
+    result =
+      A.if_expr(
+        A.eq(A.method(:keys, :len), A.method(:values, :len)),
+        [A.return_stmt(A.unsafe_block([A.return_stmt(make_map)]))],
+        [A.return_stmt(A.err(A.badarg()))]
+      )
+
     %AST.Function{
       name: :make_struct_from_nif_term_arrays,
       lifetimes: [:a],
@@ -552,13 +562,7 @@ defmodule RustQ.Rustler.Term do
         A.arg(:values, "&[rustler::wrapper::NIF_TERM]")
       ],
       returns: T.raw("NifResult<Term<'a>>"),
-      body: [
-        A.return_stmt(
-          A.escape_expr(
-            "if keys.len() == values.len() { unsafe { rustler::wrapper::map::make_map_from_arrays(env.as_c_arg(), keys, values).map(|term| Term::new(env, term)).ok_or(rustler::Error::BadArg) } } else { Err(rustler::Error::BadArg) }"
-          )
-        )
-      ]
+      body: [A.return_stmt(result)]
     }
   end
 
@@ -600,53 +604,79 @@ defmodule RustQ.Rustler.Term do
   defp decoder_inits(fields, term_arg, result) do
     Enum.map(fields, fn {field_name, spec} ->
       spec = Keyword.put_new(spec, :field, field_name)
-      {field_name, A.escape_expr(decoder_expr(spec, term_arg, result))}
+      {field_name, decoder_expr(spec, term_arg, result)}
     end)
   end
 
   defp decoder_expr(spec, term_arg, result) do
     cond do
       decode = Keyword.get(spec, :decode) ->
-        decode
+        source_expr(decode)
 
       Keyword.get(spec, :required, false) ->
         required_expr(spec, term_arg, result)
 
       Keyword.has_key?(spec, :default) ->
-        "#{term_arg}.map_get(#{key!(spec)}).ok().and_then(|t| t.decode::<#{render_type(Keyword.fetch!(spec, :type))}>().ok()).unwrap_or(#{Keyword.fetch!(spec, :default)})"
+        spec
+        |> optional_decode(term_arg, Keyword.fetch!(spec, :type))
+        |> A.method(:unwrap_or, [source_expr(Keyword.fetch!(spec, :default))])
 
       true ->
-        "#{term_arg}.map_get(#{key!(spec)}).ok().and_then(|t| t.decode::<#{inner_option_type(Keyword.fetch!(spec, :type))}>().ok())"
+        optional_decode(spec, term_arg, inner_option_type(Keyword.fetch!(spec, :type)))
     end
   end
 
   defp required_expr(spec, term_arg, :nif) do
-    "#{term_arg}.map_get(#{key!(spec)})?.decode::<#{render_type(Keyword.fetch!(spec, :type))}>()?"
+    spec
+    |> map_get(term_arg)
+    |> A.try()
+    |> A.method(:decode, [], generics: [Keyword.fetch!(spec, :type)])
+    |> A.try()
   end
 
   defp required_expr(spec, term_arg, _result) do
     field = Keyword.fetch!(spec, :field)
-    type = render_type(Keyword.fetch!(spec, :type))
     missing = Keyword.get(spec, :missing, "Missing :#{field}")
     invalid = Keyword.get(spec, :invalid, "Invalid :#{field}")
 
-    "#{term_arg}.map_get(#{key!(spec)}).map_err(|_| #{inspect(missing)}.to_string())?.decode::<#{type}>().map_err(|_| #{inspect(invalid)}.to_string())?"
+    spec
+    |> map_get(term_arg)
+    |> A.method(:map_err, [error_string_closure(missing)])
+    |> A.try()
+    |> A.method(:decode, [], generics: [Keyword.fetch!(spec, :type)])
+    |> A.method(:map_err, [error_string_closure(invalid)])
+    |> A.try()
   end
 
-  defp key!(spec), do: Keyword.fetch!(spec, :key)
+  defp optional_decode(spec, term_arg, type) do
+    decoded =
+      :term
+      |> A.method(:decode, [], generics: [type])
+      |> A.method(:ok)
 
-  defp inner_option_type({:option, type}), do: render_type(type)
-  defp inner_option_type(type), do: render_type(type)
+    spec
+    |> map_get(term_arg)
+    |> A.method(:ok)
+    |> A.method(:and_then, [A.closure([:term], decoded)])
+  end
+
+  defp map_get(spec, term_arg),
+    do: A.method(ident_atom(term_arg), :map_get, [source_expr(Keyword.fetch!(spec, :key))])
+
+  defp error_string_closure(message),
+    do: A.closure([:_], A.method(A.lit(message), :to_string))
+
+  defp source_expr(source) when is_binary(source), do: A.escape_expr(source)
+  defp source_expr(expression), do: A.expr(expression)
+
+  defp inner_option_type({:option, type}), do: type
+  defp inner_option_type(type), do: type
 
   defp result_type(name, lifetime, :nif), do: {:raw, "NifResult<#{name}<'#{lifetime}>>"}
   defp result_type(name, lifetime, result), do: {:raw, "#{result}<#{name}<'#{lifetime}>>"}
 
   defp ident_atom(value) when is_atom(value), do: value
   defp ident_atom(value) when is_binary(value), do: Identifier.atom!(value)
-
-  defp render_type(type) do
-    type |> T.type() |> Render.render_type() |> IO.iodata_to_binary()
-  end
 
   defp default_decoder_name(name), do: "decode_#{Macro.underscore(to_string(name))}"
 end

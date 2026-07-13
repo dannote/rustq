@@ -472,8 +472,22 @@ defmodule RustQ.RustlerTest do
     assert code =~ "id: term.map_get(a::id())?.decode::<i64>()?"
     assert code =~ "name: term.map_get(a::name())?.decode::<String>()?"
     assert code =~ "unwrap_or(false)"
-    assert code =~ "email: term.map_get(a::email()).ok()"
+    assert code =~ "email: term"
+    assert code =~ ".map_get(a::email())"
+    assert code =~ ".and_then(|term| term.decode::<String>().ok())"
     assert code =~ "body: list_val(term, a::body())"
+  end
+
+  test "keeps structural term decoder inputs AST-backed" do
+    [_struct, decoder] =
+      Term.decoder(:User,
+        fields: [
+          active: [type: :bool, key: A.call(:active_key), default: false],
+          body: [type: {:vec, "Term<'a>"}, decode: A.call(:decode_body, [:term])]
+        ]
+      )
+
+    refute inspect(decoder) =~ "EscapeExpr"
   end
 
   test "builds term decoders with custom result aliases" do

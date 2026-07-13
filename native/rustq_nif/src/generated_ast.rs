@@ -83,6 +83,7 @@ pub(crate) mod ast_modules {
     pub(crate) const ERR: &str = "Elixir.RustQ.Rust.AST.Err";
     pub(crate) const NIF_RAISE_ATOM: &str = "Elixir.RustQ.Rust.AST.NifRaiseAtom";
     pub(crate) const BLOCK_EXPR: &str = "Elixir.RustQ.Rust.AST.BlockExpr";
+    pub(crate) const UNSAFE_BLOCK: &str = "Elixir.RustQ.Rust.AST.UnsafeBlock";
     pub(crate) const MATCH: &str = "Elixir.RustQ.Rust.AST.Match";
     pub(crate) const IF: &str = "Elixir.RustQ.Rust.AST.If";
     pub(crate) const BINARY_OP: &str = "Elixir.RustQ.Rust.AST.BinaryOp";
@@ -145,12 +146,82 @@ pub(crate) fn expect_struct<'a>(term: Term<'a>, expected: &str) -> NifResult<()>
     }
 }
 
+pub(crate) fn decode_item_list<'a>(term: Term<'a>) -> NifResult<Vec<Item>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_ast_item)
+        .collect()
+}
+
+pub(crate) fn decode_function_arg_list<'a>(term: Term<'a>) -> NifResult<Vec<FnArg>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(super::decode_function_arg_value)
+        .collect()
+}
+
+pub(crate) fn decode_struct_field_list<'a>(term: Term<'a>) -> NifResult<Vec<Field>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_struct_field)
+        .collect()
+}
+
+pub(crate) fn decode_enum_variant_list<'a>(term: Term<'a>) -> NifResult<Vec<Variant>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_enum_variant)
+        .collect()
+}
+
+pub(crate) fn decode_type_list<'a>(term: Term<'a>) -> NifResult<Vec<Type>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_ast_type)
+        .collect()
+}
+
+pub(crate) fn decode_stmt_list<'a>(term: Term<'a>) -> NifResult<Vec<Stmt>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_ast_stmt)
+        .collect()
+}
+
+pub(crate) fn decode_arm_list<'a>(term: Term<'a>) -> NifResult<Vec<Arm>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_arm)
+        .collect()
+}
+
+pub(crate) fn decode_pat_list<'a>(term: Term<'a>) -> NifResult<Vec<Pat>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_ast_pat)
+        .collect()
+}
+
+pub(crate) fn decode_expr_list<'a>(term: Term<'a>) -> NifResult<Vec<Expr>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(decode_ast_expr)
+        .collect()
+}
+
+pub(crate) fn decode_string_list<'a>(term: Term<'a>) -> NifResult<Vec<String>> {
+    term.decode::<Vec<Term<'a>>>()?
+        .into_iter()
+        .map(super::atom_or_string)
+        .collect()
+}
+
 pub(crate) fn required_expr<'a>(term: Term<'a>, key: &str) -> NifResult<Expr> {
     super::decode_expr(required_field(term, key)?)
 }
 
 pub(crate) fn required_expr_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Expr>> {
-    super::decode_expr_list(required_field(term, key)?)
+    decode_expr_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_type<'a>(term: Term<'a>, key: &str) -> NifResult<Type> {
@@ -162,11 +233,11 @@ pub(crate) fn required_path<'a>(term: Term<'a>, key: &str) -> NifResult<Path> {
 }
 
 pub(crate) fn required_string_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<String>> {
-    super::decode_string_list(required_field(term, key)?)
+    decode_string_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_type_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Type>> {
-    super::decode_type_list(required_field(term, key)?)
+    decode_type_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_pat<'a>(term: Term<'a>, key: &str) -> NifResult<Pat> {
@@ -174,31 +245,31 @@ pub(crate) fn required_pat<'a>(term: Term<'a>, key: &str) -> NifResult<Pat> {
 }
 
 pub(crate) fn required_pat_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Pat>> {
-    super::decode_pat_list(required_field(term, key)?)
+    decode_pat_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_arm_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Arm>> {
-    super::decode_arm_list(required_field(term, key)?)
+    decode_arm_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_stmt_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Stmt>> {
-    super::decode_stmt_list(required_field(term, key)?)
+    decode_stmt_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_item_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Item>> {
-    super::decode_item_list(required_field(term, key)?)
+    decode_item_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_function_arg_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<FnArg>> {
-    super::decode_function_arg_list(required_field(term, key)?)
+    decode_function_arg_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_struct_field_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Field>> {
-    super::decode_struct_field_list(required_field(term, key)?)
+    decode_struct_field_list(required_field(term, key)?)
 }
 
 pub(crate) fn required_enum_variant_list<'a>(term: Term<'a>, key: &str) -> NifResult<Vec<Variant>> {
-    super::decode_enum_variant_list(required_field(term, key)?)
+    decode_enum_variant_list(required_field(term, key)?)
 }
 
 pub(crate) fn decode_ast_item(term: Term) -> NifResult<Item> {
@@ -304,6 +375,7 @@ pub(crate) fn decode_ast_expr(term: Term) -> NifResult<Expr> {
         ast_modules::ERR => decode_expr_err(term),
         ast_modules::NIF_RAISE_ATOM => decode_expr_nif_raise_atom(term),
         ast_modules::BLOCK_EXPR => decode_expr_block_expr(term),
+        ast_modules::UNSAFE_BLOCK => decode_expr_unsafe_block(term),
         ast_modules::MATCH => decode_expr_match(term),
         ast_modules::IF => decode_expr_if(term),
         ast_modules::BINARY_OP => decode_expr_binary_op(term),
@@ -788,6 +860,10 @@ pub(crate) fn decode_expr_binary_op<'a>(term: Term<'a>) -> NifResult<Expr> {
 
 pub(crate) fn decode_expr_block_expr<'a>(term: Term<'a>) -> NifResult<Expr> {
     super::parse_block_expr(super::decode_block(required_field(term, "body")?)?)
+}
+
+pub(crate) fn decode_expr_unsafe_block<'a>(term: Term<'a>) -> NifResult<Expr> {
+    super::parse_unsafe_block_expr(super::decode_block(required_field(term, "body")?)?)
 }
 
 pub(crate) fn decode_expr_match<'a>(term: Term<'a>) -> NifResult<Expr> {

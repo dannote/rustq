@@ -1,35 +1,19 @@
 use quote::{format_ident, quote, ToTokens};
 use rustler::{NifResult, Term};
-use syn::{Arm, Expr, Field, Item, LitInt, Pat, Stmt, Type};
+use syn::{Arm, Expr, LitInt, Pat, Stmt, Type};
 
 use crate::generated_ast::{
-    atom, atom_key, decode_arm, decode_ast_expr, decode_ast_item, decode_ast_pat, decode_ast_stmt,
-    decode_ast_type, decode_enum_variant, decode_function_arg, decode_struct_field, is_nil,
+    atom, atom_key, decode_ast_expr, decode_ast_pat, decode_ast_type, decode_function_arg, is_nil,
     optional_map_get, struct_name,
 };
 use crate::{ident_from_part, parse_expr, parse_syn, path_from_parts};
 
 // Primitive-boundary inventory:
 // - Forever primitive: Rustler Term APIs, atom/string conversion, map/list traversal.
-// - Generic glue: list/optional decoding and typed named-field collection.
-// - Dogfood candidates: keyword_args, path_parts, decode_lifetime_list once iterator lowering exists.
+// - Generic glue: optional decoding and typed named-field collection.
+// - Concrete list traversal is generated from Rusty-Elixir in generated_ast.rs.
 // - Parse assembly belongs in parse.rs, parse_item.rs, or parse_type.rs, not here.
-// Temporary dogfood bridge helpers called by generated defrust decoders.
-pub(crate) fn decode_item_list(term: Term) -> NifResult<Vec<Item>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_ast_item)
-        .collect::<NifResult<Vec<Item>>>()
-}
-
-pub(crate) fn decode_function_arg_list(term: Term) -> NifResult<Vec<syn::FnArg>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decode_function_arg_value)
-        .collect()
-}
-
-fn decode_function_arg_value(term: Term) -> NifResult<syn::FnArg> {
+pub(crate) fn decode_function_arg_value(term: Term) -> NifResult<syn::FnArg> {
     match decode_function_arg(term) {
         Ok(arg) => Ok(arg),
         Err(_) => {
@@ -39,18 +23,6 @@ fn decode_function_arg_value(term: Term) -> NifResult<syn::FnArg> {
             crate::parse_function_arg(name, ty)
         }
     }
-}
-
-pub(crate) fn decode_struct_field_list(term: Term) -> NifResult<Vec<Field>> {
-    decode_list(term, decode_struct_field)
-}
-
-pub(crate) fn decode_enum_variant_list(term: Term) -> NifResult<Vec<syn::Variant>> {
-    decode_list(term, decode_enum_variant)
-}
-
-pub(crate) fn decode_type_list(term: Term) -> NifResult<Vec<Type>> {
-    decode_list(term, decode_type)
 }
 
 // Rust syntax attribute/visibility decoders shared by handwritten and generated code.
@@ -191,16 +163,8 @@ pub(crate) fn decode_path_value(term: Term) -> NifResult<syn::Path> {
     path_from_parts(parts)
 }
 
-// Collection decoders for generated AST nodes.
-pub(crate) fn decode_list<T>(term: Term, decoder: fn(Term) -> NifResult<T>) -> NifResult<Vec<T>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(decoder)
-        .collect()
-}
-
 pub(crate) fn decode_stmt_list(term: Term) -> NifResult<Vec<Stmt>> {
-    decode_list(term, decode_stmt)
+    crate::generated_ast::decode_stmt_list(term)
 }
 
 pub(crate) fn decode_block(term: Term) -> NifResult<syn::Block> {
@@ -247,10 +211,6 @@ pub(crate) fn decode_optional_block_field(
     } else {
         Ok(Some(decode_block(value)?))
     }
-}
-
-pub(crate) fn decode_stmt(term: Term) -> NifResult<Stmt> {
-    decode_ast_stmt(term)
 }
 
 pub(crate) fn decode_let_pattern(pat: Pat, mutable: bool) -> NifResult<proc_macro2::TokenStream> {
@@ -309,6 +269,10 @@ pub(crate) fn parse_block_expr(block: syn::Block) -> NifResult<Expr> {
         label: None,
         block,
     }))
+}
+
+pub(crate) fn parse_unsafe_block_expr(block: syn::Block) -> NifResult<Expr> {
+    parse_syn::<Expr>(quote!(unsafe #block))
 }
 
 pub(crate) fn parse_if_expr(
@@ -576,10 +540,6 @@ pub(crate) fn decode_struct_literal_fields(term: Term) -> NifResult<Vec<NamedFie
     decode_named_field_list(term, decode_expr)
 }
 
-pub(crate) fn decode_arm_list(term: Term) -> NifResult<Vec<Arm>> {
-    decode_list(term, decode_arm)
-}
-
 pub(crate) fn decode_atom_guard_arm(pat_term: Term, block: syn::Block) -> NifResult<Arm> {
     let name = format_ident_value(atom_key(pat_term, "name")?);
     parse_syn::<Arm>(quote!(value if value == atoms::#name() => #block,))
@@ -727,10 +687,6 @@ pub(crate) fn decode_pat_atom_guard(_term: Term) -> NifResult<Pat> {
     Err(rustler::Error::BadArg)
 }
 
-pub(crate) fn decode_pat_list(term: Term) -> NifResult<Vec<Pat>> {
-    decode_list(term, decode_pat)
-}
-
 pub(crate) fn decode_named_field_list<T>(
     term: Term,
     decoder: fn(Term) -> NifResult<T>,
@@ -748,10 +704,6 @@ pub(crate) fn decode_named_field_list<T>(
 
 pub(crate) fn decode_pat_struct_fields(term: Term) -> NifResult<Vec<NamedField<Pat>>> {
     decode_named_field_list(term, decode_pat)
-}
-
-pub(crate) fn decode_expr_list(term: Term) -> NifResult<Vec<Expr>> {
-    decode_list(term, decode_expr)
 }
 
 pub(crate) fn decode_ident_list(term: Term) -> NifResult<Vec<proc_macro2::Ident>> {
@@ -801,8 +753,5 @@ pub(crate) fn decode_type(term: Term) -> NifResult<Type> {
 }
 
 pub(crate) fn decode_string_list(term: Term) -> NifResult<Vec<String>> {
-    term.decode::<Vec<Term>>()?
-        .into_iter()
-        .map(atom_or_string)
-        .collect::<NifResult<Vec<String>>>()
+    crate::generated_ast::decode_string_list(term)
 }

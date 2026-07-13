@@ -115,6 +115,11 @@ defmodule RustQ.Codegen.Decoders.Expr do
     Super.parse_block_expr(Super.decode_block(required_field(term, "body")))
   end
 
+  @spec decode_expr_unsafe_block(term()) :: R.nif_result(R.path(:Expr))
+  defrust decode_expr_unsafe_block(term) do
+    Super.parse_unsafe_block_expr(Super.decode_block(required_field(term, "body")))
+  end
+
   @spec decode_expr_match(term()) :: R.nif_result(R.path(:Expr))
   defrust decode_expr_match(term) do
     Super.parse_match_expr(required_expr(term, "expr"), required_arm_list(term, "arms"))

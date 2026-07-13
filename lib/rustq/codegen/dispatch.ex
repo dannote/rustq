@@ -272,6 +272,7 @@ defmodule RustQ.Codegen.Dispatch do
               :err,
               :nif_raise_atom,
               :block_expr,
+              :unsafe_block,
               :match,
               :if,
               :binary_op

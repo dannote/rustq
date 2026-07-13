@@ -11,7 +11,13 @@
     ],
     ignore: [
       paths: [
-        "lib/rustq/rustler/opts.ex"
+        "lib/rustq.ex",
+        "lib/rustq/rust/ast/builder.ex",
+        "lib/rustq/rustler/atom.ex",
+        "lib/rustq/rustler/nif.ex",
+        "lib/rustq/rustler/opts.ex",
+        "lib/rustq/rustler/schema.ex",
+        "lib/rustq/rustler/term.ex"
       ]
     ]
   ]

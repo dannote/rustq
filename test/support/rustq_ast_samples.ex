@@ -117,6 +117,7 @@ defmodule RustQ.ASTSamples do
   defp semantic_fragment(:err), do: "Err(rustler::Error::BadArg)"
   defp semantic_fragment(:nif_raise_atom), do: "RaiseAtom"
   defp semantic_fragment(:block_expr), do: "let value = 1;"
+  defp semantic_fragment(:unsafe_block), do: "unsafe {"
   defp semantic_fragment(:match), do: "match value"
   defp semantic_fragment(:if), do: "if condition"
   defp semantic_fragment(:binary_op), do: "left == right"
@@ -445,6 +446,14 @@ defmodule RustQ.ASTSamples do
       function_sample(
         :block_expr_sample,
         A.block_expr([A.let(:value, A.lit(1)), A.return(:value)]),
+        returns: "i64"
+      )
+
+  def sample_for(:unsafe_block),
+    do:
+      function_sample(
+        :unsafe_block_sample,
+        A.unsafe_block([A.return(A.call(:unsafe_value))]),
         returns: "i64"
       )
 

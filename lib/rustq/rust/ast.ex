@@ -96,6 +96,7 @@ defmodule RustQ.Rust.AST do
     TypeUnit,
     TypeVec,
     UnaryOp,
+    UnsafeBlock,
     Use,
     Var,
     VecLiteral
@@ -163,6 +164,7 @@ defmodule RustQ.Rust.AST do
           | Err.t()
           | NifRaiseAtom.t()
           | BlockExpr.t()
+          | UnsafeBlock.t()
           | Match.t()
           | If.t()
           | BinaryOp.t()
@@ -617,6 +619,8 @@ defmodule RustQ.Rust.AST do
 
   defnode(BlockExpr, :expr, [body: []], type: quote(do: %__MODULE__{body: [AST.stmt()]}))
 
+  defnode(UnsafeBlock, :expr, [body: []], type: quote(do: %__MODULE__{body: [AST.stmt()]}))
+
   defnode(Match, :expr, [:expr, arms: []],
     type: quote(do: %__MODULE__{expr: AST.expr(), arms: [Arm.t()]})
   )
@@ -775,6 +779,7 @@ defmodule RustQ.Rust.AST do
       Err,
       NifRaiseAtom,
       BlockExpr,
+      UnsafeBlock,
       Match,
       If,
       BinaryOp,
