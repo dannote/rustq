@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.11.1 - 2026-07-14
+
 - Lower named `Enum.map/2` function captures and multi-statement closure bodies,
   and dogfood them for generated native AST collection decoders.
 - Generate Rustler term decoders structurally, including cached struct keys, and
