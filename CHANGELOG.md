@@ -2,10 +2,14 @@
 
 ## Unreleased
 
-- Define the intended RustQ 1.x compatibility contract and ship the policy with
-  the package, HexDocs, and agent skill.
+## v1.0.0-rc.1 - 2026-07-15
+
+- Define the RustQ 1.x compatibility contract and ship the policy with the
+  package, HexDocs, and agent skill.
 - Validate documented public APIs, package contents, checked generation, and
   native compilation through an external consumer fixture.
+- Freeze the documented Rusty-Elixir, structural AST, Rustler generation,
+  diagnostics, and Reach surfaces for final 1.0 consumer validation.
 
 ## v0.11.1 - 2026-07-14
 

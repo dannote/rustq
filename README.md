@@ -20,7 +20,7 @@ typed macro metalanguage for generating real Rust safely.
 Add RustQ to `mix.exs`:
 
 ```elixir
-{:rustq, "~> 0.11.0", only: [:dev, :test], runtime: false}
+{:rustq, "~> 1.0.0-rc.1", only: [:dev, :test], runtime: false}
 ```
 
 RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available

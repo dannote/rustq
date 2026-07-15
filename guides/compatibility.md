@@ -1,8 +1,7 @@
 # RustQ 1.x compatibility policy
 
-This document defines the compatibility contract RustQ intends to adopt with
-`1.0.0`. Until `1.0.0` is released, it is the stabilization target for the
-`0.11.x` release line.
+This document defines the compatibility contract RustQ adopts with `1.0.0`.
+The `1.0.0-rc` release line validates this contract before the stable release.
 
 RustQ connects three surfaces: Elixir authoring APIs, structural RustQ AST, and
 generated Rust. Compatibility has to describe all three rather than treating a

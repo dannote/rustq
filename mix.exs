@@ -1,7 +1,7 @@
 defmodule RustQ.MixProject do
   use Mix.Project
 
-  @version "0.11.1"
+  @version "1.0.0-rc.1"
   @source_url "https://github.com/dannote/rustq"
 
   def project do
