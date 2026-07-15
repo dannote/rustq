@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Define the intended RustQ 1.x compatibility contract and ship the policy with
+  the package, HexDocs, and agent skill.
+- Validate documented public APIs, package contents, checked generation, and
+  native compilation through an external consumer fixture.
+
 ## v0.11.1 - 2026-07-14
 
 - Lower named `Enum.map/2` function captures and multi-statement closure bodies,

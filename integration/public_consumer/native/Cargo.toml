@@ -1,0 +1,8 @@
+[package]
+name = "rustq_public_consumer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rustler = "0.38"

@@ -20,7 +20,7 @@ typed macro metalanguage for generating real Rust safely.
 Add RustQ to `mix.exs`:
 
 ```elixir
-{:rustq, "~> 0.9", only: [:dev, :test], runtime: false}
+{:rustq, "~> 0.11.0", only: [:dev, :test], runtime: false}
 ```
 
 RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available
@@ -39,6 +39,8 @@ source-derived Rustler exports, Elixir stubs, atoms, and term encoders, see
 [`Generating Rustler Boundaries`](https://rustq.hexdocs.pm/rustler-generation.html).
 For naming, target manifests, and generator organization, see
 [`Designing RustQ Generators`](https://rustq.hexdocs.pm/designing-generators.html).
+The intended 1.x stability contract is documented in
+[`RustQ 1.x Compatibility Policy`](https://rustq.hexdocs.pm/compatibility.html).
 The skill itself is also available at
 [`https://rustq.hexdocs.pm/skill.md`](https://rustq.hexdocs.pm/skill.md).
 

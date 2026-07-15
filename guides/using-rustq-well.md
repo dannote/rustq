@@ -15,6 +15,10 @@ The goal is not to move Rust string concatenation from `.rs` files into `.ex`
 files. The goal is to use Elixir as a semantic metaprogramming language for Rust
 bridges.
 
+For the documented public/private boundary, semantic-versioning rules, AST and
+generated-output guarantees, and release validation expected for 1.x, see
+[`RustQ 1.x Compatibility Policy`](compatibility.md).
+
 ## The authoring ladder
 
 Before writing generated Rust as a string, ask:

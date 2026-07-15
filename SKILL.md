@@ -19,6 +19,17 @@ Full guide: https://rustq.hexdocs.pm/using-rustq-well.md
 4. **Infer from Rust/source schemas.** Use `RustQ.Syn`, `rust_sources`, `rust_packages`, and `callable_modules` instead of hand-copying Rust APIs.
 5. **Use RustQ AST/builders for generated structure.** If a construct is missing, prefer adding RustQ support over writing a large string template.
 6. **Keep raw Rust strings tiny and local.** Macro invocations and unavoidable syntax escapes are fine; large generated functions as strings are not.
+7. **Respect the public compatibility boundary.** Use documented modules and generated accessors; do not import hidden renderer, native NIF, lowering, inference, cache, or schema-introspection modules.
+
+## 1.x compatibility discipline
+
+RustQ's compatibility contract is documented in [`guides/compatibility.md`](guides/compatibility.md) and published in HexDocs. When changing RustQ or a consumer:
+
+- treat documented Rusty-Elixir forms, public AST schemas/builders, Rustler helpers, diagnostics, and Reach finding kinds as the stable surface
+- treat `@moduledoc false`, `@doc false`, the hidden AST renderer, native NIF implementation, Meta AST bridge, and other implementation modules as unstable
+- expect generated Rust to be deterministic for one RustQ and formatter version, but not byte-identical across upgrades; regenerate checked-in output after dependency updates
+- classify new lowering forms and Reach checks as additive minor changes; reserve semantic changes to documented valid forms for a major release unless correcting invalid, unsafe, or contradicted behavior
+- validate package contents and documented APIs through the external public-consumer fixture before release
 
 ## Starting point for a new bridge
 
