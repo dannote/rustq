@@ -26,7 +26,7 @@ Full guide: https://rustq.hexdocs.pm/using-rustq-well.md
 RustQ's compatibility contract is documented in [`guides/compatibility.md`](guides/compatibility.md) and published in HexDocs. When changing RustQ or a consumer:
 
 - treat documented Rusty-Elixir forms, public AST schemas/builders, Rustler helpers, diagnostics, and Reach finding kinds as the stable surface
-- treat `@moduledoc false`, `@doc false`, the hidden AST renderer, native NIF implementation, Meta AST bridge, and other implementation modules as unstable
+- treat `RustQ.Meta.AST` as the public structural accessor for compiled `defrust` metadata, while `@moduledoc false`, `@doc false`, the hidden AST renderer, native NIF implementation, lowerer, inference engine, caches, and other implementation modules remain unstable
 - expect generated Rust to be deterministic for one RustQ and formatter version, but not byte-identical across upgrades; regenerate checked-in output after dependency updates
 - classify new lowering forms and Reach checks as additive minor changes; reserve semantic changes to documented valid forms for a major release unless correcting invalid, unsafe, or contradicted behavior
 - validate package contents and documented APIs through the external public-consumer fixture before release

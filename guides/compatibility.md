@@ -17,7 +17,8 @@ arguments, return values, options, and examples are part of the 1.x contract.
 This includes the documented surfaces under:
 
 - `RustQ`, `RustQ.Config`, `RustQ.Generated`, and template/splice APIs
-- `RustQ.Meta` and `RustQ.Type`
+- `RustQ.Meta`, `RustQ.Meta.AST`, `RustQ.Meta.Type`, `RustQ.Spec`,
+  `RustQ.Type`, and documented `RustQ.Binding` metadata modules
 - `RustQ.Rust` and the documented `RustQ.Rust.AST` nodes and builders
 - `RustQ.Rustler` feature modules
 - `RustQ.Syn`, `RustQ.Cargo`, and documented native metadata values
@@ -30,7 +31,7 @@ addressed by name. Modules with `@moduledoc false`, functions with `@doc false`,
 and implementation namespaces such as native NIF decoders, AST rendering,
 lowering, inference, cache, and schema-introspection internals are not stable
 APIs. In particular, consumers must not call the hidden AST renderer, native
-NIF implementation, or Meta AST bridge.
+NIF implementation, lowerer, inference engine, or cache implementation.
 
 `SKILL.md` is part of the shipped compatibility documentation. Agents and
 maintainers should follow its public/private boundary and authoring ladder just
