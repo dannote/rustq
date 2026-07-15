@@ -557,10 +557,11 @@ defmodule RustQ.Meta.Type do
         })
 
       struct_type?(ast) ->
-        {struct_rust_name, fields} = struct_type(ast)
+        {struct_rust_name, elixir_module, fields} = struct_type(ast)
 
         type(:struct, path(struct_rust_name), %{
           elixir_name: name,
+          elixir_module: elixir_module,
           rust_name: struct_rust_name,
           representation: :struct,
           fields: fields
@@ -949,7 +950,7 @@ defmodule RustQ.Meta.Type do
         {name, parse(ast, %{}), :required}
       end)
 
-    {rust_name, fields}
+    {rust_name, Module.concat(parts), fields}
   end
 
   defp map_type?({:%{}, _, fields}) when is_list(fields), do: true

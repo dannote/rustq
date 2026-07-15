@@ -295,6 +295,13 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expected_expr_context(
+         {:for, _, [{:<-, _, [pattern, collection]}, [do: body]]},
+         %Type{} = _expected_type,
+         %Context{} = context
+       ),
+       do: lower_for_map(pattern, collection, body, context)
+
+  defp lower_expected_expr_context(
          {:struct_literal, _, [path, fields]},
          %Type{} = expected_type,
          %Context{} = context
@@ -307,6 +314,18 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expected_expr_context(
          {:%{}, _, fields},
+         %Type{kind: :struct, ast: %AST.TypePath{parts: parts}} = expected_type,
+         %Context{} = context
+       )
+       when is_list(fields) do
+    %AST.StructLiteral{
+      path: %AST.Path{parts: parts},
+      fields: lower_named_fields(fields, expected_type, context)
+    }
+  end
+
+  defp lower_expected_expr_context(
+         {:%, _, [_module, {:%{}, _, fields}]},
          %Type{kind: :struct, ast: %AST.TypePath{parts: parts}} = expected_type,
          %Context{} = context
        )
@@ -701,6 +720,12 @@ defmodule RustQ.Meta.Lower do
          %Context{} = context
        ),
        do: lower_for_reduce_expr(expression, context)
+
+  defp lower_expr_context(
+         {:for, _, [{:<-, _, [pattern, collection]}, [do: body]]},
+         %Context{} = context
+       ),
+       do: lower_for_map(pattern, collection, body, context)
 
   defp lower_expr_context(
          {{:., _meta, [receiver, field_or_function]}, call_meta, []},
@@ -1183,6 +1208,16 @@ defmodule RustQ.Meta.Lower do
     |> Enum.all?(&(&1 in [:ok, nil]))
   end
 
+  defp lower_for_map(pattern, collection, body, %Context{} = context) do
+    closure = lower_closure_args([pattern], body, context)
+
+    collection
+    |> lower_expr(context)
+    |> method_chain(:into_iter)
+    |> method_chain(:map, [closure])
+    |> method_chain(:collect)
+  end
+
   defp lower_for_reduce_expr(expression, %Context{return_type: %Type{} = return_type} = context),
     do: lower_for_reduce_expr(expression, return_type, context)
 
@@ -1485,6 +1520,30 @@ defmodule RustQ.Meta.Lower do
     %AST.PatPathTuple{
       path: enum_variant_path(path, variant),
       patterns: Enum.map(patterns, &lower_match_pattern(&1, nil))
+    }
+  end
+
+  defp lower_match_pattern(
+         {:%{}, _, fields},
+         %Type{kind: :struct, rust: rust_name}
+       )
+       when is_list(fields) do
+    %AST.PatStruct{
+      path: %AST.Path{parts: [rust_name]},
+      fields:
+        Enum.map(fields, fn {name, pattern} -> {name, lower_match_pattern(pattern, nil)} end)
+    }
+  end
+
+  defp lower_match_pattern(
+         {:%, _, [_module, {:%{}, _, fields}]},
+         %Type{kind: :struct, rust: rust_name}
+       )
+       when is_list(fields) do
+    %AST.PatStruct{
+      path: %AST.Path{parts: [rust_name]},
+      fields:
+        Enum.map(fields, fn {name, pattern} -> {name, lower_match_pattern(pattern, nil)} end)
     }
   end
 

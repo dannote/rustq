@@ -21,7 +21,15 @@ defmodule RustQ.Meta.Attrs do
   defp add_nif_attr(attrs, true), do: attrs ++ [%AST.Attribute{path: [:rustler, :nif]}]
 
   defp add_nif_attr(attrs, opts) when is_list(opts),
-    do: attrs ++ [%AST.Attribute{path: [:rustler, :nif], args: opts}]
+    do: attrs ++ [%AST.Attribute{path: [:rustler, :nif], args: normalize_nif_opts(opts)}]
+
+  defp normalize_nif_opts(opts) do
+    case Keyword.fetch(opts, :schedule) do
+      {:ok, :dirty_cpu} -> Keyword.put(opts, :schedule, "DirtyCpu")
+      {:ok, :dirty_io} -> Keyword.put(opts, :schedule, "DirtyIo")
+      _other -> opts
+    end
+  end
 
   defp allow_attr(values), do: %AST.Attribute{path: [:allow], args: List.wrap(values)}
 end

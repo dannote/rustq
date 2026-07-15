@@ -49,6 +49,16 @@ defmodule RustQ.PublicConsumerTest do
     [native_source] =
       Path.wildcard(Path.join(zero_rust_consumer, "_build/test/rustq_native/*/src/lib.rs"))
 
+    native_manifest = native_source |> Path.dirname() |> Path.dirname() |> Path.join("Cargo.toml")
+    run!(zero_rust_consumer, "cargo", ["fmt", "--check", "--manifest-path", native_manifest], env)
+
+    run!(
+      zero_rust_consumer,
+      "cargo",
+      ["clippy", "--manifest-path", native_manifest, "--", "-D", "warnings"],
+      env
+    )
+
     source = File.read!(native_source)
     assert source =~ "#[rustler::nif]"
     assert source =~ "fn add(left: i64, right: i64) -> i64"

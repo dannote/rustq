@@ -54,11 +54,16 @@ defmodule RustQ.Meta.DefrustTest do
 
       @spec add_impl(integer(), integer()) :: integer()
       defrustp(add_impl(left, right), do: left + right)
+
+      @nif schedule: :dirty_cpu
+      @spec slow_add(integer(), integer()) :: integer()
+      defnif(slow_add(left, right), do: left + right)
     end
 
     source = EntrypointCase.__rustq_source__()
 
     assert source =~ "#[rustler::nif]"
+    assert source =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
     assert source =~ "fn add(left: i64, right: i64) -> i64"
     assert source =~ "fn add_impl(left: i64, right: i64) -> i64"
     assert function_exported?(EntrypointCase, :add, 2)
