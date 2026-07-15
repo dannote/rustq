@@ -2,14 +2,13 @@
 
 ## Unreleased
 
-## v1.0.0-rc.1 - 2026-07-15
-
 - Define the RustQ 1.x compatibility contract and ship the policy with the
   package, HexDocs, and agent skill.
 - Validate documented public APIs, package contents, checked generation, and
   native compilation through an external consumer fixture.
-- Freeze the documented Rusty-Elixir, structural AST, Rustler generation,
-  diagnostics, and Reach surfaces for final 1.0 consumer validation.
+- Target zero-handwritten-Rust NIFs with `RustQ.Native`, `defnif`, private
+  `defrustp` helpers, derived boundaries, and a broader idiomatic Elixir
+  lowering surface before the first release candidate.
 
 ## v0.11.1 - 2026-07-14
 

@@ -11,6 +11,9 @@ defmodule RustQ.Meta.Options do
           static_types: keyword(Macro.t())
         }
 
+  @doc false
+  def option_names, do: [:rust_sources, :rust_packages, :callable_modules, :static_types]
+
   @doc "Validates and normalizes options passed to `use RustQ.Meta`."
   @spec validate!(keyword(), Macro.Env.t()) :: t()
   def validate!(opts, %Macro.Env{} = caller) when is_list(opts) do

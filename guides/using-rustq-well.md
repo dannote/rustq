@@ -17,7 +17,9 @@ bridges.
 
 For the documented public/private boundary, semantic-versioning rules, AST and
 generated-output guarantees, and release validation expected for 1.x, see
-[`RustQ 1.x Compatibility Policy`](compatibility.md).
+[`RustQ 1.x Compatibility Policy`](compatibility.md). For the 1.0
+zero-handwritten-bridge-Rust target and the boundary between inference and
+explicit native policy, see [`Zero-handwritten-Rust NIFs`](zero-rust-nifs.md).
 
 ## The authoring ladder
 

@@ -75,6 +75,7 @@ defmodule RustQ.Meta do
       import RustQ.Meta
       alias RustQ.Clippy, as: Clippy
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_stub_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_macros, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_rust_sources, accumulate: true)
@@ -112,19 +113,106 @@ defmodule RustQ.Meta do
   end
 
   defmacro defrust(call_ast, do: body_ast) do
-    {name, _meta, args} = call_ast
+    rust_definition(call_ast, body_ast, :public_helper)
+  end
+
+  @doc "Declares a private generated Rust helper from a valid Elixir-shaped body."
+  defmacro defrustp(call_ast, do: body_ast) do
+    rust_definition(call_ast, body_ast, :private_helper)
+  end
+
+  @doc "Declares a public NIF entrypoint generated from a valid Elixir-shaped body."
+  defmacro defnif(call_ast, do: body_ast) do
+    rust_definition(call_ast, body_ast, :nif)
+  end
+
+  defp rust_definition(call_ast, body_ast, kind) do
+    {name, args} = call_name_args!(call_ast)
     arity = length(args || [])
+    stub_key = {name, arity}
 
     stub_args =
       if arity == 0, do: [], else: for(index <- 1..arity//1, do: Macro.var(:"_arg#{index}", nil))
 
+    definition =
+      quote do
+        @rustq_defs {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast)),
+                     RustQ.Meta.Attrs.take_pending(__MODULE__),
+                     RustQ.Meta.Attrs.current_rust_mod(__MODULE__)}
+      end
+
     quote do
-      @rustq_defs {unquote(Macro.escape(call_ast)), unquote(Macro.escape(body_ast)),
-                   RustQ.Meta.Attrs.take_pending(__MODULE__),
-                   RustQ.Meta.Attrs.current_rust_mod(__MODULE__)}
-      @doc false
-      def unquote(name)(unquote_splicing(stub_args)), do: :erlang.nif_error(:rustq_defrust_stub)
+      unquote(nif_default(kind))
+      unquote(definition)
+      unquote(rust_stub(kind, stub_key, name, stub_args))
     end
+  end
+
+  defp nif_default(:nif) do
+    quote do
+      if Module.get_attribute(__MODULE__, :nif) == nil do
+        Module.put_attribute(__MODULE__, :nif, true)
+      end
+    end
+  end
+
+  defp nif_default(_kind), do: nil
+
+  defp rust_stub(:nif, stub_key, name, stub_args) do
+    escaped_stub_key = Macro.escape(stub_key)
+
+    quote do
+      unless unquote(escaped_stub_key) in Module.get_attribute(
+               __MODULE__,
+               :rustq_stub_keys
+             ) do
+        @rustq_stub_keys unquote(escaped_stub_key)
+
+        def unquote(name)(unquote_splicing(stub_args)),
+          do: :erlang.nif_error(:rustq_nif_not_loaded)
+      end
+    end
+  end
+
+  defp rust_stub(:private_helper, stub_key, name, stub_args) do
+    escaped_stub_key = Macro.escape(stub_key)
+
+    quote do
+      unless unquote(escaped_stub_key) in Module.get_attribute(
+               __MODULE__,
+               :rustq_stub_keys
+             ) do
+        @rustq_stub_keys unquote(escaped_stub_key)
+        @doc false
+
+        defp unquote(name)(unquote_splicing(stub_args)),
+          do: :erlang.nif_error(:rustq_defrust_stub)
+      end
+    end
+  end
+
+  defp rust_stub(:public_helper, stub_key, name, stub_args) do
+    escaped_stub_key = Macro.escape(stub_key)
+
+    quote do
+      unless unquote(escaped_stub_key) in Module.get_attribute(
+               __MODULE__,
+               :rustq_stub_keys
+             ) do
+        @rustq_stub_keys unquote(escaped_stub_key)
+        @doc false
+
+        def unquote(name)(unquote_splicing(stub_args)),
+          do: :erlang.nif_error(:rustq_defrust_stub)
+      end
+    end
+  end
+
+  defp call_name_args!({:when, _, [call_ast, _guard]}), do: call_name_args!(call_ast)
+  defp call_name_args!({name, _meta, args}) when is_atom(name), do: {name, args || []}
+
+  defp call_name_args!(other) do
+    raise ArgumentError, "expected a function head, got: #{Macro.to_string(other)}"
   end
 
   defmacro defrustmacro(call_ast, do: body_ast) do
@@ -159,7 +247,7 @@ defmodule RustQ.Meta do
 
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 
-    exports(
+    values = [
       asts: asts,
       macro_items: macro_items,
       rust_macros: rust_macros,
@@ -169,7 +257,14 @@ defmodule RustQ.Meta do
       items: items,
       local_callables: local_callables,
       source: source
-    )
+    ]
+
+    exports = exports(values)
+
+    case Module.get_attribute(env.module, :rustq_native_opts) do
+      nil -> exports
+      opts -> RustQ.Native.__compile_native__(env, values, opts, exports)
+    end
   end
 
   defp exports(values) do
@@ -196,7 +291,13 @@ defmodule RustQ.Meta do
   end
 
   defp compile_context(env) do
-    defs = Module.get_attribute(env.module, :rustq_defs) |> List.wrap() |> Enum.reverse()
+    defs =
+      env.module
+      |> Module.get_attribute(:rustq_defs)
+      |> List.wrap()
+      |> Enum.reverse()
+      |> normalize_definitions()
+
     macro_defs = Module.get_attribute(env.module, :rustq_macros) |> List.wrap() |> Enum.reverse()
     specs = Module.get_attribute(env.module, :spec) |> List.wrap()
     type_aliases = env.module |> Module.get_attribute(:type) |> Type.type_aliases()
@@ -235,6 +336,70 @@ defmodule RustQ.Meta do
       type_aliases: type_aliases
     }
   end
+
+  defp normalize_definitions(definitions) do
+    definitions
+    |> Enum.chunk_by(&definition_key/1)
+    |> Enum.map(&normalize_definition_group/1)
+  end
+
+  defp definition_key({call_ast, _body, _attrs, rust_module}) do
+    {name, args} = call_name_args!(call_ast)
+    {name, length(args), rust_module}
+  end
+
+  defp normalize_definition_group([{call_ast, _body, _attrs, _rust_module} = definition]) do
+    {_head, guard} = split_guarded_head(call_ast)
+    {_name, args} = call_name_args!(call_ast)
+
+    if guard == nil and Enum.all?(args, &plain_argument?/1) do
+      definition
+    else
+      combine_definitions([definition])
+    end
+  end
+
+  defp normalize_definition_group(definitions), do: combine_definitions(definitions)
+
+  defp combine_definitions([{first_call, _body, attrs, rust_module} | _] = definitions) do
+    {name, args} = call_name_args!(first_call)
+    arity = length(args)
+
+    if arity == 0 do
+      raise ArgumentError, "multiple zero-arity defrust clauses are not supported"
+    end
+
+    function_args = for index <- 1..arity, do: Macro.var(:"arg#{index}", nil)
+
+    scrutinee =
+      case function_args do
+        [argument] -> argument
+        arguments -> {:{}, [], arguments}
+      end
+
+    clauses =
+      Enum.map(definitions, fn {call_ast, body, _clause_attrs, _rust_module} ->
+        {call_ast, guard} = split_guarded_head(call_ast)
+        {_name, _meta, patterns} = call_ast
+
+        pattern =
+          case patterns do
+            [pattern] -> pattern
+            patterns -> {:{}, [], patterns}
+          end
+
+        pattern = if guard, do: {:when, [], [pattern, guard]}, else: pattern
+        {:->, [], [[pattern], body]}
+      end)
+
+    {{name, [], function_args}, {:case, [], [scrutinee, [do: clauses]]}, attrs, rust_module}
+  end
+
+  defp split_guarded_head({:when, _, [call_ast, guard]}), do: {call_ast, guard}
+  defp split_guarded_head(call_ast), do: {call_ast, nil}
+
+  defp plain_argument?({name, _meta, context}) when is_atom(name) and is_atom(context), do: true
+  defp plain_argument?(_argument), do: false
 
   defp configured_static_types(module, type_aliases) do
     module

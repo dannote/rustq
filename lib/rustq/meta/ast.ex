@@ -286,6 +286,7 @@ defmodule RustQ.Meta.AST do
     {name, _meta, arg_asts} = call_ast
     arg_names = Enum.map(arg_asts, &arg_name!/1)
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
+    arg_types = if nif_attrs?(attrs), do: Enum.map(arg_types, &nif_input_type/1), else: arg_types
 
     args =
       Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
@@ -315,6 +316,20 @@ defmodule RustQ.Meta.AST do
 
     %{ast: ast, rust_module: rust_module}
   end
+
+  defp nif_attrs?(attrs) do
+    Enum.any?(attrs, &match?(%AST.Attribute{path: [:rustler, :nif]}, &1))
+  end
+
+  defp nif_input_type(%Type{kind: :binary}) do
+    %Type{
+      kind: :binary,
+      rust: "Binary<'a>",
+      ast: %AST.TypePath{parts: [:Binary], lifetimes: [:a]}
+    }
+  end
+
+  defp nif_input_type(type), do: type
 
   @spec raise_defrust_diagnostic(Macro.t(), Macro.t(), Exception.t() | Diagnostic.t()) ::
           no_return()
@@ -394,6 +409,8 @@ defmodule RustQ.Meta.AST do
       :and,
       :case,
       :cast,
+      :cond,
+      :div,
       :fn,
       :for,
       :if,
@@ -412,6 +429,7 @@ defmodule RustQ.Meta.AST do
       :raw_pat!,
       :raw_stmt!,
       :raw_arm!,
+      :rem,
       :unwrap!
     ]
   end

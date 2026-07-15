@@ -770,6 +770,7 @@ defmodule RustQ.Rust.AST.Render do
   defp render_binary_op(:sub), do: "-"
   defp render_binary_op(:mul), do: "*"
   defp render_binary_op(:div), do: "/"
+  defp render_binary_op(:rem), do: "%"
   defp render_binary_op(:and), do: "&&"
   defp render_binary_op(:or), do: "||"
   defp render_binary_op(:shr), do: ">>"

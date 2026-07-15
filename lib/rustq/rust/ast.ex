@@ -641,7 +641,7 @@ defmodule RustQ.Rust.AST do
       quote(
         do: %__MODULE__{
           left: AST.expr(),
-          op: :eq | :ne | :lt | :lte | :gt | :gte | :add | :sub | :mul | :div | :and | :or,
+          op: :eq | :ne | :lt | :lte | :gt | :gte | :add | :sub | :mul | :div | :rem | :and | :or,
           right: AST.expr()
         }
       )

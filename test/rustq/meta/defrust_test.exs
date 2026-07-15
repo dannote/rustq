@@ -45,6 +45,53 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "generated_defrust.rs")
   end
 
+  test "defnif marks public entrypoints and defrustp keeps helpers private" do
+    defmodule EntrypointCase do
+      use RustQ.Meta
+
+      @spec add(integer(), integer()) :: integer()
+      defnif(add(left, right), do: add_impl(left, right))
+
+      @spec add_impl(integer(), integer()) :: integer()
+      defrustp(add_impl(left, right), do: left + right)
+    end
+
+    source = EntrypointCase.__rustq_source__()
+
+    assert source =~ "#[rustler::nif]"
+    assert source =~ "fn add(left: i64, right: i64) -> i64"
+    assert source =~ "fn add_impl(left: i64, right: i64) -> i64"
+    assert function_exported?(EntrypointCase, :add, 2)
+    refute function_exported?(EntrypointCase, :add_impl, 2)
+
+    assert_raise ErlangError, fn -> EntrypointCase.add(1, 2) end
+  end
+
+  test "defrust combines multiple clauses, head patterns, guards, and recursion" do
+    defmodule MultiClauseCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec factorial(R.i64()) :: R.i64()
+      defrust(factorial(0), do: 1)
+      defrust(factorial(value), do: value * factorial(value - 1))
+
+      @spec sign(R.i64()) :: R.i64()
+      defrust(sign(value) when value > 0, do: 1)
+      defrust(sign(0), do: 0)
+      defrust(sign(_value), do: -1)
+    end
+
+    source = MultiClauseCase.__rustq_source__()
+    assert source =~ "fn factorial(arg1: i64) -> i64"
+    assert source =~ "match arg1"
+    assert source =~ "0 => 1"
+    assert source =~ "value => value * factorial(value - 1)"
+    assert source =~ "value if value > 0 => 1"
+    assert source =~ "_value => -1"
+    assert RustQ.valid?(source, "multi_clause.rs")
+  end
+
   test "preserves no-parentheses function pointer field access in expected positions" do
     defmodule FunctionPointerFieldCase do
       use RustQ.Meta, rust_sources: ["test/fixtures/function_pointer_field.rs"]
@@ -1813,6 +1860,62 @@ defmodule RustQ.Meta.DefrustTest do
 
     source = ArithmeticCase.__rustq_source__()
     assert source =~ "x + y * 2.0 - x / 4.0"
+  end
+
+  test "defrust lowers cond, unary operators, div, and rem" do
+    defmodule CondOperatorCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec classify(R.i64()) :: R.i64()
+      defrust classify(value) do
+        cond do
+          value < 0 -> -1
+          rem(value, 2) == 0 -> div(value, 2)
+          true -> +value
+        end
+      end
+
+      @spec invert(boolean()) :: boolean()
+      defrust(invert(value), do: not value)
+    end
+
+    source = CondOperatorCase.__rustq_source__()
+    assert source =~ "if value < 0"
+    assert source =~ "value % 2 == 0"
+    assert source =~ "value / 2"
+    assert source =~ "fn invert(value: bool) -> bool"
+    assert source =~ "!value"
+    assert RustQ.valid?(source, "cond_operators.rs")
+  end
+
+  test "defrust lowers common Enum pipelines to Rust iterators" do
+    defmodule EnumPipelineCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec product([integer()]) :: integer()
+      defrust(product(values),
+        do: Enum.reduce(values, 1, fn value, product -> product * value end)
+      )
+
+      @spec positives([integer()]) :: [integer()]
+      defrust(positives(values), do: Enum.filter(values, fn value -> value > 0 end))
+
+      @spec duplicates([integer()]) :: [integer()]
+      defrust(duplicates(values), do: Enum.flat_map(values, fn value -> [value, value] end))
+
+      @spec has_positive(R.vec(R.i64())) :: boolean()
+      defrust(has_positive(values), do: Enum.any?(values, fn value -> value > 0 end))
+    end
+
+    source = EnumPipelineCase.__rustq_source__()
+    assert source =~ ".into_iter().fold(1, |product, value| product * value)"
+    assert source =~ ".filter_map(|value| if value > 0"
+    assert source =~ "Some(value)"
+    assert source =~ ".flat_map(|value| vec![value, value]).collect()"
+    assert source =~ ".into_iter().any(|value| value > 0)"
+    assert RustQ.valid?(source, "enum_pipelines.rs")
   end
 
   test "defrust lowers Elixir pipelines to Rust method, operator, and cast chains" do

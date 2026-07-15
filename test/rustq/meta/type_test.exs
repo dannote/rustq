@@ -14,6 +14,9 @@ defmodule RustQ.Meta.TypeTest do
     assert RustQ.Spec.type(quote(do: float())).rust == "f64"
     assert RustQ.Spec.type(quote(do: number())).rust == "f64"
     assert RustQ.Spec.type(quote(do: binary())).rust == "Vec<u8>"
+    assert RustQ.Spec.type(quote(do: [float()])).rust == "Vec<f64>"
+    assert RustQ.Spec.type(quote(do: list(integer()))).rust == "Vec<i64>"
+    assert RustQ.Spec.type(quote(do: nonempty_list(boolean()))).rust == "Vec<bool>"
   end
 
   test "extracts vector elements from Syn-derived type paths" do

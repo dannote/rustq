@@ -364,6 +364,7 @@ pub(crate) fn parse_binary_expr(left: Expr, op: String, right: Expr) -> NifResul
         "sub" => parse_syn::<Expr>(quote!(#left - #right)),
         "mul" => parse_syn::<Expr>(quote!(#left * #right)),
         "div" => parse_syn::<Expr>(quote!(#left / #right)),
+        "rem" => parse_syn::<Expr>(quote!(#left % #right)),
         "and" => parse_syn::<Expr>(quote!(#left && #right)),
         "or" => parse_syn::<Expr>(quote!(#left || #right)),
         "shr" => parse_syn::<Expr>(quote!(#left >> #right)),

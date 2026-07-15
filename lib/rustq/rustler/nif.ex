@@ -67,8 +67,12 @@ defmodule RustQ.Rustler.Nif do
   @spec init(module() | String.t()) :: AST.MacroItemCall.t()
   def init(module) when is_atom(module), do: init(Elixir.Atom.to_string(module))
 
-  def init(module) when is_binary(module),
-    do: A.macro_item_call([:rustler, :init], literal: module)
+  def init(module) when is_binary(module) do
+    %AST.MacroItemCall{
+      path: A.path([:rustler, :init]),
+      tokens: [%AST.Literal{value: module}]
+    }
+  end
 
   @doc "Builds a Rust struct deriving `NifStruct` for an Elixir struct module."
   @spec struct(atom() | String.t(), module() | String.t(), keyword()) :: AST.Struct.t()

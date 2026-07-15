@@ -247,7 +247,7 @@ defmodule RustQ.Meta.Lower do
     if infer_propagation?(expression, return_type, context) do
       %AST.Try{expr: lower_expr(expression, context)}
     else
-      lower_expr(expression, context)
+      lower_expr(expression, return_type, context)
     end
   end
 
@@ -306,6 +306,18 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp lower_expected_expr_context(
+         {:%{}, _, fields},
+         %Type{kind: :struct, ast: %AST.TypePath{parts: parts}} = expected_type,
+         %Context{} = context
+       )
+       when is_list(fields) do
+    %AST.StructLiteral{
+      path: %AST.Path{parts: parts},
+      fields: lower_named_fields(fields, expected_type, context)
+    }
+  end
+
+  defp lower_expected_expr_context(
          {:case, _, [expression, [do: clauses]]},
          %Type{} = expected_type,
          %Context{} = context
@@ -318,6 +330,13 @@ defmodule RustQ.Meta.Lower do
          %Context{} = context
        ),
        do: lower_if(condition, branches, %{context | position: :expr}, expected_type)
+
+  defp lower_expected_expr_context(
+         {:cond, _, [[do: clauses]]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_cond(clauses, %{context | position: :expr}, expected_type)
 
   defp lower_expected_expr_context(
          {:with, _, clauses},
@@ -530,6 +549,25 @@ defmodule RustQ.Meta.Lower do
        ),
        do: lower_enum_map(collection, mapper, context)
 
+  defp lower_expr_context(
+         {{:., _, [{:__aliases__, _, [:Enum]}, :sum]}, _, [collection]},
+         %Context{} = context
+       ),
+       do: lower_enum_terminal(collection, :sum, context)
+
+  defp lower_expr_context(
+         {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, [collection, initial, reducer]},
+         %Context{} = context
+       ),
+       do: lower_enum_reduce(collection, initial, reducer, context)
+
+  defp lower_expr_context(
+         {{:., _, [{:__aliases__, _, [:Enum]}, operation]}, _, [collection, mapper]},
+         %Context{} = context
+       )
+       when operation in [:filter, :reject, :flat_map, :each, :any?, :all?],
+       do: lower_enum_operation(operation, collection, mapper, context)
+
   defp lower_expr_context({:expr!, _, [expression]}, %Context{} = context),
     do: lower_expr(expression, context)
 
@@ -612,6 +650,21 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr_context({:/, _, [left, right]}, %Context{} = context),
     do: lower_binary_op(left, :div, right, context)
 
+  defp lower_expr_context({:-, _, [expression]}, %Context{} = context),
+    do: %AST.UnaryOp{op: :neg, expr: lower_expr(expression, context)}
+
+  defp lower_expr_context({:+, _, [expression]}, %Context{} = context),
+    do: lower_expr(expression, context)
+
+  defp lower_expr_context({:not, _, [expression]}, %Context{} = context),
+    do: %AST.UnaryOp{op: :not, expr: lower_expr(expression, context)}
+
+  defp lower_expr_context({:div, _, [left, right]}, %Context{} = context),
+    do: lower_binary_op(left, :div, right, context)
+
+  defp lower_expr_context({:rem, _, [left, right]}, %Context{} = context),
+    do: lower_binary_op(left, :rem, right, context)
+
   defp lower_expr_context({:and, _, [left, right]}, %Context{} = context),
     do: lower_binary_op(left, :and, right, context)
 
@@ -632,6 +685,9 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_expr_context({:if, _, [condition, branches]}, %Context{} = context),
     do: lower_if(condition, branches, %{context | position: :expr})
+
+  defp lower_expr_context({:cond, _, [[do: clauses]]}, %Context{} = context),
+    do: lower_cond(clauses, %{context | position: :expr})
 
   defp lower_expr_context({:case, _, [expression, [do: clauses]]}, %Context{} = context),
     do: lower_case(expression, clauses, %{context | position: :expr})
@@ -903,6 +959,52 @@ defmodule RustQ.Meta.Lower do
       then: lower_clause_body(then_body, context, expected_type),
       else: lower_clause_body(else_body, context, expected_type)
     }
+  end
+
+  defp lower_cond(clauses, %Context{} = context, expected_type \\ nil) do
+    clauses
+    |> normalize_case_clauses()
+    |> lower_cond_clauses(context, expected_type)
+  end
+
+  defp lower_cond_clauses([{:->, _, [[true], body]}], context, expected_type),
+    do: clause_expr(body, context, expected_type)
+
+  defp lower_cond_clauses([{:->, _, [[condition], body]} | rest], context, expected_type) do
+    %AST.If{
+      condition: lower_condition(condition, context),
+      then: lower_clause_body(body, context, expected_type),
+      else: [%AST.Return{expr: lower_cond_clauses(rest, context, expected_type)}]
+    }
+  end
+
+  defp lower_cond_clauses(other, _context, _expected_type) do
+    Diagnostic.lower(
+      :unsupported_cond,
+      other,
+      "unsupported defrust cond expression",
+      suggestion: "End cond with a true clause so the generated Rust expression is exhaustive."
+    )
+  end
+
+  defp clause_expr(body, context, %Type{} = expected_type) do
+    body
+    |> block_expressions()
+    |> lower_expected_value_block(context, expected_type)
+  end
+
+  defp clause_expr(body, context, _expected_type) do
+    case body |> block_expressions() |> lower_value_block(context) do
+      [%AST.Return{expr: expr}] -> expr
+      statements -> %AST.BlockExpr{body: statements}
+    end
+  end
+
+  defp lower_expected_value_block(expressions, %Context{} = context, %Type{} = expected_type) do
+    case lower_expected_block(expressions, context, expected_type) do
+      [%AST.Return{expr: expr}] -> expr
+      statements -> %AST.BlockExpr{body: statements}
+    end
   end
 
   defp lower_condition(condition, %Context{} = context),
@@ -1410,7 +1512,10 @@ defmodule RustQ.Meta.Lower do
        when is_atom(name) and is_atom(context),
        do: %AST.PatVar{name: name}
 
-  defp lower_match_pattern(atom, %Type{kind: kind}) when is_atom(atom) and kind in [:atom, :enum],
+  defp lower_match_pattern(atom, %Type{kind: :enum, rust: rust_name}) when is_atom(atom),
+    do: %AST.PatPath{path: %AST.Path{parts: [rust_name, rust_variant(atom)]}}
+
+  defp lower_match_pattern(atom, %Type{kind: :atom}) when is_atom(atom),
     do: %AST.PatAtomGuard{name: atom}
 
   defp lower_match_pattern(atom, _case_type) when is_atom(atom), do: %AST.PatAtomGuard{name: atom}
@@ -1885,6 +1990,108 @@ defmodule RustQ.Meta.Lower do
       other,
       "unsupported Enum.map mapper in defrust",
       suggestion: "Use an anonymous function mapper, e.g. Enum.map(values, fn value -> ... end)."
+    )
+  end
+
+  defp lower_enum_terminal(collection, terminal, %Context{} = context) do
+    collection
+    |> lower_expr(context)
+    |> method_chain(:into_iter)
+    |> method_chain(terminal)
+  end
+
+  defp lower_enum_reduce(
+         collection,
+         initial,
+         {:fn, _, [{:->, _, [[item, accumulator], body]}]},
+         %Context{} = context
+       ) do
+    closure = lower_closure_args([accumulator, item], body, context)
+
+    collection
+    |> lower_expr(context)
+    |> method_chain(:into_iter)
+    |> method_chain(:fold, [lower_expr(initial, context), closure])
+  end
+
+  defp lower_enum_reduce(_collection, _initial, other, %Context{}) do
+    Diagnostic.lower(
+      :unsupported_enum_reduce_reducer,
+      other,
+      "unsupported Enum.reduce reducer in defrust",
+      suggestion: "Use fn item, accumulator -> ... end as the reducer."
+    )
+  end
+
+  defp lower_enum_operation(operation, collection, mapper, %Context{} = context) do
+    collection = collection |> lower_expr(context) |> method_chain(:into_iter)
+
+    case operation do
+      :filter ->
+        lower_enum_filter_map(collection, mapper, false, context)
+
+      :reject ->
+        lower_enum_filter_map(collection, mapper, true, context)
+
+      :flat_map ->
+        collection
+        |> method_chain(:flat_map, [enum_mapper(mapper, context)])
+        |> method_chain(:collect)
+
+      :each ->
+        method_chain(collection, :for_each, [enum_mapper(mapper, context)])
+
+      :any? ->
+        method_chain(collection, :any, [enum_mapper(mapper, context)])
+
+      :all? ->
+        method_chain(collection, :all, [enum_mapper(mapper, context)])
+    end
+  end
+
+  defp lower_enum_filter_map(
+         collection,
+         {:fn, _, [{:->, _, [[argument], body]}]},
+         negate?,
+         %Context{} = context
+       ) do
+    name = closure_arg!(argument)
+    condition = lower_closure_body(body, nil, context)
+    condition = if negate?, do: %AST.UnaryOp{op: :not, expr: condition}, else: condition
+
+    closure = %AST.Closure{
+      args: [name],
+      body: %AST.If{
+        condition: condition,
+        then: [%AST.Return{expr: %AST.Some{expr: %AST.Var{name: name}}}],
+        else: [%AST.Return{expr: %AST.None{}}]
+      }
+    }
+
+    collection |> method_chain(:filter_map, [closure]) |> method_chain(:collect)
+  end
+
+  defp lower_enum_filter_map(_collection, other, _negate?, %Context{}) do
+    Diagnostic.lower(
+      :unsupported_enum_filter_predicate,
+      other,
+      "unsupported Enum filter predicate in defrust",
+      suggestion: "Use a one-argument anonymous function predicate."
+    )
+  end
+
+  defp enum_mapper({:fn, _, [{:->, _, [args, body]}]}, %Context{} = context),
+    do: lower_closure_args(args, body, context)
+
+  defp enum_mapper({:&, _, [{:/, _, [capture, 1]}]}, %Context{} = context),
+    do: lower_function_capture(capture, context)
+
+  defp enum_mapper(other, %Context{}) do
+    Diagnostic.lower(
+      :unsupported_enum_mapper,
+      other,
+      "unsupported Enum mapper or predicate in defrust",
+      suggestion: "Use an anonymous function or a named one-argument capture."
     )
   end
 

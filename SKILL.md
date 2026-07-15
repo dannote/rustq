@@ -13,13 +13,21 @@ Full guide: https://rustq.hexdocs.pm/using-rustq-well.md
 
 ## First principles
 
-1. **Write bridge behavior as Rusty-Elixir.** Prefer `defrust` functions with real `@spec`s.
+1. **Write bridge behavior as Rusty-Elixir.** Prefer `defnif` for public NIF entrypoints and `defrust`/`defrustp` helpers with real `@spec`s.
 2. **Let RustQ infer.** Do not sprinkle `unwrap!` everywhere. RustQ can infer many `?` propagations from return types, argument types, receiver types, and Rust source callable metadata.
 3. **Use Elixir metaprogramming.** Use ordinary `defmacro`, `quote`, `unquote`, pattern matching, recursion, and schema transforms.
 4. **Infer from Rust/source schemas.** Use `RustQ.Syn`, `rust_sources`, `rust_packages`, and `callable_modules` instead of hand-copying Rust APIs.
 5. **Use RustQ AST/builders for generated structure.** If a construct is missing, prefer adding RustQ support over writing a large string template.
 6. **Keep raw Rust strings tiny and local.** Macro invocations and unavoidable syntax escapes are fine; large generated functions as strings are not.
 7. **Respect the public compatibility boundary.** Use documented modules and generated accessors; do not import hidden renderer, native NIF, lowering, inference, cache, or schema-introspection modules.
+
+## Zero-handwritten-Rust target
+
+RustQ 1.0 targets `use RustQ.Native` plus `defnif` as the default starting point for ordinary bridges. RustQ should generate the crate, Rustler initialization, loader, codecs, atoms, and stubs; a simple consumer should not need a checked-in `.rs` file, `Cargo.toml`, or `rustq.exs`.
+
+Keep real policy explicit: Cargo dependencies/features, scheduler choice, resources and thread-safety, blocking or unsafe operations, lossy conversions, external adapters, and precompiled-release targets. Zero handwritten bridge Rust does not mean silently guessing those decisions.
+
+See [`guides/zero-rust-nifs.md`](guides/zero-rust-nifs.md) for the 1.0 target and supported-subset boundary.
 
 ## 1.x compatibility discipline
 

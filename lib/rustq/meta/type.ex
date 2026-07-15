@@ -562,6 +562,7 @@ defmodule RustQ.Meta.Type do
         type(:struct, path(struct_rust_name), %{
           elixir_name: name,
           rust_name: struct_rust_name,
+          representation: :struct,
           fields: fields
         })
 
@@ -571,6 +572,7 @@ defmodule RustQ.Meta.Type do
         type(:struct, %AST.TypePath{parts: [rust_name], lifetimes: field_lifetimes(fields)}, %{
           elixir_name: name,
           rust_name: rust_name,
+          representation: :map,
           fields: fields
         })
 
@@ -604,6 +606,9 @@ defmodule RustQ.Meta.Type do
 
   def parse({{:., _, [module, function]}, _, args}, aliases),
     do: parse_remote(module, function, args, aliases)
+
+  def parse([inner], aliases), do: vector_type(inner, aliases)
+  def parse([], _aliases), do: type(:vec, %AST.TypeVec{inner: path(:Term)})
 
   def parse({:{}, _, elements}, aliases) do
     tuple_types = Enum.map(elements, &parse(&1, aliases))
@@ -668,7 +673,9 @@ defmodule RustQ.Meta.Type do
   defp parse_local_type(:term, [], _aliases),
     do: type(:term, %AST.TypePath{parts: [:Term], lifetimes: [:a]})
 
-  defp parse_local_type(:binary, [], _aliases), do: type(:type, %AST.TypeVec{inner: path(:u8)})
+  defp parse_local_type(:binary, [], _aliases), do: type(:binary, %AST.TypeVec{inner: path(:u8)})
+  defp parse_local_type(:list, [inner], aliases), do: vector_type(inner, aliases)
+  defp parse_local_type(:nonempty_list, [inner], aliases), do: vector_type(inner, aliases)
   defp parse_local_type(name, args, aliases), do: parse_rust_type(name, args, aliases)
 
   defp parse_rust_type(:atom, [], _aliases), do: type(:atom, path(:Atom))
@@ -729,10 +736,7 @@ defmodule RustQ.Meta.Type do
     type(:option, %AST.TypeOption{inner: inner.ast}, %{inner: inner})
   end
 
-  defp parse_rust_type(:vec, [inner], aliases) do
-    inner = parse(inner, aliases)
-    type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
-  end
+  defp parse_rust_type(:vec, [inner], aliases), do: vector_type(inner, aliases)
 
   defp parse_rust_type(:result, [ok, error], aliases) do
     ok = parse(ok, aliases)
@@ -750,6 +754,11 @@ defmodule RustQ.Meta.Type do
       parts: [function],
       generics: Enum.map(args, &parse(&1, aliases).ast)
     })
+  end
+
+  defp vector_type(inner, aliases) do
+    inner = parse(inner, aliases)
+    type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
   end
 
   defp parse_external_type({:__aliases__, _, parts}, :t, args, aliases) do
