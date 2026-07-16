@@ -28,8 +28,7 @@ defmodule RustQ.NativeExternalTest do
 
     assert Enum.any?(items, &match?(%AST.Function{name: :env_echo}, &1))
 
-    assert %AST.Struct{derive: derive} = Enum.find(items, &match?(%AST.Struct{name: :State}, &1))
-    refute "rustler::NifMap" in derive
+    assert %AST.Struct{derive: []} = Enum.find(items, &match?(%AST.Struct{name: :State}, &1))
     assert source =~ "rustler::NifMap"
     assert source =~ "fn env_echo<'a>(env: Env<'a>, value: Term<'a>)"
     refute source =~ "rustler::init!"

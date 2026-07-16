@@ -300,7 +300,7 @@ defmodule RustQ.Native do
 
           cond do
             MapSet.member?(resource_structs, name) ->
-              [struct]
+              [%{struct | derive: []}]
 
             MapSet.member?(map_structs, name) ->
               [%{struct | derive: Enum.uniq(struct.derive ++ ["rustler::NifMap"])}]
