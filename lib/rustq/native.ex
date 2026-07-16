@@ -268,16 +268,21 @@ defmodule RustQ.Native do
       end)
 
     resource_impls =
-      Enum.map(resource_structs, fn name ->
+      resource_structs
+      |> Enum.sort()
+      |> Enum.map(fn name ->
         A.impl(T.path(name),
           trait: [:rustler, :Resource],
           attrs: [A.resource_impl_attr()]
         )
       end)
 
-    items ++
-      Enum.flat_map(tuple_enums, fn {_name, type} -> union_codec_items(type) end) ++
-      resource_impls
+    union_codecs =
+      tuple_enums
+      |> Enum.sort_by(fn {name, _type} -> name end)
+      |> Enum.flat_map(fn {_name, type} -> union_codec_items(type) end)
+
+    items ++ union_codecs ++ resource_impls
   end
 
   defp prepare_native_function(%AST.Function{name: name} = function, generated_decoders) do

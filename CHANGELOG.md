@@ -2,13 +2,22 @@
 
 ## Unreleased
 
+## v1.0.0-rc.1 - 2026-07-15
+
 - Define the RustQ 1.x compatibility contract and ship the policy with the
   package, HexDocs, and agent skill.
-- Validate documented public APIs, package contents, checked generation, and
-  native compilation through an external consumer fixture.
-- Target zero-handwritten-Rust NIFs with `RustQ.Native`, `defnif`, private
-  `defrustp` helpers, derived boundaries, and a broader idiomatic Elixir
-  lowering surface before the first release candidate.
+- Add `RustQ.Native`, public `defnif`, private `defrustp`, generated Cargo
+  crates, native loading, Cargo dependency metadata, and dirty-scheduler
+  normalization for zero-handwritten-bridge-Rust NIFs.
+- Derive directional Rustler boundaries for scalars, strings, binaries, tuples,
+  lists, options, tagged results, typed maps, Elixir structs and exceptions,
+  structural unions, unit enums, and explicitly declared resources.
+- Expand Rusty-Elixir lowering with multiple clauses, recursion, list/map/struct
+  patterns, guards, comprehensions, common `Enum` forms, ranges, membership,
+  and structural slice-pattern AST support.
+- Validate documented public APIs, package contents, checked generation, and a
+  formatted, Clippy-clean zero-Rust native crate through external consumer
+  fixtures containing no checked-in Rust or Cargo files.
 
 ## v0.11.1 - 2026-07-14
 

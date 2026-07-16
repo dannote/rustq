@@ -16,6 +16,8 @@ arguments, return values, options, and examples are part of the 1.x contract.
 This includes the documented surfaces under:
 
 - `RustQ`, `RustQ.Config`, `RustQ.Generated`, and template/splice APIs
+- `RustQ.Native`, including documented `defnif`/`defrustp` behavior and native
+  options
 - `RustQ.Meta`, `RustQ.Meta.AST`, `RustQ.Meta.Type`, `RustQ.Spec`,
   `RustQ.Type`, and documented `RustQ.Binding` metadata modules
 - `RustQ.Rust` and the documented `RustQ.Rust.AST` nodes and builders

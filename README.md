@@ -17,14 +17,16 @@ typed macro metalanguage for generating real Rust safely.
 
 ## Installation
 
-Add RustQ to `mix.exs`:
+For `RustQ.Native` modules that compile in every release environment, add:
 
 ```elixir
-{:rustq, "~> 0.11.0", only: [:dev, :test], runtime: false}
+{:rustq, "~> 1.0.0-rc.1", runtime: false}
 ```
 
-RustQ compiles a Rustler NIF at generation time, so Rust/Cargo must be available
-where `mix rustq.gen` or your own codegen task runs.
+Projects that only run checked-in generators during development may keep RustQ
+under `only: [:dev, :test]`. RustQ compiles a Rustler NIF at generation time,
+so Rust/Cargo must be available where native modules, `mix rustq.gen`, or custom
+codegen tasks compile.
 
 ## Agent skill included
 
