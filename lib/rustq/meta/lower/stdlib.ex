@@ -17,7 +17,8 @@ defmodule RustQ.Meta.Lower.Stdlib do
       :lower_closure_body,
       :lower_capture,
       :closure_arg,
-      :type_of
+      :type_of,
+      :expected
     ]
 
     @type t :: %__MODULE__{
@@ -28,7 +29,8 @@ defmodule RustQ.Meta.Lower.Stdlib do
             lower_closure_body: (Macro.t(), term() -> term()),
             lower_capture: (Macro.t() -> term()),
             closure_arg: (Macro.t() -> atom()),
-            type_of: (Macro.t() -> term())
+            type_of: (Macro.t() -> term()),
+            expected: Type.t() | nil
           }
   end
 

@@ -10,7 +10,7 @@ fn increment(value: u32) -> u32 {
     value + 1
 }
 fn increment_all(values: Vec<u32>) -> Vec<u32> {
-    values.into_iter().map(increment).collect()
+    values.into_iter().map(increment).collect::<Vec<u32>>()
 }
 struct Input<'a> {
     value: Term<'a>,

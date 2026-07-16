@@ -41,6 +41,17 @@ defmodule RustQ.Meta.Core.Call do
           source: Macro.t()
         }
 
+  @spec pipe_remote(Macro.t(), Macro.t()) :: {:ok, Macro.t()} | :unsupported
+  def pipe_remote(
+        left,
+        {{:., _dot_meta, [{:__aliases__, _, _parts}, _function]} = target, meta, args}
+      )
+      when is_list(args) do
+    {:ok, {target, meta, [left | args]}}
+  end
+
+  def pipe_remote(_left, _right), do: :unsupported
+
   @spec normalize(Macro.t()) :: {:ok, t()} | :unsupported
   def normalize({{:., _, [{:__aliases__, _, parts}, function]}, meta, args} = source)
       when is_list(parts) and is_atom(function) and is_list(args) do

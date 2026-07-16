@@ -16,6 +16,7 @@ defmodule RustQZeroRustConsumer.NativeTest do
     assert Native.squares([2, 3, 4]) == [4, 9, 16]
     assert Native.positives([-2, 0, 3, 5]) == [3, 5]
     assert Native.total([10, 20, 12]) == 42
+    assert Native.positive_square_sum([-3, 0, 2, 4]) == 20
   end
 
   test "derives map, struct, enum, union, exception, and resource codecs" do

@@ -18,6 +18,9 @@
   preferred `@nif schedule: :dirty_cpu | :dirty_io` spelling.
 - Replace the README reference manual with a focused project overview and move
   template, AST, splice, metadata, and validation details into a generation guide.
+- Lower supported remote calls in Elixir pipelines and carry expected collection
+  types through materialized Enum stages, preserving eager semantics while
+  avoiding ambiguous Rust `collect()` inference.
 
 ## v1.0.0-rc.1 - 2026-07-16
 

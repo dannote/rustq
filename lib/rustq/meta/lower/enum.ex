@@ -30,10 +30,10 @@ defmodule RustQ.Meta.Lower.Enum do
       do: {:ok, lower_operation(operation, collection, mapper, context)}
 
   def lower(%Call{function: :count, args: [collection]}, %Context{} = context),
-    do: {:ok, collection |> context.lower.() |> method_chain(:len) |> cast_i64()}
+    do: {:ok, collection |> lower_collection(context) |> method_chain(:len) |> cast_i64()}
 
   def lower(%Call{function: :count, args: [collection, predicate]}, %Context{} = context) do
-    iterator = collection |> context.lower.() |> method_chain(:into_iter)
+    iterator = collection |> lower_collection(context) |> method_chain(:into_iter)
     {:ok, iterator |> lower_filter_map(predicate, false, context, :count) |> cast_i64()}
   end
 
@@ -41,7 +41,7 @@ defmodule RustQ.Meta.Lower.Enum do
     do:
       {:ok,
        collection
-       |> context.lower.()
+       |> lower_collection(context)
        |> method_chain(:into_iter)
        |> method_chain(:next)
        |> method_chain(:is_none)}
@@ -50,18 +50,18 @@ defmodule RustQ.Meta.Lower.Enum do
     do:
       {:ok,
        %AST.MethodCall{
-         receiver: context.lower.(collection),
+         receiver: lower_collection(collection, context),
          method: :contains,
          args: [%AST.Ref{expr: context.lower.(value)}]
        }}
 
   def lower(%Call{function: :find, args: [collection, predicate]}, %Context{} = context) do
-    iterator = collection |> context.lower.() |> method_chain(:into_iter)
+    iterator = collection |> lower_collection(context) |> method_chain(:into_iter)
     {:ok, lower_filter_map(iterator, predicate, false, context, :find_map)}
   end
 
   def lower(%Call{function: :find, args: [collection, default, predicate]}, %Context{} = context) do
-    iterator = collection |> context.lower.() |> method_chain(:into_iter)
+    iterator = collection |> lower_collection(context) |> method_chain(:into_iter)
 
     {:ok,
      iterator
@@ -274,18 +274,18 @@ defmodule RustQ.Meta.Lower.Enum do
 
   defp lower_map(collection, {:fn, _, [{:->, _, [args, body]}]}, context) do
     collection
-    |> context.lower.()
+    |> lower_collection(context)
     |> method_chain(:into_iter)
     |> method_chain(:map, [context.lower_closure.(args, body)])
-    |> method_chain(:collect)
+    |> collect(context)
   end
 
   defp lower_map(collection, {:&, _, [{:/, _, [capture, 1]}]}, context) do
     collection
-    |> context.lower.()
+    |> lower_collection(context)
     |> method_chain(:into_iter)
     |> method_chain(:map, [context.lower_capture.(capture)])
-    |> method_chain(:collect)
+    |> collect(context)
   end
 
   defp lower_map(_collection, other, _context) do
@@ -299,7 +299,7 @@ defmodule RustQ.Meta.Lower.Enum do
 
   defp terminal(collection, terminal, context) do
     collection
-    |> context.lower.()
+    |> lower_collection(context)
     |> method_chain(:into_iter)
     |> method_chain(terminal)
   end
@@ -313,7 +313,7 @@ defmodule RustQ.Meta.Lower.Enum do
     closure = context.lower_closure.([accumulator, item], body)
 
     collection
-    |> context.lower.()
+    |> lower_collection(context)
     |> method_chain(:into_iter)
     |> method_chain(:fold, [context.lower.(initial), closure])
   end
@@ -328,7 +328,7 @@ defmodule RustQ.Meta.Lower.Enum do
   end
 
   defp lower_operation(operation, collection, mapper, context) do
-    collection = collection |> context.lower.() |> method_chain(:into_iter)
+    collection = collection |> lower_collection(context) |> method_chain(:into_iter)
 
     case operation do
       :filter ->
@@ -338,7 +338,7 @@ defmodule RustQ.Meta.Lower.Enum do
         lower_filter_map(collection, mapper, true, context)
 
       :flat_map ->
-        collection |> method_chain(:flat_map, [mapper(mapper, context)]) |> method_chain(:collect)
+        collection |> method_chain(:flat_map, [mapper(mapper, context)]) |> collect(context)
 
       :each ->
         method_chain(collection, :for_each, [mapper(mapper, context)])
@@ -377,7 +377,11 @@ defmodule RustQ.Meta.Lower.Enum do
     if terminal == :find_map do
       method_chain(collection, :find_map, [closure])
     else
-      collection |> method_chain(:filter_map, [closure]) |> method_chain(terminal)
+      filtered = method_chain(collection, :filter_map, [closure])
+
+      if terminal == :collect,
+        do: collect(filtered, context),
+        else: method_chain(filtered, terminal)
     end
   end
 
@@ -432,6 +436,19 @@ defmodule RustQ.Meta.Lower.Enum do
 
   defp type_result(%Type{} = type), do: {:ok, type}
   defp type_result(_type), do: :unsupported
+
+  defp lower_collection(collection, context) do
+    case context.type_of.(collection) do
+      %Type{kind: :vec} = type -> context.lower_expected.(collection, type)
+      _unknown -> context.lower.(collection)
+    end
+  end
+
+  defp collect(receiver, %Context{expected: %Type{kind: :vec, ast: type}}) do
+    %AST.MethodCall{receiver: receiver, method: :collect, args: [], generics: [type]}
+  end
+
+  defp collect(receiver, %Context{}), do: method_chain(receiver, :collect)
 
   defp cast_i64(expression),
     do: %AST.Cast{expr: expression, type: %AST.TypePath{parts: [:i64]}}

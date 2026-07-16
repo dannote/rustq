@@ -2,6 +2,7 @@ defmodule RustQ.Meta.Typing do
   @moduledoc false
 
   alias RustQ.Binding.Index, as: BindingIndex
+  alias RustQ.Meta.Core.Call
   alias RustQ.Meta.Inference
   alias RustQ.Meta.Lower
   alias RustQ.Meta.Lower.Stdlib
@@ -101,6 +102,13 @@ defmodule RustQ.Meta.Typing do
     case synth(expression, env) do
       %Type{} = type -> Type.inner(type)
       nil -> nil
+    end
+  end
+
+  def synth({:|>, _meta, [left, right]}, %Env{} = env) do
+    case Call.pipe_remote(left, right) do
+      {:ok, call} -> synth(call, env)
+      :unsupported -> nil
     end
   end
 

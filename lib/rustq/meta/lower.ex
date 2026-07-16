@@ -3,6 +3,7 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
+  alias RustQ.Meta.Core.Call
   alias RustQ.Meta.Lower.Stdlib
   alias RustQ.Meta.Lower.Stdlib.Context, as: StdlibContext
   alias RustQ.Meta.Pattern
@@ -486,6 +487,25 @@ defmodule RustQ.Meta.Lower do
     tuple
     |> Tuple.to_list()
     |> lower_expected_tuple(types, context)
+  end
+
+  defp lower_expected_expr_context(
+         {:|>, _, [left, right]},
+         %Type{} = expected_type,
+         %Context{} = context
+       ),
+       do: lower_pipe(left, right, expected_type, context)
+
+  defp lower_expected_expr_context(
+         {{:., _, [receiver = {:__aliases__, _, [module]}, function]}, _, args} = call,
+         %Type{} = expected_type,
+         %Context{} = context
+       )
+       when module in [:Kernel, :Enum, :List, :Map, :String, :Tuple, :Range] do
+    case Stdlib.lower(call, stdlib_context(context, expected_type)) do
+      {:ok, lowered} -> lowered
+      :unsupported -> lower_remote_or_method_call(receiver, function, args, context)
+    end
   end
 
   defp lower_expected_expr_context(expression, %Type{} = expected_type, %Context{} = context) do
@@ -2097,8 +2117,15 @@ defmodule RustQ.Meta.Lower do
 
   defp decode_receiver_expected_type(_type), do: nil
 
-  defp lower_pipe(left, right, %Context{} = context) do
-    lower_pipe_call(lower_expr(left, context), right, context)
+  defp lower_pipe(left, right, %Context{} = context),
+    do: lower_pipe(left, right, nil, context)
+
+  defp lower_pipe(left, right, expected_type, %Context{} = context) do
+    case Call.pipe_remote(left, right) do
+      {:ok, call} when is_struct(expected_type, Type) -> lower_expr(call, expected_type, context)
+      {:ok, call} -> lower_expr(call, context)
+      :unsupported -> lower_pipe_call(lower_expr(left, context), right, context)
+    end
   end
 
   defp lower_pipe_call(receiver, {:cast, _, [type]}, %Context{}),
@@ -2139,7 +2166,7 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
-  defp stdlib_context(%Context{} = context) do
+  defp stdlib_context(%Context{} = context, expected \\ nil) do
     %StdlibContext{
       lower: &lower_expr(&1, context),
       lower_expected: &lower_expr(&1, &2, context),
@@ -2148,7 +2175,8 @@ defmodule RustQ.Meta.Lower do
       lower_closure_body: &lower_closure_body(&1, &2, context),
       lower_capture: &lower_function_capture(&1, context),
       closure_arg: &closure_arg!/1,
-      type_of: &Typing.synth(&1, typing_env(context))
+      type_of: &Typing.synth(&1, typing_env(context)),
+      expected: expected
     }
   end
 

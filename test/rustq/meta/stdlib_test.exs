@@ -14,17 +14,36 @@ defmodule RustQ.Meta.StdlibTest do
 
     assert {:ok, %Call{module: Kernel, function: :byte_size, args: [_value]}} =
              Call.normalize(quote(do: byte_size(value)))
+
+    assert {:ok, piped} =
+             Call.pipe_remote(
+               quote(do: values),
+               quote(do: Enum.map(fn value -> value * 2 end))
+             )
+
+    assert {:ok, %Call{module: Enum, function: :map, args: [_values, _mapper]}} =
+             Call.normalize(piped)
   end
 
   test "stdlib modules synthesize collection result types" do
     integer = RustQ.Spec.type(quote(do: integer()))
     values = Type.vec(integer)
-    env = Typing.env(vars: %{values: values})
+    env = Typing.env(vars: %{initial: integer, values: values})
 
     assert %Type{kind: :i64} = Typing.synth(quote(do: Enum.count(values)), env)
 
     assert %Type{kind: :option, meta: %{inner: %Type{kind: :i64}}} =
              Typing.synth(quote(do: List.first(values)), env)
+
+    assert %Type{kind: :i64} =
+             Typing.synth(
+               quote do
+                 values
+                 |> Enum.map(fn value -> value * value end)
+                 |> Enum.reduce(initial, fn value, total -> value + total end)
+               end,
+               env
+             )
   end
 
   test "lowers Enum reverse through the stdlib dispatcher" do

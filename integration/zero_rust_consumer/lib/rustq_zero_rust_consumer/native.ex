@@ -90,6 +90,14 @@ defmodule RustQZeroRustConsumer.Native do
   @spec total([integer()]) :: integer()
   defnif(total(values), do: Enum.reduce(values, 0, fn value, total -> value + total end))
 
+  @spec positive_square_sum([integer()]) :: integer()
+  defnif positive_square_sum(values) do
+    values
+    |> Enum.filter(fn value -> value > 0 end)
+    |> Enum.map(fn value -> value * value end)
+    |> Enum.reduce(0, fn value, total -> value + total end)
+  end
+
   @spec translate(coordinates(), float(), float()) :: coordinates()
   defnif translate(point, dx, dy) do
     %{x: point.x + dx, y: point.y + dy}

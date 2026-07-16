@@ -1903,7 +1903,7 @@ defmodule RustQ.Meta.DefrustTest do
     assert RustQ.valid?(source, "cond_operators.rs")
   end
 
-  test "defrust lowers common Enum pipelines to Rust iterators" do
+  test "defrust lowers common Enum operations to Rust iterators" do
     defmodule EnumPipelineCase do
       use RustQ.Meta
       alias RustQ.Type, as: R
@@ -1927,9 +1927,55 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ ".into_iter().fold(1, |product, value| product * value)"
     assert source =~ ".filter_map(|value| if value > 0"
     assert source =~ "Some(value)"
-    assert source =~ ".flat_map(|value| vec![value, value]).collect()"
+    assert source =~ ".flat_map(|value| vec![value, value]).collect::<Vec<i64>>()"
     assert source =~ ".into_iter().any(|value| value > 0)"
     assert RustQ.valid?(source, "enum_pipelines.rs")
+  end
+
+  test "defrust lowers supported remote calls in Elixir pipelines" do
+    defmodule RemotePipelineCase do
+      use RustQ.Meta
+
+      @spec positive_square_sum([integer()]) :: integer()
+      defrust positive_square_sum(values) do
+        values
+        |> Enum.filter(fn value -> value > 0 end)
+        |> Enum.map(fn value -> value * value end)
+        # credo:disable-for-next-line ExSlop.Check.Refactor.ExplicitSumReduce
+        |> Enum.reduce(0, fn value, total -> value + total end)
+      end
+
+      @spec count_positive([integer()]) :: integer()
+      defrust count_positive(values) do
+        values
+        |> Enum.filter(fn value -> value > 0 end)
+        # credo:disable-for-next-line Credo.Check.Refactor.FilterCount
+        |> Enum.count()
+      end
+
+      @spec has_square([integer()], integer()) :: boolean()
+      defrust has_square(values, expected) do
+        values
+        |> Enum.map(fn value -> value * value end)
+        |> Enum.any?(fn value -> value == expected end)
+      end
+
+      @spec first_or([integer()], integer()) :: integer()
+      defrust(first_or(values, default), do: values |> List.first(default))
+
+      @spec trimmed(String.t()) :: String.t()
+      defrust(trimmed(value), do: value |> String.trim())
+    end
+
+    source = RemotePipelineCase.__rustq_source__()
+
+    assert source =~ ".filter_map(|value| if value > 0"
+    assert source =~ ~r/filter_map.*collect::<Vec<i64>>.*\.map.*collect::<Vec<i64>>.*\.fold/s
+    assert source =~ ~r/filter_map.*collect::<Vec<i64>>.*\.len\(\) as i64/s
+    assert source =~ ~r/\.map.*collect::<Vec<i64>>.*\.any/s
+    assert source =~ ".into_iter().next().unwrap_or(default)"
+    assert source =~ ".trim().to_string()"
+    assert RustQ.valid?(source, "remote_pipelines.rs")
   end
 
   test "defrust lowers Elixir pipelines to Rust method, operator, and cast chains" do
