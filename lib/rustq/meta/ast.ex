@@ -16,12 +16,16 @@ defmodule RustQ.Meta.AST do
 
   require A
 
+  @doc "Returns all generated `defrust` function AST nodes from a compiled module."
+  @spec functions(module()) :: [AST.Function.t()]
+  def functions(module) when is_atom(module), do: module.__rustq_asts__()
+
   @doc "Returns one generated `defrust` function AST by name, raising when absent."
   @spec function!(module(), atom() | String.t()) :: AST.Function.t()
   def function!(module, name) when is_atom(module) do
     name = Identifier.atom!(to_string(name))
 
-    Enum.find(module.__rustq_asts__(), &(&1.name == name)) ||
+    Enum.find(functions(module), &(&1.name == name)) ||
       raise ArgumentError, "#{inspect(module)} has no defrust function named #{name}"
   end
 

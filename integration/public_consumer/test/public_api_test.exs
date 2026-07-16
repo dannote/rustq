@@ -11,6 +11,9 @@ defmodule RustQPublicConsumer.PublicAPITest do
     assert Rust.render(constant) =~ "pub const VALUE: u32 = 7;"
     assert {:ok, _template} = RustQ.parse("fn public_consumer() {}", "consumer.rs")
 
+    assert [%AST.Function{name: :increment}, %AST.Function{name: :increment_all}] =
+             MetaAST.functions(RustQPublicConsumer.Generated)
+
     assert %AST.Function{name: :increment} =
              MetaAST.function!(RustQPublicConsumer.Generated, :increment)
 

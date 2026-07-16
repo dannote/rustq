@@ -488,6 +488,11 @@ node, or helper.
 
 ## RustQ AST for generated structure
 
+Generators that need structural `defrust` function metadata should use
+`RustQ.Meta.AST.functions/1` for all compiled functions or
+`RustQ.Meta.AST.function!/2` for a named function. Do not call the hidden
+`__rustq_asts__/0` accessor directly.
+
 Use builders for declarations and data-shaped Rust generation:
 
 ```elixir

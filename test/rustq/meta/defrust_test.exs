@@ -1757,8 +1757,10 @@ defmodule RustQ.Meta.DefrustTest do
   end
 
   test "Meta returns rendered items" do
+    functions = MetaAST.functions(RustQ.Meta.GeneratedCase)
     item = MetaAST.function!(RustQ.Meta.GeneratedCase, :draw_save)
 
+    assert Enum.any?(functions, &(&1.name == :draw_save))
     assert RustQ.Rust.to_fragment(item) =~ "fn draw_save"
 
     assert_raise ArgumentError, fn ->

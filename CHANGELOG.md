@@ -22,6 +22,8 @@
   arity.
 - Add packaged `RustQ.Test` ExUnit assertions for focused `defrust` source,
   `defnif` exports/attributes, and generated Rust validity.
+- Expose all compiled `defrust` function AST nodes through the documented
+  `RustQ.Meta.AST.functions/1` generator boundary.
 - Validate documented public APIs, package contents, checked generation, and a
   formatted, Clippy-clean zero-Rust native crate through structured external
   consumer fixtures containing no checked-in Rust or Cargo files.
