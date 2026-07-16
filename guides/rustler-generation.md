@@ -1,69 +1,20 @@
 # Generating Rustler Boundaries
 
-RustQ can generate repetitive Rustler boundary code while keeping implementation
-logic in ordinary Rust. Use structural manifests and Rust source metadata rather
-than duplicating signatures across Rust and Elixir.
+This guide is for existing Rustler crates whose domain implementation remains in
+Rust. For a new ordinary NIF, start with
+[`RustQ.Native` and `defnif`](zero-rust-nifs.md) instead; they derive the crate,
+wrapper, codecs, stubs, initialization, build, and loading together.
 
-## Atom registries
+Use the helpers below when an existing crate intentionally keeps Cargo and
+runtime ownership but wants structural generation for repetitive Rustler glue.
+For generator architecture and checked output, also read
+[Designing RustQ Generators](designing-generators.md) and
+[Generating Rust](generating-rust.md).
 
-Discover atom calls structurally with `RustQ.Syn.atom_references!/1`, then emit
-the registry with `RustQ.Rustler.Atom.declaration/2`. The scanner recognizes calls in
-ordinary expressions and Rust macro token trees.
+## Keep one signature source
 
-```elixir
-atoms =
-  "native/my_nif/src/*.rs"
-  |> Path.wildcard()
-  |> Enum.flat_map(fn path -> path |> File.read!() |> RustQ.Syn.atom_references!() end)
-  |> Enum.uniq()
-  |> Enum.sort()
-
-rust "native/my_nif/src/generated_atoms.rs" do
-  RustQ.Rustler.Atom.declaration(atoms)
-end
-```
-
-Exclude generated files from discovery. If another manifest introduces atom
-keys, derive those keys directly from that manifest so generation reaches a
-stable result in one pass.
-
-## Struct term encoders
-
-`term_encoder/2` generates a `rustler::Encoder` implementation backed by RustQ
-AST. Simple fields are atoms; `{key, field}` renames the atom key.
-
-```elixir
-RustQ.Rustler.Term.encoder(:EncodedLocation,
-  fields: [:start, {:end_, :end}, :line]
-)
-```
-
-Lifetime-bearing adapters use `:target_lifetimes`:
-
-```elixir
-RustQ.Rustler.Term.encoder(:EncodedError,
-  target_lifetimes: [:_],
-  fields: [:message, code: [when_some: true, via: :as_str]]
-)
-```
-
-Field metadata supports structural transformations:
-
-- `field: [:result, :code]` — nested field path
-- `via: :as_str` — zero-argument method before encoding
-- `with: :encode_value` — helper called as `encode_value(env, &value)`
-- `borrow: false` — pass the helper value without adding `&`
-- `when_some: true` — omit the map entry when the option is `None`
-- `optional: [wrap: :EncodedValue]` — encode `Some` through an adapter and `None` as nil
-- `map: [wrap: :EncodedValue]` — map a collection into encoded terms
-- `map: [convert: :EncodedValue]` — map through `EncodedValue::from`
-- `fallback: [field: [:result, :code], via: :as_str]` — generate `unwrap_or`
-
-These are typed operations, not raw Rust expression strings.
-
-## One NIF manifest for Rust and Elixir
-
-Keep NIF bodies as handwritten implementation functions with an `_impl` suffix:
+A handwritten crate can keep domain implementation functions with an `_impl`
+suffix:
 
 ```rust
 fn parse_nif_impl<'a>(env: Env<'a>, source: &str) -> NifResult<Term<'a>> {
@@ -71,7 +22,7 @@ fn parse_nif_impl<'a>(env: Env<'a>, source: &str) -> NifResult<Term<'a>> {
 }
 ```
 
-Declare boundary policy once:
+Declare only export policy in Elixir:
 
 ```elixir
 nifs = [
@@ -87,36 +38,122 @@ rust "native/my_nif/src/generated_nifs.rs" do
   )
 end
 
-generate "lib/my_app/generated_nif_stubs.ex" do
+generate "lib/my_app/native/generated_stubs.ex" do
   content(
     RustQ.Rustler.Nif.stubs_from_source(
       "native/my_nif/src/lib.rs",
       nifs,
-      MyApp.GeneratedNifStubs
+      MyApp.Native.GeneratedStubs
     )
   )
 end
 ```
 
-The Rust wrapper signatures come from `RustQ.Syn`; they are not repeated in the
-manifest. Elixir stub arities use the same signatures and structurally exclude
-Rustler's injected `Env` argument.
+`RustQ.Syn` reads arguments, returns, lifetimes, and Rustler's injected `Env`
+from the Rust source. The same metadata drives Rust wrappers and Elixir stub
+arities, so the export manifest does not repeat signatures.
 
-Retain human-facing specs in the native module and install generated stubs once:
+Keep human-facing `@spec`s in the runtime module and install the generated stubs
+once:
 
 ```elixir
 defmodule MyApp.Native do
   @spec parse_nif(String.t()) :: {:ok, map()} | {:error, term()}
 
-  use MyApp.GeneratedNifStubs
+  use MyApp.Native.GeneratedStubs
 end
 ```
 
-Run both generation and compiler checks in CI:
+If the implementation itself can be expressed cleanly as Rusty-Elixir, prefer
+`defnif` rather than retaining an `_impl` wrapper merely for appearance.
+
+## Atom registries
+
+Discover atom calls structurally and emit one registry:
 
 ```elixir
-lint: [
+atoms =
+  "native/my_nif/src/*.rs"
+  |> Path.wildcard()
+  |> Enum.flat_map(fn path ->
+    path |> File.read!() |> RustQ.Syn.atom_references!()
+  end)
+  |> Enum.uniq()
+  |> Enum.sort()
+
+rust "native/my_nif/src/generated_atoms.rs" do
+  RustQ.Rustler.Atom.declaration(atoms)
+end
+```
+
+Exclude generated files from discovery. When a schema or manifest introduces
+additional keys, derive those keys from that same source so generation reaches a
+stable result in one pass. Do not maintain a second handwritten atom registry.
+
+## Term encoders
+
+`RustQ.Rustler.Term.encoder/2` creates a structural `rustler::Encoder`
+implementation. Simple fields are atoms; `{key, field}` renames a key:
+
+```elixir
+RustQ.Rustler.Term.encoder(:EncodedLocation,
+  fields: [:start, {:end_, :end}, :line]
+)
+```
+
+Lifetime-bearing adapters can declare target lifetimes and structural field
+transformations:
+
+```elixir
+RustQ.Rustler.Term.encoder(:EncodedError,
+  target_lifetimes: [:_],
+  fields: [
+    :message,
+    code: [when_some: true, via: :as_str]
+  ]
+)
+```
+
+Common field operations include:
+
+- `field: [:result, :code]` — nested field path
+- `via: :as_str` — zero-argument method before encoding
+- `with: :encode_value` — helper called with the environment and value
+- `borrow: false` — pass a helper value without adding `&`
+- `when_some: true` — omit the entry when an option is `None`
+- `optional: [wrap: :EncodedValue]` — wrap `Some`, encode `None` as nil
+- `map: [wrap: :EncodedValue]` — wrap collection elements
+- `map: [convert: :EncodedValue]` — map through `From`
+- `fallback: [...]` — generate a structural fallback chain
+
+These options represent typed operations. If a transformation becomes domain
+logic, move it to a named Rust or Rusty-Elixir helper rather than embedding raw
+expressions in field metadata.
+
+## Resources, options, and schemas
+
+`RustQ.Rustler.Resource`, `RustQ.Rustler.Opts`, and
+`RustQ.Rustler.Schema` provide structural generation for larger existing
+surfaces. Use them when a schema is already the source of truth. Do not add a
+schema DSL solely to avoid writing a small, clear `@type` used by
+`RustQ.Native`.
+
+Prefer one structural owner for fields and variants. Rust declarations, term
+codecs, atom keys, and dispatchers should be projections of that owner rather
+than parallel tables.
+
+## CI
+
+Check generated output and both language toolchains:
+
+```elixir
+ci: [
   "rustq.gen --check",
-  "compile --warnings-as-errors"
+  "compile --warnings-as-errors",
+  "test"
 ]
 ```
+
+Also run `cargo fmt --check`, `cargo check`, and `cargo clippy -- -D warnings`
+for every generated native crate. Generated-source freshness alone does not
+prove that imported Rust metadata and wrappers still compile together.

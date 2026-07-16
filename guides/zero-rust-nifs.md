@@ -1,73 +1,105 @@
 # Zero-handwritten-Rust NIFs
 
-RustQ 1.0 targets a zero-handwritten-bridge-Rust workflow for ordinary NIFs.
-The implementation and boundary are authored in Elixir; RustQ generates,
-builds, and loads the Rust crate.
-
-The intended starting point is:
+`RustQ.Native` generates, builds, and loads a Rustler crate from typed
+Rusty-Elixir. It is the default starting point when RustQ should own an ordinary
+NIF boundary.
 
 ```elixir
 defmodule MyApp.Native do
-  use RustQ.Native
+  use RustQ.Native, crates: [crc32fast: "1"]
 
-  @spec sum([float()]) :: float()
-  defnif sum(values) do
-    Enum.sum(values)
-  end
+  alias RustQ.Type, as: R
+
+  @spec checksum(String.t()) :: R.u32()
+  defnif checksum(value), do: Crc32fast.hash(value.as_bytes())
 end
 ```
 
-`defnif` declares a public BEAM↔Rust entrypoint. `defrust` remains the form for
-generated Rust helpers, and `defrustp` declares private generated helpers.
-Ordinary Elixir macros remain the preferred way to generate or reuse all three.
+The module above needs no checked-in `.rs` file, `Cargo.toml`, NIF registry,
+Elixir stub module, or loader. RustQ generates those pieces under the Mix build
+directory and keeps the generated crate available for inspection.
 
-## Scheduling
+For authoring conventions and inference, read
+[Using RustQ Well](using-rustq-well.md). This guide focuses on crate ownership
+and the NIF boundary.
 
-A `defnif` runs on the normal BEAM scheduler unless you explicitly mark it as
-dirty. Put `@nif` immediately before the entrypoint that needs a different
-scheduler:
+## Public entrypoints and helpers
+
+Use each function form for one responsibility:
+
+- `defnif` — public BEAM↔Rust entrypoint
+- `defrust` — generated public Rust helper
+- `defrustp` — generated private Rust helper
+
+All three use real `@spec`s. Ordinary Elixir macros are the preferred way to
+reuse Rusty-Elixir source.
 
 ```elixir
-@nif schedule: :dirty_cpu
-@spec resize_image(binary()) :: binary()
-defnif resize_image(image), do: resize_impl(image)
+@spec add(integer(), integer()) :: integer()
+defnif add(left, right), do: add_impl(left, right)
 
-@nif schedule: :dirty_io
-@spec read_device(String.t()) :: binary()
-defnif read_device(path), do: read_device_impl(path)
+@spec add_impl(integer(), integer()) :: integer()
+defrustp add_impl(left, right), do: left + right
 ```
-
-Use `:dirty_cpu` for long-running CPU-bound native work and `:dirty_io` for
-native work that may block on IO. Do not mark short NIFs dirty by default.
-RustQ renders these values as Rustler's `"DirtyCpu"` and `"DirtyIo"` schedule
-options. Explicit Rustler strings are also accepted, but the atoms are the
-preferred public spelling.
-
-`@nif` applies only to the declaration immediately following it. Scheduler
-choice is intentional native policy: RustQ does not infer it from the function
-body or return type.
 
 ## What RustQ owns
 
-For a zero-Rust native module, RustQ owns:
+For a normal `RustQ.Native` module, RustQ owns:
 
-- the generated Cargo package and Rust source
-- Rustler NIF attributes and initialization
-- Elixir stubs and native-library loading
+- the generated Cargo package and source
+- declared Cargo dependencies
+- Rustler attributes and initialization
+- Elixir exports and native loading
 - directional argument and return codecs
-- atom and structural type declarations
-- incremental native compilation and generated-source inspection
+- generated atoms, structural types, and resources
+- native compilation and installation into the application
 
-The simple path does not require `rustq.exs`, a checked-in `Cargo.toml`, or a
-checked-in `.rs` file. Generated crates are formatted before compilation and
-are available under the Mix build directory for inspection. The existing
-manifest and structural generator APIs remain available for advanced
-multi-target generators and existing crates.
+Use `crates:` when generated code calls an external crate:
 
-Boundary derivation covers scalar values, strings, binaries, tuples, lists,
-options, tagged results, typed maps, Elixir structs and exceptions, structural
-unions, unit enums, and explicitly declared resources. A generated resource can
-be declared without bridge Rust by wrapping a structural state type:
+```elixir
+use RustQ.Native,
+  crates: [
+    crc32fast: "1",
+    serde_json: [version: "1", features: ["preserve_order"]]
+  ]
+```
+
+RustQ derives Rust module aliases from crate names. Cargo versions and features
+remain explicit because they are release policy, not inference.
+
+## Boundary types
+
+RustQ derives directional codecs from `@spec` and `@type`. Supported boundary
+families include:
+
+- integers, floats, booleans, atoms, strings, and binaries
+- tuples and homogeneous lists
+- options and tagged results
+- typed maps and Elixir structs
+- unit enums and structural unions
+- Elixir exceptions
+- explicitly declared resources
+
+Elixir-facing, Rust-internal, NIF-input, and NIF-output representations are
+related but not assumed identical. For example, an Elixir binary can decode as a
+borrowed Rustler binary, be used internally as bytes, and encode from owned
+bytes.
+
+A structural map type can own the codec for a NIF value:
+
+```elixir
+@type point :: %{required(:x) => float(), required(:y) => float()}
+
+@spec scale(point(), float()) :: point()
+defnif scale(point, factor) do
+  %{x: point.x * factor, y: point.y * factor}
+end
+```
+
+## Resources
+
+Wrap a structural state type with `R.resource/1` to derive registration and the
+`ResourceArc` boundary:
 
 ```elixir
 @type counter_state :: %{required(:value) => integer()}
@@ -80,33 +112,44 @@ defnif new_counter(value), do: %{value: value}
 defnif counter_value(counter), do: counter.value
 ```
 
-Resource mutation, synchronization, and thread-safety remain explicit policy;
-`R.resource/1` only derives registration and the `ResourceArc` boundary.
+`R.resource/1` does not choose mutation, synchronization, ownership, or thread
+safety. Those decisions remain explicit and may require a deliberately designed
+state type or nearby handwritten Rust.
 
-Function-head guards and `case` `when` guards lower through the same typed
-expression path as ordinary Rusty-Elixir conditions. Comparisons, boolean
-operators, arithmetic guard expressions, and supported typed calls therefore
-work for both `defrust` and `defnif`; unsupported semantics produce a lowering
-diagnostic rather than being dropped.
+## Scheduling
 
-Consumer tests can use the packaged ExUnit helpers:
+A `defnif` uses the normal BEAM scheduler by default. Mark only entrypoints that
+need dirty scheduling:
 
 ```elixir
-use RustQ.Test, async: true
+@nif schedule: :dirty_cpu
+@spec resize_image(binary()) :: binary()
+defnif resize_image(image), do: resize_impl(image)
 
-assert_defrust MyApp.Native, :sum_impl, "fn sum_impl"
-assert_defnif MyApp.Native, :sum, 1, ~r/fn sum.*Vec<f64>/
-assert_rust_valid MyApp.Native
+@nif schedule: :dirty_io
+@spec read_device(String.t()) :: binary()
+defnif read_device(path), do: read_device_impl(path)
 ```
+
+Use `:dirty_cpu` for long-running CPU-bound work and `:dirty_io` for native work
+that may block on IO. The attribute applies only to the declaration immediately
+following it. RustQ renders the Rustler `"DirtyCpu"` and `"DirtyIo"` options;
+those strings are accepted directly, but atoms are the preferred spelling.
+
+RustQ does not infer scheduling from a function body. Short NIFs should normally
+stay on the normal scheduler.
 
 ## Existing and precompiled crates
 
-`RustQ.Native` can prepare inferred ABI items without taking ownership of an
-existing crate's Cargo build, loader, or `rustler::init!`:
+An existing crate can keep Cargo, initialization, loading, and release ownership
+while RustQ prepares ABI items:
 
 ```elixir
 defmodule MyApp.NativeItems do
-  use RustQ.Native, build: false, load: false
+  use RustQ.Native,
+    build: false,
+    load: false,
+    rust_sources: ["native/my_app/src/lib.rs"]
 
   alias RustQ.Type, as: R
 
@@ -115,85 +158,59 @@ defmodule MyApp.NativeItems do
 end
 ```
 
-Use `RustQ.Native.items/1` to splice the prepared functions and codecs into the
-external crate. `nif_env/0` injects a Rustler `Env<'a>` argument into generated
-Rust while preserving the authored public BEAM arity; callers never pass the
-environment themselves. This mode is appropriate for source-built or
-precompiled domain crates that retain their own Rustler loader policy.
+`RustQ.Native.items/1` returns the prepared functions, codecs, and resource
+items for the owning crate to splice. `RustQ.Native.source/1` returns the same
+prepared source when an external system needs text.
 
-## What remains explicit
+`nif_env/0` injects `Env<'a>` into generated Rust without adding an argument to
+the public BEAM function. Use this mode for source-built or precompiled domain
+crates that should not depend on RustQ in production.
 
-Minimal configuration does not mean guessing about safety or deployment.
-Consumers still own genuine policy such as:
+## Supported Rusty-Elixir
 
-- Cargo dependency versions, features, paths, and Git sources
-- dirty CPU or dirty IO scheduling
-- resource ownership, mutation, and thread-safety
-- blocking operations, unsafe operations, and platform linking
-- lossy conversions and custom external-type or error adapters
-- precompiled artifact targets and release hosting
+`defnif` and `defrust` share the same lowering surface. It includes multiple
+clauses, patterns, guards, recursion, `case`, conditionals, `with`,
+comprehensions, closures, pipelines, ordinary macro expansion, and a
+semantics-preserving subset of Kernel, Enum, List, typed Map, String, Tuple, and
+Range operations.
 
-## 1.0 lowering target
+The subset is intentionally semantic, not name-based. RustQ rejects operations
+that cannot preserve Elixir behavior instead of silently choosing a similar
+Rust method. Dynamic or descending ranges, unrestricted dynamic maps,
+grapheme-counting `String.length/1`, process semantics, full protocols, async
+Rust, IO/network/process APIs, and the complete bitstring grammar remain
+explicit adapters or Rust boundaries.
 
-The 1.0 Rusty-Elixir surface includes enough ordinary Elixir to implement and
-compose a representative native bridge:
+See [Using RustQ Well](using-rustq-well.md) for the authoring ladder and
+inference rules. The API reference for `RustQ.Meta` documents individual forms.
 
-- multiple clauses, function-head patterns and guards, and recursion
-- `case`, `if`, `unless`, `cond`, `with`, and comprehensions
-- tuple, atom, option/result, list, map, and struct values and patterns
-- common arithmetic, comparison, boolean, range, and membership operators
-- common `Enum` mapping, filtering, reducing, searching, and predicate forms
-- closures, named captures, pipelines, and ordinary Elixir macro expansion
-- typespec-derived scalar, string, binary, list, tuple, map, struct, union,
-  exception, and resource boundaries
+## Testing
 
-Standard-library calls are normalized and dispatched through hidden, focused
-Kernel, Enum, List, Map, String, Tuple, and Range lowerers. The 1.0 subset
-currently includes:
+Use the packaged assertions instead of searching build directories:
 
-- Kernel arithmetic, comparisons, booleans, `div`, `rem`, `abs`, integer
-  `min`/`max`, `byte_size`, tuple access/update/size, ascending literal ranges,
-  and membership
-- Enum mapping, filtering, rejecting, flat-mapping, reducing, summing,
-  counting, predicates, membership, finding, concatenation, zip/unzip,
-  integer sorting, reversal, and non-negative take/drop
-- List first/last (with optional defaults), static wrapping/duplication, and
-  statically nested flattening
-- typed map/struct lookup, presence checks, and field replacement
-- String prefix, suffix, substring, trim, replacement, duplication, and UTF-8
-  validity operations
-- homogeneous `Tuple.to_list/1`
+```elixir
+use RustQ.Test, async: true
 
-These lowerers own their call-specific type synthesis as well as Rust AST
-emission. RustQ rejects or leaves explicit any call whose Elixir semantics
-cannot be preserved. In particular, descending/dynamic ranges, negative dynamic
-Enum take/drop counts, heterogeneous tuple-to-list conversion, dynamic maps,
-and grapheme-counting `String.length/1` do not silently become similar-looking
-Rust operations.
-
-RustQ does not promise full BEAM semantics in generated Rust. Process
-mailboxes, supervision, dynamic code loading, unrestricted exceptions, every
-protocol or standard-library function, async Rust, and the complete bitstring
-grammar are not 1.0 requirements. `Stream`, `Regex`, `URI`, calendar, filesystem,
-IO, networking, and process APIs remain explicit Rust or adapter boundaries.
-
-## Compiler boundary
-
-RustQ treats Elixir types, internal Rust values, and NIF ABI values as related
-but distinct representations. For example, an Elixir `binary()` may decode as
-a borrowed Rustler binary, be used internally as a byte slice, and encode from
-an owned byte vector.
-
-The compilation pipeline is therefore semantic rather than textual:
-
-```text
-expanded Elixir AST and typespecs
-  -> Rusty-Elixir core representation
-  -> type, effect, ownership, and borrowing inference
-  -> directional boundary codec derivation
-  -> RustQ Rust AST
-  -> generated crate, Cargo build, and NIF loading
+assert_defrust MyApp.Native, :add_impl, "fn add_impl"
+assert_defnif MyApp.Native, :add, 2, ~r/fn add/
+assert_rust_valid MyApp.Native
 ```
 
-Raw Rust remains an explicit escape hatch, not a prerequisite for starting a
-binding.
+`assert_defnif/4` verifies the Elixir export, generated Rustler attribute, and
+focused generated source. `assert_rust_valid/1` asks RustQ's native parser to
+validate the complete generated module.
+
+## Explicit policy checklist
+
+Before shipping a native module, review:
+
+- dependency versions and Cargo features
+- scheduler choice and blocking behavior
+- resource ownership and thread safety
+- unsafe operations
+- lossy conversions and custom adapters
+- platform linking
+- precompiled targets and artifact hosting
+
+Zero handwritten bridge Rust means RustQ derives repetitive structure. It does
+not mean RustQ guesses safety or deployment decisions.

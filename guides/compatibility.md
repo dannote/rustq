@@ -1,7 +1,12 @@
 # RustQ 1.x compatibility policy
 
-This document defines the compatibility contract RustQ adopts with `1.0.0`.
-The `1.0.0-rc` release line validates this contract before the stable release.
+This document defines RustQ's 1.x compatibility contract. The `1.0.0-rc`
+release line validates it before the stable release.
+
+This is a stability policy, not an authoring guide. Start with
+[Using RustQ Well](using-rustq-well.md),
+[Zero-handwritten-Rust NIFs](zero-rust-nifs.md), or
+[Generating Rust](generating-rust.md) for usage.
 
 RustQ connects three surfaces: Elixir authoring APIs, structural RustQ AST, and
 generated Rust. Compatibility has to describe all three rather than treating a
@@ -26,7 +31,9 @@ This includes the documented surfaces under:
 - `RustQ.Syn`, `RustQ.Cargo`, and documented native metadata values
 - `RustQ.Diagnostic` data and the documented Reach checks
 - generated `RustQ.Meta` accessors documented by `RustQ.Meta`, including
-  `__rustq_items__/0`, `__rustq_source__/0`, and `__rustq_type_items__/0`
+  `__rustq_items__/0`, `__rustq_source__/0`, and `__rustq_type_items__/0`; for
+  structural function metadata, prefer `RustQ.Meta.AST.functions/1` and
+  `function!/2`
 
 A module is not public merely because it is compiled into the package or can be
 addressed by name. Modules with `@moduledoc false`, functions with `@doc false`,
@@ -37,7 +44,8 @@ NIF implementation, lowerer, inference engine, or cache implementation.
 
 `SKILL.md` is part of the shipped compatibility documentation. Agents and
 maintainers should follow its public/private boundary and authoring ladder just
-as they follow the API reference.
+as they follow the API reference. Guides may be reorganized and clarified in
+patch releases; documented public behavior remains governed by this policy.
 
 ## Semantic versioning
 

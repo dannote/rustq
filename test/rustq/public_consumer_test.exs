@@ -14,6 +14,7 @@ defmodule RustQ.PublicConsumerTest do
   test "the Hex artifact ships its public compatibility contract", %{package: package} do
     assert File.regular?(Path.join(package, "SKILL.md"))
     assert File.regular?(Path.join(package, "guides/compatibility.md"))
+    assert File.regular?(Path.join(package, "guides/generating-rust.md"))
     assert File.regular?(Path.join(package, "guides/zero-rust-nifs.md"))
     assert File.regular?(Path.join(package, "lib/rustq/test.ex"))
   end

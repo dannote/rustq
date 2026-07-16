@@ -16,6 +16,8 @@
   metadata, and lower complete bound lists through structural `TypeImplTrait`.
 - Document `defnif` normal, dirty CPU, and dirty IO scheduler policy and the
   preferred `@nif schedule: :dirty_cpu | :dirty_io` spelling.
+- Replace the README reference manual with a focused project overview and move
+  template, AST, splice, metadata, and validation details into a generation guide.
 
 ## v1.0.0-rc.1 - 2026-07-16
 

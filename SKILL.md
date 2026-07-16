@@ -497,7 +497,9 @@ Read these in HexDocs/source when working with RustQ:
 - `RustQ.Binding.Callable`, `RustQ.Binding.Source`, `RustQ.Binding.Index` — callable metadata/inference inputs
 - `RustQ.Rustler` and `RustQ.Rustler.Schema` — Rustler helper generation
 - `lib/rustq/meta/` — internal lowering and inference implementation
-- `guides/using-rustq-well.md` — expanded guide with examples
+- `guides/using-rustq-well.md` — canonical authoring and inference practices
+- `guides/zero-rust-nifs.md` — `RustQ.Native`, boundaries, resources, and scheduling
+- `guides/generating-rust.md` — checked files, templates, AST, splices, and validation
 
 ## Verification
 
