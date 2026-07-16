@@ -39,6 +39,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_SLICE: &str = "Elixir.RustQ.Rust.AST.TypeSlice";
     pub(crate) const TYPE_ARRAY: &str = "Elixir.RustQ.Rust.AST.TypeArray";
     pub(crate) const TYPE_TUPLE: &str = "Elixir.RustQ.Rust.AST.TypeTuple";
+    pub(crate) const TYPE_BARE_FN: &str = "Elixir.RustQ.Rust.AST.TypeBareFn";
     pub(crate) const TYPE_RAW: &str = "Elixir.RustQ.Rust.AST.TypeRaw";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
@@ -302,6 +303,7 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         ast_modules::TYPE_SLICE => decode_type_slice(term),
         ast_modules::TYPE_ARRAY => decode_type_array(term),
         ast_modules::TYPE_TUPLE => decode_type_tuple(term),
+        ast_modules::TYPE_BARE_FN => decode_type_bare_fn(term),
         ast_modules::TYPE_RAW => decode_type_raw(term),
         ast_modules::TYPE_UNIT => decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
@@ -616,6 +618,24 @@ pub(crate) fn decode_type_slice<'a>(term: Term<'a>) -> NifResult<Type> {
 
 pub(crate) fn decode_type_array<'a>(term: Term<'a>) -> NifResult<Type> {
     super::parse_type_array(required_type(term, "inner")?, required_field(term, "size")?)
+}
+
+pub(crate) fn decode_type_bare_fn<'a>(term: Term<'a>) -> NifResult<Type> {
+    let abi_term = required_field(term, "abi")?;
+    let abi = if is_nil(abi_term)? {
+        None
+    } else {
+        Some(abi_term.decode::<String>()?)
+    };
+    super::parse_type_bare_fn(
+        required_type_list(term, "args")?,
+        super::decode_optional_type_field(term, "returns")?,
+        decode_lifetime_list(required_field(term, "lifetimes")?)?,
+        required_field(term, "unsafe")?.decode::<bool>()?,
+        required_field(term, "external")?.decode::<bool>()?,
+        abi,
+        required_field(term, "variadic")?.decode::<bool>()?,
+    )
 }
 
 pub(crate) fn decode_type_tuple<'a>(term: Term<'a>) -> NifResult<Type> {

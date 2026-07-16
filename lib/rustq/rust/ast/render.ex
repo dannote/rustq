@@ -82,6 +82,7 @@ defmodule RustQ.Rust.AST.Render do
     Tuple,
     TypeAlias,
     TypeArray,
+    TypeBareFn,
     TypeNifResult,
     TypeOption,
     TypePath,
@@ -467,6 +468,38 @@ defmodule RustQ.Rust.AST.Render do
 
     ["(", Elixir.Enum.intersperse(rendered, ", "), trailing_comma, ")"]
   end
+
+  def render_type(%TypeBareFn{} = type) do
+    lifetimes =
+      if type.lifetimes == [],
+        do: "",
+        else: [
+          "for<",
+          type.lifetimes
+          |> Elixir.Enum.map(&render_bound_lifetime/1)
+          |> Elixir.Enum.intersperse(", "),
+          "> "
+        ]
+
+    unsafe = if type.unsafe, do: "unsafe ", else: ""
+
+    external =
+      cond do
+        type.external and type.abi -> ["extern ", inspect(type.abi), " "]
+        type.external -> "extern "
+        true -> ""
+      end
+
+    args = Elixir.Enum.map(type.args, &render_type/1)
+    args = if type.variadic, do: args ++ ["..."], else: args
+    returns = if type.returns, do: [" -> ", render_type(type.returns)], else: ""
+
+    [lifetimes, unsafe, external, "fn(", Elixir.Enum.intersperse(args, ", "), ")", returns]
+  end
+
+  defp render_bound_lifetime(lifetime) when is_atom(lifetime), do: ["'", to_string(lifetime)]
+  defp render_bound_lifetime("'" <> _rest = lifetime), do: lifetime
+  defp render_bound_lifetime(lifetime) when is_binary(lifetime), do: ["'", lifetime]
 
   def render_stmt(%Let{} = stmt) do
     mut = if stmt.mutable, do: "mut ", else: ""

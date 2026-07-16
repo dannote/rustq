@@ -264,6 +264,35 @@ defmodule RustQ.Meta.TypeTest do
 
     assert %Type{kind: :type, rust: "Self", ast: %AST.TypePath{parts: [:Self]}} =
              Type.from_syn(%SynType.Self{code: "Self"})
+
+    assert %Type{
+             kind: :fn,
+             rust: ~s|for<'a> unsafe extern "C" fn(&'a u8, ...) -> bool|,
+             ast: %AST.TypeBareFn{
+               lifetimes: ["'a"],
+               unsafe: true,
+               external: true,
+               abi: "C",
+               variadic: true
+             }
+           } =
+             Type.from_syn(%SynType.Fn{
+               code: ~s|for<'a> unsafe extern "C" fn(value: &'a u8, ...) -> bool|,
+               lifetimes: ["'a"],
+               unsafe: true,
+               external: true,
+               abi: "C",
+               variadic: true,
+               arg_names: ["value"],
+               args: [
+                 %SynType.Ref{
+                   code: "&'a u8",
+                   lifetime: "'a",
+                   inner: %SynType.Path{code: "u8", name: "u8", segments: ["u8"]}
+                 }
+               ],
+               returns: %SynType.Path{code: "bool", name: "bool", segments: ["bool"]}
+             })
   end
 
   test "Spec exposes Syn type conversion" do

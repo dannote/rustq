@@ -57,6 +57,20 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert render_type(T.array(:u8, 4)) == "[u8; 4]"
   end
 
+  test "builds qualified bare function type nodes" do
+    type =
+      T.bare_fn([T.ref(:u8, lifetime: :a)],
+        returns: :bool,
+        lifetimes: [:a],
+        unsafe: true,
+        external: true,
+        abi: "C",
+        variadic: true
+      )
+
+    assert Rust.render_type(type) == ~s|for<'a> unsafe extern "C" fn(&'a u8, ...) -> bool|
+  end
+
   test "splits Rust path strings into type and expression path parts" do
     assert %TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
     assert Rust.render_type(T.path("paint::Cap")) == "paint::Cap"

@@ -459,11 +459,31 @@ defmodule RustQ.Meta.Type do
     type(:array, ast, %{inner: inner, length: length})
   end
 
-  def from_syn(%SynType.Fn{code: code, args: args, returns: returns}) do
-    args = Enum.map(args, &from_syn/1)
-    returns = if is_nil(returns), do: nil, else: from_syn(returns)
+  def from_syn(%SynType.Fn{} = function) do
+    args = Enum.map(function.args, &from_syn/1)
+    returns = if is_nil(function.returns), do: nil, else: from_syn(function.returns)
 
-    type(:fn, %AST.TypeRaw{source: code}, %{args: args, returns: returns})
+    ast = %AST.TypeBareFn{
+      args: Enum.map(args, & &1.ast),
+      returns: returns && returns.ast,
+      lifetimes: function.lifetimes,
+      unsafe: function.unsafe,
+      external: function.external,
+      abi: function.abi,
+      variadic: function.variadic
+    }
+
+    type(:fn, ast, %{
+      args: args,
+      arg_names: function.arg_names,
+      returns: returns,
+      lifetimes: function.lifetimes,
+      unsafe: function.unsafe,
+      external: function.external,
+      abi: function.abi,
+      variadic: function.variadic,
+      variadic_name: function.variadic_name
+    })
   end
 
   def from_syn(%SynType.Self{}), do: type(:type, %AST.TypePath{parts: [:Self]})

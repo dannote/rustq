@@ -35,6 +35,7 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def type({:vec, inner}), do: vec(inner)
   def type({:slice, inner}), do: slice(inner)
   def type({:array, inner, size}), do: array(inner, size)
+  def type({:bare_fn, args, opts}), do: bare_fn(args, opts)
 
   def type({:tuple, values}), do: tuple(values)
 
@@ -67,6 +68,18 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def array(inner, size), do: %AST.TypeArray{inner: type(inner), size: size}
   def tuple([]), do: raise(ArgumentError, "empty tuple types must use unit/0")
   def tuple(items) when is_list(items), do: %AST.TypeTuple{items: Enum.map(items, &type/1)}
+
+  def bare_fn(args, opts \\ []) when is_list(args) and is_list(opts) do
+    %AST.TypeBareFn{
+      args: Enum.map(args, &type/1),
+      returns: opts |> Keyword.get(:returns) |> then(&if(&1, do: type(&1))),
+      lifetimes: Keyword.get(opts, :lifetimes, []),
+      unsafe: Keyword.get(opts, :unsafe, false),
+      external: Keyword.get(opts, :external, false),
+      abi: Keyword.get(opts, :abi),
+      variadic: Keyword.get(opts, :variadic, false)
+    }
+  end
 
   def ref(inner, opts \\ []),
     do: %AST.TypeRef{inner: type(inner), lifetime: Keyword.get(opts, :lifetime)}

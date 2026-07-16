@@ -72,6 +72,28 @@ defmodule RustQ.Codegen.Decoders.Type do
     Super.parse_type_array(required_type(term, "inner"), required_field(term, "size"))
   end
 
+  @spec decode_type_bare_fn(term()) :: R.nif_result(R.path(:Type))
+  defrust decode_type_bare_fn(term) do
+    abi_term = required_field(term, "abi")
+
+    abi =
+      if is_nil(abi_term) do
+        nil
+      else
+        some(decode_as!(abi_term, String.t()))
+      end
+
+    Super.parse_type_bare_fn(
+      required_type_list(term, "args"),
+      Super.decode_optional_type_field(term, "returns"),
+      decode_lifetime_list(required_field(term, "lifetimes")),
+      required_field(term, "unsafe").decode(),
+      required_field(term, "external").decode(),
+      abi,
+      required_field(term, "variadic").decode()
+    )
+  end
+
   @spec decode_type_tuple(term()) :: R.nif_result(R.path(:Type))
   defrust decode_type_tuple(term) do
     Super.parse_type_tuple(required_type_list(term, "items"))

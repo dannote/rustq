@@ -454,11 +454,42 @@ fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
         Type::BareFn(function) => (
             "fn",
             code,
-            function
-                .inputs
-                .iter()
-                .map(|arg| type_metadata(env, &arg.ty))
-                .collect::<Vec<_>>(),
+            (
+                function
+                    .lifetimes
+                    .as_ref()
+                    .map(|bound| {
+                        bound
+                            .lifetimes
+                            .iter()
+                            .map(|param| param.to_token_stream().to_string())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default(),
+                function.unsafety.is_some(),
+                function.abi.is_some(),
+                function
+                    .abi
+                    .as_ref()
+                    .and_then(|abi| abi.name.as_ref().map(|name| name.value())),
+            ),
+            (
+                function
+                    .inputs
+                    .iter()
+                    .map(|arg| type_metadata(env, &arg.ty))
+                    .collect::<Vec<_>>(),
+                function
+                    .inputs
+                    .iter()
+                    .map(|arg| arg.name.as_ref().map(|(name, _colon)| name.to_string()))
+                    .collect::<Vec<_>>(),
+                function.variadic.is_some(),
+                function
+                    .variadic
+                    .as_ref()
+                    .and_then(|arg| arg.name.as_ref().map(|(name, _colon)| name.to_string())),
+            ),
             match &function.output {
                 ReturnType::Default => None,
                 ReturnType::Type(_arrow, ty) => Some(type_metadata(env, ty)),

@@ -87,6 +87,7 @@ defmodule RustQ.Rust.AST do
     Tuple,
     TypeAlias,
     TypeArray,
+    TypeBareFn,
     TypeNifResult,
     TypeOption,
     TypePath,
@@ -181,6 +182,7 @@ defmodule RustQ.Rust.AST do
           | TypeSlice.t()
           | TypeArray.t()
           | TypeTuple.t()
+          | TypeBareFn.t()
           | RustQ.Rust.AST.TypeRaw.t()
           | TypeUnit.t()
 
@@ -437,6 +439,32 @@ defmodule RustQ.Rust.AST do
   )
 
   defnode(TypeTuple, :type, [items: []], type: quote(do: %__MODULE__{items: [AST.type()]}))
+
+  defnode(
+    TypeBareFn,
+    :type,
+    [
+      args: [],
+      returns: nil,
+      lifetimes: [],
+      unsafe: false,
+      external: false,
+      abi: nil,
+      variadic: false
+    ],
+    type:
+      quote(
+        do: %__MODULE__{
+          args: [AST.type()],
+          returns: AST.type() | nil,
+          lifetimes: [atom() | String.t()],
+          unsafe: boolean(),
+          external: boolean(),
+          abi: String.t() | nil,
+          variadic: boolean()
+        }
+      )
+  )
 
   defnode(TypeRaw, :type, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
@@ -742,6 +770,7 @@ defmodule RustQ.Rust.AST do
       TypeSlice,
       TypeArray,
       TypeTuple,
+      TypeBareFn,
       TypeRaw,
       TypeUnit,
       Let,

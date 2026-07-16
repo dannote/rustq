@@ -8,6 +8,8 @@
   instead of raw rendered type strings.
 - Preserve imported Rust reference lifetimes and fixed-array lengths, lowering
   them through structural `TypeRef`, `TypeArray`, and `TypePath` nodes.
+- Add structural bare-function types with bound lifetimes, unsafe and ABI
+  qualifiers, named input metadata, variadics, and return types.
 
 ## v1.0.0-rc.1 - 2026-07-16
 

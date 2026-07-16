@@ -250,6 +250,20 @@ defmodule RustQ.ASTSamples do
   def sample_for(:type_tuple),
     do: type_sample(:type_tuple, %AST.TypeTuple{items: [A.type_path(:u8), A.type_path(:u16)]})
 
+  def sample_for(:type_bare_fn) do
+    type_sample(
+      :type_bare_fn,
+      %AST.TypeBareFn{
+        args: [%AST.TypeRef{inner: A.type_path(:u8), lifetime: :a}],
+        returns: A.type_path(:bool),
+        lifetimes: [:a],
+        unsafe: true,
+        external: true,
+        abi: "C"
+      }
+    )
+  end
+
   def sample_for(:type_raw),
     do: type_sample(:type_raw, %AST.TypeRaw{source: "std::marker::PhantomData<&'a ()>"})
 

@@ -1,4 +1,4 @@
-use quote::quote;
+use quote::{quote, ToTokens};
 use rustler::NifResult;
 use syn::Type;
 
@@ -40,6 +40,59 @@ pub(crate) fn parse_type_tuple(items: Vec<Type>) -> NifResult<Type> {
     } else {
         parse_syn(quote!((#(#items,)*)))
     }
+}
+
+pub(crate) fn parse_type_bare_fn(
+    args: Vec<Type>,
+    returns: Option<Type>,
+    lifetimes: Vec<String>,
+    unsafe_: bool,
+    external: bool,
+    abi: Option<String>,
+    variadic: bool,
+) -> NifResult<Type> {
+    let lifetimes = if lifetimes.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "for<{}> ",
+            lifetimes
+                .into_iter()
+                .map(|lifetime| {
+                    if lifetime.starts_with('\'') {
+                        lifetime
+                    } else {
+                        format!("'{lifetime}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+    let unsafe_ = if unsafe_ { "unsafe " } else { "" };
+    let external = match (external, abi) {
+        (true, Some(abi)) => format!("extern {abi:?} "),
+        (true, None) => "extern ".to_string(),
+        (false, _) => String::new(),
+    };
+    let mut args = args
+        .into_iter()
+        .map(|arg| arg.to_token_stream().to_string())
+        .collect::<Vec<_>>();
+
+    if variadic {
+        args.push("...".to_string());
+    }
+
+    let returns = returns
+        .map(|returns| format!(" -> {}", returns.to_token_stream()))
+        .unwrap_or_default();
+    let source = format!(
+        "{lifetimes}{unsafe_}{external}fn({}){returns}",
+        args.join(", ")
+    );
+
+    syn::parse_str::<Type>(&source).map_err(|_| rustler::Error::BadArg)
 }
 
 pub(crate) fn parse_type_array(inner: Type, size: rustler::Term) -> NifResult<Type> {

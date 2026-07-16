@@ -229,6 +229,38 @@ defmodule RustQ.Syn.MetadataTest do
              "fn borrow(values: &'a mut [u8; N]) -> &'a [u8; 4]"
   end
 
+  test "preserves qualified bare function type metadata" do
+    source = """
+    pub fn install(callback: for<'a> unsafe extern "C" fn(value: &'a u8, count: usize, ...) -> bool) {}
+    """
+
+    assert [
+             %Syn.Function{
+               signature_ast: signature,
+               args: [
+                 %Arg{
+                   type_ast: %Type.Fn{
+                     lifetimes: ["'a"],
+                     unsafe: true,
+                     external: true,
+                     abi: "C",
+                     arg_names: ["value", "count"],
+                     variadic: true,
+                     args: [
+                       %Type.Ref{lifetime: "'a", inner: %Type.Path{name: "u8"}},
+                       %Type.Path{name: "usize"}
+                     ],
+                     returns: %Type.Path{name: "bool"}
+                   }
+                 }
+               ]
+             }
+           ] = source |> Syn.parse!() |> Syn.functions()
+
+    assert Signature.render(signature) ==
+             ~s|fn install(callback: for<'a> unsafe extern "C" fn(value: &'a u8, count: usize, ...) -> bool)|
+  end
+
   test "returns variants for a named enum" do
     source = """
     enum Hidden { A, B }

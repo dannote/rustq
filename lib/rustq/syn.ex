@@ -178,12 +178,30 @@ defmodule RustQ.Syn do
 
     defmodule Fn do
       @moduledoc "Rust bare function pointer type metadata."
-      defstruct [:code, args: [], returns: nil]
+      defstruct [
+        :code,
+        :abi,
+        :variadic_name,
+        args: [],
+        arg_names: [],
+        returns: nil,
+        lifetimes: [],
+        unsafe: false,
+        external: false,
+        variadic: false
+      ]
 
       @type t :: %__MODULE__{
               code: String.t(),
               args: [RustQ.Syn.type()],
-              returns: RustQ.Syn.type() | nil
+              arg_names: [String.t() | nil],
+              returns: RustQ.Syn.type() | nil,
+              lifetimes: [String.t()],
+              unsafe: boolean(),
+              external: boolean(),
+              abi: String.t() | nil,
+              variadic: boolean(),
+              variadic_name: String.t() | nil
             }
     end
 
@@ -404,8 +422,49 @@ defmodule RustQ.Syn do
          do: "[#{render_type(inner)}; #{length}]"
 
     defp render_type(%RustQ.Syn.Type.Array{code: code}), do: code
+
+    defp render_type(%RustQ.Syn.Type.Fn{} = type), do: render_bare_fn(type)
+
     defp render_type(%RustQ.Syn.Type.Self{}), do: "Self"
     defp render_type(%RustQ.Syn.Type.Raw{code: code}), do: code
+
+    defp render_bare_fn(type) do
+      prefix = render_bare_fn_prefix(type)
+      args = type |> render_bare_fn_args() |> Elixir.Enum.join(", ")
+      returns = if type.returns, do: " -> #{render_type(type.returns)}", else: ""
+      "#{prefix}fn(#{args})#{returns}"
+    end
+
+    defp render_bare_fn_prefix(type) do
+      lifetimes =
+        if type.lifetimes == [], do: "", else: "for<#{Elixir.Enum.join(type.lifetimes, ", ")}> "
+
+      unsafe = if type.unsafe, do: "unsafe ", else: ""
+
+      external =
+        cond do
+          type.external and type.abi -> "extern #{inspect(type.abi)} "
+          type.external -> "extern "
+          true -> ""
+        end
+
+      "#{lifetimes}#{unsafe}#{external}"
+    end
+
+    defp render_bare_fn_args(type) do
+      arg_names = type.arg_names ++ List.duplicate(nil, length(type.args))
+
+      args =
+        type.args
+        |> Elixir.Enum.zip(arg_names)
+        |> Elixir.Enum.map(fn
+          {arg, nil} -> render_type(arg)
+          {arg, name} -> "#{name}: #{render_type(arg)}"
+        end)
+
+      variadic = if type.variadic_name, do: "#{type.variadic_name}: ...", else: "..."
+      if type.variadic, do: args ++ [variadic], else: args
+    end
 
     defp render_reference(lifetime, mutable, inner) do
       lifetime = if lifetime, do: "#{lifetime} ", else: ""
@@ -910,10 +969,23 @@ defmodule RustQ.Syn do
 
   defp decode_type!({"self", code}), do: %RustQ.Syn.Type.Self{code: code}
 
-  defp decode_type!({"fn", code, args, returns}) do
+  defp decode_type!({
+         "fn",
+         code,
+         {lifetimes, unsafe, external, abi},
+         {args, arg_names, variadic, variadic_name},
+         returns
+       }) do
     %RustQ.Syn.Type.Fn{
       code: code,
+      lifetimes: lifetimes,
+      unsafe: unsafe,
+      external: external,
+      abi: abi,
       args: Elixir.Enum.map(args, &decode_type!/1),
+      arg_names: arg_names,
+      variadic: variadic,
+      variadic_name: variadic_name,
       returns: if(is_nil(returns), do: nil, else: decode_type!(returns))
     }
   end

@@ -120,6 +120,7 @@ defmodule RustQ.Codegen.Dispatch do
               :type_vec,
               :type_slice,
               :type_array,
+              :type_bare_fn,
               :type_tuple,
               :type_raw
             ],
