@@ -73,6 +73,28 @@ assert_defnif MyApp.Native, :sum, 1, ~r/fn sum.*Vec<f64>/
 assert_rust_valid MyApp.Native
 ```
 
+## Existing and precompiled crates
+
+`RustQ.Native` can prepare inferred ABI items without taking ownership of an
+existing crate's Cargo build, loader, or `rustler::init!`:
+
+```elixir
+defmodule MyApp.NativeItems do
+  use RustQ.Native, build: false, load: false
+
+  alias RustQ.Type, as: R
+
+  @spec decode(term()) :: R.nif_result(term())
+  defnif decode(value), do: decode_impl(nif_env(), value)
+end
+```
+
+Use `RustQ.Native.items/1` to splice the prepared functions and codecs into the
+external crate. `nif_env/0` injects a Rustler `Env<'a>` argument into generated
+Rust while preserving the authored public BEAM arity; callers never pass the
+environment themselves. This mode is appropriate for source-built or
+precompiled domain crates that retain their own Rustler loader policy.
+
 ## What remains explicit
 
 Minimal configuration does not mean guessing about safety or deployment.

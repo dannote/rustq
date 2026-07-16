@@ -62,6 +62,14 @@ defmodule RustQ.Meta.Typing do
     |> then(&Map.get(vars, &1))
   end
 
+  def synth({:nif_env, _meta, []}, %Env{}) do
+    %Type{
+      kind: :path,
+      rust: "Env<'a>",
+      ast: %AST.TypePath{parts: [:Env], lifetimes: [:a]}
+    }
+  end
+
   def synth({:cast, _meta, [_expression, type_ast]}, %Env{}) do
     RustQ.Spec.type(type_ast)
   end

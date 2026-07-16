@@ -29,6 +29,13 @@ Keep real policy explicit: Cargo dependencies/features, scheduler choice, resour
 
 See [`guides/zero-rust-nifs.md`](guides/zero-rust-nifs.md) for the 1.0 target and supported-subset boundary.
 
+For an existing source-built or precompiled crate, use
+`RustQ.Native, build: false, load: false` and splice
+`RustQ.Native.items/1`. This keeps Cargo, loading, initialization, and release
+policy with the existing crate while still deriving native boundary items. Use
+`nif_env/0` when a dynamic `Term` adapter needs Rustler's `Env`; RustQ injects
+the Rust argument without adding a public BEAM argument.
+
 ## 1.x compatibility discipline
 
 RustQ's compatibility contract is documented in [`guides/compatibility.md`](guides/compatibility.md) and published in HexDocs. When changing RustQ or a consumer:

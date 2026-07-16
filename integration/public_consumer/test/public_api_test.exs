@@ -21,4 +21,13 @@ defmodule RustQPublicConsumer.PublicAPITest do
     assert_defrust(RustQPublicConsumer.Generated, :increment_all, ~r/into_iter.*map/s)
     assert_rust_valid(RustQPublicConsumer.Generated)
   end
+
+  test "prepares ABI items for an externally built and loaded crate" do
+    source = RustQ.Native.source(RustQPublicConsumer.ExternalNative)
+
+    assert source =~ "fn wrap<'a>(__rustq_env: Env<'a>, value: Term<'a>)"
+    assert function_exported?(RustQPublicConsumer.ExternalNative, :wrap, 1)
+    refute function_exported?(RustQPublicConsumer.ExternalNative, :wrap, 2)
+    refute function_exported?(RustQPublicConsumer.ExternalNative, :__rustq_load_nif__, 0)
+  end
 end

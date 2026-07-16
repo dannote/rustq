@@ -288,11 +288,19 @@ defmodule RustQ.Meta.AST do
     {arg_types, return_type} = find_spec!(specs, name, length(arg_names), type_aliases)
     arg_types = if nif_attrs?(attrs), do: Enum.map(arg_types, &nif_input_type/1), else: arg_types
 
+    body_ast = expand_body_macros(body_ast, env)
+    uses_nif_env? = contains_nif_env?(body_ast)
+
+    if uses_nif_env? and not nif_attrs?(attrs) do
+      raise ArgumentError, "nif_env/0 is only available inside defnif"
+    end
+
+    implicit_env? = nif_attrs?(attrs) and uses_nif_env?
+
     args =
       Enum.zip(arg_names, Enum.map(arg_types, & &1.ast))
       |> Enum.map(fn {name, type} -> %AST.FunctionArg{name: name, type: type} end)
-
-    body_ast = expand_body_macros(body_ast, env)
+      |> maybe_prepend_nif_env(implicit_env?)
 
     vars = Map.merge(external_static_types, Map.new(Enum.zip(arg_names, arg_types)))
 
@@ -303,7 +311,8 @@ defmodule RustQ.Meta.AST do
         rust_macros: rust_macros
       )
 
-    lifetime = if Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: :a
+    lifetime =
+      if implicit_env? or Enum.any?(arg_types ++ [return_type], &Type.lifetime?/1), do: :a
 
     ast = %AST.Function{
       name: name,
@@ -320,6 +329,28 @@ defmodule RustQ.Meta.AST do
   defp nif_attrs?(attrs) do
     Enum.any?(attrs, &match?(%AST.Attribute{path: [:rustler, :nif]}, &1))
   end
+
+  defp contains_nif_env?(body_ast) do
+    {_body, found?} =
+      Macro.prewalk(body_ast, false, fn
+        {:nif_env, _meta, []} = call, _found? -> {call, true}
+        ast, found? -> {ast, found?}
+      end)
+
+    found?
+  end
+
+  defp maybe_prepend_nif_env(args, true) do
+    [
+      %AST.FunctionArg{
+        name: :__rustq_env,
+        type: %AST.TypePath{parts: [:Env], lifetimes: [:a]}
+      }
+      | args
+    ]
+  end
+
+  defp maybe_prepend_nif_env(args, false), do: args
 
   defp nif_input_type(%Type{kind: :binary}) do
     %Type{

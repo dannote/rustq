@@ -76,6 +76,7 @@ defmodule RustQ.Meta do
       alias RustQ.Clippy, as: Clippy
       Module.register_attribute(__MODULE__, :rustq_defs, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_stub_keys, accumulate: true)
+      Module.register_attribute(__MODULE__, :rustq_nif_stub_keys, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_macros, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_mod_aliases, accumulate: true)
       Module.register_attribute(__MODULE__, :rustq_rust_sources, accumulate: true)
@@ -143,6 +144,7 @@ defmodule RustQ.Meta do
 
     quote do
       unquote(nif_default(kind))
+      unquote(nif_stub_key(kind, stub_key))
       unquote(definition)
       unquote(rust_stub(kind, stub_key, name, stub_args))
     end
@@ -158,21 +160,15 @@ defmodule RustQ.Meta do
 
   defp nif_default(_kind), do: nil
 
-  defp rust_stub(:nif, stub_key, name, stub_args) do
-    escaped_stub_key = Macro.escape(stub_key)
-
+  defp nif_stub_key(:nif, stub_key) do
     quote do
-      unless unquote(escaped_stub_key) in Module.get_attribute(
-               __MODULE__,
-               :rustq_stub_keys
-             ) do
-        @rustq_stub_keys unquote(escaped_stub_key)
-
-        def unquote(name)(unquote_splicing(stub_args)),
-          do: :erlang.nif_error(:rustq_nif_not_loaded)
-      end
+      @rustq_nif_stub_keys unquote(Macro.escape(stub_key))
     end
   end
+
+  defp nif_stub_key(_kind, _stub_key), do: nil
+
+  defp rust_stub(:nif, _stub_key, _name, _stub_args), do: nil
 
   defp rust_stub(:private_helper, stub_key, name, stub_args) do
     escaped_stub_key = Macro.escape(stub_key)
@@ -256,7 +252,12 @@ defmodule RustQ.Meta do
       type_items: type_items,
       items: items,
       local_callables: local_callables,
-      source: source
+      source: source,
+      nif_stub_keys:
+        env.module
+        |> Module.get_attribute(:rustq_nif_stub_keys)
+        |> List.wrap()
+        |> Enum.reverse()
     ]
 
     exports = exports(values)
@@ -280,7 +281,23 @@ defmodule RustQ.Meta do
       {:__rustq_source__, values[:source]}
     ]
 
-    {:__block__, [], Enum.map(definitions, &export_definition/1)}
+    metadata = Enum.map(definitions, &export_definition/1)
+    {:__block__, [], metadata ++ nif_stub_definitions(values[:nif_stub_keys])}
+  end
+
+  defp nif_stub_definitions(stub_keys) do
+    stub_keys
+    |> Enum.uniq()
+    |> Enum.map(fn {name, arity} ->
+      stub_args = for index <- 1..arity//1, do: Macro.var(:"_arg#{index}", nil)
+      {name, stub_args}
+    end)
+    |> Enum.map(fn {name, stub_args} ->
+      quote do
+        def unquote(name)(unquote_splicing(stub_args)),
+          do: :erlang.nif_error(:rustq_nif_not_loaded)
+      end
+    end)
   end
 
   defp export_definition({name, value}) do

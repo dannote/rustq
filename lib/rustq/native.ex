@@ -23,6 +23,14 @@ defmodule RustQ.Native do
   Generated crates are formatted before compilation. Existing
   `RustQ.Meta` options such as `:rust_sources`, `:rust_packages`, and
   `:callable_modules` may be passed alongside them.
+
+  Existing and precompiled crates can use RustQ as an item generator without
+  transferring build or loading ownership:
+
+      use RustQ.Native, build: false, load: false
+
+  `RustQ.Native.items/1` then returns ABI-prepared functions, codecs, and
+  resource implementations for splicing into the externally-owned crate.
   """
 
   alias RustQ.Meta.{Options, Type}
@@ -34,17 +42,21 @@ defmodule RustQ.Native do
   alias RustQ.Rust.Identifier
   alias RustQ.Rustler.Nif
 
-  @native_options [:otp_app, :crate, :mode, :cargo, :crates]
+  @native_options [:otp_app, :crate, :mode, :cargo, :crates, :build, :load]
 
   @doc false
   defmacro __using__(opts) do
     native_opts = native_options!(opts, __CALLER__)
-    manifest = prepare_manifest!(native_opts)
+    manifest = if native_opts[:build], do: prepare_manifest!(native_opts)
 
     package_metadata =
-      Enum.map(native_opts[:crates], fn {package, _spec} ->
-        {package, manifest_path: manifest}
-      end)
+      if manifest do
+        Enum.map(native_opts[:crates], fn {package, _spec} ->
+          {package, manifest_path: manifest}
+        end)
+      else
+        []
+      end
 
     meta_opts =
       opts
@@ -69,9 +81,42 @@ defmodule RustQ.Native do
     end
   end
 
+  @doc "Returns ABI-prepared Rust items from a `RustQ.Native` module."
+  @spec items(module()) :: [AST.item()]
+  def items(module) when is_atom(module), do: module.__rustq_native_items__()
+
+  @doc "Returns ABI-prepared Rust source without crate imports or initialization."
+  @spec source(module()) :: String.t()
+  def source(module) when is_atom(module), do: module.__rustq_native_source__()
+
   @doc false
   def __compile_native__(env, values, opts, exports) do
     module = env.module
+    items = native_items(values)
+    item_source = RustQ.Rust.render_all(items)
+    loader = maybe_build_and_loader(module, items, opts)
+
+    native_exports =
+      quote do
+        @doc false
+        def __rustq_native_items__, do: unquote(Macro.escape(items))
+
+        @doc false
+        def __rustq_native_source__, do: unquote(item_source)
+      end
+
+    quote do
+      unquote(exports)
+      unquote(native_exports)
+      unquote(loader)
+    end
+  end
+
+  defp maybe_build_and_loader(module, items, opts) do
+    if opts[:build], do: build_and_loader(module, items, opts)
+  end
+
+  defp build_and_loader(module, items, opts) do
     crate = Keyword.fetch!(opts, :crate)
     otp_app = Keyword.fetch!(opts, :otp_app)
     mode = Keyword.fetch!(opts, :mode)
@@ -81,18 +126,17 @@ defmodule RustQ.Native do
     manifest = Path.join(root, "Cargo.toml")
     source_path = Path.join([root, "src", "lib.rs"])
     target = Path.join(root, "target")
-
-    source = native_source(native_items(values), module)
+    source = native_source(items, module)
 
     write_if_changed!(manifest, cargo_manifest(crate, opts[:crates]))
     write_if_changed!(source_path, source)
     format_crate!(cargo, manifest, module)
     build_crate!(cargo, manifest, target, mode, module)
 
-    destination = install_library!(target, mode, crate, otp_app)
-    relative_library = Path.join("priv/native", Path.rootname(Path.basename(destination)))
+    if opts[:load] do
+      destination = install_library!(target, mode, crate, otp_app)
+      relative_library = Path.join("priv/native", Path.rootname(Path.basename(destination)))
 
-    loader =
       quote do
         @on_load :__rustq_load_nif__
 
@@ -108,10 +152,6 @@ defmodule RustQ.Native do
           :erlang.load_nif(path, 0)
         end
       end
-
-    quote do
-      unquote(exports)
-      unquote(loader)
     end
   end
 
@@ -132,6 +172,8 @@ defmodule RustQ.Native do
     mode = opts |> Keyword.get_lazy(:mode, &default_mode/0) |> Macro.expand(caller)
     cargo = opts |> Keyword.get(:cargo, "cargo") |> Macro.expand(caller)
     crates = opts |> Keyword.get(:crates, []) |> Macro.expand(caller) |> normalize_crates!()
+    build? = opts |> Keyword.get(:build, true) |> Macro.expand(caller)
+    load? = opts |> Keyword.get(:load, build?) |> Macro.expand(caller)
 
     unless is_atom(otp_app), do: raise(ArgumentError, ":otp_app must be an atom")
 
@@ -139,10 +181,24 @@ defmodule RustQ.Native do
       do: raise(ArgumentError, ":mode must be :debug or :release")
 
     unless is_binary(cargo), do: raise(ArgumentError, ":cargo must be an executable path")
+    unless is_boolean(build?), do: raise(ArgumentError, ":build must be a boolean")
+    unless is_boolean(load?), do: raise(ArgumentError, ":load must be a boolean")
+
+    if load? and not build? do
+      raise ArgumentError, ":load cannot be true when :build is false"
+    end
 
     crate = crate |> to_string() |> normalize_crate!()
 
-    [otp_app: otp_app, crate: crate, mode: mode, cargo: cargo, crates: crates]
+    [
+      otp_app: otp_app,
+      crate: crate,
+      mode: mode,
+      cargo: cargo,
+      crates: crates,
+      build: build?,
+      load: load?
+    ]
   end
 
   defp default_otp_app! do

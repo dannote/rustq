@@ -82,6 +82,20 @@ These assertions render one function at a time and report the generated Rust on
 failure. `assert_defnif/4` additionally verifies the Elixir export and
 `#[rustler::nif]` attribute.
 
+Existing and precompiled crates can retain their Cargo and loader policy while
+using RustQ's native ABI preparation:
+
+```elixir
+use RustQ.Native, build: false, load: false
+
+@spec decode(term()) :: RustQ.Type.nif_result(term())
+defnif decode(value), do: decode_impl(nif_env(), value)
+```
+
+`RustQ.Native.items/1` returns the prepared items for the existing crate.
+`nif_env/0` injects Rustler's environment without changing the public BEAM
+arity.
+
 ## Rusty Elixir with `defrust`
 
 `defrust` is the high-level user-facing Rusty-Elixir surface. It reads normal

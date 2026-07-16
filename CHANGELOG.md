@@ -16,6 +16,10 @@
   patterns, guards, comprehensions, and structural slice-pattern AST support;
   normalize semantics-preserving Kernel, Enum, List, typed Map, String, Tuple,
   and Range calls through focused hidden lowerers with call-specific typing.
+- Add external/precompiled-crate native preparation through
+  `use RustQ.Native, build: false, load: false`, with public
+  `RustQ.Native.items/1` and implicit `nif_env/0` injection that preserves BEAM
+  arity.
 - Add packaged `RustQ.Test` ExUnit assertions for focused `defrust` source,
   `defnif` exports/attributes, and generated Rust validity.
 - Validate documented public APIs, package contents, checked generation, and a
