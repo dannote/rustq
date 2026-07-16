@@ -20,7 +20,7 @@ typed macro metalanguage for generating real Rust safely.
 For `RustQ.Native` modules that compile in every release environment, add:
 
 ```elixir
-{:rustq, "~> 1.0.0-rc.1", runtime: false}
+{:rustq, "~> 1.0.0-rc.2", runtime: false}
 ```
 
 Projects that only run checked-in generators during development may keep RustQ

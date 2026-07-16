@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.0.0-rc.2 - 2026-07-16
+
 - Funnel compiled `defrust` AST access and internal rendering through the
   documented `RustQ.Meta.AST` and `RustQ.Rust` boundaries.
 - Preserve inferred tuple types as structural `RustQ.Rust.AST.TypeTuple` nodes
@@ -12,6 +14,8 @@
   qualifiers, named input metadata, variadics, and return types.
 - Preserve ordered Rust path generic arguments and `impl Trait` bounds in Syn
   metadata, and lower complete bound lists through structural `TypeImplTrait`.
+- Document `defnif` normal, dirty CPU, and dirty IO scheduler policy and the
+  preferred `@nif schedule: :dirty_cpu | :dirty_io` spelling.
 
 ## v1.0.0-rc.1 - 2026-07-16
 
