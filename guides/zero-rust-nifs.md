@@ -21,6 +21,32 @@ end
 generated Rust helpers, and `defrustp` declares private generated helpers.
 Ordinary Elixir macros remain the preferred way to generate or reuse all three.
 
+## Scheduling
+
+A `defnif` runs on the normal BEAM scheduler unless you explicitly mark it as
+dirty. Put `@nif` immediately before the entrypoint that needs a different
+scheduler:
+
+```elixir
+@nif schedule: :dirty_cpu
+@spec resize_image(binary()) :: binary()
+defnif resize_image(image), do: resize_impl(image)
+
+@nif schedule: :dirty_io
+@spec read_device(String.t()) :: binary()
+defnif read_device(path), do: read_device_impl(path)
+```
+
+Use `:dirty_cpu` for long-running CPU-bound native work and `:dirty_io` for
+native work that may block on IO. Do not mark short NIFs dirty by default.
+RustQ renders these values as Rustler's `"DirtyCpu"` and `"DirtyIo"` schedule
+options. Explicit Rustler strings are also accepted, but the atoms are the
+preferred public spelling.
+
+`@nif` applies only to the declaration immediately following it. Scheduler
+choice is intentional native policy: RustQ does not infer it from the function
+body or return type.
+
 ## What RustQ owns
 
 For a zero-Rust native module, RustQ owns:

@@ -36,6 +36,28 @@ Use this order:
 4. Rust/Syn/schema/type introspection for metadata
 5. tiny raw escapes only where RustQ lacks a representation
 
+## Keep NIF scheduling explicit
+
+Public `defnif` entrypoints use the normal BEAM scheduler by default. Scheduling
+is native policy, so RustQ does not infer it from a function's implementation.
+Annotate only the entrypoint that needs dirty scheduling:
+
+```elixir
+@nif schedule: :dirty_cpu
+@spec render_scene(Scene.t()) :: binary()
+defnif render_scene(scene), do: render_scene_impl(scene)
+
+@nif schedule: :dirty_io
+@spec read_device(String.t()) :: binary()
+defnif read_device(path), do: read_device_impl(path)
+```
+
+Use `:dirty_cpu` for long-running CPU-bound native work and `:dirty_io` for
+native calls that may block on IO. `@nif` applies only to the immediately
+following declaration. Short NIFs should normally remain on the normal
+scheduler. See [Zero-handwritten-Rust NIFs](zero-rust-nifs.md#scheduling) for
+the complete policy.
+
 ## `defrust` first
 
 A `defrust` function is ordinary Elixir-shaped source that lowers to Rust:

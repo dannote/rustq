@@ -27,6 +27,23 @@ RustQ 1.0 targets `use RustQ.Native` plus `defnif` as the default starting point
 
 Keep real policy explicit: Cargo dependencies/features, scheduler choice, resources and thread-safety, blocking or unsafe operations, lossy conversions, external adapters, and precompiled-release targets. Zero handwritten bridge Rust does not mean silently guessing those decisions.
 
+A `defnif` uses the normal BEAM scheduler unless explicitly annotated. Put the
+policy immediately before the affected entrypoint:
+
+```elixir
+@nif schedule: :dirty_cpu
+@spec render_scene(Scene.t()) :: binary()
+defnif render_scene(scene), do: render_scene_impl(scene)
+
+@nif schedule: :dirty_io
+@spec read_device(String.t()) :: binary()
+defnif read_device(path), do: read_device_impl(path)
+```
+
+Use `:dirty_cpu` for long CPU-bound native work and `:dirty_io` for native work
+that may block on IO. The attribute applies only to the next declaration; do not
+mark short NIFs dirty by default or expect RustQ to infer scheduling policy.
+
 See [`guides/zero-rust-nifs.md`](guides/zero-rust-nifs.md) for the 1.0 target and supported-subset boundary.
 
 For an existing source-built or precompiled crate, use

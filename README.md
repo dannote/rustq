@@ -232,8 +232,9 @@ Current `defrust` lowering supports a growing valid-Elixir subset:
 - focused Kernel, Enum, List, typed Map, String-predicate, Tuple, and Range
   lowerers provide the semantics-preserving subset documented in
   `guides/zero-rust-nifs.md`
-- Rust-facing attributes such as `@nif schedule: "DirtyCpu"` and
-  `@allow :dead_code` are supported before `defrust`
+- Rust-facing attributes such as `@nif schedule: :dirty_cpu`,
+  `@nif schedule: :dirty_io`, and `@allow :dead_code` are supported before the
+  affected generated function; see the [scheduling guide](guides/zero-rust-nifs.md#scheduling)
 
 Use semantic helpers such as `expr!`, `pat!`, `stmt!`, and `arm!` for
 Rust-shaped values that are still authored as valid Elixir. `Super.*` calls mark
