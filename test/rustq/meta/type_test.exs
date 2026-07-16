@@ -2,6 +2,7 @@ defmodule RustQ.Meta.TypeTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.Type
+  alias RustQ.Rust.AST
   alias RustQ.Some.External
   alias RustQ.Spec
   alias RustQ.Syn.Type, as: SynType
@@ -192,6 +193,18 @@ defmodule RustQ.Meta.TypeTest do
                inner: %SynType.Path{code: "Path", name: "Path", segments: ["Path"]}
              })
 
+    assert %Type{
+             kind: :mut_ref,
+             rust: "&'a mut Path",
+             ast: %AST.TypeRef{lifetime: :a, mutable: true}
+           } =
+             Type.from_syn(%SynType.Ref{
+               code: "&'a mut Path",
+               lifetime: "'a",
+               mutable: true,
+               inner: %SynType.Path{code: "Path", name: "Path", segments: ["Path"]}
+             })
+
     assert %Type{kind: :option, rust: "Option<Rect>"} =
              Type.from_syn(%SynType.Option{
                code: "Option<Rect>",
@@ -231,11 +244,26 @@ defmodule RustQ.Meta.TypeTest do
                inner: %SynType.Path{code: "u8", name: "u8", segments: ["u8"]}
              })
 
-    assert %Type{kind: :array, rust: "[u8; 4]"} =
+    assert %Type{
+             kind: :array,
+             rust: "[u8; 4]",
+             ast: %AST.TypeArray{size: "4"},
+             meta: %{length: "4"}
+           } =
              Type.from_syn(%SynType.Array{
                code: "[u8; 4]",
+               length: "4",
                inner: %SynType.Path{code: "u8", name: "u8", segments: ["u8"]}
              })
+
+    assert %Type{kind: :array, rust: "[u8; LEGACY]", ast: %AST.TypeRaw{}} =
+             Type.from_syn(%SynType.Array{
+               code: "[u8; LEGACY]",
+               inner: %SynType.Path{code: "u8", name: "u8", segments: ["u8"]}
+             })
+
+    assert %Type{kind: :type, rust: "Self", ast: %AST.TypePath{parts: [:Self]}} =
+             Type.from_syn(%SynType.Self{code: "Self"})
   end
 
   test "Spec exposes Syn type conversion" do

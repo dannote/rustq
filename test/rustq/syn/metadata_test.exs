@@ -199,6 +199,36 @@ defmodule RustQ.Syn.MetadataTest do
            } = method
   end
 
+  test "preserves reference lifetimes and fixed array lengths" do
+    source = """
+    pub fn borrow<'a, const N: usize>(values: &'a mut [u8; N]) -> &'a [u8; 4] {
+        todo!()
+    }
+    """
+
+    assert [
+             %Syn.Function{
+               signature_ast: signature,
+               args: [
+                 %Arg{
+                   type_ast: %Type.Ref{
+                     lifetime: "'a",
+                     mutable: true,
+                     inner: %Type.Array{length: "N", inner: %Type.Path{name: "u8"}}
+                   }
+                 }
+               ],
+               returns_ast: %Type.Ref{
+                 lifetime: "'a",
+                 inner: %Type.Array{length: "4", inner: %Type.Path{name: "u8"}}
+               }
+             }
+           ] = source |> Syn.parse!() |> Syn.functions()
+
+    assert Signature.render(signature) ==
+             "fn borrow(values: &'a mut [u8; N]) -> &'a [u8; 4]"
+  end
+
   test "returns variants for a named enum" do
     source = """
     enum Hidden { A, B }

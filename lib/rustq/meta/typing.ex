@@ -317,7 +317,7 @@ defmodule RustQ.Meta.Typing do
     do: %Type{
       kind: :result,
       rust: "Result<#{ok.rust}, rustler::Error>",
-      ast: %AST.TypeResult{ok: ok.ast, error: %AST.TypeRaw{source: "rustler::Error"}},
+      ast: %AST.TypeResult{ok: ok.ast, error: %AST.TypePath{parts: [:rustler, :Error]}},
       meta: %{ok: ok}
     }
 

@@ -66,6 +66,7 @@ defmodule RustQ.Test do
       function = unquote(function)
       arity = unquote(arity)
       expected = unquote(expected)
+      Code.ensure_loaded!(module)
 
       ExUnit.Assertions.assert(
         function_exported?(module, function, arity),

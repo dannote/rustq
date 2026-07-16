@@ -416,9 +416,14 @@ defmodule RustQ.Meta.Type do
   @spec from_syn(RustQ.Syn.type()) :: t()
   def from_syn(%SynType.Path{} = path), do: from_syn_path(path)
 
-  def from_syn(%SynType.Ref{inner: inner, mutable: mutable}) do
+  def from_syn(%SynType.Ref{inner: inner, mutable: mutable, lifetime: lifetime}) do
     inner = from_syn(inner)
-    type(ref_kind(mutable), %AST.TypeRef{inner: inner.ast, mutable: mutable}, %{inner: inner})
+
+    type(
+      ref_kind(mutable),
+      %AST.TypeRef{inner: inner.ast, mutable: mutable, lifetime: syn_lifetime(lifetime)},
+      %{inner: inner, lifetime: lifetime}
+    )
   end
 
   def from_syn(%SynType.Option{inner: inner}) do
@@ -443,9 +448,15 @@ defmodule RustQ.Meta.Type do
     type(:slice, %AST.TypeSlice{inner: inner.ast}, %{inner: inner})
   end
 
-  def from_syn(%SynType.Array{code: code, inner: inner}) do
+  def from_syn(%SynType.Array{code: code, inner: inner, length: length}) do
     inner = from_syn(inner)
-    type(:array, %AST.TypeRaw{source: code}, %{inner: inner})
+
+    ast =
+      if is_binary(length),
+        do: %AST.TypeArray{inner: inner.ast, size: length},
+        else: %AST.TypeRaw{source: code}
+
+    type(:array, ast, %{inner: inner, length: length})
   end
 
   def from_syn(%SynType.Fn{code: code, args: args, returns: returns}) do
@@ -455,7 +466,7 @@ defmodule RustQ.Meta.Type do
     type(:fn, %AST.TypeRaw{source: code}, %{args: args, returns: returns})
   end
 
-  def from_syn(%SynType.Self{code: code}), do: type(:type, %AST.TypeRaw{source: code})
+  def from_syn(%SynType.Self{}), do: type(:type, %AST.TypePath{parts: [:Self]})
   def from_syn(%SynType.Raw{code: code}), do: type(:type, %AST.TypeRaw{source: code})
 
   def from_syn(%SynType.ImplTrait{code: code, traits: traits}) do
@@ -502,6 +513,10 @@ defmodule RustQ.Meta.Type do
 
   defp ref_kind(true), do: :mut_ref
   defp ref_kind(false), do: :ref
+
+  defp syn_lifetime(nil), do: nil
+
+  defp syn_lifetime("'" <> name), do: Identifier.atom!(name)
 
   @doc false
   @spec parse(Macro.t(), map()) :: t()

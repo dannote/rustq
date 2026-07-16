@@ -6,6 +6,8 @@
   documented `RustQ.Meta.AST` and `RustQ.Rust` boundaries.
 - Preserve inferred tuple types as structural `RustQ.Rust.AST.TypeTuple` nodes
   instead of raw rendered type strings.
+- Preserve imported Rust reference lifetimes and fixed-array lengths, lowering
+  them through structural `TypeRef`, `TypeArray`, and `TypePath` nodes.
 
 ## v1.0.0-rc.1 - 2026-07-16
 

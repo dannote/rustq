@@ -112,10 +112,15 @@ defmodule RustQ.Syn do
     end
 
     defmodule Ref do
-      @moduledoc "Rust reference type metadata, for example `&Paint` or `&mut Path`."
-      defstruct [:code, :inner, mutable: false]
+      @moduledoc "Rust reference type metadata, for example `&Paint` or `&'a mut Path`."
+      defstruct [:code, :inner, :lifetime, mutable: false]
 
-      @type t :: %__MODULE__{code: String.t(), mutable: boolean(), inner: RustQ.Syn.type()}
+      @type t :: %__MODULE__{
+              code: String.t(),
+              mutable: boolean(),
+              lifetime: String.t() | nil,
+              inner: RustQ.Syn.type()
+            }
     end
 
     defmodule Tuple do
@@ -154,10 +159,14 @@ defmodule RustQ.Syn do
     end
 
     defmodule Array do
-      @moduledoc "Rust array type metadata."
-      defstruct [:code, :inner]
+      @moduledoc "Rust fixed-size array type metadata."
+      defstruct [:code, :inner, :length]
 
-      @type t :: %__MODULE__{code: String.t(), inner: RustQ.Syn.type()}
+      @type t :: %__MODULE__{
+              code: String.t(),
+              inner: RustQ.Syn.type(),
+              length: String.t() | nil
+            }
     end
 
     defmodule Self do
@@ -351,11 +360,11 @@ defmodule RustQ.Syn do
       "fn #{name}(#{rendered_args})#{rendered_returns}"
     end
 
-    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: %RustQ.Syn.Type.Ref{mutable: false}}),
-      do: "&self"
-
-    defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: %RustQ.Syn.Type.Ref{mutable: true}}),
-      do: "&mut self"
+    defp render_arg(%RustQ.Syn.Arg{
+           name: "self",
+           type_ast: %RustQ.Syn.Type.Ref{lifetime: lifetime, mutable: mutable}
+         }),
+         do: render_reference(lifetime, mutable, "self")
 
     defp render_arg(%RustQ.Syn.Arg{name: "self", type_ast: type}), do: render_type(type)
     defp render_arg(%RustQ.Syn.Arg{name: nil, type_ast: type}), do: render_type(type)
@@ -370,17 +379,12 @@ defmodule RustQ.Syn do
       "#{Elixir.Enum.join(segments, "::")}<#{Elixir.Enum.map_join(args, ", ", &render_type/1)}>"
     end
 
-    defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: false}),
-      do: "&Self"
-
-    defp render_type(%RustQ.Syn.Type.Ref{inner: %RustQ.Syn.Type.Self{}, mutable: true}),
-      do: "&mut Self"
-
-    defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: false}),
-      do: "&#{render_type(inner)}"
-
-    defp render_type(%RustQ.Syn.Type.Ref{inner: inner, mutable: true}),
-      do: "&mut #{render_type(inner)}"
+    defp render_type(%RustQ.Syn.Type.Ref{
+           inner: inner,
+           lifetime: lifetime,
+           mutable: mutable
+         }),
+         do: render_reference(lifetime, mutable, render_type(inner))
 
     defp render_type(%RustQ.Syn.Type.Tuple{elems: elems}),
       do: "(#{Elixir.Enum.map_join(elems, ", ", &render_type/1)})"
@@ -394,9 +398,20 @@ defmodule RustQ.Syn do
       do: "impl #{Elixir.Enum.map_join(traits, " + ", &render_type/1)}"
 
     defp render_type(%RustQ.Syn.Type.Slice{inner: inner}), do: "[#{render_type(inner)}]"
-    defp render_type(%RustQ.Syn.Type.Array{inner: inner}), do: "[#{render_type(inner)}]"
+
+    defp render_type(%RustQ.Syn.Type.Array{inner: inner, length: length})
+         when is_binary(length),
+         do: "[#{render_type(inner)}; #{length}]"
+
+    defp render_type(%RustQ.Syn.Type.Array{code: code}), do: code
     defp render_type(%RustQ.Syn.Type.Self{}), do: "Self"
     defp render_type(%RustQ.Syn.Type.Raw{code: code}), do: code
+
+    defp render_reference(lifetime, mutable, inner) do
+      lifetime = if lifetime, do: "#{lifetime} ", else: ""
+      mutable = if mutable, do: "mut ", else: ""
+      "&#{lifetime}#{mutable}#{inner}"
+    end
   end
 
   defmodule Impl do
@@ -860,8 +875,13 @@ defmodule RustQ.Syn do
     decode_path_type!(code, segments, args, assoc)
   end
 
-  defp decode_type!({"ref", code, mutable, inner}) do
-    %RustQ.Syn.Type.Ref{code: code, mutable: mutable, inner: decode_type!(inner)}
+  defp decode_type!({"ref", code, mutable, lifetime, inner}) do
+    %RustQ.Syn.Type.Ref{
+      code: code,
+      mutable: mutable,
+      lifetime: lifetime,
+      inner: decode_type!(inner)
+    }
   end
 
   defp decode_type!({"tuple", code, elems}) do
@@ -884,8 +904,8 @@ defmodule RustQ.Syn do
     %RustQ.Syn.Type.Slice{code: code, inner: decode_type!(inner)}
   end
 
-  defp decode_type!({"array", code, inner}) do
-    %RustQ.Syn.Type.Array{code: code, inner: decode_type!(inner)}
+  defp decode_type!({"array", code, inner, length}) do
+    %RustQ.Syn.Type.Array{code: code, inner: decode_type!(inner), length: length}
   end
 
   defp decode_type!({"self", code}), do: %RustQ.Syn.Type.Self{code: code}

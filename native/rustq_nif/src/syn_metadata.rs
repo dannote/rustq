@@ -393,11 +393,12 @@ fn type_string(ty: &Type) -> String {
 fn receiver_type_metadata<'a>(env: Env<'a>, receiver: &syn::Receiver) -> Term<'a> {
     let self_term = ("self", "Self").encode(env);
 
-    if let Some((_and, _lifetime)) = &receiver.reference {
+    if let Some((_and, lifetime)) = &receiver.reference {
         (
             "ref",
             receiver.to_token_stream().to_string(),
             receiver.mutability.is_some(),
+            lifetime.as_ref().map(ToString::to_string),
             self_term,
         )
             .encode(env)
@@ -418,6 +419,7 @@ fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
             "ref",
             code,
             reference.mutability.is_some(),
+            reference.lifetime.as_ref().map(ToString::to_string),
             type_metadata(env, &reference.elem),
         )
             .encode(env),
@@ -442,7 +444,13 @@ fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
         )
             .encode(env),
         Type::Slice(slice) => ("slice", code, type_metadata(env, &slice.elem)).encode(env),
-        Type::Array(array) => ("array", code, type_metadata(env, &array.elem)).encode(env),
+        Type::Array(array) => (
+            "array",
+            code,
+            type_metadata(env, &array.elem),
+            array.len.to_token_stream().to_string(),
+        )
+            .encode(env),
         Type::BareFn(function) => (
             "fn",
             code,
