@@ -404,7 +404,10 @@ defmodule RustQ.Native do
   end
 
   defp add_generated_clippy_allows(%AST.Function{} = function) do
-    lints = Walk.reduce(function.body, MapSet.new(), &generated_clippy_lints/2)
+    lints =
+      function.body
+      |> Walk.reduce(MapSet.new(), &generated_clippy_lints/2)
+      |> add_unused_variables_lint(function)
 
     if MapSet.size(lints) == 0 do
       function
@@ -414,8 +417,40 @@ defmodule RustQ.Native do
     end
   end
 
+  defp add_unused_variables_lint(lints, %AST.Function{args: args, body: body}) do
+    used =
+      Walk.reduce(body, MapSet.new(), fn
+        %AST.Var{name: name}, names -> MapSet.put(names, name)
+        _node, names -> names
+      end)
+
+    if Enum.any?(args, fn
+         %AST.FunctionArg{receiver: false, name: name} -> not MapSet.member?(used, name)
+         %AST.FunctionArg{receiver: true} -> false
+       end) do
+      MapSet.put(lints, [:unused_variables])
+    else
+      lints
+    end
+  end
+
+  defp generated_clippy_lints(
+         %AST.MethodCall{
+           method: :take,
+           receiver: %AST.PathCall{path: %AST.Path{parts: [:std, :iter, :repeat]}}
+         },
+         lints
+       ),
+       do: MapSet.put(lints, [:clippy, :manual_repeat_n])
+
   defp generated_clippy_lints(%AST.MethodCall{method: :filter_map}, lints),
     do: MapSet.put(lints, [:clippy, :unnecessary_filter_map])
+
+  defp generated_clippy_lints(%AST.MethodCall{method: :find_map}, lints),
+    do: MapSet.put(lints, [:clippy, :unnecessary_find_map])
+
+  defp generated_clippy_lints(%AST.MethodCall{method: :count}, lints),
+    do: MapSet.put(lints, [:clippy, :iter_count])
 
   defp generated_clippy_lints(%AST.MethodCall{method: :fold}, lints),
     do: MapSet.put(lints, [:clippy, :unnecessary_fold])

@@ -191,10 +191,12 @@ Current `defrust` lowering supports a growing valid-Elixir subset:
   lower to Rust array literals, indexing, and struct literals
 - `Bitwise.bsr/2` and `Bitwise.band/2` lower to Rust `>>` and `&`
 - aliases, remote calls, method calls, local calls, fields, tuples, nested tuple
-  patterns, literals, lists as `vec![...]`, simple `for` comprehensions,
-  expression/item macro calls, and `Enum.map/2` with anonymous functions or
-  named one-argument captures are supported; closures may contain ordinary
+  patterns, literals, lists as `vec![...]`, simple `for` comprehensions, and
+  expression/item macro calls are supported; closures may contain ordinary
   multi-statement Elixir blocks
+- focused Kernel, Enum, List, typed Map, String-predicate, Tuple, and Range
+  lowerers provide the semantics-preserving subset documented in
+  `guides/zero-rust-nifs.md`
 - Rust-facing attributes such as `@nif schedule: "DirtyCpu"` and
   `@allow :dead_code` are supported before `defrust`
 

@@ -4,6 +4,8 @@ defmodule RustQ.Meta.Typing do
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Meta.Inference
   alias RustQ.Meta.Lower
+  alias RustQ.Meta.Lower.Stdlib
+  alias RustQ.Meta.Lower.Stdlib.TypeContext, as: StdlibTypeContext
   alias RustQ.Meta.Pattern
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
@@ -95,15 +97,33 @@ defmodule RustQ.Meta.Typing do
   end
 
   def synth(call_ast, %Env{} = env) do
-    Lower.callable_return_type(
-      call_ast,
-      callables: env.callables,
-      rust_modules: env.rust_modules,
-      vars: env.vars
-    ) || synth_method_call(call_ast, env)
+    case synth_stdlib(call_ast, env) do
+      {:ok, %Type{} = type} ->
+        type
+
+      :unsupported ->
+        Lower.callable_return_type(
+          call_ast,
+          callables: env.callables,
+          rust_modules: env.rust_modules,
+          vars: env.vars
+        ) || synth_method_call(call_ast, env)
+    end
   end
 
   def synth(ast, opts) when is_list(opts), do: synth(ast, env(opts))
+
+  defp synth_stdlib({name, _meta, args} = call_ast, %Env{} = env)
+       when is_atom(name) and is_list(args) do
+    if BindingIndex.get(env.callables, nil, name, length(args)) do
+      :unsupported
+    else
+      Stdlib.synth(call_ast, stdlib_type_context(env))
+    end
+  end
+
+  defp synth_stdlib(call_ast, %Env{} = env),
+    do: Stdlib.synth(call_ast, stdlib_type_context(env))
 
   @spec check(Macro.t(), Type.t(), env_source()) :: Check.t()
   def check(ast, %Type{} = expected, opts) when is_list(opts), do: check(ast, expected, env(opts))
@@ -148,6 +168,13 @@ defmodule RustQ.Meta.Typing do
       end)
 
     Map.merge(rhs_types, inferred_types)
+  end
+
+  defp stdlib_type_context(%Env{} = env) do
+    %StdlibTypeContext{
+      type_of: &synth(&1, env),
+      type_with_vars: fn ast, vars -> synth(ast, %{env | vars: Map.merge(env.vars, vars)}) end
+    }
   end
 
   defp default_inference_callbacks do

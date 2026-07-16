@@ -198,6 +198,12 @@ defmodule RustQ.Meta.Type do
 
   def slice_inner(%__MODULE__{}), do: nil
 
+  @doc false
+  @spec tuple([t()]) :: t()
+  def tuple(elements) when is_list(elements) and elements != [] do
+    type(:tuple, %AST.TypeTuple{items: Enum.map(elements, & &1.ast)}, %{elements: elements})
+  end
+
   @doc "Constructs `Vec<T>` type metadata."
   @spec vec(t()) :: t()
   def vec(%__MODULE__{} = inner) do

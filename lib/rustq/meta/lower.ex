@@ -3,6 +3,8 @@ defmodule RustQ.Meta.Lower do
 
   alias RustQ.Binding.Index, as: BindingIndex
   alias RustQ.Diagnostic
+  alias RustQ.Meta.Lower.Stdlib
+  alias RustQ.Meta.Lower.Stdlib.Context, as: StdlibContext
   alias RustQ.Meta.Pattern
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Semantics
@@ -603,29 +605,15 @@ defmodule RustQ.Meta.Lower do
     do: lower_closure_args(args, body, context)
 
   defp lower_expr_context(
-         {{:., _, [{:__aliases__, _, [:Enum]}, :map]}, _, [collection, mapper]},
-         %Context{} = context
-       ),
-       do: lower_enum_map(collection, mapper, context)
-
-  defp lower_expr_context(
-         {{:., _, [{:__aliases__, _, [:Enum]}, :sum]}, _, [collection]},
-         %Context{} = context
-       ),
-       do: lower_enum_terminal(collection, :sum, context)
-
-  defp lower_expr_context(
-         {{:., _, [{:__aliases__, _, [:Enum]}, :reduce]}, _, [collection, initial, reducer]},
-         %Context{} = context
-       ),
-       do: lower_enum_reduce(collection, initial, reducer, context)
-
-  defp lower_expr_context(
-         {{:., _, [{:__aliases__, _, [:Enum]}, operation]}, _, [collection, mapper]},
+         {{:., _, [receiver = {:__aliases__, _, [module]}, function]}, _, args} = call,
          %Context{} = context
        )
-       when operation in [:filter, :reject, :flat_map, :each, :any?, :all?],
-       do: lower_enum_operation(operation, collection, mapper, context)
+       when module in [:Kernel, :Enum, :List, :Map, :String, :Tuple, :Range] do
+    case Stdlib.lower(call, stdlib_context(context)) do
+      {:ok, lowered} -> lowered
+      :unsupported -> lower_remote_or_method_call(receiver, function, args, context)
+    end
+  end
 
   defp lower_expr_context({:expr!, _, [expression]}, %Context{} = context),
     do: lower_expr(expression, context)
@@ -679,77 +667,41 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr_context({:index, _, [receiver, index]}, %Context{} = context),
     do: %AST.Index{receiver: lower_expr(receiver, context), index: lower_expr(index, context)}
 
-  defp lower_expr_context({:.., _, [start, stop]}, %Context{} = context),
-    do: %AST.Range{
-      start: lower_expr(start, context),
-      stop: lower_expr(stop, context),
-      inclusive: true
-    }
-
-  defp lower_expr_context({:in, _, [value, collection]}, %Context{} = context) do
-    receiver =
-      case lower_expr(collection, context) do
-        %AST.Range{} = range -> %AST.BlockExpr{body: [%AST.Return{expr: range}]}
-        expression -> expression
-      end
-
-    %AST.MethodCall{
-      receiver: receiver,
-      method: :contains,
-      args: [%AST.Ref{expr: lower_expr(value, context)}]
-    }
+  defp lower_expr_context({function, _, args} = call, %Context{} = context)
+       when function in [
+              :..,
+              :in,
+              :==,
+              :!=,
+              :<,
+              :<=,
+              :>,
+              :>=,
+              :+,
+              :-,
+              :*,
+              :/,
+              :not,
+              :div,
+              :rem,
+              :and,
+              :or,
+              :abs,
+              :min,
+              :max,
+              :byte_size,
+              :length,
+              :map_size,
+              :elem,
+              :put_elem,
+              :tuple_size,
+              :is_nil
+            ] and is_list(args) do
+    case BindingIndex.get(context.callables, nil, function, length(args)) do
+      %RustQ.Binding.Callable{} -> lower_local_or_macro_call(function, args, context)
+      nil -> Stdlib.lower!(call, stdlib_context(context))
+    end
   end
-
-  defp lower_expr_context({:==, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :eq, right, context)
-
-  defp lower_expr_context({:!=, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :ne, right, context)
-
-  defp lower_expr_context({:<, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :lt, right, context)
-
-  defp lower_expr_context({:<=, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :lte, right, context)
-
-  defp lower_expr_context({:>, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :gt, right, context)
-
-  defp lower_expr_context({:>=, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :gte, right, context)
-
-  defp lower_expr_context({:+, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :add, right, context)
-
-  defp lower_expr_context({:-, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :sub, right, context)
-
-  defp lower_expr_context({:*, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :mul, right, context)
-
-  defp lower_expr_context({:/, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :div, right, context)
-
-  defp lower_expr_context({:-, _, [expression]}, %Context{} = context),
-    do: %AST.UnaryOp{op: :neg, expr: lower_expr(expression, context)}
-
-  defp lower_expr_context({:+, _, [expression]}, %Context{} = context),
-    do: lower_expr(expression, context)
-
-  defp lower_expr_context({:not, _, [expression]}, %Context{} = context),
-    do: %AST.UnaryOp{op: :not, expr: lower_expr(expression, context)}
-
-  defp lower_expr_context({:div, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :div, right, context)
-
-  defp lower_expr_context({:rem, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :rem, right, context)
-
-  defp lower_expr_context({:and, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :and, right, context)
-
-  defp lower_expr_context({:or, _, [left, right]}, %Context{} = context),
-    do: lower_binary_op(left, :or, right, context)
 
   defp lower_expr_context(
          {{:., _, [{:__aliases__, _, [:Bitwise]}, :bsr]}, _, [left, right]},
@@ -2153,6 +2105,19 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
+  defp stdlib_context(%Context{} = context) do
+    %StdlibContext{
+      lower: &lower_expr(&1, context),
+      lower_expected: &lower_expr(&1, &2, context),
+      lower_binary_operand: &lower_binary_operand(&1, context),
+      lower_closure: &lower_closure_args(&1, &2, context),
+      lower_closure_body: &lower_closure_body(&1, &2, context),
+      lower_capture: &lower_function_capture(&1, context),
+      closure_arg: &closure_arg!/1,
+      type_of: &Typing.synth(&1, typing_env(context))
+    }
+  end
+
   defp lower_binary_operand(expression, %Context{} = context) do
     if fallible_expression?(expression, context) and propagation_allowed?(context.return_type) do
       %AST.Try{expr: lower_expr(expression, context)}
@@ -2167,137 +2132,6 @@ defmodule RustQ.Meta.Lower do
   defp operator_op(:/), do: :div
   defp operator_op(:bsr), do: :shr
   defp operator_op(:band), do: :bitand
-
-  defp lower_enum_map(collection, {:fn, _, [{:->, _, [args, body]}]}, %Context{} = context) do
-    collection
-    |> lower_expr(context)
-    |> method_chain(:into_iter)
-    |> method_chain(:map, [lower_closure_args(args, body, context)])
-    |> method_chain(:collect)
-  end
-
-  defp lower_enum_map(
-         collection,
-         {:&, _, [{:/, _, [capture, 1]}]},
-         %Context{} = context
-       ) do
-    collection
-    |> lower_expr(context)
-    |> method_chain(:into_iter)
-    |> method_chain(:map, [lower_function_capture(capture, context)])
-    |> method_chain(:collect)
-  end
-
-  defp lower_enum_map(_collection, other, %Context{}) do
-    Diagnostic.lower(
-      :unsupported_enum_map_mapper,
-      other,
-      "unsupported Enum.map mapper in defrust",
-      suggestion: "Use an anonymous function mapper, e.g. Enum.map(values, fn value -> ... end)."
-    )
-  end
-
-  defp lower_enum_terminal(collection, terminal, %Context{} = context) do
-    collection
-    |> lower_expr(context)
-    |> method_chain(:into_iter)
-    |> method_chain(terminal)
-  end
-
-  defp lower_enum_reduce(
-         collection,
-         initial,
-         {:fn, _, [{:->, _, [[item, accumulator], body]}]},
-         %Context{} = context
-       ) do
-    closure = lower_closure_args([accumulator, item], body, context)
-
-    collection
-    |> lower_expr(context)
-    |> method_chain(:into_iter)
-    |> method_chain(:fold, [lower_expr(initial, context), closure])
-  end
-
-  defp lower_enum_reduce(_collection, _initial, other, %Context{}) do
-    Diagnostic.lower(
-      :unsupported_enum_reduce_reducer,
-      other,
-      "unsupported Enum.reduce reducer in defrust",
-      suggestion: "Use fn item, accumulator -> ... end as the reducer."
-    )
-  end
-
-  defp lower_enum_operation(operation, collection, mapper, %Context{} = context) do
-    collection = collection |> lower_expr(context) |> method_chain(:into_iter)
-
-    case operation do
-      :filter ->
-        lower_enum_filter_map(collection, mapper, false, context)
-
-      :reject ->
-        lower_enum_filter_map(collection, mapper, true, context)
-
-      :flat_map ->
-        collection
-        |> method_chain(:flat_map, [enum_mapper(mapper, context)])
-        |> method_chain(:collect)
-
-      :each ->
-        method_chain(collection, :for_each, [enum_mapper(mapper, context)])
-
-      :any? ->
-        method_chain(collection, :any, [enum_mapper(mapper, context)])
-
-      :all? ->
-        method_chain(collection, :all, [enum_mapper(mapper, context)])
-    end
-  end
-
-  defp lower_enum_filter_map(
-         collection,
-         {:fn, _, [{:->, _, [[argument], body]}]},
-         negate?,
-         %Context{} = context
-       ) do
-    name = closure_arg!(argument)
-    condition = lower_closure_body(body, nil, context)
-    condition = if negate?, do: %AST.UnaryOp{op: :not, expr: condition}, else: condition
-
-    closure = %AST.Closure{
-      args: [name],
-      body: %AST.If{
-        condition: condition,
-        then: [%AST.Return{expr: %AST.Some{expr: %AST.Var{name: name}}}],
-        else: [%AST.Return{expr: %AST.None{}}]
-      }
-    }
-
-    collection |> method_chain(:filter_map, [closure]) |> method_chain(:collect)
-  end
-
-  defp lower_enum_filter_map(_collection, other, _negate?, %Context{}) do
-    Diagnostic.lower(
-      :unsupported_enum_filter_predicate,
-      other,
-      "unsupported Enum filter predicate in defrust",
-      suggestion: "Use a one-argument anonymous function predicate."
-    )
-  end
-
-  defp enum_mapper({:fn, _, [{:->, _, [args, body]}]}, %Context{} = context),
-    do: lower_closure_args(args, body, context)
-
-  defp enum_mapper({:&, _, [{:/, _, [capture, 1]}]}, %Context{} = context),
-    do: lower_function_capture(capture, context)
-
-  defp enum_mapper(other, %Context{}) do
-    Diagnostic.lower(
-      :unsupported_enum_mapper,
-      other,
-      "unsupported Enum mapper or predicate in defrust",
-      suggestion: "Use an anonymous function or a named one-argument capture."
-    )
-  end
 
   defp lower_closure_args(args, body, %Context{} = context, expected_return_type \\ nil)
        when is_list(args) do
@@ -2768,6 +2602,8 @@ defmodule RustQ.Meta.Lower do
       %AST.AssignOp{target: %AST.Var{name: name}}, acc -> [name | acc]
       %AST.Assign{target: %AST.Index{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
       %AST.AssignOp{target: %AST.Index{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
+      %AST.Assign{target: %AST.Field{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
+      %AST.AssignOp{target: %AST.Field{receiver: %AST.Var{name: name}}}, acc -> [name | acc]
       %AST.Ref{mutable: true, expr: %AST.Var{name: name}}, acc -> [name | acc]
       _other, acc -> acc
     end)

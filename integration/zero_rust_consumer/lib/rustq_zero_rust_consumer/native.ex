@@ -147,4 +147,120 @@ defmodule RustQZeroRustConsumer.Native do
 
   @spec includes([integer()], integer()) :: boolean()
   defnif(includes(values, value), do: value in values)
+
+  @spec integer_abs(integer()) :: integer()
+  defnif(integer_abs(value), do: abs(value))
+
+  @spec integer_min(integer(), integer()) :: integer()
+  defnif(integer_min(left, right), do: min(left, right))
+
+  @spec byte_size_of(String.t()) :: integer()
+  defnif(byte_size_of(value), do: byte_size(value))
+
+  @spec list_length([integer()]) :: integer()
+  defnif(list_length(values), do: length(values))
+
+  @spec coordinate_size(coordinates()) :: integer()
+  defnif(coordinate_size(point), do: map_size(point))
+
+  @spec pair_first({integer(), integer()}) :: integer()
+  defnif(pair_first(pair), do: elem(pair, 0))
+
+  @spec pair_replace({integer(), integer()}, integer()) :: {integer(), integer()}
+  defnif(pair_replace(pair, value), do: put_elem(pair, 1, value))
+
+  @spec pair_size({integer(), integer()}) :: integer()
+  defnif(pair_size(pair), do: tuple_size(pair))
+
+  @spec count_values([integer()]) :: integer()
+  defnif(count_values(values), do: Enum.count(values))
+
+  @spec count_positive([integer()]) :: integer()
+  defnif(count_positive(values), do: Enum.count(values, fn value -> value > 0 end))
+
+  @spec values_empty([integer()]) :: boolean()
+  defnif(values_empty(values), do: Enum.empty?(values))
+
+  @spec find_positive([integer()]) :: integer() | nil
+  defnif(find_positive(values), do: Enum.find(values, fn value -> value > 0 end))
+
+  @spec concat_values([[integer()]]) :: [integer()]
+  defnif(concat_values(values), do: Enum.concat(values))
+
+  @spec zip_values([integer()], [integer()]) :: [{integer(), integer()}]
+  defnif(zip_values(left, right), do: Enum.zip(left, right))
+
+  @spec unzip_values([{integer(), integer()}]) :: {[integer()], [integer()]}
+  defnif(unzip_values(values), do: Enum.unzip(values))
+
+  @spec reverse_values([integer()]) :: [integer()]
+  defnif(reverse_values(values), do: Enum.reverse(values))
+
+  @spec sort_values([integer()]) :: [integer()]
+  defnif(sort_values(values), do: Enum.sort(values))
+
+  @spec take_two([integer()]) :: [integer()]
+  defnif(take_two(values), do: Enum.take(values, 2))
+
+  @spec drop_one([integer()]) :: [integer()]
+  defnif(drop_one(values), do: Enum.drop(values, 1))
+
+  @spec first_value([integer()]) :: integer() | nil
+  defnif(first_value(values), do: List.first(values))
+
+  @spec last_value([integer()]) :: integer() | nil
+  defnif(last_value(values), do: List.last(values))
+
+  @spec flatten_values([[[integer()]]]) :: [integer()]
+  defnif(flatten_values(values), do: List.flatten(values))
+
+  @spec first_or([integer()], integer()) :: integer()
+  defnif(first_or(values, default), do: List.first(values, default))
+
+  @spec wrap_value(integer()) :: [integer()]
+  defnif(wrap_value(value), do: List.wrap(value))
+
+  @spec duplicate_value(integer()) :: [integer()]
+  defnif(duplicate_value(value), do: List.duplicate(value, 3))
+
+  @spec coordinate_x(coordinates()) :: float()
+  defnif(coordinate_x(point), do: Map.fetch!(point, :x))
+
+  @spec coordinate_get_x(coordinates()) :: float()
+  defnif(coordinate_get_x(point), do: Map.get(point, :x))
+
+  @spec coordinate_get_missing(coordinates(), integer()) :: integer()
+  defnif(coordinate_get_missing(point, default), do: Map.get(point, :missing, default))
+
+  @spec coordinate_has_x(coordinates()) :: boolean()
+  defnif(coordinate_has_x(point), do: Map.has_key?(point, :x))
+
+  @spec coordinate_put_x(coordinates(), float()) :: coordinates()
+  defnif(coordinate_put_x(point, x), do: Map.put(point, :x, x))
+
+  @spec starts_with(String.t(), String.t()) :: boolean()
+  defnif(starts_with(value, prefix), do: String.starts_with?(value, prefix))
+
+  @spec ends_with(String.t(), String.t()) :: boolean()
+  defnif(ends_with(value, suffix), do: String.ends_with?(value, suffix))
+
+  @spec string_contains(String.t(), String.t()) :: boolean()
+  defnif(string_contains(value, part), do: String.contains?(value, part))
+
+  @spec trim_string(String.t()) :: String.t()
+  defnif(trim_string(value), do: String.trim(value))
+
+  @spec replace_string(String.t(), String.t(), String.t()) :: String.t()
+  defnif(replace_string(value, pattern, replacement),
+    do: String.replace(value, pattern, replacement)
+  )
+
+  @spec duplicate_string(String.t()) :: String.t()
+  defnif(duplicate_string(value), do: String.duplicate(value, 3))
+
+  @spec valid_utf8(binary()) :: boolean()
+  defnif(valid_utf8(value), do: String.valid?(value))
+
+  @spec tuple_to_list({integer(), integer(), integer()}) :: [integer()]
+  defnif(tuple_to_list(tuple), do: Tuple.to_list(tuple))
 end

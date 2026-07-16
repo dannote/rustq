@@ -305,7 +305,8 @@ Common supported forms include:
 - ordinary assignments (`let`) and inferred mutability when later assigned
 - multiple clauses, recursion, `case`, `if`, `unless`, `cond`, `with`, and guards
 - tuple, list head/tail, map, struct, option/result, atom, and literal patterns
-- comprehensions, common `Enum` pipelines, ranges, and `in`
+- comprehensions and the documented Kernel, Enum, List, typed Map, String
+  predicate, Tuple, and ascending Range subset
 - method calls, remote calls, local calls, aliases, pipelines
 - `decode_as/2` and `decode_as!/2` for Rustler term decoding
 - `ref/1`, `mut_ref/1`, `deref/1`, `cast/2`, `array/1`, `index/2`, `struct_literal/2`
@@ -329,7 +330,10 @@ Use `RustQ.Type` (`alias RustQ.Type, as: R`) for Rust-specific precision:
 - `R.lifetime/1`
 - `R.raw/1` and `R.path/1,2` as low-level escapes
 
-Do not invent fake Elixir modules solely to spell Rust paths.
+Do not invent fake Elixir modules solely to spell Rust paths. Do not assume a
+similarly named Rust method preserves Elixir semantics: for example,
+`String.length/1` counts graphemes and must not become `.chars().count()`.
+Unsupported stdlib behavior belongs behind an explicit adapter.
 
 ## Generate Rust type items from `@type`
 

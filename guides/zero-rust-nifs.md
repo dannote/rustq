@@ -83,10 +83,35 @@ compose a representative native bridge:
 - typespec-derived scalar, string, binary, list, tuple, map, struct, union,
   exception, and resource boundaries
 
+Standard-library calls are normalized and dispatched through hidden, focused
+Kernel, Enum, List, Map, String, Tuple, and Range lowerers. The 1.0 subset
+currently includes:
+
+- Kernel arithmetic, comparisons, booleans, `div`, `rem`, `abs`, integer
+  `min`/`max`, `byte_size`, tuple access/update/size, ascending literal ranges,
+  and membership
+- Enum mapping, filtering, rejecting, flat-mapping, reducing, summing,
+  counting, predicates, membership, finding, concatenation, zip/unzip,
+  integer sorting, reversal, and non-negative take/drop
+- List first/last (with optional defaults), static wrapping/duplication, and
+  statically nested flattening
+- typed map/struct lookup, presence checks, and field replacement
+- String prefix, suffix, substring, trim, replacement, duplication, and UTF-8
+  validity operations
+- homogeneous `Tuple.to_list/1`
+
+These lowerers own their call-specific type synthesis as well as Rust AST
+emission. RustQ rejects or leaves explicit any call whose Elixir semantics
+cannot be preserved. In particular, descending/dynamic ranges, negative dynamic
+Enum take/drop counts, heterogeneous tuple-to-list conversion, dynamic maps,
+and grapheme-counting `String.length/1` do not silently become similar-looking
+Rust operations.
+
 RustQ does not promise full BEAM semantics in generated Rust. Process
 mailboxes, supervision, dynamic code loading, unrestricted exceptions, every
 protocol or standard-library function, async Rust, and the complete bitstring
-grammar are not 1.0 requirements.
+grammar are not 1.0 requirements. `Stream`, `Regex`, `URI`, calendar, filesystem,
+IO, networking, and process APIs remain explicit Rust or adapter boundaries.
 
 ## Compiler boundary
 

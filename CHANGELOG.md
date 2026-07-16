@@ -13,8 +13,9 @@
   lists, options, tagged results, typed maps, Elixir structs and exceptions,
   structural unions, unit enums, and explicitly declared resources.
 - Expand Rusty-Elixir lowering with multiple clauses, recursion, list/map/struct
-  patterns, guards, comprehensions, common `Enum` forms, ranges, membership,
-  and structural slice-pattern AST support.
+  patterns, guards, comprehensions, and structural slice-pattern AST support;
+  normalize semantics-preserving Kernel, Enum, List, typed Map, String, Tuple,
+  and Range calls through focused hidden lowerers with call-specific typing.
 - Validate documented public APIs, package contents, checked generation, and a
   formatted, Clippy-clean zero-Rust native crate through external consumer
   fixtures containing no checked-in Rust or Cargo files.
