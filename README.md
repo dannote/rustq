@@ -1,6 +1,6 @@
 # RustQ
 
-[![Hex.pm](https://img.shields.io/hexpm/v/rustq.svg)](https://hex.pm/packages/rustq) [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/rustq)
+[![Hex.pm Version](https://img.shields.io/hexpm/v/rustq.svg)](https://hex.pm/packages/rustq) [![Hex.pm Downloads](https://img.shields.io/hexpm/dt/rustq.svg)](https://hex.pm/packages/rustq) [![HexDocs](https://img.shields.io/badge/HexDocs-documentation-blue.svg)](https://hexdocs.pm/rustq)
 
 Write native Elixir in Elixir. RustQ turns typed, Elixir-shaped code into readable
 Rust and can generate, compile, and load a complete Rustler NIF without checked-in
@@ -28,6 +28,40 @@ That module is the bridge. RustQ derives the Cargo crate, Rustler entrypoints,
 Elixir stubs, boundary codecs, initialization, build, and native loading. There
 is no `.rs` file, `Cargo.toml`, atom registry, or duplicated signature list to
 maintain.
+
+## Typed Elixir in, Rust out
+
+`defrust` uses the Elixir typespec as the Rust signature source of truth, then
+lowers Elixir semantics rather than substituting text:
+
+```elixir
+defmodule MyApp.Generated do
+  use RustQ.Meta
+
+  @spec sum_squares([integer()]) :: integer()
+  defrust sum_squares([]), do: 0
+  defrust sum_squares([head | tail]), do: head * head + sum_squares(tail)
+end
+```
+
+The list and integer types become `Vec<i64>` and `i64`; clauses and list patterns
+become a Rust match:
+
+```rust
+fn sum_squares(arg1: Vec<i64>) -> i64 {
+    match arg1.as_slice() {
+        [] => 0,
+        [head, tail @ ..] => head * head + sum_squares(tail.to_vec()),
+    }
+}
+```
+
+`RustQ.Type` extends normal typespecs with Rust-specific precision such as
+references, fixed-width numbers, lifetimes, slices, options, results, and
+`NifResult`. The same lowerer powers `defnif`, which additionally derives the
+BEAM boundary and Rustler attribute. It understands guards, structs, typed maps,
+comprehensions, closures, and a semantics-preserving subset of Kernel, Enum,
+List, Map, String, Tuple, and Range.
 
 ## Why RustQ
 
