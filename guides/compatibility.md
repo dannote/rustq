@@ -18,6 +18,7 @@ This includes the documented surfaces under:
 - `RustQ`, `RustQ.Config`, `RustQ.Generated`, and template/splice APIs
 - `RustQ.Native`, including documented `defnif`/`defrustp` behavior and native
   options
+- `RustQ.Test` and its documented ExUnit assertions
 - `RustQ.Meta`, `RustQ.Meta.AST`, `RustQ.Meta.Type`, `RustQ.Spec`,
   `RustQ.Type`, and documented `RustQ.Binding` metadata modules
 - `RustQ.Rust` and the documented `RustQ.Rust.AST` nodes and builders

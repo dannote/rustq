@@ -139,6 +139,8 @@ defmodule RustQ.MixProject do
         "Start here": [
           RustQ,
           RustQ.Meta,
+          RustQ.Native,
+          RustQ.Test,
           RustQ.Type,
           RustQ.Config,
           RustQ.Rustler,

@@ -60,6 +60,27 @@ The skill itself is also available at
 | Generate Rustler boilerplate | `RustQ.Rustler` helpers or `RustQ.Rustler.Schema` |
 | Introspect existing Rust crates structurally | `RustQ.Syn` |
 | Keep generated files checked in and fresh | `rustq.exs` plus `mix rustq.gen --check` |
+| Test generated functions and NIF exports | `use RustQ.Test` |
+
+## Testing generated modules
+
+RustQ ships focused ExUnit assertions for both helpers and native entrypoints:
+
+```elixir
+defmodule MyApp.NativeTest do
+  use RustQ.Test, async: true
+
+  test "generates the expected boundary" do
+    assert_defrust MyApp.Native, :sum_impl, "fn sum_impl"
+    assert_defnif MyApp.Native, :sum, 1, ~r/fn sum.*Vec<f64>/
+    assert_rust_valid MyApp.Native
+  end
+end
+```
+
+These assertions render one function at a time and report the generated Rust on
+failure. `assert_defnif/4` additionally verifies the Elixir export and
+`#[rustler::nif]` attribute.
 
 ## Rusty Elixir with `defrust`
 

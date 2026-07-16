@@ -66,6 +66,11 @@ defmodule RustQZeroRustConsumer.Native do
   defnif(factorial(0), do: 1)
   defnif(factorial(value), do: value * factorial(value - 1))
 
+  @spec guarded_sign(integer()) :: integer()
+  defnif(guarded_sign(value) when value > 0, do: 1)
+  defnif(guarded_sign(value) when value < 0, do: -1)
+  defnif(guarded_sign(_value), do: 0)
+
   @spec recursive_sum([integer()]) :: integer()
   defnif(recursive_sum([]), do: 0)
   defnif(recursive_sum([head | tail]), do: head + recursive_sum(tail))
@@ -83,6 +88,10 @@ defmodule RustQZeroRustConsumer.Native do
   defnif translate(point, dx, dy) do
     %{x: point.x + dx, y: point.y + dy}
   end
+
+  @spec guarded_coordinate(coordinates()) :: float()
+  defnif(guarded_coordinate(%{x: x}) when x > 0.0, do: x)
+  defnif(guarded_coordinate(_point), do: 0.0)
 
   @spec coordinate_sum(coordinates()) :: float()
   defnif coordinate_sum(coordinates) do

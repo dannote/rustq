@@ -57,6 +57,22 @@ defnif counter_value(counter), do: counter.value
 Resource mutation, synchronization, and thread-safety remain explicit policy;
 `R.resource/1` only derives registration and the `ResourceArc` boundary.
 
+Function-head guards and `case` `when` guards lower through the same typed
+expression path as ordinary Rusty-Elixir conditions. Comparisons, boolean
+operators, arithmetic guard expressions, and supported typed calls therefore
+work for both `defrust` and `defnif`; unsupported semantics produce a lowering
+diagnostic rather than being dropped.
+
+Consumer tests can use the packaged ExUnit helpers:
+
+```elixir
+use RustQ.Test, async: true
+
+assert_defrust MyApp.Native, :sum_impl, "fn sum_impl"
+assert_defnif MyApp.Native, :sum, 1, ~r/fn sum.*Vec<f64>/
+assert_rust_valid MyApp.Native
+```
+
 ## What remains explicit
 
 Minimal configuration does not mean guessing about safety or deployment.

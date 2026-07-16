@@ -1,7 +1,7 @@
 Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
 
 defmodule RustQ.Meta.DefrustTest do
-  use ExUnit.Case, async: true
+  use RustQ.Test, async: true
 
   alias RustQ.Diagnostic
   alias RustQ.Meta.AST, as: MetaAST
@@ -42,7 +42,7 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "Event::Click(Click { name: name }) =>"
     assert source =~ "Event::Resize(Resize { width: width, height: height }) =>"
 
-    assert RustQ.valid?(source, "generated_defrust.rs")
+    assert_rust_valid(Generated)
   end
 
   test "defnif marks public entrypoints and defrustp keeps helpers private" do
@@ -66,6 +66,8 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
     assert source =~ "fn add(left: i64, right: i64) -> i64"
     assert source =~ "fn add_impl(left: i64, right: i64) -> i64"
+    assert_defnif(EntrypointCase, :add, 2, "fn add(left: i64, right: i64) -> i64")
+    assert_defrust(EntrypointCase, :add_impl, "fn add_impl(left: i64, right: i64) -> i64")
     assert function_exported?(EntrypointCase, :add, 2)
     refute function_exported?(EntrypointCase, :add_impl, 2)
 
@@ -94,7 +96,8 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "value => value * factorial(value - 1)"
     assert source =~ "value if value > 0 => 1"
     assert source =~ "_value => -1"
-    assert RustQ.valid?(source, "multi_clause.rs")
+    assert_defrust(MultiClauseCase, :sign, "value if value > 0 => 1")
+    assert_rust_valid(MultiClauseCase)
   end
 
   test "preserves no-parentheses function pointer field access in expected positions" do

@@ -1,5 +1,5 @@
 defmodule RustQPublicConsumer.PublicAPITest do
-  use ExUnit.Case, async: true
+  use RustQ.Test, async: true
 
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Rust
@@ -16,5 +16,9 @@ defmodule RustQPublicConsumer.PublicAPITest do
 
     assert [_, _] = generated = RustQPublicConsumer.Generated.__rustq_items__()
     assert Rust.render_all(generated) =~ "fn increment_all"
+
+    assert_defrust(RustQPublicConsumer.Generated, :increment, "fn increment(value: u32) -> u32")
+    assert_defrust(RustQPublicConsumer.Generated, :increment_all, ~r/into_iter.*map/s)
+    assert_rust_valid(RustQPublicConsumer.Generated)
   end
 end

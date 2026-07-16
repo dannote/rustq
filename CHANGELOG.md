@@ -16,9 +16,11 @@
   patterns, guards, comprehensions, and structural slice-pattern AST support;
   normalize semantics-preserving Kernel, Enum, List, typed Map, String, Tuple,
   and Range calls through focused hidden lowerers with call-specific typing.
+- Add packaged `RustQ.Test` ExUnit assertions for focused `defrust` source,
+  `defnif` exports/attributes, and generated Rust validity.
 - Validate documented public APIs, package contents, checked generation, and a
-  formatted, Clippy-clean zero-Rust native crate through external consumer
-  fixtures containing no checked-in Rust or Cargo files.
+  formatted, Clippy-clean zero-Rust native crate through structured external
+  consumer fixtures containing no checked-in Rust or Cargo files.
 
 ## v0.11.1 - 2026-07-14
 

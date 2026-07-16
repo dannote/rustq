@@ -432,6 +432,24 @@ RustQ.Rust.fragment(:item, [
 
 If a raw escape grows beyond a small syntax boundary, stop and add a semantic RustQ capability.
 
+## Test generated APIs idiomatically
+
+Consumer tests should use `RustQ.Test` instead of reaching into build
+directories or repeating source-search helpers:
+
+```elixir
+use RustQ.Test, async: true
+
+assert_defrust MyApp.Native, :decode_impl, "fn decode_impl"
+assert_defnif MyApp.Native, :decode, 1, ~r/fn decode/
+assert_rust_valid MyApp.Native
+```
+
+`assert_defnif/4` verifies both the Elixir export and generated Rustler NIF
+attribute. Keep package/build orchestration in a project test case or fixture
+driver rather than embedding shell runners and temporary-workspace management
+inside behavior tests.
+
 ## Porting checklist
 
 When porting existing bindings:

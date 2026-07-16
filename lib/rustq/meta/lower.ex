@@ -949,7 +949,7 @@ defmodule RustQ.Meta.Lower do
         %AST.Arm{
           pattern:
             pattern |> lower_match_pattern(case_type) |> mark_mutable_pattern_vars(mutable_vars),
-          guard: lower_guard_expr(guard, context),
+          guard: lower_guard_expr(guard, body_context),
           body: body
         }
       end)
@@ -1475,6 +1475,22 @@ defmodule RustQ.Meta.Lower do
        do: context_with_list_pattern(pattern, type, context)
 
   defp context_with_match_pattern(
+         {:%{}, _, fields},
+         %Type{kind: :struct} = type,
+         %Context{} = context
+       )
+       when is_list(fields),
+       do: context_with_struct_pattern(fields, type, context)
+
+  defp context_with_match_pattern(
+         {:%, _, [_module, {:%{}, _, fields}]},
+         %Type{kind: :struct} = type,
+         %Context{} = context
+       )
+       when is_list(fields),
+       do: context_with_struct_pattern(fields, type, context)
+
+  defp context_with_match_pattern(
          {name, _meta, ast_context},
          %Type{} = type,
          %Context{} = context
@@ -1498,6 +1514,15 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp context_with_match_pattern(_pattern, _type, %Context{} = context), do: context
+
+  defp context_with_struct_pattern(fields, %Type{} = type, %Context{} = context) do
+    Enum.reduce(fields, context, fn {field, pattern}, acc ->
+      case Type.field_type(type, field) do
+        %Type{} = field_type -> context_with_match_pattern(pattern, field_type, acc)
+        nil -> acc
+      end
+    end)
+  end
 
   defp context_with_list_pattern(pattern, %Type{} = type, %Context{} = context) do
     {elements, rest} = split_list_pattern(pattern)
@@ -1607,25 +1632,23 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_match_pattern(
          {:%{}, _, fields},
-         %Type{kind: :struct, rust: rust_name}
+         %Type{kind: :struct, rust: rust_name, meta: %{fields: type_fields}}
        )
        when is_list(fields) do
     %AST.PatStruct{
       path: %AST.Path{parts: [rust_name]},
-      fields:
-        Enum.map(fields, fn {name, pattern} -> {name, lower_match_pattern(pattern, nil)} end)
+      fields: lower_struct_pattern_fields(fields, type_fields)
     }
   end
 
   defp lower_match_pattern(
          {:%, _, [_module, {:%{}, _, fields}]},
-         %Type{kind: :struct, rust: rust_name}
+         %Type{kind: :struct, rust: rust_name, meta: %{fields: type_fields}}
        )
        when is_list(fields) do
     %AST.PatStruct{
       path: %AST.Path{parts: [rust_name]},
-      fields:
-        Enum.map(fields, fn {name, pattern} -> {name, lower_match_pattern(pattern, nil)} end)
+      fields: lower_struct_pattern_fields(fields, type_fields)
     }
   end
 
@@ -1679,6 +1702,15 @@ defmodule RustQ.Meta.Lower do
       suggestion:
         "Use a variable, tuple, list, option/result, atom, literal, or supported struct pattern."
     )
+  end
+
+  defp lower_struct_pattern_fields(fields, type_fields) do
+    patterns = Map.new(fields)
+
+    Enum.map(type_fields, fn {name, _type, _presence} ->
+      pattern = Map.get(patterns, name, {:_, [], nil})
+      {name, lower_match_pattern(pattern, nil)}
+    end)
   end
 
   defp lower_list_pattern(pattern, %Type{} = type) do
