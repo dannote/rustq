@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Funnel compiled `defrust` AST access and internal rendering through the
+  documented `RustQ.Meta.AST` and `RustQ.Rust` boundaries.
+- Preserve inferred tuple types as structural `RustQ.Rust.AST.TypeTuple` nodes
+  instead of raw rendered type strings.
+
 ## v1.0.0-rc.1 - 2026-07-16
 
 - Define the RustQ 1.x compatibility contract and ship the policy with the

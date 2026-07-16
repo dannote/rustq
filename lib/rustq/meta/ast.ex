@@ -9,16 +9,27 @@ defmodule RustQ.Meta.AST do
   alias RustQ.Meta.Lower
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
+  alias RustQ.Rust
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.Identifier
 
   require A
 
-  @doc "Returns all generated `defrust` function AST nodes from a compiled module."
+  @doc """
+  Returns all generated `defrust` function AST nodes from a compiled module.
+
+  Raises `ArgumentError` when the module does not contain compiled `defrust`
+  metadata.
+  """
   @spec functions(module()) :: [AST.Function.t()]
-  def functions(module) when is_atom(module), do: module.__rustq_asts__()
+  def functions(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :__rustq_asts__, 0) do
+      module.__rustq_asts__()
+    else
+      raise ArgumentError, "#{inspect(module)} has no compiled defrust function metadata"
+    end
+  end
 
   @doc "Returns one generated `defrust` function AST by name, raising when absent."
   @spec function!(module(), atom() | String.t()) :: AST.Function.t()
@@ -266,7 +277,7 @@ defmodule RustQ.Meta.AST do
   defp rust_ast_type(type_ast) do
     %Type{
       kind: rust_ast_type_kind(type_ast),
-      rust: type_ast |> Render.render_type() |> IO.iodata_to_binary(),
+      rust: Rust.render_type(type_ast),
       ast: type_ast
     }
   end

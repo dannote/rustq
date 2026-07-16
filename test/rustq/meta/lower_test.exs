@@ -21,6 +21,7 @@ defmodule RustQ.Meta.LowerTest do
   alias RustQ.Codegen.Decoders
   alias RustQ.Codegen.Helpers
   alias RustQ.Diagnostic
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Meta.Lower
@@ -1669,7 +1670,7 @@ defmodule RustQ.Meta.LowerTest do
 
   test "defrust consumes idiomatic Rust-facing attributes" do
     assert %Function{attrs: attrs} =
-             AttrCase.__rustq_asts__()
+             MetaAST.functions(AttrCase)
              |> Enum.find(&(&1.name == :render))
 
     assert [
@@ -1688,7 +1689,7 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "generated ASTs are retained before fragment validation" do
-    [draw_save, decode_mode, draw_rect, maybe_save | _] = Generated.__rustq_asts__()
+    [draw_save, decode_mode, draw_rect, maybe_save | _] = MetaAST.functions(Generated)
 
     assert %Function{
              name: :draw_save,
@@ -1897,7 +1898,7 @@ defmodule RustQ.Meta.LowerTest do
                %AST.IfLet{pattern: %AST.PatSome{pattern: %AST.PatVar{name: :alpha}}},
                %AST.Return{expr: %AST.Ok{}}
              ]
-           } = OptionCase.__rustq_asts__() |> List.first()
+           } = OptionCase |> MetaAST.functions() |> List.first()
 
     source = OptionCase.__rustq_source__()
     assert source =~ "if let Some(alpha) = maybe_alpha"
@@ -1905,7 +1906,7 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "dogfooded native helpers lower binary operators and Rust string types" do
-    helpers = Helpers.__rustq_asts__()
+    helpers = MetaAST.functions(Helpers)
 
     assert %Function{
              name: :required_field,
@@ -1973,7 +1974,7 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "ordinary syntax lowers to RustQ AST while native decoders use structural helpers" do
-    draw_rect = Enum.find(Generated.__rustq_asts__(), &(&1.name == :draw_rect))
+    draw_rect = Enum.find(MetaAST.functions(Generated), &(&1.name == :draw_rect))
 
     decode_expr_ref =
       Enum.find(Decoders.asts(), &(&1.name == :decode_expr_ref))
@@ -1997,7 +1998,7 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "nested branches use expected return type wrapping" do
-    asts = Generated.__rustq_asts__()
+    asts = MetaAST.functions(Generated)
 
     assert %Function{
              name: :nested_option,

@@ -58,7 +58,7 @@ defmodule RustQ.Meta do
   alias RustQ.Meta.Options
   alias RustQ.Meta.RustMacro
   alias RustQ.Meta.Type
-  alias RustQ.Rust.AST.Render
+  alias RustQ.Rust
   alias RustQ.Rust.Identifier
 
   @doc false
@@ -236,10 +236,8 @@ defmodule RustQ.Meta do
     rust_items = AST.group_module_asts(built_macros ++ built_asts)
     items = type_items ++ rust_items
 
-    type_source = Enum.map_join(type_items, "\n\n", &Render.render_item/1)
-
-    function_source =
-      Enum.map_join(rust_items, "\n\n", &Render.render_item/1)
+    type_source = Rust.render_all(type_items)
+    function_source = Rust.render_all(rust_items)
 
     source = [type_source, function_source] |> Enum.reject(&(&1 == "")) |> Enum.join("\n\n")
 

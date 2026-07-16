@@ -7,7 +7,7 @@ defmodule RustQ.Codegen.GeneratedASTTest do
   alias RustQ.Codegen.Decoders.Type, as: TypeDecoders
   alias RustQ.Codegen.Dispatch
   alias RustQ.Codegen.Modules
-
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Rust.AST.Schema
 
   alias RustQ.Rust.AST.{
@@ -105,7 +105,8 @@ defmodule RustQ.Codegen.GeneratedASTTest do
 
   test "type ref decoder delegates only the syn ref construction boundary" do
     assert %Function{body: body} =
-             TypeDecoders.__rustq_asts__()
+             TypeDecoders
+             |> MetaAST.functions()
              |> Enum.find(&(&1.name == :decode_type_ref))
 
     assert %Return{
@@ -114,7 +115,7 @@ defmodule RustQ.Codegen.GeneratedASTTest do
   end
 
   test "type container decoders use generic type construction" do
-    decoders = TypeDecoders.__rustq_asts__()
+    decoders = MetaAST.functions(TypeDecoders)
 
     for name <- [
           :decode_type_option,
@@ -134,7 +135,7 @@ defmodule RustQ.Codegen.GeneratedASTTest do
   end
 
   test "dogfooded type helpers cover path and lifetime list boundaries" do
-    type_decoders = TypeDecoders.__rustq_asts__()
+    type_decoders = MetaAST.functions(TypeDecoders)
 
     assert %Function{name: :path_parts, body: path_body} =
              Enum.find(type_decoders, &(&1.name == :path_parts))
@@ -160,7 +161,7 @@ defmodule RustQ.Codegen.GeneratedASTTest do
   end
 
   test "dogfooded derive decoder uses iterator lowering" do
-    item_decoders = ItemDecoders.__rustq_asts__()
+    item_decoders = MetaAST.functions(ItemDecoders)
 
     assert %Function{name: :decode_derive_path_list, body: body} =
              Enum.find(item_decoders, &(&1.name == :decode_derive_path_list))
@@ -177,7 +178,7 @@ defmodule RustQ.Codegen.GeneratedASTTest do
   end
 
   test "dogfooded item decoders expose structural AST boundaries" do
-    item_decoders = ItemDecoders.__rustq_asts__()
+    item_decoders = MetaAST.functions(ItemDecoders)
 
     assert %Function{name: :decode_ast_function, body: function_body} =
              Enum.find(item_decoders, &(&1.name == :decode_ast_function))

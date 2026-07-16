@@ -12,8 +12,15 @@ defmodule RustQ.SpecTest do
   end
 
   test "lowers quoted tuple types structurally" do
-    assert %RustQ.Meta.Type{kind: :tuple, rust: "(f64, f64)", meta: %{elements: elements}} =
-             RustQ.Spec.type(quote(do: {number(), number()}))
+    assert %RustQ.Meta.Type{
+             kind: :tuple,
+             rust: "(f64, f64)",
+             ast: %RustQ.Rust.AST.TypeTuple{items: items},
+             meta: %{elements: elements}
+           } = RustQ.Spec.type(quote(do: {number(), number()}))
+
+    assert [%RustQ.Rust.AST.TypePath{parts: [:f64]}, %RustQ.Rust.AST.TypePath{parts: [:f64]}] =
+             items
 
     assert [%RustQ.Meta.Type{kind: :f64}, %RustQ.Meta.Type{kind: :f64}] = elements
   end

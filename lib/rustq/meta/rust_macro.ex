@@ -5,8 +5,8 @@ defmodule RustQ.Meta.RustMacro do
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.Lower
   alias RustQ.Meta.Type
+  alias RustQ.Rust
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
 
   defmodule Definition do
     @moduledoc false
@@ -550,11 +550,7 @@ defmodule RustQ.Meta.RustMacro do
     "fn #{name}#{lifetime}(#{args}) -> #{render_type(return_type)} {\n#{indent(rendered_body)}\n}"
   end
 
-  defp render_macro_item_stmt(stmt) do
-    stmt
-    |> Render.render_stmt()
-    |> IO.iodata_to_binary()
-  end
+  defp render_macro_item_stmt(stmt), do: Rust.render(stmt)
 
   defp macro_capture_source({name, _meta, args}, macro_vars)
        when is_atom(name) and is_list(args) do
@@ -570,7 +566,7 @@ defmodule RustQ.Meta.RustMacro do
     if Map.has_key?(macro_vars, other), do: "$#{other}", else: Atom.to_string(other)
   end
 
-  defp render_type(%Type{} = type), do: type.ast |> Render.render_type() |> IO.iodata_to_binary()
+  defp render_type(%Type{} = type), do: Rust.render_type(type.ast)
 
   defp macro_var_map(args) do
     args
@@ -585,8 +581,7 @@ defmodule RustQ.Meta.RustMacro do
   defp source(name, args, body) do
     pattern = Enum.map_join(args, ", ", fn {arg_name, fragment} -> "$#{arg_name}:#{fragment}" end)
 
-    rendered_body =
-      Enum.map_join(body, "\n", &(Render.render_stmt(&1) |> IO.iodata_to_binary()))
+    rendered_body = Enum.map_join(body, "\n", &Rust.render/1)
 
     "macro_rules! #{name} {\n    (#{pattern}) => {{\n#{indent(rendered_body)}\n    }};\n}"
   end

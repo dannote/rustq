@@ -18,8 +18,8 @@ defmodule RustQ.Meta.Type do
   parsing rendered Rust type strings.
   """
 
+  alias RustQ.Rust
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.Identifier
   alias RustQ.Syn.Type, as: SynType
 
@@ -865,7 +865,7 @@ defmodule RustQ.Meta.Type do
   end
 
   defp path_alias_type(%AST.TypePath{} = ast, aliases) do
-    rust = ast |> Render.render_type() |> IO.iodata_to_binary()
+    rust = Rust.render_type(ast)
 
     Enum.find_value(aliases, fn
       {_key, %__MODULE__{meta: %{rust_name: ^rust}} = alias_type} -> alias_type
@@ -1014,8 +1014,8 @@ defmodule RustQ.Meta.Type do
   defp ast_type_kind(_ast), do: :type
 
   defp tuple_type(tuple_types) do
-    rendered = Enum.map_join(tuple_types, ", ", & &1.rust)
-    type(:tuple, %AST.TypeRaw{source: "(#{rendered})"}, %{elements: tuple_types})
+    ast = %AST.TypeTuple{items: Enum.map(tuple_types, & &1.ast)}
+    type(:tuple, ast, %{elements: tuple_types})
   end
 
   defp struct_type?({:%, _, [{:__aliases__, _, _parts}, {:%{}, _, fields}]}) when is_list(fields),
@@ -1145,7 +1145,7 @@ defmodule RustQ.Meta.Type do
     %__MODULE__{
       kind: kind,
       ast: ast,
-      rust: ast |> Render.render_type() |> IO.iodata_to_binary(),
+      rust: Rust.render_type(ast),
       meta: meta
     }
   end

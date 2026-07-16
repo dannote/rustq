@@ -1,8 +1,8 @@
 defmodule RustQ.Meta.Validate do
   @moduledoc false
 
+  alias RustQ.Rust
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
 
   def item_ast(%AST.Function{} = item), do: ast_item(item)
   def item_ast(%AST.Module{} = item), do: ast_item(item)
@@ -14,6 +14,6 @@ defmodule RustQ.Meta.Validate do
   def item_ast(%AST.MacroRules{} = item), do: ast_item(item)
 
   def ast_item(item) do
-    RustQ.parse_fragment!(:item, Render.render_item(item))
+    RustQ.parse_fragment!(:item, Rust.render(item))
   end
 end

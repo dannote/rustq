@@ -19,6 +19,7 @@ defmodule RustQ.Test do
   failures remain focused.
   """
 
+  alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Rust
   alias RustQ.Rust.AST
 
@@ -144,11 +145,5 @@ defmodule RustQ.Test do
     "expected generated Rust for #{target} to match #{inspect(expected)}:\n#{source}"
   end
 
-  defp functions!(module) do
-    if function_exported?(module, :__rustq_asts__, 0) do
-      module.__rustq_asts__()
-    else
-      raise ArgumentError, "#{inspect(module)} does not expose __rustq_asts__/0"
-    end
-  end
+  defp functions!(module), do: MetaAST.functions(module)
 end

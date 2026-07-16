@@ -10,8 +10,8 @@ defmodule RustQ.Meta.Lower do
   alias RustQ.Meta.Semantics
   alias RustQ.Meta.Type
   alias RustQ.Meta.Typing
+  alias RustQ.Rust
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.Render
   alias RustQ.Rust.AST.Walk
   alias RustQ.Rust.Identifier
 
@@ -56,7 +56,7 @@ defmodule RustQ.Meta.Lower do
   def function_body(body_ast, return_type, vars \\ %{}, opts \\ []) do
     body_ast
     |> quoted_body(return_type, vars, opts)
-    |> Enum.map_join("\n", &Render.render_stmt/1)
+    |> Enum.map_join("\n", &Rust.render/1)
   end
 
   @doc """
@@ -2336,14 +2336,14 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp macro_call_arg_tokens(arg, :expr, %Context{} = context),
-    do: arg |> lower_expr(context) |> Render.render_expr() |> IO.iodata_to_binary()
+    do: arg |> lower_expr(context) |> Rust.render()
 
   defp macro_call_arg_tokens(arg, :ty, %Context{} = context),
-    do: arg |> lower_type_arg(context) |> Render.render_type() |> IO.iodata_to_binary()
+    do: arg |> lower_type_arg(context) |> Rust.render_type()
 
   defp macro_call_arg_tokens(arg, fragment, %Context{} = context)
        when fragment in [:ident, :literal],
-       do: arg |> lower_expr(context) |> Render.render_expr() |> IO.iodata_to_binary()
+       do: arg |> lower_expr(context) |> Rust.render()
 
   defp macro_call_arg_tokens(arg, fragment, %Context{}) do
     Diagnostic.lower(

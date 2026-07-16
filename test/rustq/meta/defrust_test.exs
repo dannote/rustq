@@ -456,7 +456,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     call =
-      RustQ.Meta.AST.macro_call!(DefrustMacroItemCallCase, :descriptor,
+      MetaAST.macro_call!(DefrustMacroItemCallCase, :descriptor,
         fn: :decode_user,
         env: :env,
         fields: [
@@ -467,7 +467,7 @@ defmodule RustQ.Meta.DefrustTest do
 
     source =
       [
-        RustQ.Meta.AST.macro_item!(DefrustMacroItemCallCase, :descriptor),
+        MetaAST.macro_item!(DefrustMacroItemCallCase, :descriptor),
         call
       ]
       |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
@@ -527,7 +527,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     call =
-      RustQ.Meta.AST.macro_call!(DefrustMacroFullMessageItemCallCase, :descriptor,
+      MetaAST.macro_call!(DefrustMacroFullMessageItemCallCase, :descriptor,
         fn: :decode_message,
         fields: [
           [field_id: 1, field_index: 1, field_repeated: false, field_decode: :decode_id],
@@ -537,7 +537,7 @@ defmodule RustQ.Meta.DefrustTest do
 
     source =
       [
-        RustQ.Meta.AST.macro_item!(DefrustMacroFullMessageItemCallCase, :descriptor),
+        MetaAST.macro_item!(DefrustMacroFullMessageItemCallCase, :descriptor),
         call
       ]
       |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
@@ -581,7 +581,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     call =
-      RustQ.Meta.AST.macro_call!(DefrustMacroOneCaptureItemCallCase, :descriptor,
+      MetaAST.macro_call!(DefrustMacroOneCaptureItemCallCase, :descriptor,
         fn: :decode_values,
         fields: [
           [field_expr: "1 + 2"],
@@ -591,7 +591,7 @@ defmodule RustQ.Meta.DefrustTest do
 
     source =
       [
-        RustQ.Meta.AST.macro_item!(DefrustMacroOneCaptureItemCallCase, :descriptor),
+        MetaAST.macro_item!(DefrustMacroOneCaptureItemCallCase, :descriptor),
         call
       ]
       |> Enum.map_join("\n", &RustQ.Rust.to_fragment/1)
@@ -617,14 +617,14 @@ defmodule RustQ.Meta.DefrustTest do
       end
     end
 
-    [field] = RustQ.Meta.AST.macro_items!(DefrustMacroSelectorCase, [:field])
+    [field] = MetaAST.macro_items!(DefrustMacroSelectorCase, [:field])
     source = RustQ.Rust.to_fragment(field)
 
     assert source =~ "macro_rules! field"
     assert source =~ "required_field($term, $name)?.decode::<$type>()?"
 
     assert_raise ArgumentError, ~r/no defrustmacro item named missing/, fn ->
-      RustQ.Meta.AST.macro_item!(DefrustMacroSelectorCase, :missing)
+      MetaAST.macro_item!(DefrustMacroSelectorCase, :missing)
     end
   end
 
@@ -1341,7 +1341,7 @@ defmodule RustQ.Meta.DefrustTest do
     end
 
     assert %AST.Function{name: :generated_save, body: [%AST.ExprStmt{}, %AST.Return{}]} =
-             GeneratedSaveCase.__rustq_asts__() |> List.first()
+             GeneratedSaveCase |> MetaAST.functions() |> List.first()
 
     source = GeneratedSaveCase.__rustq_source__()
     assert source =~ "fn generated_save(canvas: &Canvas) -> NifResult<()>"
@@ -1765,6 +1765,10 @@ defmodule RustQ.Meta.DefrustTest do
 
     assert_raise ArgumentError, fn ->
       MetaAST.function!(RustQ.Meta.GeneratedCase, :missing)
+    end
+
+    assert_raise ArgumentError, ~r/no compiled defrust function metadata/, fn ->
+      MetaAST.functions(__MODULE__)
     end
   end
 
@@ -2351,7 +2355,7 @@ defmodule RustQ.Meta.DefrustTest do
   end
 
   test "native AST renderer emits Rust through syn" do
-    [draw_save | _] = Generated.__rustq_asts__()
+    [draw_save | _] = MetaAST.functions(Generated)
 
     assert Nif.render_ast(draw_save) =~
              "fn draw_save(canvas: &Canvas) -> NifResult<()>"
