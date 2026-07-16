@@ -57,6 +57,14 @@ defmodule RustQ.Codegen.Decoders.Pat do
     Super.parse_path_tuple_pat(required_path(term, "path"), required_pat_list(term, "patterns"))
   end
 
+  @spec decode_pat_slice(term()) :: R.nif_result(R.path(:Pat))
+  defrust decode_pat_slice(term) do
+    Super.parse_slice_pat(
+      required_pat_list(term, "patterns"),
+      Super.decode_optional_pat_field(term, "rest")
+    )
+  end
+
   @spec decode_pat_struct(term()) :: R.nif_result(R.path(:Pat))
   defrust decode_pat_struct(term) do
     Super.parse_struct_pat(

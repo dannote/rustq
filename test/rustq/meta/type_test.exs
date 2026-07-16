@@ -213,6 +213,9 @@ defmodule RustQ.Meta.TypeTest do
                error: %SynType.Path{code: "Error", name: "Error", segments: ["Error"]}
              })
 
+    result_ast = quote(do: {:ok, integer()} | {:error, String.t()})
+    assert %Type{kind: :result, rust: "Result<i64, String>"} = RustQ.Spec.type(result_ast)
+
     assert %Type{kind: :tuple, rust: "(f32, f32)", meta: %{elements: [%Type{}, %Type{}]}} =
              Type.from_syn(%SynType.Tuple{
                code: "(f32, f32)",

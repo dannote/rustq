@@ -470,12 +470,19 @@ pub(crate) fn parse_index_expr(receiver: Expr, index: Expr) -> NifResult<Expr> {
     parse_syn::<Expr>(quote!(#receiver[#index]))
 }
 
-pub(crate) fn parse_range_expr(start: Option<Expr>, stop: Option<Expr>) -> NifResult<Expr> {
-    match (start, stop) {
-        (Some(start), Some(stop)) => parse_syn::<Expr>(quote!(#start..#stop)),
-        (Some(start), None) => parse_syn::<Expr>(quote!(#start..)),
-        (None, Some(stop)) => parse_syn::<Expr>(quote!(..#stop)),
-        (None, None) => parse_syn::<Expr>(quote!(..)),
+pub(crate) fn parse_range_expr(
+    start: Option<Expr>,
+    stop: Option<Expr>,
+    inclusive: bool,
+) -> NifResult<Expr> {
+    match (start, stop, inclusive) {
+        (Some(start), Some(stop), true) => parse_syn::<Expr>(quote!(#start..=#stop)),
+        (None, Some(stop), true) => parse_syn::<Expr>(quote!(..=#stop)),
+        (Some(start), Some(stop), false) => parse_syn::<Expr>(quote!(#start..#stop)),
+        (Some(start), None, false) => parse_syn::<Expr>(quote!(#start..)),
+        (None, Some(stop), false) => parse_syn::<Expr>(quote!(..#stop)),
+        (None, None, false) => parse_syn::<Expr>(quote!(..)),
+        _ => Err(rustler::Error::BadArg),
     }
 }
 
@@ -596,6 +603,10 @@ pub(crate) fn decode_optional_expr_field(term: Term, key: &str) -> NifResult<Opt
     decode_optional_field(term, key, decode_expr)
 }
 
+pub(crate) fn decode_optional_pat_field(term: Term, key: &str) -> NifResult<Option<Pat>> {
+    decode_optional_field(term, key, decode_pat)
+}
+
 enum LiteralTerm {
     Bool(bool),
     I64(i64),
@@ -665,6 +676,13 @@ pub(crate) fn parse_path_tuple_pat(path: syn::Path, patterns: Vec<Pat>) -> NifRe
 
 pub(crate) fn parse_struct_pat(path: syn::Path, fields: Vec<NamedField<Pat>>) -> NifResult<Pat> {
     parse_syn::<Pat>(quote!(#path { #(#fields),* }))
+}
+
+pub(crate) fn parse_slice_pat(patterns: Vec<Pat>, rest: Option<Pat>) -> NifResult<Pat> {
+    match rest {
+        Some(rest) => parse_syn::<Pat>(quote!([#(#patterns),*, #rest @ ..])),
+        None => parse_syn::<Pat>(quote!([#(#patterns),*])),
+    }
 }
 
 pub(crate) fn decode_pat_literal_value(term: Term) -> NifResult<Pat> {

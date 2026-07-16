@@ -1,9 +1,26 @@
 Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
 
+defmodule RustQ.Meta.ResourceTypeCase do
+  use RustQ.Meta
+  alias RustQ.Type, as: R
+
+  @type counter_state :: %{required(:value) => integer()}
+  @type counter :: R.resource(counter_state())
+end
+
 defmodule RustQ.Meta.TypeItemsTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Meta.{ResourceTypeCase, Type}
+
+  test "resource aliases preserve their structural inner type" do
+    assert %Type{kind: :resource} =
+             resource =
+             ResourceTypeCase.__rustq_types__()[{:counter, 0}]
+
+    assert %Type{kind: :struct} = Type.inner(resource)
+  end
 
   test "set-theoretic type aliases are available to specs" do
     assert %RustQ.Meta.Type{kind: :enum, rust: "Mode", meta: %{variants: [:src_over, :multiply]}} =

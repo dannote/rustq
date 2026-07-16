@@ -226,8 +226,12 @@ defmodule RustQ.Meta.Lower do
   defp lower_return_expr_context({:error, value}, %Type{kind: :nif_result}, %Context{} = context),
     do: %AST.Err{expr: lower_nif_error(value, context)}
 
-  defp lower_return_expr_context({:error, value}, %Type{kind: :result}, %Context{} = context),
-    do: %AST.Err{expr: lower_expr(value, context)}
+  defp lower_return_expr_context(
+         {:error, value},
+         %Type{kind: :result} = return_type,
+         %Context{} = context
+       ),
+       do: %AST.Err{expr: lower_expr(value, Type.error(return_type), context)}
 
   defp lower_return_expr_context(
          expression,
@@ -265,6 +269,14 @@ defmodule RustQ.Meta.Lower do
          %Context{} = context
        ),
        do: lower_expected_expr_context(expression, expected_type, context)
+
+  defp lower_expected_expr_context(
+         value,
+         %Type{meta: %{elixir_module: String, elixir_type: :t}},
+         %Context{}
+       )
+       when is_binary(value),
+       do: %AST.MethodCall{receiver: %AST.Literal{value: value}, method: :to_string, args: []}
 
   defp lower_expected_expr_context(
          {:ref, _, [expression]},
@@ -309,6 +321,34 @@ defmodule RustQ.Meta.Lower do
     %AST.StructLiteral{
       path: lower_struct_literal_path(path, context),
       fields: lower_named_fields(fields, expected_type, context)
+    }
+  end
+
+  defp lower_expected_expr_context(
+         {:%{}, _, fields} = expression,
+         %Type{kind: :resource} = expected_type,
+         %Context{} = context
+       )
+       when is_list(fields) do
+    inner = expected_type |> Type.inner() |> Type.expected_value()
+
+    %AST.PathCall{
+      path: %AST.Path{parts: [:ResourceArc, :new]},
+      args: [lower_expr(expression, inner, context)]
+    }
+  end
+
+  defp lower_expected_expr_context(
+         {:%, _, [_module, {:%{}, _, fields}]} = expression,
+         %Type{kind: :resource} = expected_type,
+         %Context{} = context
+       )
+       when is_list(fields) do
+    inner = expected_type |> Type.inner() |> Type.expected_value()
+
+    %AST.PathCall{
+      path: %AST.Path{parts: [:ResourceArc, :new]},
+      args: [lower_expr(expression, inner, context)]
     }
   end
 
@@ -639,6 +679,27 @@ defmodule RustQ.Meta.Lower do
   defp lower_expr_context({:index, _, [receiver, index]}, %Context{} = context),
     do: %AST.Index{receiver: lower_expr(receiver, context), index: lower_expr(index, context)}
 
+  defp lower_expr_context({:.., _, [start, stop]}, %Context{} = context),
+    do: %AST.Range{
+      start: lower_expr(start, context),
+      stop: lower_expr(stop, context),
+      inclusive: true
+    }
+
+  defp lower_expr_context({:in, _, [value, collection]}, %Context{} = context) do
+    receiver =
+      case lower_expr(collection, context) do
+        %AST.Range{} = range -> %AST.BlockExpr{body: [%AST.Return{expr: range}]}
+        expression -> expression
+      end
+
+    %AST.MethodCall{
+      receiver: receiver,
+      method: :contains,
+      args: [%AST.Ref{expr: lower_expr(value, context)}]
+    }
+  end
+
   defp lower_expr_context({:==, _, [left, right]}, %Context{} = context),
     do: lower_binary_op(left, :eq, right, context)
 
@@ -895,6 +956,9 @@ defmodule RustQ.Meta.Lower do
   defp lower_checked_coercion(%Typing.Check{coercion: :some}, expression, context),
     do: %AST.Some{expr: lower_expr(expression, context)}
 
+  defp lower_checked_coercion(%Typing.Check{coercion: :to_vec}, expression, context),
+    do: %AST.MethodCall{receiver: lower_expr(expression, context), method: :to_vec, args: []}
+
   defp lower_checked_coercion(%Typing.Check{}, expression, context),
     do: lower_expr(expression, context)
 
@@ -941,6 +1005,21 @@ defmodule RustQ.Meta.Lower do
     %AST.Match{expr: match_expr, arms: arms}
   end
 
+  defp case_scrutinee(
+         expression,
+         %Type{kind: :vec} = expression_type,
+         clauses,
+         %Context{} = context
+       ) do
+    match_expr = lower_expr(expression, context)
+
+    if Enum.any?(clauses, &list_case_clause?/1) do
+      {expression_type, %AST.MethodCall{receiver: match_expr, method: :as_slice, args: []}}
+    else
+      {expression_type, match_expr}
+    end
+  end
+
   defp case_scrutinee(expression, %Type{} = expression_type, clauses, %Context{} = context) do
     if propagate_case_scrutinee?(expression_type, clauses) do
       inner = Type.inner(expression_type)
@@ -952,6 +1031,11 @@ defmodule RustQ.Meta.Lower do
 
   defp case_scrutinee(expression, _expression_type, clauses, %Context{} = context) do
     {infer_case_type_from_patterns(clauses), lower_expr(expression, context)}
+  end
+
+  defp list_case_clause?({:->, _, [[pattern], _body]}) do
+    {pattern, _guard} = split_guarded_pattern(pattern)
+    list_pattern?(pattern)
   end
 
   defp propagate_case_scrutinee?(%Type{} = expression_type, clauses) do
@@ -1366,6 +1450,23 @@ defmodule RustQ.Meta.Lower do
   defp option_pattern?({:{}, _, [:some, _pattern]}), do: true
   defp option_pattern?(_pattern), do: false
 
+  defp list_pattern?([]), do: true
+  defp list_pattern?([_head | _tail]), do: true
+  defp list_pattern?(_pattern), do: false
+
+  defp split_list_pattern(pattern), do: do_split_list_pattern(pattern, [])
+
+  defp do_split_list_pattern([], elements), do: {Enum.reverse(elements), nil}
+
+  defp do_split_list_pattern([{:|, _, [head, rest]}], elements),
+    do: {Enum.reverse([head | elements]), rest}
+
+  defp do_split_list_pattern([head | tail], elements) when is_list(tail),
+    do: do_split_list_pattern(tail, [head | elements])
+
+  defp do_split_list_pattern([head | tail], elements),
+    do: {Enum.reverse([head | elements]), tail}
+
   defp result_pattern?({:ok, _pattern}), do: true
   defp result_pattern?({:error, _pattern}), do: true
   defp result_pattern?({:{}, _, [:ok, _pattern]}), do: true
@@ -1411,6 +1512,16 @@ defmodule RustQ.Meta.Lower do
     context_with_inner_pattern(pattern, Type.inner(type), [:ok], context)
   end
 
+  defp context_with_match_pattern([], %Type{kind: :vec} = type, %Context{} = context),
+    do: context_with_list_pattern([], type, context)
+
+  defp context_with_match_pattern(
+         [_head | _tail] = pattern,
+         %Type{kind: :vec} = type,
+         %Context{} = context
+       ),
+       do: context_with_list_pattern(pattern, type, context)
+
   defp context_with_match_pattern(
          {name, _meta, ast_context},
          %Type{} = type,
@@ -1435,6 +1546,20 @@ defmodule RustQ.Meta.Lower do
   end
 
   defp context_with_match_pattern(_pattern, _type, %Context{} = context), do: context
+
+  defp context_with_list_pattern(pattern, %Type{} = type, %Context{} = context) do
+    {elements, rest} = split_list_pattern(pattern)
+    inner = Type.vec_inner(type)
+
+    context =
+      Enum.reduce(elements, context, fn element, acc ->
+        context_with_match_pattern(element, inner, acc)
+      end)
+
+    if rest,
+      do: context_with_match_pattern(rest, Type.slice_ref(inner), context),
+      else: context
+  end
 
   defp context_with_for_pattern(pattern, expression, %Context{} = context) do
     expression
@@ -1523,6 +1648,11 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
+  defp lower_match_pattern([], %Type{kind: :vec} = type), do: lower_list_pattern([], type)
+
+  defp lower_match_pattern([_head | _tail] = pattern, %Type{kind: :vec} = type),
+    do: lower_list_pattern(pattern, type)
+
   defp lower_match_pattern(
          {:%{}, _, fields},
          %Type{kind: :struct, rust: rust_name}
@@ -1547,10 +1677,12 @@ defmodule RustQ.Meta.Lower do
     }
   end
 
-  defp lower_match_pattern({:%, _, [{:__aliases__, _, [module]}, {:%{}, _, fields}]}, %Type{
+  defp lower_match_pattern({:%, _, [{:__aliases__, _, modules}, {:%{}, _, fields}]}, %Type{
          kind: :tuple_enum,
          rust: rust_name
        }) do
+    module = List.last(modules)
+
     %AST.PatPathTuple{
       path: %AST.Path{parts: [rust_name, module]},
       patterns: [
@@ -1593,8 +1725,18 @@ defmodule RustQ.Meta.Lower do
       other,
       "unsupported defrust match pattern",
       suggestion:
-        "Use a variable, tuple, option/result pattern, atom, literal, or supported struct pattern."
+        "Use a variable, tuple, list, option/result, atom, literal, or supported struct pattern."
     )
+  end
+
+  defp lower_list_pattern(pattern, %Type{} = type) do
+    {elements, rest} = split_list_pattern(pattern)
+    inner = Type.vec_inner(type)
+
+    %AST.PatSlice{
+      patterns: Enum.map(elements, &lower_match_pattern(&1, inner)),
+      rest: if(rest, do: lower_match_pattern(rest, Type.slice_ref(inner)))
+    }
   end
 
   defp lower_tuple_pattern({name, _, context}) when is_atom(name) and is_atom(context),
@@ -1607,6 +1749,9 @@ defmodule RustQ.Meta.Lower do
 
   defp lower_tuple_pattern(patterns) when is_tuple(patterns),
     do: %AST.PatTuple{patterns: patterns |> Tuple.to_list() |> Enum.map(&lower_tuple_pattern/1)}
+
+  defp lower_tuple_pattern(value) when is_binary(value) or is_integer(value),
+    do: %AST.PatLiteral{value: value}
 
   defp lower_tuple_pattern(nil), do: %AST.PatNone{}
   defp lower_tuple_pattern(atom) when is_atom(atom), do: %AST.PatAtomGuard{name: atom}

@@ -35,7 +35,8 @@ defmodule RustQ.Codegen.Decoders.Expr do
   defrust decode_expr_range(term) do
     Super.parse_range_expr(
       Super.decode_optional_expr_field(term, "start"),
-      Super.decode_optional_expr_field(term, "stop")
+      Super.decode_optional_expr_field(term, "stop"),
+      decode_as!(required_field(term, "inclusive"), boolean())
     )
   end
 

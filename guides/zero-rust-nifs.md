@@ -33,8 +33,29 @@ For a zero-Rust native module, RustQ owns:
 - incremental native compilation and generated-source inspection
 
 The simple path does not require `rustq.exs`, a checked-in `Cargo.toml`, or a
-checked-in `.rs` file. The existing manifest and structural generator APIs
-remain available for advanced multi-target generators and existing crates.
+checked-in `.rs` file. Generated crates are formatted before compilation and
+are available under the Mix build directory for inspection. The existing
+manifest and structural generator APIs remain available for advanced
+multi-target generators and existing crates.
+
+Boundary derivation covers scalar values, strings, binaries, tuples, lists,
+options, tagged results, typed maps, Elixir structs and exceptions, structural
+unions, unit enums, and explicitly declared resources. A generated resource can
+be declared without bridge Rust by wrapping a structural state type:
+
+```elixir
+@type counter_state :: %{required(:value) => integer()}
+@type counter :: R.resource(counter_state())
+
+@spec new_counter(integer()) :: counter()
+defnif new_counter(value), do: %{value: value}
+
+@spec counter_value(counter()) :: integer()
+defnif counter_value(counter), do: counter.value
+```
+
+Resource mutation, synchronization, and thread-safety remain explicit policy;
+`R.resource/1` only derives registration and the `ResourceArc` boundary.
 
 ## What remains explicit
 

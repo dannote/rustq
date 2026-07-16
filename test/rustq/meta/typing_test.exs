@@ -151,6 +151,12 @@ defmodule RustQ.Meta.TypingTest do
     assert %Typing.Check{coercion: :propagate} = Typing.check(quote(do: decode()), color, env)
     assert %Typing.Check{coercion: :some} = Typing.check(quote(do: color), option_color, env)
     assert %Typing.Check{coercion: :borrow} = Typing.check(quote(do: color), ref_color, env)
+
+    integer = type(:i64, "i64")
+    list_env = Typing.env(vars: %{tail: Type.slice_ref(integer)})
+
+    assert %Typing.Check{coercion: :to_vec} =
+             Typing.check(quote(do: tail), Type.vec(integer), list_env)
   end
 
   test "infers let expectations from vars and tuple-return calls" do

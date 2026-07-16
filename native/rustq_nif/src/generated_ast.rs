@@ -99,6 +99,7 @@ pub(crate) mod ast_modules {
     pub(crate) const PAT_ERR: &str = "Elixir.RustQ.Rust.AST.PatErr";
     pub(crate) const PAT_PATH_TUPLE: &str = "Elixir.RustQ.Rust.AST.PatPathTuple";
     pub(crate) const PAT_STRUCT: &str = "Elixir.RustQ.Rust.AST.PatStruct";
+    pub(crate) const PAT_SLICE: &str = "Elixir.RustQ.Rust.AST.PatSlice";
 }
 
 pub(crate) fn atom(env: Env, name: &str) -> NifResult<Atom> {
@@ -321,6 +322,7 @@ pub(crate) fn decode_ast_pat(term: Term) -> NifResult<Pat> {
         ast_modules::PAT_ERR => decode_pat_err(term),
         ast_modules::PAT_PATH_TUPLE => decode_pat_path_tuple(term),
         ast_modules::PAT_STRUCT => decode_pat_struct(term),
+        ast_modules::PAT_SLICE => decode_pat_slice(term),
         _ => Err(rustler::Error::BadArg),
     }
 }
@@ -665,6 +667,13 @@ pub(crate) fn decode_pat_path_tuple<'a>(term: Term<'a>) -> NifResult<Pat> {
     )
 }
 
+pub(crate) fn decode_pat_slice<'a>(term: Term<'a>) -> NifResult<Pat> {
+    super::parse_slice_pat(
+        required_pat_list(term, "patterns")?,
+        super::decode_optional_pat_field(term, "rest")?,
+    )
+}
+
 pub(crate) fn decode_pat_struct<'a>(term: Term<'a>) -> NifResult<Pat> {
     super::parse_struct_pat(
         required_path(term, "path")?,
@@ -792,6 +801,7 @@ pub(crate) fn decode_expr_range<'a>(term: Term<'a>) -> NifResult<Expr> {
     super::parse_range_expr(
         super::decode_optional_expr_field(term, "start")?,
         super::decode_optional_expr_field(term, "stop")?,
+        required_field(term, "inclusive")?.decode::<bool>()?,
     )
 }
 

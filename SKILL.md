@@ -303,7 +303,9 @@ Common supported forms include:
 
 - `@spec` / `@type` driven function signatures
 - ordinary assignments (`let`) and inferred mutability when later assigned
-- `case`, `if`, `with`, guards, tuple patterns, `{:ok, value}`, `{:error, reason}`, `{:some, value}`, `:none`
+- multiple clauses, recursion, `case`, `if`, `unless`, `cond`, `with`, and guards
+- tuple, list head/tail, map, struct, option/result, atom, and literal patterns
+- comprehensions, common `Enum` pipelines, ranges, and `in`
 - method calls, remote calls, local calls, aliases, pipelines
 - `decode_as/2` and `decode_as!/2` for Rustler term decoding
 - `ref/1`, `mut_ref/1`, `deref/1`, `cast/2`, `array/1`, `index/2`, `struct_literal/2`
@@ -323,7 +325,7 @@ Use `RustQ.Type` (`alias RustQ.Type, as: R`) for Rust-specific precision:
 
 - `R.ref/1`, `R.mut_ref/1`, `R.slice/1`
 - fixed-width numbers: `R.u32()`, `R.i64()`, `R.f32()`
-- `R.nif_result/1`, `R.result/2`, `R.option/1`, `R.vec/1`
+- `R.nif_result/1`, `R.result/2`, `R.option/1`, `R.vec/1`, `R.resource/1`
 - `R.lifetime/1`
 - `R.raw/1` and `R.path/1,2` as low-level escapes
 

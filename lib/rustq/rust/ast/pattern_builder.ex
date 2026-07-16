@@ -3,8 +3,8 @@ defmodule RustQ.Rust.AST.PatternBuilder do
   Constructors and normalization for Rust pattern AST nodes.
 
   `pattern/1` accepts existing pattern nodes and atom variables. Named helpers
-  cover wildcard, literal, path, tuple-variant, struct, `Some`, `Ok`, and `Err`
-  patterns.
+  cover wildcard, literal, path, tuple-variant, struct, slice, `Some`, `Ok`, and
+  `Err` patterns.
   """
 
   alias RustQ.Rust.AST
@@ -31,6 +31,13 @@ defmodule RustQ.Rust.AST.PatternBuilder do
 
   def path_tuple(path, patterns),
     do: %AST.PatPathTuple{path: A.expr_path(path), patterns: Enum.map(patterns, &pattern/1)}
+
+  def slice(patterns, opts \\ []) do
+    %AST.PatSlice{
+      patterns: Enum.map(patterns, &pattern/1),
+      rest: opts |> Keyword.get(:rest) |> then(&if(&1, do: pattern(&1)))
+    }
+  end
 
   def struct(path, fields) do
     %AST.PatStruct{

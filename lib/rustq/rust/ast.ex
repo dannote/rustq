@@ -68,6 +68,7 @@ defmodule RustQ.Rust.AST do
     PatOk,
     PatPath,
     PatPathTuple,
+    PatSlice,
     PatSome,
     PatStruct,
     PatTuple,
@@ -197,6 +198,7 @@ defmodule RustQ.Rust.AST do
           | PatErr.t()
           | PatPathTuple.t()
           | PatStruct.t()
+          | PatSlice.t()
 
   @type vis :: :pub | :crate | nil
 
@@ -518,12 +520,13 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{receiver: AST.expr(), index: AST.expr()})
   )
 
-  defnode(Range, :expr, [:start, :stop],
+  defnode(Range, :expr, [:start, :stop, inclusive: false],
     type:
       quote(
         do: %__MODULE__{
           start: AST.expr() | nil,
-          stop: AST.expr() | nil
+          stop: AST.expr() | nil,
+          inclusive: boolean()
         }
       )
   )
@@ -683,6 +686,10 @@ defmodule RustQ.Rust.AST do
     type: quote(do: %__MODULE__{path: Path.t(), fields: [{atom(), AST.pat()}]})
   )
 
+  defnode(PatSlice, :pat, [patterns: [], rest: nil],
+    type: quote(do: %__MODULE__{patterns: [AST.pat()], rest: AST.pat() | nil})
+  )
+
   @doc "Returns whether a value is a structural Rust type node."
   @spec type_node?(term()) :: boolean()
   def type_node?(term), do: category_node?(term, :type)
@@ -795,7 +802,8 @@ defmodule RustQ.Rust.AST do
       PatOk,
       PatErr,
       PatPathTuple,
-      PatStruct
+      PatStruct,
+      PatSlice
     ]
   end
 end

@@ -82,13 +82,26 @@ defmodule RustQ.Meta.Type do
   def inner(%__MODULE__{kind: :option, meta: %{inner: %__MODULE__{} = inner}}), do: inner
   def inner(%__MODULE__{kind: :result, meta: %{ok: %__MODULE__{} = ok}}), do: ok
   def inner(%__MODULE__{kind: :nif_result, meta: %{inner: %__MODULE__{} = inner}}), do: inner
+  def inner(%__MODULE__{kind: :resource, meta: %{inner: %__MODULE__{} = inner}}), do: inner
   def inner(%__MODULE__{kind: :option, ast: %AST.TypeOption{inner: inner}}), do: ast_type(inner)
   def inner(%__MODULE__{kind: :result, ast: %AST.TypeResult{ok: ok}}), do: ast_type(ok)
+
+  def inner(%__MODULE__{
+        kind: :resource,
+        ast: %AST.TypePath{parts: [:ResourceArc], generics: [inner]}
+      }),
+      do: ast_type(inner)
 
   def inner(%__MODULE__{kind: :nif_result, ast: %AST.TypeNifResult{inner: inner}}),
     do: ast_type(inner)
 
   def inner(%__MODULE__{}), do: nil
+
+  @doc "Returns the error type of a `Result` wrapper."
+  @spec error(t()) :: t() | nil
+  def error(%__MODULE__{kind: :result, meta: %{error: %__MODULE__{} = error}}), do: error
+  def error(%__MODULE__{kind: :result, ast: %AST.TypeResult{error: error}}), do: ast_type(error)
+  def error(%__MODULE__{}), do: nil
 
   @doc "Returns the referenced inner type for `&T` or `&mut T` metadata."
   @spec ref_inner(t()) :: t() | nil
@@ -191,6 +204,16 @@ defmodule RustQ.Meta.Type do
     type(:vec, %AST.TypeVec{inner: inner.ast}, %{inner: inner})
   end
 
+  @doc "Constructs borrowed slice metadata for a list-pattern tail."
+  @spec slice_ref(t()) :: t()
+  def slice_ref(%__MODULE__{} = inner) do
+    type(
+      :slice,
+      %AST.TypeRef{inner: %AST.TypeSlice{inner: inner.ast}},
+      %{inner: inner, borrowed: true}
+    )
+  end
+
   @doc """
   Returns the natural Rusty-Elixir input type for a callable expected type.
 
@@ -257,6 +280,9 @@ defmodule RustQ.Meta.Type do
         nil
     end) || type
   end
+
+  def expected_value(%__MODULE__{kind: :alias, meta: %{target: %__MODULE__{} = target}}),
+    do: expected_value(target)
 
   def expected_value(%__MODULE__{
         kind: :option,
@@ -577,18 +603,45 @@ defmodule RustQ.Meta.Type do
           fields: fields
         })
 
-      true ->
-        {target_type, _aliases} = parse_alias_type(ast, raw, aliases)
+      resource_marker?(ast) ->
+        {inner, _aliases} = parse_alias_type(resource_marker_inner(ast), raw, aliases)
 
-        if target_type.kind == :rust_enum do
-          type(
-            :rust_enum,
-            path(rust_name),
-            Map.merge(target_type.meta, %{elixir_name: name, rust_name: rust_name})
-          )
-        else
-          type(:alias, path(rust_name), %{elixir_name: name, target: target_type})
-        end
+        target =
+          type(:resource, %AST.TypePath{parts: [:ResourceArc], generics: [inner.ast]}, %{
+            inner: inner
+          })
+
+        type(:resource, path(rust_name), %{
+          elixir_name: name,
+          target: target,
+          inner: inner
+        })
+
+      true ->
+        parse_standard_alias_target(name, ast, rust_name, raw, aliases)
+    end
+  end
+
+  defp parse_standard_alias_target(name, ast, rust_name, raw, aliases) do
+    {target_type, _aliases} = parse_alias_type(ast, raw, aliases)
+
+    cond do
+      target_type.kind == :rust_enum ->
+        type(
+          :rust_enum,
+          path(rust_name),
+          Map.merge(target_type.meta, %{elixir_name: name, rust_name: rust_name})
+        )
+
+      target_type.kind == :resource ->
+        type(:resource, path(rust_name), %{
+          elixir_name: name,
+          target: target_type,
+          inner: inner(target_type)
+        })
+
+      true ->
+        type(:alias, path(rust_name), %{elixir_name: name, target: target_type})
     end
   end
 
@@ -616,13 +669,6 @@ defmodule RustQ.Meta.Type do
     tuple_type(tuple_types)
   end
 
-  def parse({name, _, args}, aliases) when is_atom(name) and is_list(args) do
-    case Map.get(aliases, {name, length(args)}) do
-      nil -> parse_local_type(name, args, aliases)
-      alias_type -> alias_type
-    end
-  end
-
   def parse({:|, _, _args} = union, aliases) do
     cond do
       option_union?(union) ->
@@ -634,13 +680,25 @@ defmodule RustQ.Meta.Type do
         {ok, error} = result_members(union)
         ok_type = parse(ok, aliases)
         error_type = parse(error, aliases)
-        type(:result, %AST.TypeResult{ok: ok_type.ast, error: error_type.ast})
+
+        type(
+          :result,
+          %AST.TypeResult{ok: ok_type.ast, error: error_type.ast},
+          %{ok: ok_type, error: error_type}
+        )
 
       atom_union?(union) ->
         type(:enum, path(:Atom))
 
       true ->
         type(:type, path(:Term))
+    end
+  end
+
+  def parse({name, _, args}, aliases) when is_atom(name) and is_list(args) do
+    case Map.get(aliases, {name, length(args)}) do
+      nil -> parse_local_type(name, args, aliases)
+      alias_type -> alias_type
     end
   end
 
@@ -738,6 +796,16 @@ defmodule RustQ.Meta.Type do
   end
 
   defp parse_rust_type(:vec, [inner], aliases), do: vector_type(inner, aliases)
+
+  defp parse_rust_type(:resource, [inner], aliases) do
+    inner = parse(inner, aliases)
+
+    type(
+      :resource,
+      %AST.TypePath{parts: [:ResourceArc], generics: [inner.ast]},
+      %{inner: inner}
+    )
+  end
 
   defp parse_rust_type(:result, [ok, error], aliases) do
     ok = parse(ok, aliases)
@@ -847,6 +915,13 @@ defmodule RustQ.Meta.Type do
   defp raw_type!(other) do
     raise ArgumentError, "expected R.raw atom marker or string, got: #{Macro.to_string(other)}"
   end
+
+  defp resource_marker?({{:., _, [module, :resource]}, _, [_inner]}),
+    do: type_module?(module)
+
+  defp resource_marker?(_ast), do: false
+
+  defp resource_marker_inner({{:., _, [_module, :resource]}, _, [inner]}), do: inner
 
   defp rust_enum_marker?({{:., _, [module, :enum]}, _, [variants]}) when is_list(variants),
     do: type_module?(module)
@@ -981,6 +1056,12 @@ defmodule RustQ.Meta.Type do
     collect_union_members(left, acc)
   end
 
+  defp collect_union_members({:|, _, [members]}, acc) when is_list(members) do
+    members
+    |> Enum.reverse()
+    |> Enum.reduce(acc, &collect_union_members/2)
+  end
+
   defp collect_union_members(other, acc), do: [other | acc]
 
   defp atom_union?(ast), do: ast |> union_members() |> Enum.all?(&is_atom/1)
@@ -1004,11 +1085,15 @@ defmodule RustQ.Meta.Type do
   defp option_members?(_members), do: false
 
   defp result_members?([left, right]) do
-    (match?({:ok, _}, left) and match?({:error, _}, right)) or
-      (match?({:error, _}, left) and match?({:ok, _}, right))
+    (result_member?(left, :ok) and result_member?(right, :error)) or
+      (result_member?(left, :error) and result_member?(right, :ok))
   end
 
   defp result_members?(_members), do: false
+
+  defp result_member?({tag, _type}, tag), do: true
+  defp result_member?({:{}, _, [tag, _type]}, tag), do: true
+  defp result_member?(_member, _tag), do: false
 
   defp tuple_union?({:|, _, _} = ast, raw, aliases),
     do: ast |> union_members() |> Enum.all?(&tagged_tuple?(&1, raw, aliases))
@@ -1037,9 +1122,15 @@ defmodule RustQ.Meta.Type do
 
   defp result_members(ast) do
     members = union_members(ast)
-    {:ok, ok} = Enum.find(members, &match?({:ok, _}, &1))
-    {:error, error} = Enum.find(members, &match?({:error, _}, &1))
-    {ok, error}
+    {result_member_type(members, :ok), result_member_type(members, :error)}
+  end
+
+  defp result_member_type(members, tag) do
+    Enum.find_value(members, fn
+      {^tag, type} -> type
+      {:{}, _, [^tag, type]} -> type
+      _member -> nil
+    end)
   end
 
   defp path(part), do: %AST.TypePath{parts: [part]}

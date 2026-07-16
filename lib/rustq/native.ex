@@ -19,7 +19,8 @@ defmodule RustQ.Native do
   required for this path.
 
   Genuine native policy remains explicit. Use `:otp_app`, `:crate`, `:mode`,
-  or `:cargo` only when their inferred defaults are not appropriate. Existing
+  `:cargo`, or `:crates` only when their inferred defaults are not appropriate.
+  Generated crates are formatted before compilation. Existing
   `RustQ.Meta` options such as `:rust_sources`, `:rust_packages`, and
   `:callable_modules` may be passed alongside them.
   """
@@ -27,6 +28,8 @@ defmodule RustQ.Native do
   alias RustQ.Meta.{Options, Type}
   alias RustQ.Rust.AST
   alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rust.AST.PatternBuilder, as: P
+  alias RustQ.Rust.AST.TypeBuilder, as: T
   alias RustQ.Rust.AST.Walk
   alias RustQ.Rust.Identifier
   alias RustQ.Rustler.Nif
@@ -83,6 +86,7 @@ defmodule RustQ.Native do
 
     write_if_changed!(manifest, cargo_manifest(crate, opts[:crates]))
     write_if_changed!(source_path, source)
+    format_crate!(cargo, manifest, module)
     build_crate!(cargo, manifest, target, mode, module)
 
     destination = install_library!(target, mode, crate, otp_app)
@@ -176,6 +180,20 @@ defmodule RustQ.Native do
       end)
       |> MapSet.new()
 
+    resource_structs =
+      values[:type_aliases]
+      |> Enum.flat_map(fn
+        {_key, %Type{kind: :resource} = type} ->
+          case Type.inner(type) do
+            %Type{rust: rust_name} -> [to_string(rust_name)]
+            _type -> []
+          end
+
+        _type ->
+          []
+      end)
+      |> MapSet.new()
+
     nif_structs =
       values[:type_aliases]
       |> Enum.flat_map(fn
@@ -202,70 +220,186 @@ defmodule RustQ.Native do
       end)
       |> Map.new()
 
+    tuple_enums =
+      values[:type_aliases]
+      |> Enum.flat_map(fn
+        {_key, %Type{kind: :tuple_enum} = type} -> [{to_string(type.rust), type}]
+        _type -> []
+      end)
+      |> Map.new()
+
     generated_decoders =
       map_structs
       |> MapSet.union(MapSet.new(Map.keys(nif_structs)))
       |> MapSet.new(fn name -> "decode_#{Macro.underscore(name)}" end)
       |> MapSet.union(MapSet.new(Map.values(unit_enums)))
+      |> MapSet.union(
+        MapSet.new(tuple_enums, fn {_name, type} -> "decode_#{type.meta.elixir_name}" end)
+      )
 
-    Enum.flat_map(values[:items], fn
-      %AST.Struct{name: name} = struct ->
-        name = to_string(name)
+    items =
+      Enum.flat_map(values[:items], fn
+        %AST.Struct{name: name} = struct ->
+          name = to_string(name)
 
-        cond do
-          MapSet.member?(map_structs, name) ->
-            [%{struct | derive: Enum.uniq(struct.derive ++ ["rustler::NifMap"])}]
+          cond do
+            MapSet.member?(map_structs, name) ->
+              [%{struct | derive: Enum.uniq(struct.derive ++ ["rustler::NifMap"])}]
 
-          module = Map.get(nif_structs, name) ->
-            [
-              %{
-                struct
-                | derive: Enum.uniq(struct.derive ++ ["rustler::NifStruct"]),
-                  attrs: Enum.uniq(struct.attrs ++ [A.attr_value(:module, module_name(module))])
-              }
-            ]
+            module = Map.get(nif_structs, name) ->
+              [derive_elixir_struct(struct, module)]
 
-          true ->
-            [struct]
-        end
+            true ->
+              [struct]
+          end
 
-      %AST.Enum{name: name} = enum ->
-        if Map.has_key?(unit_enums, to_string(name)) do
-          [%{enum | derive: Enum.uniq(enum.derive ++ ["rustler::NifUnitEnum"])}]
-        else
-          [enum]
-        end
+        %AST.Enum{name: name} = enum ->
+          if Map.has_key?(unit_enums, to_string(name)) do
+            [%{enum | derive: Enum.uniq(enum.derive ++ ["rustler::NifUnitEnum"])}]
+          else
+            [enum]
+          end
 
-      %AST.Function{name: name} = function ->
-        if MapSet.member?(generated_decoders, to_string(name)) do
-          []
-        else
-          [add_generated_clippy_allows(function)]
-        end
+        %AST.Function{} = function ->
+          prepare_native_function(function, generated_decoders)
 
-      item ->
-        [item]
-    end)
+        item ->
+          [item]
+      end)
+
+    resource_impls =
+      Enum.map(resource_structs, fn name ->
+        A.impl(T.path(name),
+          trait: [:rustler, :Resource],
+          attrs: [A.resource_impl_attr()]
+        )
+      end)
+
+    items ++
+      Enum.flat_map(tuple_enums, fn {_name, type} -> union_codec_items(type) end) ++
+      resource_impls
+  end
+
+  defp prepare_native_function(%AST.Function{name: name} = function, generated_decoders) do
+    if MapSet.member?(generated_decoders, to_string(name)) do
+      []
+    else
+      function
+      |> expand_nif_result_codec()
+      |> Enum.map(&prepare_expanded_native_item/1)
+    end
+  end
+
+  defp prepare_expanded_native_item(%AST.Function{} = function),
+    do: add_generated_clippy_allows(function)
+
+  defp prepare_expanded_native_item(item), do: item
+
+  defp derive_elixir_struct(%AST.Struct{} = struct, module) do
+    derive =
+      if function_exported?(module, :exception, 1),
+        do: "rustler::NifException",
+        else: "rustler::NifStruct"
+
+    %{
+      struct
+      | derive: Enum.uniq(struct.derive ++ [derive]),
+        attrs: Enum.uniq(struct.attrs ++ [A.attr_value(:module, module_name(module))])
+    }
+  end
+
+  defp expand_nif_result_codec(
+         %AST.Function{
+           name: name,
+           returns: %AST.TypeResult{ok: ok_type, error: error_type},
+           attrs: attrs
+         } = function
+       ) do
+    if Enum.any?(attrs, &match?(%AST.Attribute{path: [:rustler, :nif]}, &1)) do
+      codec_name =
+        name
+        |> to_string()
+        |> Macro.camelize()
+        |> Kernel.<>("NifResult")
+        |> Identifier.atom!()
+
+      codec_path = [codec_name]
+
+      codec = %AST.Enum{
+        name: codec_name,
+        vis: :pub,
+        derive: ["Clone", "Debug", "rustler::NifTaggedEnum"],
+        variants: [
+          %AST.EnumVariant{name: :Ok, tuple: [ok_type]},
+          %AST.EnumVariant{name: :Error, tuple: [error_type]}
+        ]
+      }
+
+      body =
+        Walk.prewalk(function.body, fn
+          %AST.Ok{expr: expression} -> A.path_call(codec_path ++ [:Ok], List.wrap(expression))
+          %AST.Err{expr: expression} -> A.path_call(codec_path ++ [:Error], [expression])
+          %AST.PatOk{pattern: pattern} -> P.path_tuple(codec_path ++ [:Ok], [pattern])
+          %AST.PatErr{pattern: pattern} -> P.path_tuple(codec_path ++ [:Error], [pattern])
+          node -> node
+        end)
+
+      [codec, %{function | returns: T.path(codec_path), body: body}]
+    else
+      [function]
+    end
+  end
+
+  defp expand_nif_result_codec(%AST.Function{} = function), do: [function]
+
+  defp union_codec_items(%Type{
+         ast: %AST.TypePath{parts: enum_parts} = enum_type,
+         meta: %{variants: variants}
+       }) do
+    decoder_arms =
+      Enum.map(variants, fn {variant, [%Type{ast: payload_type}]} ->
+        A.if_let(
+          P.ok(:value),
+          A.method(:term, :decode, [], generics: [payload_type]),
+          [A.early_return(A.ok(A.path_call(enum_parts ++ [variant], [:value])))]
+        )
+      end)
+
+    decoder = %AST.Function{
+      name: :decode,
+      args: A.function_args(term: T.term(:a)),
+      returns: T.nif_result(enum_type),
+      body: decoder_arms ++ [A.return_stmt(A.err(A.path([:rustler, :Error, :BadArg])))]
+    }
+
+    encoder_arms =
+      Enum.map(variants, fn {variant, [_payload_type]} ->
+        %AST.Arm{
+          pattern: P.path_tuple(enum_parts ++ [variant], [:value]),
+          body: [A.return_stmt(A.method(:value, :encode, [:env]))]
+        }
+      end)
+
+    encoder = %AST.Function{
+      name: :encode,
+      args: [A.receiver(), A.arg(:env, T.path(:Env, lifetimes: [:a]))],
+      returns: T.term(:a),
+      lifetimes: [:a],
+      body: [A.return_stmt(%AST.Match{expr: A.expr(:self), arms: encoder_arms})]
+    }
+
+    [
+      A.impl(enum_type,
+        trait: T.path([:rustler, :Decoder], lifetimes: [:a]),
+        lifetimes: [:a],
+        items: [decoder]
+      ),
+      A.impl(enum_type, trait: [:rustler, :Encoder], items: [encoder])
+    ]
   end
 
   defp add_generated_clippy_allows(%AST.Function{} = function) do
-    lints =
-      Walk.reduce(function.body, MapSet.new(), fn
-        %AST.MethodCall{method: :filter_map}, lints ->
-          MapSet.put(lints, [:clippy, :unnecessary_filter_map])
-
-        %AST.MethodCall{method: :fold}, lints ->
-          MapSet.put(lints, [:clippy, :unnecessary_fold])
-
-        %AST.Match{arms: [_single]}, lints ->
-          MapSet.put(lints, [:clippy, :match_single_binding])
-
-        %AST.PatStruct{}, lints ->
-          MapSet.put(lints, [:non_shorthand_field_patterns])
-
-        _node, lints ->
-          lints
-      end)
+    lints = Walk.reduce(function.body, MapSet.new(), &generated_clippy_lints/2)
 
     if MapSet.size(lints) == 0 do
       function
@@ -273,6 +407,45 @@ defmodule RustQ.Native do
       allow = A.attr(:allow, lints |> Enum.sort() |> Enum.map(&A.path/1))
       %{function | attrs: Enum.uniq(function.attrs ++ [allow])}
     end
+  end
+
+  defp generated_clippy_lints(%AST.MethodCall{method: :filter_map}, lints),
+    do: MapSet.put(lints, [:clippy, :unnecessary_filter_map])
+
+  defp generated_clippy_lints(%AST.MethodCall{method: :fold}, lints),
+    do: MapSet.put(lints, [:clippy, :unnecessary_fold])
+
+  defp generated_clippy_lints(%AST.Match{arms: arms}, lints) do
+    lints = add_single_match_lint(arms, lints)
+    if option_match?(arms), do: MapSet.put(lints, [:clippy, :manual_map]), else: lints
+  end
+
+  defp generated_clippy_lints(%AST.StructLiteral{fields: fields}, lints) do
+    if redundant_field_names?(fields),
+      do: MapSet.put(lints, [:clippy, :redundant_field_names]),
+      else: lints
+  end
+
+  defp generated_clippy_lints(%AST.PatStruct{}, lints),
+    do: MapSet.put(lints, [:non_shorthand_field_patterns])
+
+  defp generated_clippy_lints(_node, lints), do: lints
+
+  defp add_single_match_lint([_single], lints),
+    do: MapSet.put(lints, [:clippy, :match_single_binding])
+
+  defp add_single_match_lint(_arms, lints), do: lints
+
+  defp option_match?(arms) do
+    Enum.any?(arms, &match?(%AST.Arm{pattern: %AST.PatNone{}}, &1)) and
+      Enum.any?(arms, &match?(%AST.Arm{pattern: %AST.PatSome{}}, &1))
+  end
+
+  defp redundant_field_names?(fields) do
+    Enum.any?(fields, fn
+      {name, %AST.Var{name: name}} -> true
+      _field -> false
+    end)
   end
 
   defp module_name(module), do: module |> Module.split() |> Enum.join(".")
@@ -291,7 +464,10 @@ defmodule RustQ.Native do
   end
 
   defp native_source(items, module) do
-    imports = A.use({[:rustler], [:Atom, :Binary, :Decoder, :Encoder, :Env, :NifResult, :Term]})
+    imports =
+      A.use(
+        {[:rustler], [:Atom, :Binary, :Decoder, :Encoder, :Env, :NifResult, :ResourceArc, :Term]}
+      )
 
     body =
       [imports | items]
@@ -366,6 +542,17 @@ defmodule RustQ.Native do
     if not File.exists?(path) or File.read!(path) != content do
       File.mkdir_p!(Path.dirname(path))
       File.write!(path, content)
+    end
+  end
+
+  defp format_crate!(cargo, manifest, module) do
+    {output, status} =
+      System.cmd(cargo, ["fmt", "--manifest-path", manifest], stderr_to_stdout: true)
+
+    if status != 0 do
+      raise CompileError,
+        description:
+          "generated RustQ.Native crate for #{inspect(module)} failed to format:\n#{output}"
     end
   end
 

@@ -10,7 +10,7 @@ defmodule RustQ.Type do
   `generated_opts::OvalOpts<'a>`. Use this module where Rust needs extra
   precision or syntax that Elixir types cannot express cleanly: fixed-width
   numbers, enum intent markers, references, lifetimes, slices, `NifResult`,
-  `Vec`, and unit.
+  `Vec`, generated resources, and unit.
 
       alias RustQ.Type, as: R
 
@@ -92,6 +92,9 @@ defmodule RustQ.Type do
 
   @typedoc "Rust `Vec<T>`."
   @type vec(t) :: [t]
+
+  @typedoc "Rustler `ResourceArc<T>` boundary with RustQ-generated resource registration."
+  @type resource(t) :: reference() | t
 
   @typedoc "Rustler NIF error marker."
   @type nif_error :: atom()
@@ -194,6 +197,9 @@ defmodule RustQ.Type do
 
   @spec vec(term()) :: no_return()
   def vec(_type), do: type_only!()
+
+  @spec resource(term()) :: no_return()
+  def resource(_type), do: type_only!()
 
   @spec result(term(), term()) :: no_return()
   def result(_ok, _error), do: type_only!()

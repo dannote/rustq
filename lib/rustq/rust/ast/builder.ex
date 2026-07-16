@@ -306,7 +306,15 @@ defmodule RustQ.Rust.AST.Builder do
 
   def field(receiver, field), do: %Field{receiver: expr(receiver), field: field}
   def index(receiver, index), do: %Index{receiver: expr(receiver), index: expr(index)}
-  def range(start, stop), do: %Range{start: maybe_expr(start), stop: maybe_expr(stop)}
+
+  def range(start, stop, opts \\ []) do
+    %Range{
+      start: maybe_expr(start),
+      stop: maybe_expr(stop),
+      inclusive: Keyword.get(opts, :inclusive, false)
+    }
+  end
+
   def cast(expression, type), do: %Cast{expr: expr(expression), type: type(type)}
   def not_(expression), do: %UnaryOp{op: :not, expr: expr(expression)}
   def neg(expression), do: %UnaryOp{op: :neg, expr: expr(expression)}

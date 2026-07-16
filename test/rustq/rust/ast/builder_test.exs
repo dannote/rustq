@@ -46,6 +46,11 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert source =~ "-> NifResult<()>"
   end
 
+  test "builds exclusive and inclusive range expressions" do
+    assert Rust.render(A.range(0, 10)) == "0..10"
+    assert Rust.render(A.range(0, 10, inclusive: true)) == "0..=10"
+  end
+
   test "builds slice and array type nodes" do
     assert render_type(T.slice(T.ref(:str))) == "[&str]"
     assert render_type(T.ref(T.slice(T.ref(:str)))) == "&[&str]"

@@ -27,6 +27,7 @@ defmodule RustQ.Meta.Typing do
             :none
             | :propagate
             | :some
+            | :to_vec
             | :borrow
             | :mut_borrow
             | :propagate_borrow
@@ -408,6 +409,7 @@ defmodule RustQ.Meta.Typing do
       expected.kind == :option and Type.compatible?(actual, Type.inner(expected)) -> :some
       ref_inner_compatible?(actual, expected) -> borrow_coercion(expected)
       vec_slice_compatible?(actual, expected) -> :borrow
+      slice_vec_compatible?(actual, expected) -> :to_vec
       Type.compatible_with_expected?(actual, expected) -> :none
       true -> nil
     end
@@ -461,6 +463,15 @@ defmodule RustQ.Meta.Typing do
 
   defp type_name(%Type{} = type) do
     type.meta[:syn_name] || type.rust || Type.callable_target(type)
+  end
+
+  defp slice_vec_compatible?(%Type{} = actual, %Type{} = expected) do
+    with %Type{} = slice_inner <- Type.slice_inner(actual),
+         %Type{} = vec_inner <- Type.vec_inner(expected) do
+      Type.compatible?(slice_inner, vec_inner)
+    else
+      _other -> false
+    end
   end
 
   defp vec_slice_compatible?(%Type{} = actual, %Type{} = expected_inner) do

@@ -50,7 +50,8 @@ The skill itself is also available at
 
 | Need | Use |
 | --- | --- |
-| Write Rust implementation logic in Elixir | `RustQ.Meta.defrust` |
+| Build and load an ordinary NIF with no checked-in Rust | `use RustQ.Native` and `defnif` |
+| Write generated Rust helper logic in Elixir | `RustQ.Meta.defrust` / `defrustp` |
 | Compose reusable Rusty-Elixir body fragments | ordinary Elixir `defmacro`, `quote`, and `unquote` |
 | Generate from real `.rs` files | templates, `~R`, placeholders, `RustQ.render_file!/2` |
 | Generate repetitive Rust declarations from data | `RustQ.Rust` builders or RustQ AST builders |

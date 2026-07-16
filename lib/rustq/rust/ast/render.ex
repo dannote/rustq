@@ -63,6 +63,7 @@ defmodule RustQ.Rust.AST.Render do
     PatOk,
     PatPath,
     PatPathTuple,
+    PatSlice,
     PatSome,
     PatStruct,
     PatTuple,
@@ -544,10 +545,10 @@ defmodule RustQ.Rust.AST.Render do
   def render_expr(%Index{receiver: receiver, index: index}),
     do: [render_expr(receiver), "[", render_expr(index), "]"]
 
-  def render_expr(%Range{start: start, stop: stop}),
+  def render_expr(%Range{start: start, stop: stop, inclusive: inclusive}),
     do: [
       if(start, do: render_expr(start), else: []),
-      "..",
+      if(inclusive, do: "..=", else: ".."),
       if(stop, do: render_expr(stop), else: [])
     ]
 
@@ -710,6 +711,16 @@ defmodule RustQ.Rust.AST.Render do
       |> Elixir.Enum.intersperse(", ")
 
     [render_expr(path), " { ", rendered_fields, " }"]
+  end
+
+  def render_pattern(%PatSlice{patterns: patterns, rest: rest}) do
+    entries =
+      patterns
+      |> Elixir.Enum.reduce([], &[render_pattern(&1) | &2])
+      |> then(&if(rest, do: [[render_pattern(rest), " @ .."] | &1], else: &1))
+      |> Elixir.Enum.reverse()
+
+    ["[", Elixir.Enum.intersperse(entries, ", "), "]"]
   end
 
   def render_pattern(%PatAtomGuard{name: name, module: module}),

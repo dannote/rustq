@@ -386,6 +386,7 @@ defmodule RustQ.Meta.AST do
     name in [
       :=,
       :!,
+      :..,
       :!=,
       :!==,
       :%,
@@ -494,7 +495,8 @@ defmodule RustQ.Meta.AST do
     [enum, decoder]
   end
 
-  defp type_items(%Type{kind: :alias, rust: rust_name, meta: %{target: %Type{} = target}}) do
+  defp type_items(%Type{kind: kind, rust: rust_name, meta: %{target: %Type{} = target}})
+       when kind in [:alias, :resource] do
     [%AST.TypeAlias{name: Identifier.atom!(rust_name), type: target.ast, vis: :pub}]
   end
 
