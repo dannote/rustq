@@ -129,7 +129,14 @@ defmodule RustQ.Syn.MetadataTest do
                      traits: [
                        %Type.Path{
                          name: "IntoIterator",
-                         assoc: %{"Item" => %Type.Option{inner: %Type.Path{name: "ImageFilter"}}}
+                         assoc: %{"Item" => %Type.Option{inner: %Type.Path{name: "ImageFilter"}}},
+                         generic_args: [
+                           %Type.GenericArgument{
+                             kind: :assoc_type,
+                             name: "Item",
+                             type: %Type.Option{inner: %Type.Path{name: "ImageFilter"}}
+                           }
+                         ]
                        }
                      ]
                    }
@@ -137,6 +144,25 @@ defmodule RustQ.Syn.MetadataTest do
                ]
              }
            ] = Syn.functions(file)
+  end
+
+  test "preserves ordered impl Trait bounds" do
+    source = "pub fn spawn(value: impl Send + 'static) {}"
+
+    assert [
+             %Syn.Function{
+               args: [
+                 %Arg{
+                   type_ast: %Type.ImplTrait{
+                     bounds: [
+                       %Type.Bound{kind: :trait, code: "Send"},
+                       %Type.Bound{kind: :lifetime, lifetime: "'static"}
+                     ]
+                   }
+                 }
+               ]
+             }
+           ] = source |> Syn.parse!() |> Syn.functions()
   end
 
   test "parses nested module free functions with module paths" do
@@ -181,9 +207,13 @@ defmodule RustQ.Syn.MetadataTest do
                    traits: [
                      %Type.Path{
                        name: "AsRef",
-                       args: [%Type.Path{name: "Rect"}]
+                       args: [%Type.Path{name: "Rect"}],
+                       generic_args: [
+                         %Type.GenericArgument{kind: :type, type: %Type.Path{name: "Rect"}}
+                       ]
                      }
-                   ]
+                   ],
+                   bounds: [%Type.Bound{kind: :trait, code: "AsRef < Rect >"}]
                  }
                },
                %Arg{

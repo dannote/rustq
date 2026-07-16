@@ -10,6 +10,8 @@
   them through structural `TypeRef`, `TypeArray`, and `TypePath` nodes.
 - Add structural bare-function types with bound lifetimes, unsafe and ABI
   qualifiers, named input metadata, variadics, and return types.
+- Preserve ordered Rust path generic arguments and `impl Trait` bounds in Syn
+  metadata, and lower complete bound lists through structural `TypeImplTrait`.
 
 ## v1.0.0-rc.1 - 2026-07-16
 

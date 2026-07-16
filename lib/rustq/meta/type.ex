@@ -489,17 +489,29 @@ defmodule RustQ.Meta.Type do
   def from_syn(%SynType.Self{}), do: type(:type, %AST.TypePath{parts: [:Self]})
   def from_syn(%SynType.Raw{code: code}), do: type(:type, %AST.TypeRaw{source: code})
 
-  def from_syn(%SynType.ImplTrait{code: code, traits: traits}) do
+  def from_syn(%SynType.ImplTrait{code: code, traits: traits, bounds: bounds}) do
     trait_types = Enum.map(traits, &from_syn/1)
-    type(:impl_trait, %AST.TypeRaw{source: code}, %{traits: trait_types})
+
+    ast =
+      if bounds == [],
+        do: %AST.TypeRaw{source: code},
+        else: %AST.TypeImplTrait{bounds: Enum.map(bounds, & &1.code)}
+
+    type(:impl_trait, ast, %{traits: trait_types, bounds: bounds})
   end
 
-  defp from_syn_path(%SynType.Path{name: name, segments: segments, args: args, assoc: assoc}) do
+  defp from_syn_path(%SynType.Path{
+         name: name,
+         segments: segments,
+         args: args,
+         assoc: assoc,
+         generic_args: generic_args
+       }) do
     args = Enum.map(args, &from_syn/1)
     assoc = Map.new(assoc, fn {assoc_name, type} -> {assoc_name, from_syn(type)} end)
     parts = path_segments(segments, name)
 
-    from_syn_path_parts(parts, name, args, assoc)
+    from_syn_path_parts(parts, name, args, assoc, generic_args)
   end
 
   defp path_segments([], name), do: [name]
@@ -512,23 +524,30 @@ defmodule RustQ.Meta.Type do
   defp path_kind(["Term"]), do: :term
   defp path_kind(_parts), do: :type
 
-  defp from_syn_path_parts(["NifResult"], name, [inner], assoc) do
+  defp from_syn_path_parts(["NifResult"], name, [inner], assoc, generic_args) do
     type(:nif_result, %AST.TypeNifResult{inner: inner.ast}, %{
       syn_name: name,
       syn_segments: ["NifResult"],
       args: [inner],
       assoc: assoc,
+      generic_args: generic_args,
       inner: inner
     })
   end
 
-  defp from_syn_path_parts(parts, name, args, assoc) do
+  defp from_syn_path_parts(parts, name, args, assoc, generic_args) do
     ast = %AST.TypePath{
       parts: Enum.map(parts, &Identifier.atom!/1),
       generics: Enum.map(args, & &1.ast)
     }
 
-    type(path_kind(parts), ast, %{syn_name: name, syn_segments: parts, args: args, assoc: assoc})
+    type(path_kind(parts), ast, %{
+      syn_name: name,
+      syn_segments: parts,
+      args: args,
+      assoc: assoc,
+      generic_args: generic_args
+    })
   end
 
   defp ref_kind(true), do: :mut_ref

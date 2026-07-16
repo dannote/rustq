@@ -42,6 +42,15 @@ pub(crate) fn parse_type_tuple(items: Vec<Type>) -> NifResult<Type> {
     }
 }
 
+pub(crate) fn parse_type_impl_trait(bounds: Vec<String>) -> NifResult<Type> {
+    if bounds.is_empty() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    syn::parse_str::<Type>(&format!("impl {}", bounds.join(" + ")))
+        .map_err(|_| rustler::Error::BadArg)
+}
+
 pub(crate) fn parse_type_bare_fn(
     args: Vec<Type>,
     returns: Option<Type>,

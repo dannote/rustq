@@ -71,6 +71,10 @@ defmodule RustQ.Rust.AST.BuilderTest do
     assert Rust.render_type(type) == ~s|for<'a> unsafe extern "C" fn(&'a u8, ...) -> bool|
   end
 
+  test "builds structural impl Trait types" do
+    assert Rust.render_type(T.impl_trait(["Into<u32>", "Send"])) == "impl Into<u32> + Send"
+  end
+
   test "splits Rust path strings into type and expression path parts" do
     assert %TypePath{parts: ["paint", "Cap"]} = T.path("paint::Cap")
     assert Rust.render_type(T.path("paint::Cap")) == "paint::Cap"

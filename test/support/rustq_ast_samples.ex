@@ -264,6 +264,9 @@ defmodule RustQ.ASTSamples do
     )
   end
 
+  def sample_for(:type_impl_trait),
+    do: type_sample(:type_impl_trait, %AST.TypeImplTrait{bounds: ["Into<u32>", "Send"]})
+
   def sample_for(:type_raw),
     do: type_sample(:type_raw, %AST.TypeRaw{source: "std::marker::PhantomData<&'a ()>"})
 

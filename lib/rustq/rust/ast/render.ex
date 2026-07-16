@@ -83,6 +83,7 @@ defmodule RustQ.Rust.AST.Render do
     TypeAlias,
     TypeArray,
     TypeBareFn,
+    TypeImplTrait,
     TypeNifResult,
     TypeOption,
     TypePath,
@@ -496,6 +497,9 @@ defmodule RustQ.Rust.AST.Render do
 
     [lifetimes, unsafe, external, "fn(", Elixir.Enum.intersperse(args, ", "), ")", returns]
   end
+
+  def render_type(%TypeImplTrait{bounds: bounds}),
+    do: ["impl ", Elixir.Enum.intersperse(bounds, " + ")]
 
   defp render_bound_lifetime(lifetime) when is_atom(lifetime), do: ["'", to_string(lifetime)]
   defp render_bound_lifetime("'" <> _rest = lifetime), do: lifetime

@@ -94,6 +94,11 @@ defmodule RustQ.Codegen.Decoders.Type do
     )
   end
 
+  @spec decode_type_impl_trait(term()) :: R.nif_result(R.path(:Type))
+  defrust decode_type_impl_trait(term) do
+    Super.parse_type_impl_trait(required_string_list(term, "bounds"))
+  end
+
   @spec decode_type_tuple(term()) :: R.nif_result(R.path(:Type))
   defrust decode_type_tuple(term) do
     Super.parse_type_tuple(required_type_list(term, "items"))

@@ -441,6 +441,11 @@ fn type_metadata<'a>(env: Env<'a>, ty: &Type) -> Term<'a> {
                 .iter()
                 .filter_map(|bound| trait_bound_metadata(env, bound))
                 .collect::<Vec<_>>(),
+            impl_trait
+                .bounds
+                .iter()
+                .map(|bound| bound_metadata(env, bound))
+                .collect::<Vec<_>>(),
         )
             .encode(env),
         Type::Slice(slice) => ("slice", code, type_metadata(env, &slice.elem)).encode(env),
@@ -507,7 +512,7 @@ fn path_type_metadata<'a>(env: Env<'a>, code: String, path: &syn::Path) -> Term<
         .map(|segment| segment.ident.to_string())
         .collect::<Vec<_>>();
 
-    let (args, assoc) = path
+    let (args, assoc, generic_args) = path
         .segments
         .last()
         .map(|segment| generic_args(env, &segment.arguments))
@@ -518,7 +523,7 @@ fn path_type_metadata<'a>(env: Env<'a>, code: String, path: &syn::Path) -> Term<
     match name.as_str() {
         "Option" if args.len() == 1 => ("option", code, args[0]).encode(env),
         "Result" if args.len() == 2 => ("result", code, args[0], args[1]).encode(env),
-        _ => ("path", code, segments, args, assoc).encode(env),
+        _ => ("path", code, segments, args, assoc, generic_args).encode(env),
     }
 }
 
@@ -533,27 +538,94 @@ fn trait_bound_metadata<'a>(env: Env<'a>, bound: &TypeParamBound) -> Option<Term
     }
 }
 
-fn generic_args<'a>(env: Env<'a>, arguments: &PathArguments) -> (Vec<Term<'a>>, Vec<Term<'a>>) {
+fn bound_metadata<'a>(env: Env<'a>, bound: &TypeParamBound) -> Term<'a> {
+    match bound {
+        TypeParamBound::Trait(trait_bound) => (
+            "trait",
+            trait_bound.to_token_stream().to_string(),
+            match trait_bound.modifier {
+                syn::TraitBoundModifier::None => "none",
+                syn::TraitBoundModifier::Maybe(_) => "maybe",
+            },
+            trait_bound
+                .lifetimes
+                .as_ref()
+                .map(|bound| {
+                    bound
+                        .lifetimes
+                        .iter()
+                        .map(|param| param.to_token_stream().to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+            path_type_metadata(
+                env,
+                trait_bound.path.to_token_stream().to_string(),
+                &trait_bound.path,
+            ),
+        )
+            .encode(env),
+        TypeParamBound::Lifetime(lifetime) => {
+            ("lifetime", lifetime.to_token_stream().to_string()).encode(env)
+        }
+        TypeParamBound::PreciseCapture(capture) => {
+            ("precise_capture", capture.to_token_stream().to_string()).encode(env)
+        }
+        TypeParamBound::Verbatim(tokens) => ("raw", tokens.to_string()).encode(env),
+        _ => ("raw", bound.to_token_stream().to_string()).encode(env),
+    }
+}
+
+fn generic_args<'a>(
+    env: Env<'a>,
+    arguments: &PathArguments,
+) -> (Vec<Term<'a>>, Vec<Term<'a>>, Vec<Term<'a>>) {
     match arguments {
         PathArguments::AngleBracketed(args) => {
             let mut positional = Vec::new();
             let mut associated = Vec::new();
+            let mut ordered = Vec::new();
 
             for arg in &args.args {
                 match arg {
-                    GenericArgument::Type(ty) => positional.push(type_metadata(env, ty)),
-                    GenericArgument::AssocType(assoc) => {
-                        associated.push(
-                            (assoc.ident.to_string(), type_metadata(env, &assoc.ty)).encode(env),
-                        );
+                    GenericArgument::Lifetime(lifetime) => ordered
+                        .push(("lifetime", lifetime.to_token_stream().to_string()).encode(env)),
+                    GenericArgument::Type(ty) => {
+                        let metadata = type_metadata(env, ty);
+                        positional.push(metadata);
+                        ordered.push(("type", metadata).encode(env));
                     }
+                    GenericArgument::Const(expr) => {
+                        ordered.push(("const", expr.to_token_stream().to_string()).encode(env));
+                    }
+                    GenericArgument::AssocType(assoc) => {
+                        let metadata = type_metadata(env, &assoc.ty);
+                        associated.push((assoc.ident.to_string(), metadata).encode(env));
+                        ordered.push(("assoc_type", assoc.ident.to_string(), metadata).encode(env));
+                    }
+                    GenericArgument::AssocConst(assoc) => ordered.push(
+                        (
+                            "assoc_const",
+                            assoc.ident.to_string(),
+                            assoc.value.to_token_stream().to_string(),
+                        )
+                            .encode(env),
+                    ),
+                    GenericArgument::Constraint(constraint) => ordered.push(
+                        (
+                            "constraint",
+                            constraint.ident.to_string(),
+                            constraint.to_token_stream().to_string(),
+                        )
+                            .encode(env),
+                    ),
                     _ => {}
                 }
             }
 
-            (positional, associated)
+            (positional, associated, ordered)
         }
-        _ => (Vec::new(), Vec::new()),
+        _ => (Vec::new(), Vec::new(), Vec::new()),
     }
 }
 

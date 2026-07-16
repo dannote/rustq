@@ -121,6 +121,7 @@ defmodule RustQ.Codegen.Dispatch do
               :type_slice,
               :type_array,
               :type_bare_fn,
+              :type_impl_trait,
               :type_tuple,
               :type_raw
             ],

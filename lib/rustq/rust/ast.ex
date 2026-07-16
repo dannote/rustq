@@ -88,6 +88,7 @@ defmodule RustQ.Rust.AST do
     TypeAlias,
     TypeArray,
     TypeBareFn,
+    TypeImplTrait,
     TypeNifResult,
     TypeOption,
     TypePath,
@@ -183,6 +184,7 @@ defmodule RustQ.Rust.AST do
           | TypeArray.t()
           | TypeTuple.t()
           | TypeBareFn.t()
+          | TypeImplTrait.t()
           | RustQ.Rust.AST.TypeRaw.t()
           | TypeUnit.t()
 
@@ -465,6 +467,8 @@ defmodule RustQ.Rust.AST do
         }
       )
   )
+
+  defnode(TypeImplTrait, :type, [bounds: []], type: quote(do: %__MODULE__{bounds: [String.t()]}))
 
   defnode(TypeRaw, :type, [:source], type: quote(do: %__MODULE__{source: String.t()}))
 
@@ -771,6 +775,7 @@ defmodule RustQ.Rust.AST do
       TypeArray,
       TypeTuple,
       TypeBareFn,
+      TypeImplTrait,
       TypeRaw,
       TypeUnit,
       Let,

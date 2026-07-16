@@ -293,6 +293,20 @@ defmodule RustQ.Meta.TypeTest do
                ],
                returns: %SynType.Path{code: "bool", name: "bool", segments: ["bool"]}
              })
+
+    assert %Type{
+             kind: :impl_trait,
+             rust: "impl Into<u32> + Send",
+             ast: %AST.TypeImplTrait{bounds: ["Into<u32>", "Send"]}
+           } =
+             Type.from_syn(%SynType.ImplTrait{
+               code: "impl Into<u32> + Send",
+               traits: [],
+               bounds: [
+                 %SynType.Bound{kind: :trait, code: "Into<u32>"},
+                 %SynType.Bound{kind: :trait, code: "Send"}
+               ]
+             })
   end
 
   test "Spec exposes Syn type conversion" do

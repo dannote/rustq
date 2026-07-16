@@ -98,16 +98,44 @@ defmodule RustQ.Syn do
     def type_name(%{__struct__: RustQ.Syn.Type.Option, inner: inner}), do: type_name(inner)
     def type_name(_type), do: nil
 
+    defmodule GenericArgument do
+      @moduledoc "One ordered Rust path generic argument."
+      defstruct [:kind, :name, :type, :source]
+
+      @type kind :: :lifetime | :type | :const | :assoc_type | :assoc_const | :constraint
+      @type t :: %__MODULE__{
+              kind: kind(),
+              name: String.t() | nil,
+              type: RustQ.Syn.type() | nil,
+              source: String.t() | nil
+            }
+    end
+
+    defmodule Bound do
+      @moduledoc "One ordered `impl Trait` bound."
+      defstruct [:kind, :code, :path, :lifetime, :modifier, lifetimes: []]
+
+      @type t :: %__MODULE__{
+              kind: :trait | :lifetime | :precise_capture | :raw,
+              code: String.t(),
+              path: RustQ.Syn.Type.Path.t() | nil,
+              lifetime: String.t() | nil,
+              modifier: :maybe | nil,
+              lifetimes: [String.t()]
+            }
+    end
+
     defmodule Path do
       @moduledoc "Rust path type metadata, for example `Paint`, `skia_safe::Canvas`, or `AsRef<Rect>`."
-      defstruct [:code, :name, segments: [], args: [], assoc: %{}]
+      defstruct [:code, :name, segments: [], args: [], assoc: %{}, generic_args: []]
 
       @type t :: %__MODULE__{
               code: String.t(),
               name: String.t(),
               segments: [String.t()],
               args: [RustQ.Syn.type()],
-              assoc: %{optional(String.t()) => RustQ.Syn.type()}
+              assoc: %{optional(String.t()) => RustQ.Syn.type()},
+              generic_args: [RustQ.Syn.Type.GenericArgument.t()]
             }
     end
 
@@ -146,9 +174,13 @@ defmodule RustQ.Syn do
 
     defmodule ImplTrait do
       @moduledoc "Rust impl Trait type metadata."
-      defstruct [:code, traits: []]
+      defstruct [:code, traits: [], bounds: []]
 
-      @type t :: %__MODULE__{code: String.t(), traits: [RustQ.Syn.type()]}
+      @type t :: %__MODULE__{
+              code: String.t(),
+              traits: [RustQ.Syn.type()],
+              bounds: [RustQ.Syn.Type.Bound.t()]
+            }
     end
 
     defmodule Slice do
@@ -390,6 +422,10 @@ defmodule RustQ.Syn do
     defp render_arg(%RustQ.Syn.Arg{name: name, type_ast: type}),
       do: "#{name}: #{render_type(type)}"
 
+    defp render_type(%RustQ.Syn.Type.Path{segments: segments, generic_args: [_ | _] = args}) do
+      "#{Elixir.Enum.join(segments, "::")}<#{Elixir.Enum.map_join(args, ", ", &render_generic_argument/1)}>"
+    end
+
     defp render_type(%RustQ.Syn.Type.Path{segments: segments, args: []}),
       do: Elixir.Enum.join(segments, "::")
 
@@ -412,6 +448,9 @@ defmodule RustQ.Syn do
     defp render_type(%RustQ.Syn.Type.Result{ok: ok, error: error}),
       do: "Result<#{render_type(ok)}, #{render_type(error)}>"
 
+    defp render_type(%RustQ.Syn.Type.ImplTrait{bounds: [_ | _] = bounds}),
+      do: "impl #{Elixir.Enum.map_join(bounds, " + ", &render_bound/1)}"
+
     defp render_type(%RustQ.Syn.Type.ImplTrait{traits: traits}),
       do: "impl #{Elixir.Enum.map_join(traits, " + ", &render_type/1)}"
 
@@ -427,6 +466,41 @@ defmodule RustQ.Syn do
 
     defp render_type(%RustQ.Syn.Type.Self{}), do: "Self"
     defp render_type(%RustQ.Syn.Type.Raw{code: code}), do: code
+
+    defp render_generic_argument(%RustQ.Syn.Type.GenericArgument{kind: :type, type: type}),
+      do: render_type(type)
+
+    defp render_generic_argument(%RustQ.Syn.Type.GenericArgument{kind: :assoc_type} = arg),
+      do: "#{arg.name} = #{render_type(arg.type)}"
+
+    defp render_generic_argument(%RustQ.Syn.Type.GenericArgument{
+           kind: :lifetime,
+           source: source
+         }),
+         do: source
+
+    defp render_generic_argument(%RustQ.Syn.Type.GenericArgument{kind: :const, source: source}),
+      do: source
+
+    defp render_generic_argument(%RustQ.Syn.Type.GenericArgument{
+           kind: :constraint,
+           source: source
+         }),
+         do: source
+
+    defp render_generic_argument(%RustQ.Syn.Type.GenericArgument{name: name, source: source}),
+      do: if(name, do: "#{name} = #{source}", else: source)
+
+    defp render_bound(%RustQ.Syn.Type.Bound{kind: :trait} = bound) do
+      modifier = if bound.modifier == :maybe, do: "?", else: ""
+
+      lifetimes =
+        if bound.lifetimes == [], do: "", else: "for<#{Elixir.Enum.join(bound.lifetimes, ", ")}> "
+
+      "#{modifier}#{lifetimes}#{render_type(bound.path)}"
+    end
+
+    defp render_bound(%RustQ.Syn.Type.Bound{code: code}), do: code
 
     defp render_bare_fn(type) do
       prefix = render_bare_fn_prefix(type)
@@ -927,11 +1001,15 @@ defmodule RustQ.Syn do
   defp decode_return({type, type_ast}), do: {type, decode_type!(type_ast)}
 
   defp decode_type!({"path", code, segments, args}) do
-    decode_path_type!(code, segments, args, [])
+    decode_path_type!(code, segments, args, [], [])
   end
 
   defp decode_type!({"path", code, segments, args, assoc}) do
-    decode_path_type!(code, segments, args, assoc)
+    decode_path_type!(code, segments, args, assoc, [])
+  end
+
+  defp decode_type!({"path", code, segments, args, assoc, generic_args}) do
+    decode_path_type!(code, segments, args, assoc, generic_args)
   end
 
   defp decode_type!({"ref", code, mutable, lifetime, inner}) do
@@ -955,8 +1033,12 @@ defmodule RustQ.Syn do
     %RustQ.Syn.Type.Result{code: code, ok: decode_type!(ok), error: decode_type!(error)}
   end
 
-  defp decode_type!({"impl_trait", code, traits}) do
-    %RustQ.Syn.Type.ImplTrait{code: code, traits: Elixir.Enum.map(traits, &decode_type!/1)}
+  defp decode_type!({"impl_trait", code, traits, bounds}) do
+    %RustQ.Syn.Type.ImplTrait{
+      code: code,
+      traits: Elixir.Enum.map(traits, &decode_type!/1),
+      bounds: Elixir.Enum.map(bounds, &decode_bound!/1)
+    }
   end
 
   defp decode_type!({"slice", code, inner}) do
@@ -992,15 +1074,51 @@ defmodule RustQ.Syn do
 
   defp decode_type!({"raw", code}), do: %RustQ.Syn.Type.Raw{code: code}
 
-  defp decode_path_type!(code, segments, args, assoc) do
+  defp decode_path_type!(code, segments, args, assoc, generic_args) do
     %RustQ.Syn.Type.Path{
       code: code,
       name: List.last(segments),
       segments: segments,
       args: Elixir.Enum.map(args, &decode_type!/1),
-      assoc: Map.new(assoc, fn {name, type} -> {name, decode_type!(type)} end)
+      assoc: Map.new(assoc, fn {name, type} -> {name, decode_type!(type)} end),
+      generic_args: Elixir.Enum.map(generic_args, &decode_generic_argument!/1)
     }
   end
+
+  defp decode_generic_argument!({"lifetime", source}),
+    do: %RustQ.Syn.Type.GenericArgument{kind: :lifetime, source: source}
+
+  defp decode_generic_argument!({"type", type}),
+    do: %RustQ.Syn.Type.GenericArgument{kind: :type, type: decode_type!(type)}
+
+  defp decode_generic_argument!({"const", source}),
+    do: %RustQ.Syn.Type.GenericArgument{kind: :const, source: source}
+
+  defp decode_generic_argument!({"assoc_type", name, type}),
+    do: %RustQ.Syn.Type.GenericArgument{kind: :assoc_type, name: name, type: decode_type!(type)}
+
+  defp decode_generic_argument!({kind, name, source}) when kind in ["assoc_const", "constraint"],
+    do: %RustQ.Syn.Type.GenericArgument{
+      kind: String.to_existing_atom(kind),
+      name: name,
+      source: source
+    }
+
+  defp decode_bound!({"trait", code, modifier, lifetimes, path}) do
+    %RustQ.Syn.Type.Bound{
+      kind: :trait,
+      code: code,
+      modifier: if(modifier == "maybe", do: :maybe),
+      lifetimes: lifetimes,
+      path: decode_type!(path)
+    }
+  end
+
+  defp decode_bound!({"lifetime", lifetime}),
+    do: %RustQ.Syn.Type.Bound{kind: :lifetime, code: lifetime, lifetime: lifetime}
+
+  defp decode_bound!({kind, code}) when kind in ["precise_capture", "raw"],
+    do: %RustQ.Syn.Type.Bound{kind: String.to_existing_atom(kind), code: code}
 
   defp decode_visibility!("public"), do: :public
   defp decode_visibility!("private"), do: :private

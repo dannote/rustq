@@ -36,6 +36,7 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def type({:slice, inner}), do: slice(inner)
   def type({:array, inner, size}), do: array(inner, size)
   def type({:bare_fn, args, opts}), do: bare_fn(args, opts)
+  def type({:impl_trait, bounds}), do: impl_trait(bounds)
 
   def type({:tuple, values}), do: tuple(values)
 
@@ -68,6 +69,8 @@ defmodule RustQ.Rust.AST.TypeBuilder do
   def array(inner, size), do: %AST.TypeArray{inner: type(inner), size: size}
   def tuple([]), do: raise(ArgumentError, "empty tuple types must use unit/0")
   def tuple(items) when is_list(items), do: %AST.TypeTuple{items: Enum.map(items, &type/1)}
+
+  def impl_trait(bounds) when is_list(bounds), do: %AST.TypeImplTrait{bounds: bounds}
 
   def bare_fn(args, opts \\ []) when is_list(args) and is_list(opts) do
     %AST.TypeBareFn{

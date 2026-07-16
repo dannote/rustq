@@ -40,6 +40,7 @@ pub(crate) mod ast_modules {
     pub(crate) const TYPE_ARRAY: &str = "Elixir.RustQ.Rust.AST.TypeArray";
     pub(crate) const TYPE_TUPLE: &str = "Elixir.RustQ.Rust.AST.TypeTuple";
     pub(crate) const TYPE_BARE_FN: &str = "Elixir.RustQ.Rust.AST.TypeBareFn";
+    pub(crate) const TYPE_IMPL_TRAIT: &str = "Elixir.RustQ.Rust.AST.TypeImplTrait";
     pub(crate) const TYPE_RAW: &str = "Elixir.RustQ.Rust.AST.TypeRaw";
     pub(crate) const TYPE_UNIT: &str = "Elixir.RustQ.Rust.AST.TypeUnit";
     pub(crate) const LET: &str = "Elixir.RustQ.Rust.AST.Let";
@@ -304,6 +305,7 @@ pub(crate) fn decode_ast_type(term: Term) -> NifResult<Type> {
         ast_modules::TYPE_ARRAY => decode_type_array(term),
         ast_modules::TYPE_TUPLE => decode_type_tuple(term),
         ast_modules::TYPE_BARE_FN => decode_type_bare_fn(term),
+        ast_modules::TYPE_IMPL_TRAIT => decode_type_impl_trait(term),
         ast_modules::TYPE_RAW => decode_type_raw(term),
         ast_modules::TYPE_UNIT => decode_type_unit(term),
         _ => Err(rustler::Error::BadArg),
@@ -636,6 +638,10 @@ pub(crate) fn decode_type_bare_fn<'a>(term: Term<'a>) -> NifResult<Type> {
         abi,
         required_field(term, "variadic")?.decode::<bool>()?,
     )
+}
+
+pub(crate) fn decode_type_impl_trait<'a>(term: Term<'a>) -> NifResult<Type> {
+    super::parse_type_impl_trait(required_string_list(term, "bounds")?)
 }
 
 pub(crate) fn decode_type_tuple<'a>(term: Term<'a>) -> NifResult<Type> {
