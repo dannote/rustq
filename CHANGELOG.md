@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v1.0.0-rc.1 - 2026-07-15
+## v1.0.0-rc.1 - 2026-07-16
 
 - Define the RustQ 1.x compatibility contract and ship the policy with the
   package, HexDocs, and agent skill.
