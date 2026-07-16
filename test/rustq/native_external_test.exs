@@ -7,6 +7,8 @@ defmodule RustQ.NativeExternalFixture do
   alias RustQ.Type, as: R
 
   @type point :: %{required(:x) => integer(), required(:y) => integer()}
+  @type state :: %{required(:value) => R.raw(:ExternalState)}
+  @type state_resource :: R.resource(state())
 
   @spec env_echo(term()) :: R.nif_result(term())
   defnif(env_echo(value), do: external_env_echo(nif_env(), value))
@@ -25,6 +27,9 @@ defmodule RustQ.NativeExternalTest do
     source = RustQ.Native.source(RustQ.NativeExternalFixture)
 
     assert Enum.any?(items, &match?(%AST.Function{name: :env_echo}, &1))
+
+    assert %AST.Struct{derive: derive} = Enum.find(items, &match?(%AST.Struct{name: :State}, &1))
+    refute "rustler::NifMap" in derive
     assert source =~ "rustler::NifMap"
     assert source =~ "fn env_echo<'a>(env: Env<'a>, value: Term<'a>)"
     refute source =~ "rustler::init!"
