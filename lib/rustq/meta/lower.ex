@@ -635,8 +635,7 @@ defmodule RustQ.Meta.Lower do
       body: lower_semantic_arm_body(block, context)
     }
 
-  defp lower_expr_context({:nif_env, _, []}, %Context{}),
-    do: %AST.Path{parts: [:__rustq_env]}
+  defp lower_expr_context({:nif_env, _, []}, %Context{}), do: %AST.Path{parts: [:env]}
 
   defp lower_expr_context({:badarg, _, []}, %Context{}),
     do: %AST.Path{parts: [:rustler, :Error, :BadArg]}

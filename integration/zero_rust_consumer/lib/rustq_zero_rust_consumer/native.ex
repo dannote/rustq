@@ -66,6 +66,12 @@ defmodule RustQZeroRustConsumer.Native do
   defnif(factorial(0), do: 1)
   defnif(factorial(value), do: value * factorial(value - 1))
 
+  @spec env_roundtrip(term()) :: R.nif_result(term())
+  defnif(env_roundtrip(value), do: with_env(nif_env(), value))
+
+  @spec with_env(R.path(:Env, R.lifetime(:a)), term()) :: R.nif_result(term())
+  defrustp(with_env(_env, value), do: {:ok, value})
+
   @spec guarded_sign(integer()) :: integer()
   defnif(guarded_sign(value) when value > 0, do: 1)
   defnif(guarded_sign(value) when value < 0, do: -1)

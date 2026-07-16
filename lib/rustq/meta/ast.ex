@@ -295,6 +295,10 @@ defmodule RustQ.Meta.AST do
       raise ArgumentError, "nif_env/0 is only available inside defnif"
     end
 
+    if uses_nif_env? and :env in arg_names do
+      raise ArgumentError, "nif_env/0 reserves the Rust argument name env"
+    end
+
     implicit_env? = nif_attrs?(attrs) and uses_nif_env?
 
     args =
@@ -343,7 +347,7 @@ defmodule RustQ.Meta.AST do
   defp maybe_prepend_nif_env(args, true) do
     [
       %AST.FunctionArg{
-        name: :__rustq_env,
+        name: :env,
         type: %AST.TypePath{parts: [:Env], lifetimes: [:a]}
       }
       | args

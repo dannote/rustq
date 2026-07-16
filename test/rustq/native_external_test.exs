@@ -26,7 +26,7 @@ defmodule RustQ.NativeExternalTest do
 
     assert Enum.any?(items, &match?(%AST.Function{name: :env_echo}, &1))
     assert source =~ "rustler::NifMap"
-    assert source =~ "fn env_echo<'a>(__rustq_env: Env<'a>, value: Term<'a>)"
+    assert source =~ "fn env_echo<'a>(env: Env<'a>, value: Term<'a>)"
     refute source =~ "rustler::init!"
     refute function_exported?(RustQ.NativeExternalFixture, :__rustq_load_nif__, 0)
   end
@@ -39,7 +39,7 @@ defmodule RustQ.NativeExternalTest do
       RustQ.NativeExternalFixture,
       :env_echo,
       1,
-      "external_env_echo(__rustq_env, value)"
+      "external_env_echo(env, value)"
     )
   end
 end

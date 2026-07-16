@@ -7,6 +7,7 @@ defmodule RustQZeroRustConsumer.NativeTest do
     assert Native.add(20, 22) == 42
     assert Native.sum([1.5, 2.0, 3.5]) == 7.0
     assert Native.factorial(6) == 720
+    assert Native.env_roundtrip(%{value: [1, 2, 3]}) == %{value: [1, 2, 3]}
     assert Native.guarded_sign(10) == 1
     assert Native.guarded_sign(-10) == -1
     assert Native.guarded_sign(0) == 0
