@@ -45,7 +45,8 @@ defmodule RustQ.MixProject do
       {:ex_dna, "~> 1.0", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.0", runtime: false},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:makeup_rust, "~> 0.3", only: :dev}
     ]
   end
 
