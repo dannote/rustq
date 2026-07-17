@@ -1,6 +1,6 @@
 # RustQ
 
-[![Hex.pm](https://img.shields.io/badge/dynamic/json.svg?url=https%3A%2F%2Fhex.pm%2Fapi%2Fpackages%2Frustq&query=%24.latest_version&prefix=v&label=hex.pm)](https://hex.pm/packages/rustq) [![Documentation](https://img.shields.io/badge/documentation-gray.svg)](https://hexdocs.pm/rustq/1.0.0-rc.2/)
+[![Hex.pm](https://img.shields.io/badge/dynamic/json.svg?url=https%3A%2F%2Fhex.pm%2Fapi%2Fpackages%2Frustq&query=%24.latest_version&prefix=v&label=hex.pm)](https://hex.pm/packages/rustq) [![Documentation](https://img.shields.io/badge/documentation-gray.svg)](https://rustq.hexdocs.pm/)
 
 Write native Elixir in Elixir. RustQ turns typed, Elixir-shaped code into readable
 Rust and can generate, compile, and load a complete Rustler NIF without checked-in
@@ -116,19 +116,19 @@ are the final, local escape hatch—not the default authoring style.
 
 ## Documentation
 
-- [Zero-handwritten-Rust NIFs](https://hexdocs.pm/rustq/zero-rust-nifs.html) —
+- [Zero-handwritten-Rust NIFs](https://rustq.hexdocs.pm/zero-rust-nifs.html) —
   `RustQ.Native`, `defnif`, codecs, resources, scheduling, and existing crates.
-- [Using RustQ Well](https://hexdocs.pm/rustq/using-rustq-well.html) — inference,
+- [Using RustQ Well](https://rustq.hexdocs.pm/using-rustq-well.html) — inference,
   Rusty-Elixir conventions, metadata, macros, AST, and migration guidance.
-- [Generating Rust](https://hexdocs.pm/rustq/generating-rust.html) —
+- [Generating Rust](https://rustq.hexdocs.pm/generating-rust.html) —
   `rustq.exs`, templates, placeholders, AST builders, splices, and validation.
-- [Generating Rustler Boundaries](https://hexdocs.pm/rustq/rustler-generation.html)
+- [Generating Rustler Boundaries](https://rustq.hexdocs.pm/rustler-generation.html)
   — atoms, term codecs, NIF wrappers, and structural Rustler helpers.
-- [Designing RustQ Generators](https://hexdocs.pm/rustq/designing-generators.html)
+- [Designing RustQ Generators](https://rustq.hexdocs.pm/designing-generators.html)
   — project layout and maintainable generator architecture.
-- [RustQ 1.x Compatibility Policy](https://hexdocs.pm/rustq/compatibility.html) —
+- [RustQ 1.x Compatibility Policy](https://rustq.hexdocs.pm/compatibility.html) —
   the public API and generated-code stability contract.
-- [API reference](https://hexdocs.pm/rustq/api-reference.html) — public modules,
+- [API reference](https://rustq.hexdocs.pm/api-reference.html) — public modules,
   functions, macros, and AST nodes.
 
 ## Agent skill
