@@ -58,6 +58,25 @@ defmodule RustQ.Meta.TypingTest do
     assert %Typing.Check{coercion: :none} = Typing.check(quote(do: lookup().ok()), expected, env)
   end
 
+  test "synthesizes Option.filter as the original option type" do
+    term = type(:term, "Term")
+
+    option = %Type{
+      kind: :option,
+      rust: "Option<Term>",
+      ast: %AST.TypeOption{inner: term.ast},
+      meta: %{inner: term}
+    }
+
+    env =
+      Typing.env(callables: [%Callable{name: "get", kind: :function, args: [], returns: option}])
+
+    expression = quote(do: get().filter(fn value -> value.is_map() end))
+
+    assert Typing.synth(expression, env) == option
+    assert %Typing.Check{coercion: :none} = Typing.check(expression, option, env)
+  end
+
   test "synthesizes unambiguous parent-module free-function returns" do
     string = type(:type, "String")
 

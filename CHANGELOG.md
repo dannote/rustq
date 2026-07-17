@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Generate optional Rustler term filters with typed `Option::filter` calls for
+  compatibility with Rust 1.97 Clippy.
+
 ## v1.0.0-rc.2 - 2026-07-16
 
 - Add composable `RustQ.Test.rust_source!/1,2` and `nif_exported?/3` helpers

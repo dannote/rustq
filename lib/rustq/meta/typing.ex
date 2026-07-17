@@ -257,6 +257,13 @@ defmodule RustQ.Meta.Typing do
     end
   end
 
+  defp synth_method_call({{:., _, [receiver, :filter]}, _meta, [_predicate]}, %Env{} = env) do
+    case synth(receiver, env) do
+      %Type{kind: :option} = option -> option
+      _unknown -> nil
+    end
+  end
+
   defp synth_method_call(
          {{:., _, [receiver, :map]}, _meta, [{:__aliases__, _, [:Some]}]},
          %Env{} = env

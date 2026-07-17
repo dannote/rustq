@@ -139,6 +139,7 @@ defmodule RustQ.RustlerTermTest do
 
     assert code =~ "fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
     assert code =~ "fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>>"
+    assert code =~ "get(term, key).filter(|value| !is_nil(*value))"
     assert code =~ "fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String"
     assert code =~ "get(term, atoms::r#type())"
   end
@@ -384,7 +385,7 @@ defmodule RustQ.RustlerTermTest do
     assert code =~ "fn get_term_list<'a>"
     assert code =~ "fn get_map<'a>"
     assert code =~ "value.decode::<Vec<String>>()"
-    assert code =~ "value.is_map()"
+    assert code =~ "get(term, key).filter(|value| value.is_map())"
   end
 
   test "supports explicit all term helper selection" do

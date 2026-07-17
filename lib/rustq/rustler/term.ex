@@ -124,18 +124,8 @@ defmodule RustQ.Rustler.Term do
   end
 
   @spec opt(term(), R.path({:rustler, :Atom})) :: R.option(term())
-  defrust opt(term, key) do
-    case get(term, key) do
-      {:some, value} ->
-        if is_nil(value) do
-          nil
-        else
-          value
-        end
-
-      :none ->
-        nil
-    end
+  defrust(opt(term, key)) do
+    get(term, key).filter(fn value -> not is_nil(deref(value)) end)
   end
 
   @spec str_val(term(), R.path({:rustler, :Atom})) :: String.t()
@@ -275,18 +265,8 @@ defmodule RustQ.Rustler.Term do
   end
 
   @spec get_map(term(), R.path({:rustler, :Atom})) :: R.option(term())
-  defrust get_map(term, key) do
-    case get(term, key) do
-      {:some, value} ->
-        if value.is_map() do
-          value
-        else
-          nil
-        end
-
-      :none ->
-        nil
-    end
+  defrust(get_map(term, key)) do
+    get(term, key).filter(fn value -> value.is_map() end)
   end
 
   @spec type_atom(term()) :: R.option(R.path({:rustler, :Atom}))
