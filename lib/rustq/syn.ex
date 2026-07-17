@@ -1097,12 +1097,11 @@ defmodule RustQ.Syn do
   defp decode_generic_argument!({"assoc_type", name, type}),
     do: %RustQ.Syn.Type.GenericArgument{kind: :assoc_type, name: name, type: decode_type!(type)}
 
-  defp decode_generic_argument!({kind, name, source}) when kind in ["assoc_const", "constraint"],
-    do: %RustQ.Syn.Type.GenericArgument{
-      kind: String.to_existing_atom(kind),
-      name: name,
-      source: source
-    }
+  defp decode_generic_argument!({"assoc_const", name, source}),
+    do: %RustQ.Syn.Type.GenericArgument{kind: :assoc_const, name: name, source: source}
+
+  defp decode_generic_argument!({"constraint", name, source}),
+    do: %RustQ.Syn.Type.GenericArgument{kind: :constraint, name: name, source: source}
 
   defp decode_bound!({"trait", code, modifier, lifetimes, path}) do
     %RustQ.Syn.Type.Bound{
@@ -1117,8 +1116,11 @@ defmodule RustQ.Syn do
   defp decode_bound!({"lifetime", lifetime}),
     do: %RustQ.Syn.Type.Bound{kind: :lifetime, code: lifetime, lifetime: lifetime}
 
-  defp decode_bound!({kind, code}) when kind in ["precise_capture", "raw"],
-    do: %RustQ.Syn.Type.Bound{kind: String.to_existing_atom(kind), code: code}
+  defp decode_bound!({"precise_capture", code}),
+    do: %RustQ.Syn.Type.Bound{kind: :precise_capture, code: code}
+
+  defp decode_bound!({"raw", code}),
+    do: %RustQ.Syn.Type.Bound{kind: :raw, code: code}
 
   defp decode_visibility!("public"), do: :public
   defp decode_visibility!("private"), do: :private

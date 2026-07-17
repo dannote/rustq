@@ -2,13 +2,14 @@
 
 ## Unreleased
 
+## v1.0.0-rc.2 - 2026-07-16
+
 - Add composable `RustQ.Test.rust_source!/1,2` and `nif_exported?/3` helpers
   that preserve ordinary ExUnit assertions and diffs; reorganize the suite
   around focused source values, parameterized schema/corpus cases, compiled
   support fixtures, and ExUnit-managed temporary directories.
-
-## v1.0.0-rc.2 - 2026-07-16
-
+- Decode precise-capturing `impl Trait + use<'a>` bounds without relying on
+  pre-existing runtime atoms, as exercised by current `skia-safe` metadata.
 - Funnel compiled `defrust` AST access and internal rendering through the
   documented `RustQ.Meta.AST` and `RustQ.Rust` boundaries.
 - Preserve inferred tuple types as structural `RustQ.Rust.AST.TypeTuple` nodes

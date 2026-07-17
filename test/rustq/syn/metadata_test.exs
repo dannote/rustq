@@ -165,6 +165,21 @@ defmodule RustQ.Syn.MetadataTest do
            ] = source |> Syn.parse!() |> Syn.functions()
   end
 
+  test "preserves precise capture impl Trait bounds" do
+    source = "pub fn values(value: &str) -> impl Iterator<Item = String> + use<'_> { todo!() }"
+
+    assert [
+             %Syn.Function{
+               returns_ast: %Type.ImplTrait{
+                 bounds: [
+                   %Type.Bound{kind: :trait, code: "Iterator < Item = String >"},
+                   %Type.Bound{kind: :precise_capture, code: "use < '_ >"}
+                 ]
+               }
+             }
+           ] = source |> Syn.parse!() |> Syn.functions()
+  end
+
   test "parses nested module free functions with module paths" do
     source = """
     pub mod color_filters {
