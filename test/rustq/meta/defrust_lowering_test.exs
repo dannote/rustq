@@ -1,0 +1,679 @@
+defmodule RustQ.Meta.DefrustLoweringTest do
+  use RustQ.Test, async: true
+
+  alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Native.Nif
+
+  test "Meta returns rendered items" do
+    functions = MetaAST.functions(RustQ.Meta.GeneratedCase)
+    item = MetaAST.function!(RustQ.Meta.GeneratedCase, :draw_save)
+
+    assert Enum.any?(functions, &(&1.name == :draw_save))
+    assert RustQ.Rust.to_fragment(item) =~ "fn draw_save"
+
+    assert_raise ArgumentError, fn ->
+      MetaAST.function!(RustQ.Meta.GeneratedCase, :missing)
+    end
+
+    assert_raise ArgumentError, ~r/no compiled defrust function metadata/, fn ->
+      MetaAST.functions(__MODULE__)
+    end
+  end
+
+  test "defrust lowers zero-arity closures" do
+    defmodule ZeroArityClosureCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec value() :: R.i64()
+      defrust value() do
+        get_or_init(fn -> 42 end)
+      end
+    end
+
+    source = ZeroArityClosureCase.__rustq_source__()
+    assert source =~ "get_or_init(|| 42)"
+  end
+
+  test "defrust lowers arrays and indexed assignment" do
+    defmodule ArrayIndexCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec fill(R.u8()) :: R.nif_result(R.unit())
+      defrust fill(value) do
+        values = array([cast(0, :u8), cast(0, :u8)])
+        index = cast(0, :usize)
+        assign!(index(values, index), value)
+        :ok
+      end
+    end
+
+    source = ArrayIndexCase.__rustq_source__()
+    assert source =~ "let mut values = [0 as u8, 0 as u8];"
+    assert source =~ "values[index] = value;"
+  end
+
+  test "defrust lowers structural Rust enum variants" do
+    defmodule EnumVariantCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec one(R.raw(:SkipFn)) :: R.raw(:KiwiSkipKind)
+      defrust one(skip) do
+        enum_variant(KiwiSkipKind, :one, skip)
+      end
+
+      @spec bytes() :: R.raw(:KiwiSkipKind)
+      defrust bytes() do
+        enum_variant(KiwiSkipKind, :bytes)
+      end
+    end
+
+    source = EnumVariantCase.__rustq_source__()
+
+    assert source =~ "KiwiSkipKind::One(skip)"
+    assert source =~ "KiwiSkipKind::Bytes"
+  end
+
+  test "defrust lowers structural Rust struct literals" do
+    defmodule StructLiteralCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec cubic(R.f64(), R.f64()) :: R.path(:CubicResampler)
+      defrust cubic(b, c) do
+        struct_literal(CubicResampler, b: cast(b, :f32), c: cast(c, :f32))
+      end
+    end
+
+    source = StructLiteralCase.__rustq_source__()
+    assert source =~ "CubicResampler {"
+    assert source =~ "b: b as f32"
+    assert source =~ "c: c as f32"
+  end
+
+  test "defrust lowers bitwise helper calls" do
+    defmodule BitwiseHelperCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec red(R.u32()) :: R.u8()
+      defrust red(rgba) do
+        Bitwise.band(Bitwise.bsr(rgba, 24), 0xFF)
+        |> cast(:u8)
+      end
+    end
+
+    source = BitwiseHelperCase.__rustq_source__()
+    assert source =~ "(rgba >> 24 & 255) as u8"
+  end
+
+  test "defrust lowers arithmetic operators" do
+    defmodule ArithmeticCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec scale(R.f32(), R.f32()) :: R.f32()
+      defrust scale(x, y) do
+        x + y * 2.0 - x / 4.0
+      end
+    end
+
+    source = ArithmeticCase.__rustq_source__()
+    assert source =~ "x + y * 2.0 - x / 4.0"
+  end
+
+  test "defrust lowers cond, unary operators, div, and rem" do
+    defmodule CondOperatorCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec classify(R.i64()) :: R.i64()
+      defrust classify(value) do
+        cond do
+          value < 0 -> -1
+          rem(value, 2) == 0 -> div(value, 2)
+          true -> +value
+        end
+      end
+
+      @spec invert(boolean()) :: boolean()
+      defrust(invert(value), do: not value)
+    end
+
+    classify = rust_source!(CondOperatorCase, :classify)
+    invert = rust_source!(CondOperatorCase, :invert)
+
+    assert classify =~ "if value < 0"
+    assert classify =~ "value % 2 == 0"
+    assert classify =~ "value / 2"
+    assert invert =~ "fn invert(value: bool) -> bool"
+    assert invert =~ "!value"
+    assert RustQ.valid?(rust_source!(CondOperatorCase), "cond_operators.rs")
+  end
+
+  test "defrust lowers common Enum operations to Rust iterators" do
+    defmodule EnumPipelineCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec product([integer()]) :: integer()
+      defrust(product(values),
+        do: Enum.reduce(values, 1, fn value, product -> product * value end)
+      )
+
+      @spec positives([integer()]) :: [integer()]
+      defrust(positives(values), do: Enum.filter(values, fn value -> value > 0 end))
+
+      @spec duplicates([integer()]) :: [integer()]
+      defrust(duplicates(values), do: Enum.flat_map(values, fn value -> [value, value] end))
+
+      @spec has_positive(R.vec(R.i64())) :: boolean()
+      defrust(has_positive(values), do: Enum.any?(values, fn value -> value > 0 end))
+    end
+
+    assert rust_source!(EnumPipelineCase, :product) =~
+             ".into_iter().fold(1, |product, value| product * value)"
+
+    positives = rust_source!(EnumPipelineCase, :positives)
+    assert positives =~ ".filter_map(|value| if value > 0"
+    assert positives =~ "Some(value)"
+
+    assert rust_source!(EnumPipelineCase, :duplicates) =~
+             ".flat_map(|value| vec![value, value]).collect::<Vec<i64>>()"
+
+    assert rust_source!(EnumPipelineCase, :has_positive) =~
+             ".into_iter().any(|value| value > 0)"
+
+    assert RustQ.valid?(rust_source!(EnumPipelineCase), "enum_pipelines.rs")
+  end
+
+  test "defrust lowers supported remote calls in Elixir pipelines" do
+    defmodule RemotePipelineCase do
+      use RustQ.Meta
+
+      @spec positive_square_sum([integer()]) :: integer()
+      defrust positive_square_sum(values) do
+        values
+        |> Enum.filter(fn value -> value > 0 end)
+        |> Enum.map(fn value -> value * value end)
+        # credo:disable-for-next-line ExSlop.Check.Refactor.ExplicitSumReduce
+        |> Enum.reduce(0, fn value, total -> value + total end)
+      end
+
+      @spec count_positive([integer()]) :: integer()
+      defrust count_positive(values) do
+        values
+        |> Enum.filter(fn value -> value > 0 end)
+        # credo:disable-for-next-line Credo.Check.Refactor.FilterCount
+        |> Enum.count()
+      end
+
+      @spec has_square([integer()], integer()) :: boolean()
+      defrust has_square(values, expected) do
+        values
+        |> Enum.map(fn value -> value * value end)
+        |> Enum.any?(fn value -> value == expected end)
+      end
+
+      @spec first_or([integer()], integer()) :: integer()
+      defrust(first_or(values, default), do: values |> List.first(default))
+
+      @spec trimmed(String.t()) :: String.t()
+      defrust(trimmed(value), do: value |> String.trim())
+    end
+
+    positive_square_sum = rust_source!(RemotePipelineCase, :positive_square_sum)
+    count_positive = rust_source!(RemotePipelineCase, :count_positive)
+    has_square = rust_source!(RemotePipelineCase, :has_square)
+
+    assert positive_square_sum =~
+             ~r/filter_map.*collect::<Vec<i64>>.*\.map.*collect::<Vec<i64>>.*\.fold/s
+
+    assert count_positive =~ ~r/filter_map.*collect::<Vec<i64>>.*\.len\(\) as i64/s
+    assert has_square =~ ~r/\.map.*collect::<Vec<i64>>.*\.any/s
+    assert rust_source!(RemotePipelineCase, :first_or) =~ ".into_iter().next().unwrap_or(default)"
+    assert rust_source!(RemotePipelineCase, :trimmed) =~ ".trim().to_string()"
+    assert RustQ.valid?(rust_source!(RemotePipelineCase), "remote_pipeline_case.rs")
+  end
+
+  test "defrust lowers Elixir pipelines to Rust method, operator, and cast chains" do
+    defmodule PipelineCastCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec alpha(OpacityOpts.t()) :: R.u8()
+      defrust alpha(opts) do
+        opts.opacity.unwrap_or(1.0)
+        |> clamp(0.0, 1.0)
+        |> Kernel.*(255.0)
+        |> round()
+        |> cast(:u8)
+      end
+    end
+
+    source = PipelineCastCase.__rustq_source__()
+    assert source =~ "opts.opacity.unwrap_or(1.0).clamp(0.0, 1.0)"
+    assert source =~ "* 255.0"
+    assert source =~ ".round() as u8"
+  end
+
+  test "defrust cast accepts RustQ type markers" do
+    defmodule TypeMarkerCastCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec widen(R.u8()) :: R.u32()
+      defrust widen(value) do
+        cast(value, R.u32())
+      end
+    end
+
+    source = TypeMarkerCastCase.__rustq_source__()
+    assert source =~ "value as u32"
+  end
+
+  test "defrust lowers comparison operators" do
+    defmodule ComparisonCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec positive(R.f32()) :: R.nif_result(R.unit())
+      defrust positive(radius) do
+        if radius > 0.0 do
+          use_positive(radius)
+        else
+          use_zero()
+        end
+
+        :ok
+      end
+    end
+
+    source = ComparisonCase.__rustq_source__()
+    assert source =~ "if radius > 0.0"
+  end
+
+  test "defrust expands ordinary Elixir helper macros before lowering" do
+    defmodule MacroBodyCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defmacro with_saved_canvas(do: body) do
+        quote do
+          var!(canvas).save()
+          unquote(body)
+          var!(canvas).restore()
+        end
+      end
+
+      @spec draw(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+      defrust draw(canvas) do
+        with_saved_canvas do
+          canvas.translate({1.0, 2.0})
+        end
+
+        :ok
+      end
+    end
+
+    source = MacroBodyCase.__rustq_source__()
+    assert source =~ "canvas.save();"
+    assert source =~ "canvas.translate((1.0, 2.0));"
+    assert source =~ "canvas.restore();"
+  end
+
+  test "defrustmod maps alias calls to Rust module paths" do
+    defmodule ModuleMappedCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod(GeneratedOpts, as: :generated_opts)
+
+      @spec decode(term()) :: R.nif_result(R.unit())
+      defrust decode(opts) do
+        GeneratedOpts.decode_path_opts(ref(opts))
+      end
+    end
+
+    source = ModuleMappedCase.__rustq_source__()
+    assert source =~ "generated_opts::decode_path_opts(&opts)"
+  end
+
+  test "defrustmod maps nested alias constant paths" do
+    defmodule NestedModuleConstantCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod(SkiaSafe.ArcSize, as: [:skia_safe, :path_builder, :ArcSize])
+
+      @spec large() :: R.nif_result(R.path(:ArcSize))
+      defrust large() do
+        {:ok, SkiaSafe.ArcSize.Large}
+      end
+    end
+
+    source = NestedModuleConstantCase.__rustq_source__()
+
+    assert source =~ "Ok(skia_safe::path_builder::ArcSize::Large)"
+  end
+
+  test "defrustmod groups nested defrust declarations" do
+    defmodule NestedModuleCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      defrustmod GeneratedHelpers, as: :generated_helpers do
+        @spec save(R.ref(Canvas.t())) :: R.nif_result(R.unit())
+        defrust save(canvas) do
+          canvas.save()
+          :ok
+        end
+      end
+    end
+
+    source = NestedModuleCase.__rustq_source__()
+    assert source =~ "mod generated_helpers"
+    assert source =~ "fn save(canvas: &Canvas) -> NifResult<()>"
+    assert source =~ "canvas.save();"
+  end
+
+  test "lowers plural module alias calls as snake_case Rust modules" do
+    defmodule AutomaticModuleAliasCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec atom_call() :: R.nif_result(atom())
+      defrust atom_call() do
+        Atoms.fill()
+      end
+    end
+
+    source = AutomaticModuleAliasCase.__rustq_source__()
+    assert source =~ "atoms::fill()"
+  end
+
+  test "lowers zero-arity alias calls from defrust as Rust calls" do
+    defmodule AliasCallCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec atom_call() :: R.nif_result(atom())
+      defrust atom_call() do
+        Atoms.args()
+      end
+
+      @spec nil_atom_call() :: R.nif_result(atom())
+      defrust nil_atom_call() do
+        Atoms.nil()
+      end
+    end
+
+    source = AliasCallCase.__rustq_source__()
+    assert source =~ "atoms::args()"
+    assert source =~ "atoms::nil()"
+  end
+
+  test "lowers simple for comprehensions to Rust for loops" do
+    defmodule ForComprehensionCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec push_pairs(R.vec({String.t(), R.u32()})) :: R.nif_result(R.unit())
+      defrust push_pairs(pairs) do
+        for {name, count} <- pairs do
+          push_pair(name, count)
+        end
+
+        :ok
+      end
+    end
+
+    source = ForComprehensionCase.__rustq_source__()
+
+    assert source =~ "for (name, count) in pairs"
+    assert source =~ "push_pair(name, count);"
+  end
+
+  test "marks mutable lets inside if branches" do
+    defmodule IfBranchMutationCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec collect_if(R.bool(), R.vec(R.f64())) :: R.nif_result(R.unit())
+      defrust collect_if(enabled, values) do
+        if enabled do
+          mapped = Vec.with_capacity(values.len())
+
+          for value <- values do
+            mapped.push(cast(value, :f32))
+          end
+
+          use_values(mapped.as_slice())
+        end
+
+        :ok
+      end
+    end
+
+    source = IfBranchMutationCase.__rustq_source__()
+    assert source =~ "let mut mapped = Vec::with_capacity(values.len());"
+  end
+
+  test "keeps tuple pattern lets through mutability inference" do
+    defmodule TupleLetCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec pair(term()) :: R.nif_result(R.unit())
+      defrust pair(term) do
+        {left, right} = decode_as!(term, {R.u8(), R.u8()})
+        use_pair(left, right)
+        :ok
+      end
+    end
+
+    source = TupleLetCase.__rustq_source__()
+    assert source =~ "let (left, right) = term.decode::<(u8, u8)>()?;"
+  end
+
+  test "marks assign bang targets as mutable lets" do
+    defmodule AssignBangMutationCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec toggle() :: R.nif_result(R.bool())
+      defrust toggle() do
+        flag = true
+        assign!(flag, false)
+        {:ok, flag}
+      end
+    end
+
+    source = AssignBangMutationCase.__rustq_source__()
+    assert source =~ "let mut flag = true;"
+    assert source =~ "flag = false;"
+  end
+
+  test "renders assign bang arithmetic as compound assignment" do
+    defmodule AssignBangCompoundCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec count() :: R.usize()
+      defrust count() do
+        count = 2
+        assign!(count, count + 1)
+        count
+      end
+    end
+
+    source = AssignBangCompoundCase.__rustq_source__()
+    assert source =~ "let mut count = 2;"
+    assert source =~ "count += 1;"
+  end
+
+  test "renders assign bang Bitwise operations as compound assignment" do
+    defmodule AssignBangBitwiseCompoundCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec masked(R.u32()) :: R.u32()
+      defrust masked(mask) do
+        value = 255
+        assign!(value, Bitwise.band(value, mask))
+        value
+      end
+    end
+
+    source = AssignBangBitwiseCompoundCase.__rustq_source__()
+    assert source =~ "value &= mask;"
+  end
+
+  test "lowers statement option cases with unit none branch to if let" do
+    defmodule OptionCaseIfLetStatementCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec attr(R.option(R.path(:String)), R.usize()) ::
+              R.raw(:"Option<(&'static str, String)>")
+      defrust attr(name, index) do
+        cursor = 0
+
+        case name.as_ref() do
+          {:some, value} ->
+            if index == cursor do
+              return!(some({"name", value.clone()}))
+            end
+
+            assign!(cursor, cursor + 1)
+
+          :none ->
+            :ok
+        end
+
+        nil
+      end
+    end
+
+    source = OptionCaseIfLetStatementCase.__rustq_source__()
+    assert source =~ "if let Some(value) = name.as_ref()"
+    assert source =~ "cursor += 1;"
+    refute source =~ "match name.as_ref()"
+  end
+
+  test "builds typed Rustler decode expressions from defrust valid Elixir" do
+    defmodule DecodeTermsCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode_terms(term()) :: R.nif_result(R.vec(term()))
+      defrust decode_terms(term) do
+        decode_as!(term, R.vec(term()))
+      end
+    end
+
+    source = DecodeTermsCase.__rustq_source__()
+    assert source =~ "fn decode_terms<'a>(term: Term<'a>) -> NifResult<Vec<Term<'a>>>"
+    assert source =~ "term.decode::<Vec<Term<'a>>>()?"
+  end
+
+  test "lowers integer match patterns from defrust valid Elixir" do
+    defmodule IntegerMatchCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec decode(R.i64()) :: R.nif_result(R.unit())
+      defrust decode(op) do
+        case op do
+          1 -> draw_move()
+          2 -> draw_line()
+          _ -> :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = IntegerMatchCase.__rustq_source__()
+
+    assert source =~ "1 =>"
+    assert source =~ "2 =>"
+  end
+
+  test "lowers Rust tuple field access from defrust valid Elixir" do
+    defmodule TupleFieldCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec first(R.raw(:Tuple1)) :: R.nif_result(R.i64())
+      defrust first(tuple) do
+        {:ok, tuple_field(tuple, 0)}
+      end
+    end
+
+    source = TupleFieldCase.__rustq_source__()
+
+    assert source =~ "Ok(tuple.0)"
+  end
+
+  test "lowers nested tuple decode probe matches" do
+    defmodule NestedTupleDecodeProbeCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec probe(term()) :: R.nif_result(R.unit())
+      defrust probe(term) do
+        case decode_as(term, {R.atom(), {R.f64(), R.f64()}}) do
+          {:ok, {tag, {x, y}}} -> handle(tag, x, y)
+          {:error, _reason} -> :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = NestedTupleDecodeProbeCase.__rustq_source__()
+    assert source =~ "Ok((tag, (x, y))) =>"
+  end
+
+  test "builds typed Rustler decode result probes from defrust valid Elixir" do
+    defmodule DecodeResultProbeCase do
+      use RustQ.Meta
+      alias RustQ.Type, as: R
+
+      @spec probe(term()) :: R.nif_result(R.unit())
+      defrust probe(term) do
+        case decode_as(term, {R.i64(), R.f64()}) do
+          {:ok, {op, value}} -> handle(op, value)
+          {:error, _reason} -> :ok
+        end
+
+        :ok
+      end
+    end
+
+    source = DecodeResultProbeCase.__rustq_source__()
+
+    assert source =~ "match term.decode::<(i64, f64)>()"
+    assert source =~ "Ok((op, value)) =>"
+    assert source =~ "Err(_reason) =>"
+  end
+
+  test "native AST renderer emits Rust through syn" do
+    [draw_save | _] = MetaAST.functions(Generated)
+
+    assert Nif.render_ast(draw_save) =~
+             "fn draw_save(canvas: &Canvas) -> NifResult<()>"
+
+    assert Nif.render_ast(draw_save) =~ "canvas.save();"
+  end
+
+  test "generated items remain structural RustQ AST" do
+    assert Enum.all?(Generated.__rustq_items__(), fn item ->
+             item.__struct__.__rustq_ast_category__() == :item
+           end)
+  end
+end
