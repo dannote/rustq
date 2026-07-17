@@ -3,7 +3,7 @@ defmodule RustQ.RustlerTest do
 
   alias RustQ.Rust
   alias RustQ.Rust.AST.Builder, as: A
-  alias RustQ.Rustler.{Atom, Nif, Opts, Resource, TaggedEnum, Term}
+  alias RustQ.Rustler.{Atom, Nif}
 
   test "builds Rustler helpers" do
     code =
@@ -201,6 +201,13 @@ defmodule RustQ.RustlerTest do
 
     assert code =~ "files::register(path, data)"
   end
+end
+
+defmodule RustQ.RustlerAtomTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rustler.Atom
 
   test "builds atom decoders" do
     code =
@@ -309,6 +316,13 @@ defmodule RustQ.RustlerTest do
     assert code =~ "value if value == atoms::rect() => draw_rect()"
     assert code =~ "_ => Err(rustler::Error::BadArg)"
   end
+end
+
+defmodule RustQ.RustlerTermTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rustler.{Atom, Nif, Opts, TaggedEnum, Term}
 
   test "builds map helper functions" do
     code =
@@ -715,6 +729,14 @@ defmodule RustQ.RustlerTest do
     refute code =~ "fn f64_val"
     refute code =~ "fn type_str"
   end
+end
+
+defmodule RustQ.RustlerResourceTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Rust
+  alias RustQ.Rust.AST.Builder, as: A
+  alias RustQ.Rustler.{Atom, Opts, Resource}
 
   test "builds resource helper boilerplate" do
     code =

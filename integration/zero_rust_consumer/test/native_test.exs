@@ -113,7 +113,7 @@ defmodule RustQZeroRustConsumer.NativeTest do
     assert Native.tuple_to_list({1, 2, 3}) == [1, 2, 3]
   end
 
-  test "exposes focused generated-source assertions" do
+  test "exposes focused generated-source helpers" do
     assert nif_exported?(Native, :guarded_sign, 1)
     assert rust_source!(Native, :guarded_sign) =~ ~r/value if value > 0/
     assert RustQ.valid?(rust_source!(Native), "zero_rust_native.rs")

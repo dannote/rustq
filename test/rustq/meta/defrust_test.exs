@@ -1,11 +1,8 @@
 defmodule RustQ.Meta.DefrustTest do
   use RustQ.Test, async: true
 
-  alias RustQ.Diagnostic
   alias RustQ.Meta.AST, as: MetaAST
   alias RustQ.Meta.GeneratedCase, as: Generated
-  alias RustQ.Native.Nif
-  alias RustQ.Rust.AST
 
   describe "compiled defrust fixtures" do
     test "renders a focused function exactly" do
@@ -215,6 +212,13 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "other => Ok(other)"
     assert RustQ.valid?(source, "macro_generated_case_clause.rs")
   end
+end
+
+defmodule RustQ.Meta.DefrustMacroTest do
+  use RustQ.Test, async: true
+
+  alias RustQ.Diagnostic
+  alias RustQ.Meta.AST, as: MetaAST
 
   test "defrustmacro defines Rust macros from Rusty-Elixir bodies" do
     defmodule DefrustMacroFieldCase do
@@ -785,6 +789,12 @@ defmodule RustQ.Meta.DefrustTest do
       Code.compile_quoted(quoted)
     end
   end
+end
+
+defmodule RustQ.Meta.DefrustCallableTest do
+  use RustQ.Test, async: true
+
+  alias RustQ.Diagnostic
 
   test "defrust uses module specs as callable metadata for propagation inference" do
     defmodule LocalCallablePropagationCase do
@@ -1344,6 +1354,13 @@ defmodule RustQ.Meta.DefrustTest do
     assert %Diagnostic{phase: :lower, kind: :unsupported_binding_pattern} =
              diagnostic.details.cause
   end
+end
+
+defmodule RustQ.Meta.DefrustTypingTest do
+  use RustQ.Test, async: true
+
+  alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Rust.AST
 
   test "builds a function AST from defrust valid Elixir" do
     defmodule GeneratedSaveCase do
@@ -1772,6 +1789,14 @@ defmodule RustQ.Meta.DefrustTest do
     assert source =~ "let mut builder = PathBuilder::new();"
     assert source =~ "builder.add_circle(Point::new(0.0, 0.0), 1.0, None);"
   end
+end
+
+defmodule RustQ.Meta.DefrustLoweringTest do
+  use RustQ.Test, async: true
+
+  alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Native.Nif
 
   test "Meta returns rendered items" do
     functions = MetaAST.functions(RustQ.Meta.GeneratedCase)
@@ -1911,13 +1936,15 @@ defmodule RustQ.Meta.DefrustTest do
       defrust(invert(value), do: not value)
     end
 
-    source = CondOperatorCase.__rustq_source__()
-    assert source =~ "if value < 0"
-    assert source =~ "value % 2 == 0"
-    assert source =~ "value / 2"
-    assert source =~ "fn invert(value: bool) -> bool"
-    assert source =~ "!value"
-    assert RustQ.valid?(source, "cond_operators.rs")
+    classify = rust_source!(CondOperatorCase, :classify)
+    invert = rust_source!(CondOperatorCase, :invert)
+
+    assert classify =~ "if value < 0"
+    assert classify =~ "value % 2 == 0"
+    assert classify =~ "value / 2"
+    assert invert =~ "fn invert(value: bool) -> bool"
+    assert invert =~ "!value"
+    assert RustQ.valid?(rust_source!(CondOperatorCase), "cond_operators.rs")
   end
 
   test "defrust lowers common Enum operations to Rust iterators" do
@@ -1940,13 +1967,20 @@ defmodule RustQ.Meta.DefrustTest do
       defrust(has_positive(values), do: Enum.any?(values, fn value -> value > 0 end))
     end
 
-    source = EnumPipelineCase.__rustq_source__()
-    assert source =~ ".into_iter().fold(1, |product, value| product * value)"
-    assert source =~ ".filter_map(|value| if value > 0"
-    assert source =~ "Some(value)"
-    assert source =~ ".flat_map(|value| vec![value, value]).collect::<Vec<i64>>()"
-    assert source =~ ".into_iter().any(|value| value > 0)"
-    assert RustQ.valid?(source, "enum_pipelines.rs")
+    assert rust_source!(EnumPipelineCase, :product) =~
+             ".into_iter().fold(1, |product, value| product * value)"
+
+    positives = rust_source!(EnumPipelineCase, :positives)
+    assert positives =~ ".filter_map(|value| if value > 0"
+    assert positives =~ "Some(value)"
+
+    assert rust_source!(EnumPipelineCase, :duplicates) =~
+             ".flat_map(|value| vec![value, value]).collect::<Vec<i64>>()"
+
+    assert rust_source!(EnumPipelineCase, :has_positive) =~
+             ".into_iter().any(|value| value > 0)"
+
+    assert RustQ.valid?(rust_source!(EnumPipelineCase), "enum_pipelines.rs")
   end
 
   test "defrust lowers supported remote calls in Elixir pipelines" do

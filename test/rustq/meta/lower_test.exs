@@ -16,16 +16,12 @@ defmodule RustQ.Meta.LowerTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Binding.Callable
-  alias RustQ.Codegen.Decoders
-  alias RustQ.Codegen.Helpers
-  alias RustQ.Diagnostic
-  alias RustQ.Meta.AST, as: MetaAST
-  alias RustQ.Meta.AttrCase
   alias RustQ.Meta.GeneratedCase, as: Generated
   alias RustQ.Meta.Lower
   alias RustQ.Meta.Type
   alias RustQ.Rust.AST
-  alias RustQ.Rust.AST.{Attribute, ExprStmt, Function, FunctionArg, MethodCall}
+
+  import RustQ.Meta.LowerCase
 
   test "lowers ok_or bang as option to result propagation" do
     statements =
@@ -433,6 +429,17 @@ defmodule RustQ.Meta.LowerTest do
              %AST.Return{expr: %AST.Ok{}}
            ] = statements
   end
+end
+
+defmodule RustQ.Meta.LowerLetPropagationTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Binding.Callable
+  alias RustQ.Meta.Lower
+  alias RustQ.Meta.Type
+  alias RustQ.Rust.AST
+
+  import RustQ.Meta.LowerCase
 
   test "infers let RHS propagation when pattern type is known" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
@@ -1260,6 +1267,18 @@ defmodule RustQ.Meta.LowerTest do
              %AST.Return{}
            ] = statements
   end
+end
+
+defmodule RustQ.Meta.LowerCallPropagationTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Binding.Callable
+  alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Meta.Lower
+  alias RustQ.Meta.Type
+  alias RustQ.Rust.AST
+
+  import RustQ.Meta.LowerCase
 
   test "infers local call argument propagation from callable arg types" do
     path_type = %Type{kind: :type, rust: "Path", ast: %AST.TypePath{parts: [:Path]}}
@@ -1669,6 +1688,18 @@ defmodule RustQ.Meta.LowerTest do
 
     assert Lower.callable_return_type(quote(do: missing()), callables: callables) == nil
   end
+end
+
+defmodule RustQ.Meta.LowerContractTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Diagnostic
+  alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Meta.AttrCase
+  alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Meta.Lower
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.{Attribute, Function, FunctionArg}
 
   test "defrust consumes idiomatic Rust-facing attributes" do
     assert %Function{attrs: attrs} =
@@ -1804,6 +1835,19 @@ defmodule RustQ.Meta.LowerTest do
              }
            ] = Lower.quoted_body(quote(do: arm!({:ok, value}, value)), nil)
   end
+end
+
+defmodule RustQ.Meta.LowerSemanticTest do
+  use ExUnit.Case, async: true
+
+  alias RustQ.Codegen.Decoders
+  alias RustQ.Codegen.Helpers
+  alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Meta.GeneratedCase, as: Generated
+  alias RustQ.Meta.Lower
+  alias RustQ.Meta.Type
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.{ExprStmt, Function, FunctionArg, MethodCall}
 
   test "Enum.map lowers multi-statement closures to block expressions" do
     assert [
@@ -2141,20 +2185,4 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = Enum.find(decoders, &(&1.name == :decode_expr_none))
   end
-
-  defp unit_type, do: %Type{kind: :unit, rust: "()", ast: %AST.TypeUnit{}}
-
-  defp self_arg,
-    do: %{
-      name: "self",
-      type: %Type{kind: :ref, rust: "&Self", ast: %AST.TypeRaw{source: "&Self"}},
-      syn: nil
-    }
-
-  defp rect_arg,
-    do: %{
-      name: "rect",
-      type: %Type{kind: :type, rust: "Rect", ast: %AST.TypeRaw{source: "Rect"}},
-      syn: nil
-    }
 end
