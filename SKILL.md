@@ -464,12 +464,14 @@ directories or repeating source-search helpers:
 ```elixir
 use RustQ.Test, async: true
 
-assert_defrust MyApp.Native, :decode_impl, "fn decode_impl"
-assert_defnif MyApp.Native, :decode, 1, ~r/fn decode/
-assert_rust_valid MyApp.Native
+assert rust_source!(MyApp.Native, :decode_impl) =~ "fn decode_impl"
+assert rust_source!(MyApp.Native, :decode) =~ ~r/fn decode/
+assert nif_exported?(MyApp.Native, :decode, 1)
+assert RustQ.valid?(rust_source!(MyApp.Native), "my_app_native.rs")
 ```
 
-`assert_defnif/4` verifies both the Elixir export and generated Rustler NIF
+`rust_source!/2` returns one focused function for ordinary ExUnit assertions;
+`nif_exported?/3` verifies both the Elixir export and generated Rustler NIF
 attribute. Keep package/build orchestration in a project test case or fixture
 driver rather than embedding shell runners and temporary-workspace management
 inside behavior tests.

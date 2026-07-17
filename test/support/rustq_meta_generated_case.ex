@@ -7,6 +7,11 @@ defmodule RustQ.Meta.GeneratedCase do
 
   alias RustQ.Type, as: R
 
+  defmodule Canvas do
+    @moduledoc false
+    @type t :: term()
+  end
+
   defmodule Click do
     @moduledoc """
     Fixture struct for click-event type lowering tests.

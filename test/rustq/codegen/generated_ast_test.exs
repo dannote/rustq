@@ -2,13 +2,10 @@ defmodule RustQ.Codegen.GeneratedASTTest do
   use ExUnit.Case, async: true
 
   alias RustQ.Codegen
-  alias RustQ.Codegen.Decoders
   alias RustQ.Codegen.Decoders.Item, as: ItemDecoders
   alias RustQ.Codegen.Decoders.Type, as: TypeDecoders
-  alias RustQ.Codegen.Dispatch
   alias RustQ.Codegen.Modules
   alias RustQ.Meta.AST, as: MetaAST
-  alias RustQ.Rust.AST.Schema
 
   alias RustQ.Rust.AST.{
     Closure,
@@ -18,20 +15,17 @@ defmodule RustQ.Codegen.GeneratedASTTest do
     If,
     Let,
     MacroItemCall,
-    Match,
     MethodCall,
     Module,
     Ok,
     Path,
     PathCall,
-    PatPath,
     Return,
     Try,
     TypeNifResult,
     TypePath,
     TypeRef,
-    Var,
-    VecLiteral
+    Var
   }
 
   test "generates parseable AST support" do
@@ -72,37 +66,6 @@ defmodule RustQ.Codegen.GeneratedASTTest do
            } = Enum.find(List.flatten(modules), &match?(%Function{name: :atom}, &1))
   end
 
-  test "dispatch functions cover every externally decodable schema node" do
-    dispatch = Dispatch.asts()
-    names = dispatch |> Enum.map(& &1.name) |> MapSet.new()
-
-    expected_dispatch = %{
-      item: :decode_ast_item,
-      type: :decode_ast_type,
-      pat: :decode_ast_pat,
-      stmt: :decode_ast_stmt,
-      expr: :decode_ast_expr
-    }
-
-    assert MapSet.subset?(MapSet.new(Map.values(expected_dispatch)), names)
-
-    for {category, function_name} <- expected_dispatch do
-      assert %Function{body: [%Return{expr: %Match{arms: arms}}]} =
-               Enum.find(dispatch, &(&1.name == function_name))
-
-      actual_consts = dispatch_constants(arms)
-
-      expected_consts =
-        category
-        |> Schema.nodes()
-        |> Enum.map(& &1.rust_const)
-        |> MapSet.new()
-
-      assert actual_consts == expected_consts,
-             "#{function_name} dispatch does not match #{category} schema nodes"
-    end
-  end
-
   test "type ref decoder delegates only the syn ref construction boundary" do
     assert %Function{body: body} =
              TypeDecoders
@@ -112,26 +75,6 @@ defmodule RustQ.Codegen.GeneratedASTTest do
     assert %Return{
              expr: %PathCall{path: %Path{parts: [:super, :parse_type_ref]}}
            } = List.last(body)
-  end
-
-  test "type container decoders use generic type construction" do
-    decoders = MetaAST.functions(TypeDecoders)
-
-    for name <- [
-          :decode_type_option,
-          :decode_type_result,
-          :decode_type_nif_result,
-          :decode_type_vec
-        ] do
-      assert %Function{body: body} = Enum.find(decoders, &(&1.name == name))
-
-      assert %Return{
-               expr: %PathCall{
-                 path: %Path{parts: [:super, :parse_type_generic]},
-                 args: [_path, %VecLiteral{}]
-               }
-             } = List.last(body)
-    end
   end
 
   test "dogfooded type helpers cover path and lifetime list boundaries" do
@@ -210,49 +153,96 @@ defmodule RustQ.Codegen.GeneratedASTTest do
              expr: %PathCall{path: %Path{parts: [:super, :parse_function_arg]}}
            } = List.last(else_body)
   end
+end
 
-  test "dogfooded decoder modules cover generated decoder categories" do
-    decoder_names =
-      Decoders.asts()
-      |> Enum.map(& &1.name)
+defmodule RustQ.Codegen.DispatchCoverageTest do
+  use ExUnit.Case,
+    async: true,
+    parameterize: [
+      %{category: :item, function_name: :decode_ast_item},
+      %{category: :type, function_name: :decode_ast_type},
+      %{category: :pat, function_name: :decode_ast_pat},
+      %{category: :stmt, function_name: :decode_ast_stmt},
+      %{category: :expr, function_name: :decode_ast_expr}
+    ]
+
+  alias RustQ.Codegen.Dispatch
+  alias RustQ.Rust.AST.{Function, Match, Path, PatPath, Return}
+  alias RustQ.Rust.AST.Schema
+
+  test "dispatch covers its externally decodable schema category", %{
+    category: category,
+    function_name: function_name
+  } do
+    assert %Function{body: [%Return{expr: %Match{arms: arms}}]} =
+             Enum.find(Dispatch.asts(), &(&1.name == function_name))
+
+    actual_consts =
+      arms
+      |> Enum.flat_map(fn
+        %{pattern: %PatPath{path: %Path{parts: [:ast_modules, rust_const]}}} -> [rust_const]
+        _badarg_arm -> []
+      end)
       |> MapSet.new()
 
-    expected_expr_decoders =
-      Schema.nodes(:expr)
-      |> Enum.map(&String.to_atom("decode_expr_#{&1.name}"))
+    expected_consts =
+      category
+      |> Schema.nodes()
+      |> Enum.map(& &1.rust_const)
+      |> MapSet.new()
 
-    expected_stmt_decoders =
-      Schema.nodes(:stmt)
-      |> Enum.map(&String.to_atom("decode_stmt_#{&1.name}"))
-
-    expected_pat_decoders =
-      Schema.nodes(:pat)
-      |> Enum.reject(&(&1.name == :pat_atom_guard))
-      |> Enum.map(&String.to_atom("decode_#{&1.name}"))
-
-    expected_type_decoders =
-      Schema.nodes(:type)
-      |> Enum.map(&String.to_atom("decode_#{&1.name}"))
-
-    expected_item_decoders =
-      Schema.nodes(:item)
-      |> Enum.map(&String.to_atom("decode_ast_#{&1.name}"))
-      |> Kernel.++([:decode_function_arg, :decode_struct_field, :decode_enum_variant])
-
-    for decoder <-
-          expected_item_decoders ++
-            expected_type_decoders ++
-            expected_expr_decoders ++ expected_stmt_decoders ++ expected_pat_decoders do
-      assert MapSet.member?(decoder_names, decoder), "missing dogfooded decoder #{decoder}"
-    end
+    assert actual_consts == expected_consts
   end
+end
 
-  defp dispatch_constants(arms) do
-    arms
-    |> Enum.flat_map(fn
-      %{pattern: %PatPath{path: %Path{parts: [:ast_modules, rust_const]}}} -> [rust_const]
-      _badarg_arm -> []
-    end)
-    |> MapSet.new()
+defmodule RustQ.Codegen.TypeContainerDecoderTest do
+  use ExUnit.Case,
+    async: true,
+    parameterize:
+      Enum.map(
+        [:decode_type_option, :decode_type_result, :decode_type_nif_result, :decode_type_vec],
+        &%{decoder_name: &1}
+      )
+
+  alias RustQ.Codegen.Decoders.Type, as: TypeDecoders
+  alias RustQ.Meta.AST, as: MetaAST
+  alias RustQ.Rust.AST.{Function, Path, PathCall, Return, VecLiteral}
+
+  test "uses generic type construction", %{decoder_name: name} do
+    assert %Function{body: body} =
+             TypeDecoders
+             |> MetaAST.functions()
+             |> Enum.find(&(&1.name == name))
+
+    assert %Return{
+             expr: %PathCall{
+               path: %Path{parts: [:super, :parse_type_generic]},
+               args: [_path, %VecLiteral{}]
+             }
+           } = List.last(body)
+  end
+end
+
+defmodule RustQ.Codegen.DecoderCoverageTest do
+  alias RustQ.Rust.AST.Schema
+
+  expected_decoders =
+    Enum.map(Schema.nodes(:item), &String.to_atom("decode_ast_#{&1.name}")) ++
+      [:decode_function_arg, :decode_struct_field, :decode_enum_variant] ++
+      Enum.map(Schema.nodes(:type), &String.to_atom("decode_#{&1.name}")) ++
+      Enum.map(Schema.nodes(:expr), &String.to_atom("decode_expr_#{&1.name}")) ++
+      Enum.map(Schema.nodes(:stmt), &String.to_atom("decode_stmt_#{&1.name}")) ++
+      (Schema.nodes(:pat)
+       |> Enum.reject(&(&1.name == :pat_atom_guard))
+       |> Enum.map(&String.to_atom("decode_#{&1.name}")))
+
+  use ExUnit.Case,
+    async: true,
+    parameterize: Enum.map(expected_decoders, &%{decoder_name: &1})
+
+  alias RustQ.Codegen.Decoders
+
+  test "generated decoder exists", %{decoder_name: decoder_name} do
+    assert Enum.any?(Decoders.asts(), &(&1.name == decoder_name))
   end
 end

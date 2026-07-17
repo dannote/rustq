@@ -39,11 +39,7 @@ defmodule RustQ.NativeExternalTest do
     assert function_exported?(RustQ.NativeExternalFixture, :env_echo, 1)
     refute function_exported?(RustQ.NativeExternalFixture, :env_echo, 2)
 
-    assert_defnif(
-      RustQ.NativeExternalFixture,
-      :env_echo,
-      1,
-      "external_env_echo(env, value)"
-    )
+    assert nif_exported?(RustQ.NativeExternalFixture, :env_echo, 1)
+    assert rust_source!(RustQ.NativeExternalFixture, :env_echo) =~ "external_env_echo(env, value)"
   end
 end

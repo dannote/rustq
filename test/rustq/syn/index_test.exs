@@ -8,6 +8,8 @@ defmodule RustQ.Syn.IndexTest do
   alias RustQ.Syn.TypeAlias
   alias RustQ.Syn.Use, as: SynUse
 
+  @moduletag :tmp_dir
+
   test "builds package-aware indexes from Cargo metadata" do
     index =
       Index.from_package("rustq_nif", manifest_path: "native/rustq_nif/Cargo.toml")
@@ -35,12 +37,8 @@ defmodule RustQ.Syn.IndexTest do
     )
   end
 
-  test "refreshes cached package indexes when package source changes" do
-    dir =
-      Path.join(
-        System.tmp_dir!(),
-        "rustq_syn_package_cache_#{System.unique_integer([:positive])}"
-      )
+  test "refreshes cached package indexes when package source changes", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "package")
 
     manifest_path = Path.join(dir, "Cargo.toml")
     lib_path = Path.join([dir, "src", "lib.rs"])
@@ -49,7 +47,6 @@ defmodule RustQ.Syn.IndexTest do
 
     on_exit(fn ->
       Index.clear_cached_package("rustq_cache_fixture", manifest_path: manifest_path)
-      File.rm_rf(dir)
     end)
 
     File.write!(manifest_path, """
@@ -74,9 +71,8 @@ defmodule RustQ.Syn.IndexTest do
              RustQ.Syn.functions(Map.fetch!(second.files, lib_path))
   end
 
-  test "refreshes cached package indexes when a source file is added" do
-    dir =
-      Path.join(System.tmp_dir!(), "rustq_syn_package_add_#{System.unique_integer([:positive])}")
+  test "refreshes cached package indexes when a source file is added", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "package")
 
     manifest_path = Path.join(dir, "Cargo.toml")
     lib_path = Path.join([dir, "src", "lib.rs"])
@@ -86,7 +82,6 @@ defmodule RustQ.Syn.IndexTest do
 
     on_exit(fn ->
       Index.clear_cached_package("rustq_package_add_fixture", manifest_path: manifest_path)
-      File.rm_rf(dir)
     end)
 
     File.write!(manifest_path, """
@@ -107,9 +102,9 @@ defmodule RustQ.Syn.IndexTest do
              RustQ.Syn.functions(Map.fetch!(second.files, added_path))
   end
 
-  test "indexes enums by name" do
+  test "indexes enums by name", %{tmp_dir: tmp_dir} do
     path =
-      write_source!("""
+      write_source!(tmp_dir, """
       pub enum ClipOp { Intersect, Difference }
       """)
 
@@ -123,9 +118,9 @@ defmodule RustQ.Syn.IndexTest do
     assert %SynEnum{name: "ClipOp"} = Index.enum!(index, "ClipOp")
   end
 
-  test "indexes use aliases by alias" do
+  test "indexes use aliases by alias", %{tmp_dir: tmp_dir} do
     path =
-      write_source!("""
+      write_source!(tmp_dir, """
       pub use sb::SkPaint_Cap as Cap;
       use crate::Paint;
       """)
@@ -147,13 +142,11 @@ defmodule RustQ.Syn.IndexTest do
              Index.use_alias(index, "Cap")
 
     assert %SynUse{alias: "Cap"} = Index.use_alias!(index, "Cap")
-  after
-    if path = Process.get(:path), do: File.rm(path)
   end
 
-  test "indexes glob reexports structurally" do
+  test "indexes glob reexports structurally", %{tmp_dir: tmp_dir} do
     path =
-      write_source!("""
+      write_source!(tmp_dir, """
       pub use blend_mode::*;
       """)
 
@@ -168,13 +161,11 @@ defmodule RustQ.Syn.IndexTest do
                visibility: :public
              }
            ] = Index.uses(index)
-  after
-    if path = Process.get(:path), do: File.rm(path)
   end
 
-  test "indexes type aliases by name" do
+  test "indexes type aliases by name", %{tmp_dir: tmp_dir} do
     path =
-      write_source!("""
+      write_source!(tmp_dir, """
       pub type PathOp = skia_bindings::SkPathOp;
       type Local = crate::Private;
       """)
@@ -195,13 +186,11 @@ defmodule RustQ.Syn.IndexTest do
              Index.type_alias(index, "PathOp")
 
     assert %TypeAlias{name: "PathOp"} = Index.type_alias!(index, "PathOp")
-  after
-    if path = Process.get(:path), do: File.rm(path)
   end
 
-  test "finds public type names for aliased Rust types" do
+  test "finds public type names for aliased Rust types", %{tmp_dir: tmp_dir} do
     path =
-      write_source!("""
+      write_source!(tmp_dir, """
       pub type PathOp = skia_bindings::SkPathOp;
       type PrivateOp = skia_bindings::SkPrivateOp;
       """)
@@ -211,18 +200,13 @@ defmodule RustQ.Syn.IndexTest do
     assert {:ok, "PathOp"} = Index.public_type_name(index, "SkPathOp")
     assert "PathOp" = Index.public_type_name!(index, "SkPathOp")
     assert :error = Index.public_type_name(index, "SkPrivateOp")
-  after
-    if path = Process.get(:path), do: File.rm(path)
   end
 
-  test "prefers public root reexports for aliased Rust types" do
-    dir =
-      Path.join(System.tmp_dir!(), "rustq_syn_index_test_#{System.unique_integer([:positive])}")
-
+  test "prefers public root reexports for aliased Rust types", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "sources")
     File.mkdir_p!(dir)
     paint_path = Path.join(dir, "paint.rs")
     core_path = Path.join(dir, "core.rs")
-    Process.put(:paths, [paint_path, core_path])
 
     File.write!(paint_path, "pub use sb::SkPaint_Cap as Cap;\n")
     File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
@@ -230,19 +214,14 @@ defmodule RustQ.Syn.IndexTest do
     index = Index.from_paths([paint_path, core_path])
 
     assert {:ok, "PaintCap"} = Index.public_type_name(index, "SkPaint_Cap")
-  after
-    for path <- Process.get(:paths, []), do: File.rm(path)
   end
 
-  test "follows public reexport chains for aliased Rust types" do
-    dir =
-      Path.join(System.tmp_dir!(), "rustq_syn_index_test_#{System.unique_integer([:positive])}")
-
+  test "follows public reexport chains for aliased Rust types", %{tmp_dir: tmp_dir} do
+    dir = Path.join(tmp_dir, "sources")
     File.mkdir_p!(dir)
     paint_path = Path.join(dir, "paint.rs")
     core_path = Path.join(dir, "core.rs")
     lib_path = Path.join(dir, "lib.rs")
-    Process.put(:paths, [paint_path, core_path, lib_path])
 
     File.write!(paint_path, "pub use sb::SkPaint_Cap as Cap;\n")
     File.write!(core_path, "pub use paint::Cap as PaintCap;\n")
@@ -251,18 +230,10 @@ defmodule RustQ.Syn.IndexTest do
     index = Index.from_paths([paint_path, core_path, lib_path])
 
     assert {:ok, "PublicPaintCap"} = Index.public_type_name(index, "SkPaint_Cap")
-  after
-    for path <- Process.get(:paths, []), do: File.rm(path)
   end
 
-  test "indexes impl methods by target" do
-    path =
-      Path.join(
-        System.tmp_dir!(),
-        "rustq_syn_index_test_#{System.unique_integer([:positive])}.rs"
-      )
-
-    Process.put(:path, path)
+  test "indexes impl methods by target", %{tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "impl.rs")
 
     File.write!(path, """
     impl Canvas {
@@ -281,8 +252,6 @@ defmodule RustQ.Syn.IndexTest do
 
     assert {:ok, %RustQ.Syn.Method{name: "op"}} = Index.method(index, "Path", "op")
     assert :error = Index.method(index, "Canvas", "missing")
-  after
-    if path = Process.get(:path), do: File.rm(path)
   end
 
   test "type helper predicates match common Rust type shapes" do
@@ -302,14 +271,8 @@ defmodule RustQ.Syn.IndexTest do
     assert Type.ref_to?(paint_arg.type_ast, "Paint")
   end
 
-  defp write_source!(source) do
-    path =
-      Path.join(
-        System.tmp_dir!(),
-        "rustq_syn_index_test_#{System.unique_integer([:positive])}.rs"
-      )
-
-    Process.put(:path, path)
+  defp write_source!(tmp_dir, source) do
+    path = Path.join(tmp_dir, "source.rs")
     File.write!(path, source)
     path
   end

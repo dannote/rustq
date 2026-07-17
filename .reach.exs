@@ -11,6 +11,7 @@
     ],
     ignore: [
       paths: [
+        "test/support/**",
         "lib/rustq.ex",
         "lib/rustq/rust/ast/builder.ex",
         "lib/rustq/rustler/atom.ex",

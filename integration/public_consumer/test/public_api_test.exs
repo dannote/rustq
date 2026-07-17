@@ -20,9 +20,15 @@ defmodule RustQPublicConsumer.PublicAPITest do
     assert [_, _] = generated = RustQPublicConsumer.Generated.__rustq_items__()
     assert Rust.render_all(generated) =~ "fn increment_all"
 
-    assert_defrust(RustQPublicConsumer.Generated, :increment, "fn increment(value: u32) -> u32")
-    assert_defrust(RustQPublicConsumer.Generated, :increment_all, ~r/into_iter.*map/s)
-    assert_rust_valid(RustQPublicConsumer.Generated)
+    assert rust_source!(RustQPublicConsumer.Generated, :increment) =~
+             "fn increment(value: u32) -> u32"
+
+    assert rust_source!(RustQPublicConsumer.Generated, :increment_all) =~ ~r/into_iter.*map/s
+
+    assert RustQ.valid?(
+             rust_source!(RustQPublicConsumer.Generated),
+             "rustq_public_consumer_generated.rs"
+           )
   end
 
   test "prepares ABI items for an externally built and loaded crate" do

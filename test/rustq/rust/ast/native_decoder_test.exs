@@ -1,5 +1,3 @@
-Code.require_file("../../../support/rustq_ast_samples.ex", __DIR__)
-
 defmodule RustQ.Rust.AST.NativeDecoderTest do
   use ExUnit.Case, async: true
 
@@ -10,7 +8,6 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
   alias RustQ.Rust.AST.Function
   alias RustQ.Rust.AST.PatternBuilder, as: P
   alias RustQ.Rust.AST.Render
-  alias RustQ.Rust.AST.Schema
   alias RustQ.Rust.AST.TypePath
 
   require A
@@ -32,21 +29,6 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
   test "native type decoding accepts only structural type nodes" do
     assert_raise ArgumentError, fn ->
       Native.render_ast(%Function{name: :legacy, args: [], returns: "i32", body: []})
-    end
-  end
-
-  test "behavioral examples cover every current AST schema node" do
-    samples = RustQ.ASTSamples.all()
-
-    assert MapSet.new(Map.keys(samples)) ==
-             Schema.nodes() |> Enum.map(& &1.name) |> MapSet.new()
-
-    for {name, ast} <- samples do
-      source = render_ast(ast)
-      assert is_binary(source), "sample for #{name} should render"
-
-      assert RustQ.ASTSamples.validate_rendered?(name, ast, source),
-             "sample for #{name} should render expected behavior, got:\n#{source}"
     end
   end
 
@@ -446,6 +428,37 @@ defmodule RustQ.Rust.AST.NativeDecoderTest do
     assert tuple_source =~ "(left, right)"
     assert some_source =~ "Some(value)"
     assert err_source =~ "Err(rustler::Error::BadArg)"
+  end
+
+  defp render_ast(%AST.Function{} = function) do
+    function
+    |> Map.update!(:args, &A.function_args/1)
+    |> Map.update!(:returns, &A.type/1)
+    |> Native.render_ast()
+  end
+
+  defp render_ast(ast), do: Native.render_ast(ast)
+end
+
+defmodule RustQ.Rust.AST.NativeDecoderBehaviorTest do
+  use ExUnit.Case,
+    async: true,
+    parameterize:
+      Enum.map(RustQ.ASTSamples.all(), fn {name, ast} ->
+        %{sample_name: name, sample_ast: ast}
+      end)
+
+  alias RustQ.Native.Nif, as: Native
+  alias RustQ.Rust.AST
+  alias RustQ.Rust.AST.Builder, as: A
+
+  test "renders every schema node behaviorally", %{sample_name: name, sample_ast: ast} do
+    source = render_ast(ast)
+
+    assert is_binary(source)
+
+    assert RustQ.ASTSamples.validate_rendered?(name, ast, source),
+           "sample for #{name} should render expected behavior, got:\n#{source}"
   end
 
   defp render_ast(%AST.Function{} = function) do

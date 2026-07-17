@@ -1,5 +1,3 @@
-Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
-
 defmodule RustQ.Meta.DefrustTest do
   use RustQ.Test, async: true
 
@@ -9,40 +7,63 @@ defmodule RustQ.Meta.DefrustTest do
   alias RustQ.Native.Nif
   alias RustQ.Rust.AST
 
-  test "generates Rust source from defrust functions and specs" do
-    source = Generated.__rustq_source__()
+  describe "compiled defrust fixtures" do
+    test "renders a focused function exactly" do
+      assert rust_source!(Generated, :draw_save) == """
+             fn draw_save(canvas: &Canvas) -> NifResult<()> {
+                 canvas.save();
+                 Ok(())
+             }
+             """
+    end
 
-    assert source =~ "fn draw_save(canvas: &Canvas) -> NifResult<()>"
-    assert source =~ "canvas.save();"
-    assert source =~ "Ok(())"
+    test "renders atom matching and errors" do
+      source = rust_source!(Generated, :decode_mode)
 
-    assert source =~ "fn decode_mode(atom: Atom) -> NifResult<Mode>"
-    assert source =~ "match atom"
-    assert source =~ "value if value == atoms::src_over() =>"
-    assert source =~ "Ok(BlendMode::SrcOver)"
-    assert source =~ ~s|Err(rustler::Error::RaiseAtom("invalid_blend_mode"))|
+      assert source =~ "fn decode_mode(atom: Atom) -> NifResult<Mode>"
+      assert source =~ "value if value == atoms::src_over() =>"
+      assert source =~ "Ok(BlendMode::SrcOver)"
+      assert source =~ ~s|Err(rustler::Error::RaiseAtom("invalid_blend_mode"))|
+    end
 
-    assert source =~ "fn draw_rect<'a>("
-    assert source =~ "opts: RectOpts<'a>"
-    assert source =~ "raw_opts: Term<'a>"
-    assert source =~ "let rect = Rect::from_xywh(opts.x, opts.y, opts.width, opts.height);"
-    assert source =~ "let mut paint = decode_paint(opts.fill)?;"
-    assert source =~ "apply_blend_mode(&mut paint, raw_opts)?;"
-    assert source =~ "canvas.draw_rect(&rect, &paint);"
+    test "renders inferred lifetimes, propagation, and borrowing" do
+      source = rust_source!(Generated, :draw_rect)
 
-    assert source =~ "fn maybe_save(canvas: Option<&Canvas>) -> NifResult<()>"
-    assert source =~ "None => {}"
-    assert source =~ "Some(canvas) => {"
+      assert source =~ "fn draw_rect<'a>("
+      assert source =~ "opts: RectOpts<'a>"
+      assert source =~ "raw_opts: Term<'a>"
+      assert source =~ "let rect = Rect::from_xywh(opts.x, opts.y, opts.width, opts.height);"
+      assert source =~ "let mut paint = decode_paint(opts.fill)?;"
+      assert source =~ "apply_blend_mode(&mut paint, raw_opts)?;"
+      assert source =~ "canvas.draw_rect(&rect, &paint);"
+    end
 
-    assert source =~ "fn unwrap_code(result: Result<u32, Atom>) -> NifResult<u32>"
-    assert source =~ "Ok(value) =>"
-    assert source =~ "Err(reason) =>"
+    test "renders option matching" do
+      source = rust_source!(Generated, :maybe_save)
 
-    assert source =~ "fn handle_event(event: Event) -> NifResult<()>"
-    assert source =~ "Event::Click(Click { name: name }) =>"
-    assert source =~ "Event::Resize(Resize { width: width, height: height }) =>"
+      assert source =~ "fn maybe_save(canvas: Option<&Canvas>)"
+      assert source =~ "None => {}"
+      assert source =~ "Some(canvas) => {"
+    end
 
-    assert_rust_valid(Generated)
+    test "renders result matching" do
+      source = rust_source!(Generated, :unwrap_code)
+
+      assert source =~ "fn unwrap_code(result: Result<u32, Atom>)"
+      assert source =~ "Ok(value) =>"
+      assert source =~ "Err(reason) =>"
+    end
+
+    test "renders structural event patterns" do
+      source = rust_source!(Generated, :handle_event)
+
+      assert source =~ "Event::Click(Click { name: name }) =>"
+      assert source =~ "Event::Resize(Resize { width: width, height: height }) =>"
+    end
+
+    test "renders a syntactically valid generated module" do
+      assert RustQ.valid?(rust_source!(Generated), "generated_case.rs")
+    end
   end
 
   test "defnif marks public entrypoints and defrustp keeps helpers private" do
@@ -60,15 +81,10 @@ defmodule RustQ.Meta.DefrustTest do
       defnif(slow_add(left, right), do: left + right)
     end
 
-    source = EntrypointCase.__rustq_source__()
-
-    assert source =~ "#[rustler::nif]"
-    assert source =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
-    assert source =~ "fn add(left: i64, right: i64) -> i64"
-    assert source =~ "fn add_impl(left: i64, right: i64) -> i64"
-    assert_defnif(EntrypointCase, :add, 2, "fn add(left: i64, right: i64) -> i64")
-    assert_defrust(EntrypointCase, :add_impl, "fn add_impl(left: i64, right: i64) -> i64")
-    assert function_exported?(EntrypointCase, :add, 2)
+    assert nif_exported?(EntrypointCase, :add, 2)
+    assert rust_source!(EntrypointCase, :add) =~ "fn add(left: i64, right: i64) -> i64"
+    assert rust_source!(EntrypointCase, :slow_add) =~ ~s|#[rustler::nif(schedule = "DirtyCpu")]|
+    assert rust_source!(EntrypointCase, :add_impl) =~ "fn add_impl(left: i64, right: i64) -> i64"
     refute function_exported?(EntrypointCase, :add_impl, 2)
 
     assert_raise ErlangError, fn -> EntrypointCase.add(1, 2) end
@@ -89,15 +105,16 @@ defmodule RustQ.Meta.DefrustTest do
       defrust(sign(_value), do: -1)
     end
 
-    source = MultiClauseCase.__rustq_source__()
-    assert source =~ "fn factorial(arg1: i64) -> i64"
-    assert source =~ "match arg1"
-    assert source =~ "0 => 1"
-    assert source =~ "value => value * factorial(value - 1)"
-    assert source =~ "value if value > 0 => 1"
-    assert source =~ "_value => -1"
-    assert_defrust(MultiClauseCase, :sign, "value if value > 0 => 1")
-    assert_rust_valid(MultiClauseCase)
+    factorial = rust_source!(MultiClauseCase, :factorial)
+    sign = rust_source!(MultiClauseCase, :sign)
+
+    assert factorial =~ "fn factorial(arg1: i64) -> i64"
+    assert factorial =~ "match arg1"
+    assert factorial =~ "0 => 1"
+    assert factorial =~ "value => value * factorial(value - 1)"
+    assert sign =~ "value if value > 0 => 1"
+    assert sign =~ "_value => -1"
+    assert RustQ.valid?(rust_source!(MultiClauseCase), "multi_clause_case.rs")
   end
 
   test "preserves no-parentheses function pointer field access in expected positions" do
@@ -1967,15 +1984,18 @@ defmodule RustQ.Meta.DefrustTest do
       defrust(trimmed(value), do: value |> String.trim())
     end
 
-    source = RemotePipelineCase.__rustq_source__()
+    positive_square_sum = rust_source!(RemotePipelineCase, :positive_square_sum)
+    count_positive = rust_source!(RemotePipelineCase, :count_positive)
+    has_square = rust_source!(RemotePipelineCase, :has_square)
 
-    assert source =~ ".filter_map(|value| if value > 0"
-    assert source =~ ~r/filter_map.*collect::<Vec<i64>>.*\.map.*collect::<Vec<i64>>.*\.fold/s
-    assert source =~ ~r/filter_map.*collect::<Vec<i64>>.*\.len\(\) as i64/s
-    assert source =~ ~r/\.map.*collect::<Vec<i64>>.*\.any/s
-    assert source =~ ".into_iter().next().unwrap_or(default)"
-    assert source =~ ".trim().to_string()"
-    assert RustQ.valid?(source, "remote_pipelines.rs")
+    assert positive_square_sum =~
+             ~r/filter_map.*collect::<Vec<i64>>.*\.map.*collect::<Vec<i64>>.*\.fold/s
+
+    assert count_positive =~ ~r/filter_map.*collect::<Vec<i64>>.*\.len\(\) as i64/s
+    assert has_square =~ ~r/\.map.*collect::<Vec<i64>>.*\.any/s
+    assert rust_source!(RemotePipelineCase, :first_or) =~ ".into_iter().next().unwrap_or(default)"
+    assert rust_source!(RemotePipelineCase, :trimmed) =~ ".trim().to_string()"
+    assert RustQ.valid?(rust_source!(RemotePipelineCase), "remote_pipeline_case.rs")
   end
 
   test "defrust lowers Elixir pipelines to Rust method, operator, and cast chains" do
@@ -2276,7 +2296,8 @@ defmodule RustQ.Meta.DefrustTest do
       use RustQ.Meta
       alias RustQ.Type, as: R
 
-      @spec attr(R.option(R.path(:String)), R.usize()) :: R.raw(:"Option<(&'static str, String)>")
+      @spec attr(R.option(R.path(:String)), R.usize()) ::
+              R.raw(:"Option<(&'static str, String)>")
       defrust attr(name, index) do
         cursor = 0
 

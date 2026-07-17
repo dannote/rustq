@@ -1,5 +1,3 @@
-Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
-
 defmodule RustQ.Meta.ResourceTypeCase do
   use RustQ.Meta
   alias RustQ.Type, as: R

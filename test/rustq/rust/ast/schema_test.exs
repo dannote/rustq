@@ -1,5 +1,3 @@
-Code.require_file("../../../support/rustq_ast_samples.ex", __DIR__)
-
 defmodule RustQ.Rust.AST.SchemaTest do
   use ExUnit.Case, async: true
 
@@ -21,24 +19,29 @@ defmodule RustQ.Rust.AST.SchemaTest do
     assert Enum.any?(Schema.nodes(:expr), &(&1.module == RustQ.Rust.AST.Var))
     refute Enum.any?(Schema.nodes(:expr), &(&1.module == RustQ.Rust.AST.Function))
   end
+end
 
-  test "every schema node has a behavioral sample containing that node shape" do
-    samples = RustQ.ASTSamples.all()
+defmodule RustQ.Rust.AST.SchemaSampleTest do
+  alias RustQ.Rust.AST.Schema
 
-    for node <- Schema.nodes() do
-      assert Map.has_key?(samples, node.name), "missing sample for #{node.name}"
+  use ExUnit.Case,
+    async: true,
+    parameterize:
+      Enum.map(Schema.nodes(), fn node ->
+        %{schema_node: node}
+      end)
 
-      sample = Map.fetch!(samples, node.name)
+  test "behavioral sample contains every schema field", %{schema_node: node} do
+    sample = RustQ.ASTSamples.sample_for(node.name)
 
-      assert found = find_struct(sample, node.module),
-             "sample for #{node.name} does not contain #{inspect(node.module)}"
+    assert found = find_struct(sample, node.module),
+           "sample for #{node.name} does not contain #{inspect(node.module)}"
 
-      actual_fields = found |> Map.keys() |> Enum.reject(&(&1 == :__struct__)) |> MapSet.new()
-      schema_fields = node.fields |> Enum.map(&elem(&1, 0)) |> MapSet.new()
+    actual_fields = found |> Map.keys() |> Enum.reject(&(&1 == :__struct__)) |> MapSet.new()
+    schema_fields = node.fields |> Enum.map(&elem(&1, 0)) |> MapSet.new()
 
-      assert actual_fields == schema_fields,
-             "sample for #{node.name} does not match schema fields"
-    end
+    assert actual_fields == schema_fields,
+           "sample for #{node.name} does not match schema fields"
   end
 
   defp find_struct(%{__struct__: module} = struct, module), do: struct

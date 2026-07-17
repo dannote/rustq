@@ -12,21 +12,30 @@ end
 defmodule RustQ.TestTest do
   use RustQ.Test, async: true
 
-  test "asserts focused defrust output" do
-    assert_defrust(RustQ.TestFixture, :increment, "fn increment(value: i64) -> i64")
-    assert_defrust(RustQ.TestFixture, :guarded_sign, ~r/value if value > 0/)
-    assert_rust(RustQ.TestFixture, "#[rustler::nif]")
-    assert_rust_valid(RustQ.TestFixture)
+  test "returns focused generated Rust for ordinary ExUnit assertions" do
+    assert rust_source!(RustQ.TestFixture, :increment) =~ "fn increment(value: i64) -> i64"
+
+    assert rust_source!(RustQ.TestFixture, :increment) == """
+           fn increment(value: i64) -> i64 {
+               value + 1
+           }
+           """
+
+    assert rust_source!(RustQ.TestFixture, :guarded_sign) =~ ~r/value if value > 0/
+    assert rust_source!(RustQ.TestFixture) =~ "#[rustler::nif]"
+    assert RustQ.valid?(rust_source!(RustQ.TestFixture), "rustq_test_fixture.rs")
   end
 
-  test "asserts defnif exports and attributes" do
-    assert_defnif(RustQ.TestFixture, :guarded_sign, 1, "fn guarded_sign(arg1: i64) -> i64")
-    assert RustQ.Test.nif?(RustQ.TestFixture, :guarded_sign)
+  test "identifies exported NIFs" do
+    assert nif_exported?(RustQ.TestFixture, :guarded_sign, 1)
+    refute nif_exported?(RustQ.TestFixture, :guarded_sign, 2)
+    refute nif_exported?(RustQ.TestFixture, :increment, 1)
+    refute nif_exported?(__MODULE__, :module_info, 0)
   end
 
   test "raises focused errors for modules without RustQ metadata" do
     assert_raise ArgumentError, ~r/does not expose __rustq_source__/, fn ->
-      RustQ.Test.source!(__MODULE__)
+      rust_source!(__MODULE__)
     end
   end
 end

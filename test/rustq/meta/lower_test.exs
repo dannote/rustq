@@ -1,5 +1,3 @@
-Code.require_file("../../support/rustq_meta_generated_case.ex", __DIR__)
-
 defmodule RustQ.Meta.AttrCase do
   use RustQ.Meta
 
@@ -178,7 +176,11 @@ defmodule RustQ.Meta.LowerTest do
   end
 
   test "infers propagation through impl Into option arguments from plain values" do
-    tile_mode_type = %Type{kind: :type, rust: "TileMode", ast: %AST.TypePath{parts: [:TileMode]}}
+    tile_mode_type = %Type{
+      kind: :type,
+      rust: "TileMode",
+      ast: %AST.TypePath{parts: [:TileMode]}
+    }
 
     option_tile_mode_type = %Type{
       kind: :option,
@@ -1706,12 +1708,16 @@ defmodule RustQ.Meta.LowerTest do
              ]
            } = draw_rect
 
-    assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} = hd(draw_rect.body)
+    assert %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :rect}} =
+             hd(draw_rect.body)
 
     assert Enum.any?(
              draw_rect.body,
              &match?(
-               %RustQ.Rust.AST.Let{pattern: %RustQ.Rust.AST.PatVar{name: :paint}, mutable: true},
+               %RustQ.Rust.AST.Let{
+                 pattern: %RustQ.Rust.AST.PatVar{name: :paint},
+                 mutable: true
+               },
                &1
              )
            )
@@ -1873,7 +1879,9 @@ defmodule RustQ.Meta.LowerTest do
 
     source = ClosureDerefCase.__rustq_source__()
 
-    assert source =~ "if let Some(color) = args.first().and_then(|term| decode_color(*term).ok())"
+    assert source =~
+             "if let Some(color) = args.first().and_then(|term| decode_color(*term).ok())"
+
     assert source =~ "canvas.clear(color);"
   end
 

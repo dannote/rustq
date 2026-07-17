@@ -9,7 +9,7 @@ unpacked package, and verifies:
 
 - dependency compilation from packaged files
 - checked `rustq.exs` generation
-- documented Elixir APIs, `RustQ.Test` assertions, and generated `RustQ.Meta`
+- documented Elixir APIs, composable `RustQ.Test` helpers, and generated `RustQ.Meta`
   accessors
 - structural Rust AST and Rustler helpers
 - native Cargo compilation

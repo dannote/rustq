@@ -235,9 +235,10 @@ Consumer tests can verify generated functions and compile rendered Rust:
 ```elixir
 use RustQ.Test, async: true
 
-assert_defrust MyApp.Native, :decode_impl, "fn decode_impl"
-assert_defnif MyApp.Native, :decode, 1, ~r/fn decode/
-assert_rust_valid MyApp.Native
+assert rust_source!(MyApp.Native, :decode_impl) =~ "fn decode_impl"
+assert rust_source!(MyApp.Native, :decode) =~ ~r/fn decode/
+assert nif_exported?(MyApp.Native, :decode, 1)
+assert RustQ.valid?(rust_source!(MyApp.Native), "my_app_native.rs")
 ```
 
 Run `mix rustq.gen --check`, Cargo formatting/checks, and downstream tests in CI.

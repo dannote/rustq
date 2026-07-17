@@ -1,6 +1,7 @@
 defmodule RustQ.PublicConsumerTest do
   use RustQ.Test.PackageCase, async: false
 
+  @moduletag :package_test
   @moduletag timeout: 600_000
 
   @root Path.expand("../..", __DIR__)

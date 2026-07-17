@@ -191,14 +191,16 @@ Use the packaged assertions instead of searching build directories:
 ```elixir
 use RustQ.Test, async: true
 
-assert_defrust MyApp.Native, :add_impl, "fn add_impl"
-assert_defnif MyApp.Native, :add, 2, ~r/fn add/
-assert_rust_valid MyApp.Native
+assert rust_source!(MyApp.Native, :add_impl) =~ "fn add_impl"
+assert rust_source!(MyApp.Native, :add) =~ ~r/fn add/
+assert nif_exported?(MyApp.Native, :add, 2)
+assert RustQ.valid?(rust_source!(MyApp.Native), "my_app_native.rs")
 ```
 
-`assert_defnif/4` verifies the Elixir export, generated Rustler attribute, and
-focused generated source. `assert_rust_valid/1` asks RustQ's native parser to
-validate the complete generated module.
+`rust_source!/2` returns one focused function for ordinary ExUnit assertions,
+while `rust_source!/1` returns the complete generated module.
+`nif_exported?/3` checks both the Elixir export and generated Rustler attribute.
+Use `RustQ.valid?/2` when the test specifically needs Rust syntax validation.
 
 ## Explicit policy checklist
 

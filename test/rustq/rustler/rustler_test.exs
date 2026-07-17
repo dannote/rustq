@@ -641,7 +641,10 @@ defmodule RustQ.RustlerTest do
         splice: [
           items:
             Term.encoder(:EncodedError,
-              fields: [:message, code: [field: [0, :module_code], when_some: true, via: :as_str]],
+              fields: [
+                :message,
+                code: [field: [0, :module_code], when_some: true, via: :as_str]
+              ],
               target_lifetimes: [:_]
             )
         ]
@@ -808,7 +811,10 @@ defmodule RustQ.RustlerTest do
               lifetime: :a,
               fields: [
                 x: [type: :f32, decode: R.opt_decode(:opt_f32, :opts, :x)],
-                mode: [type: :Atom, decode: R.required_opt_decode(:opt_atom_option, :opts, :mode)],
+                mode: [
+                  type: :Atom,
+                  decode: R.required_opt_decode(:opt_atom_option, :opts, :mode)
+                ],
                 count: [
                   type: {:option, :i64},
                   decode: R.optional_term_decode(:opts, :count, :i64)

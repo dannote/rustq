@@ -114,7 +114,8 @@ defmodule RustQZeroRustConsumer.NativeTest do
   end
 
   test "exposes focused generated-source assertions" do
-    assert_defnif(Native, :guarded_sign, 1, ~r/value if value > 0/)
-    assert_rust_valid(Native)
+    assert nif_exported?(Native, :guarded_sign, 1)
+    assert rust_source!(Native, :guarded_sign) =~ ~r/value if value > 0/
+    assert RustQ.valid?(rust_source!(Native), "zero_rust_native.rs")
   end
 end
