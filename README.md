@@ -1,6 +1,6 @@
 # RustQ
 
-[![Hex.pm](https://img.shields.io/badge/dynamic/json.svg?url=https%3A%2F%2Fhex.pm%2Fapi%2Fpackages%2Frustq&query=%24.latest_version&prefix=v&label=hex.pm)](https://hex.pm/packages/rustq) [![Documentation](https://img.shields.io/badge/documentation-gray.svg)](https://hexdocs.pm/rustq/1.0.0-rc.1/)
+[![Hex.pm](https://img.shields.io/badge/dynamic/json.svg?url=https%3A%2F%2Fhex.pm%2Fapi%2Fpackages%2Frustq&query=%24.latest_version&prefix=v&label=hex.pm)](https://hex.pm/packages/rustq) [![Documentation](https://img.shields.io/badge/documentation-gray.svg)](https://hexdocs.pm/rustq/1.0.0-rc.2/)
 
 Write native Elixir in Elixir. RustQ turns typed, Elixir-shaped code into readable
 Rust and can generate, compile, and load a complete Rustler NIF without checked-in
