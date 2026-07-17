@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## v1.0.0-rc.3 - 2026-07-17
+
 - Generate optional Rustler term filters with typed `Option::filter` calls for
   compatibility with Rust 1.97 Clippy.
+- Highlight fenced Rust examples in generated HexDocs.
 
 ## v1.0.0-rc.2 - 2026-07-16
 
